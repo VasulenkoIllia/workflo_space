@@ -20,7 +20,7 @@
 
 ```
 main          ← production (захищена, тільки через PR)
-dev           ← staging (захищена, тільки через PR)
+dev           ← staging (team-mode: через PR, solo-mode: direct push)
 
 feature/*     ← нова функція
 fix/*         ← виправлення бага
@@ -218,6 +218,19 @@ chore(infra): setup Dockerfile for all 5 apps (S0-20)
 
 ```
 feature/* ──→ dev ──→ staging (автоматично) ──→ main ──→ production (ручний approve)
+```
+
+### Solo mode (тимчасово, коли 1 розробник)
+
+```
+локальні коміти ──→ dev (direct push) ──→ staging (автоматично)
+release PR: dev ──→ main ──→ production (manual approval)
+```
+
+Команда для включення такого режиму:
+
+```bash
+./scripts/s0/github-branch-protection.sh your-org/your-repo --solo
 ```
 
 ### Staging (автоматично при push в dev)
