@@ -88,6 +88,17 @@ jobs:
     needs: approval
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync runtime manifests
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "docker-compose.production.yml,infra/maintenance/**"
+          target: "${{ env.RUNTIME_ROOT }}/production"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -110,14 +121,14 @@ jobs:
             export BOT_TAG=$new_tag
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            docker compose -f docker-compose.production.yml pull
-            docker compose -f docker-compose.production.yml up -d postgres
+            docker compose --env-file .env -f docker-compose.production.yml pull
+            docker compose --env-file .env -f docker-compose.production.yml up -d postgres
 
-            docker compose -f docker-compose.production.yml up -d --no-deps api
-            docker compose -f docker-compose.production.yml up -d --no-deps bot
-            docker compose -f docker-compose.production.yml up -d --no-deps portal
-            docker compose -f docker-compose.production.yml up -d --no-deps workspace
-            docker compose -f docker-compose.production.yml up -d --no-deps landing
+            docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps api
+            docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps bot
+            docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps portal
+            docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps workspace
+            docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps landing
 
             echo "$new_tag" > .last_deploy
 
@@ -151,4 +162,4 @@ jobs:
             export BOT_TAG=$prev_tag
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            docker compose -f docker-compose.production.yml up -d
+            docker compose --env-file .env -f docker-compose.production.yml up -d

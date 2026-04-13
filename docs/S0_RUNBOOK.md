@@ -138,17 +138,17 @@ Mailcow:
 
 ## 6) Staging/Production deploy (S0-30)
 
-На сервері:
+На сервері (первинна ініціалізація, один раз):
 
 ```bash
 mkdir -p /var/www/srv/workflo/staging /var/www/srv/workflo/production
-cp docker-compose.staging.yml /var/www/srv/workflo/staging/
-cp docker-compose.production.yml /var/www/srv/workflo/production/
 
 cp .env.server.example /var/www/srv/workflo/staging/.env
 cp .env.server.example /var/www/srv/workflo/production/.env
 # заповнити реальними значеннями
 ```
+
+Важливо: `docker-compose.staging.yml`, `docker-compose.production.yml` і `infra/maintenance` тепер синхронізуються автоматично з GitHub Actions на кожному deploy. Ручний `cp` цих файлів перед кожним релізом більше не потрібен.
 
 В `.env` значення `GITHUB_REPOSITORY_OWNER` вкажи в lowercase (наприклад `vasulenkoillia`), бо GHCR чутливий до регістру.
 Для dockerized PostgreSQL заповни:
@@ -156,7 +156,10 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 - `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`
 - `DATABASE_URL_STAGING` / `DATABASE_URL_PROD` з host `postgres`
 
-Push у `dev` запускає `staging.yml`.
+Push у `dev` запускає `staging.yml`, який робить:
+- build/push Docker images у GHCR
+- sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance`)
+- deploy контейнерів у `/var/www/srv/workflo/staging`
 
 Перевірка:
 
@@ -171,6 +174,8 @@ Push у `dev` запускає `staging.yml`.
 ```bash
 ./scripts/healthcheck.sh --env production --delay 20 --retries 3
 ```
+
+`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` після manual approval.
 
 ## 7) Backup/Rollback
 

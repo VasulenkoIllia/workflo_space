@@ -243,6 +243,10 @@ on:
 ```
 
 Після merge будь-якого PR в `dev` → staging автоматично оновлюється за ~5 хвилин.
+CI автоматично:
+- збирає і публікує Docker images
+- синхронізує `docker-compose.staging.yml` та `infra/maintenance` на сервер
+- виконує `docker compose up -d` у runtime директорії staging
 
 ### Production (ручний approve)
 
