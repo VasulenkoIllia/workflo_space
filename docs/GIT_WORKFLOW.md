@@ -335,6 +335,9 @@ git push origin dev
 ✅ Do not allow bypassing the above settings
 ```
 
+> Примітка: для private репозиторію на GitHub Free ці правила недоступні.
+> Варіанти: зробити repo public або перейти на GitHub Pro/Team.
+
 ### `dev` (staging)
 
 ```

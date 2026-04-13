@@ -9,7 +9,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.landing-staging.rule=Host(`dev.workflo.space`)
       - traefik.http.routers.landing-staging.entrypoints=websecure
-      - traefik.http.routers.landing-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.landing-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.services.landing-staging.loadbalancer.server.port=3000
     networks:
       - traefik_network
@@ -21,7 +21,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.portal-staging.rule=Host(`dev-app.workflo.space`)
       - traefik.http.routers.portal-staging.entrypoints=websecure
-      - traefik.http.routers.portal-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.portal-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.services.portal-staging.loadbalancer.server.port=80
     networks:
       - traefik_network
@@ -33,7 +33,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.workspace-staging.rule=Host(`dev-work.workflo.space`)
       - traefik.http.routers.workspace-staging.entrypoints=websecure
-      - traefik.http.routers.workspace-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.workspace-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.services.workspace-staging.loadbalancer.server.port=80
       - traefik.http.middlewares.workspace-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
       - traefik.http.routers.workspace-staging.middlewares=workspace-staging-ipwhitelist
@@ -61,7 +61,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)
       - traefik.http.routers.api-staging.entrypoints=websecure
-      - traefik.http.routers.api-staging.tls.certresolver=letsencrypt
+      - traefik.http.routers.api-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.services.api-staging.loadbalancer.server.port=4000
     healthcheck:
       test:
@@ -91,4 +91,4 @@ services:
 networks:
   traefik_network:
     external: true
-    name: traefik_network
+    name: ${TRAEFIK_NETWORK:-traefik_network}

@@ -800,7 +800,9 @@ jobs:
 
   # ── 3. ⏸ РУЧНЕ ПІДТВЕРДЖЕННЯ ─────────────────────────────────
   # GitHub Environment "production" → Settings → Environments
-  # Required reviewers: ти (owner)
+  # Required reviewers працює:
+  # - public repo на GitHub Free
+  # - private repo на GitHub Pro/Team
   approval:
     name: Waiting for approval
     needs: build
@@ -967,6 +969,7 @@ hotfix/xyz ───────────────────────
 ✅ Require status checks to pass (check job)
 ✅ Require branches to be up to date
 ✅ Do not allow bypassing the above settings
+ℹ️ На GitHub Free для private repo ця функція недоступна (потрібен public або Pro/Team)
 ```
 
 ---
@@ -1792,7 +1795,9 @@ http://localhost:8025
 ### GitHub репозиторій
 
 ```
-□ Створити private GitHub репозиторій
+□ Створити GitHub репозиторій:
+  □ public (рекомендовано для GitHub Free)
+  □ private (потребує Pro/Team для branch protection та required reviewers)
 □ Додати .gitignore (node_modules, .env*, .next, dist, .turbo)
 □ Branch protection → main:
   □ Require PR before merge
@@ -1800,7 +1805,7 @@ http://localhost:8025
   □ Require status checks (check job)
   □ Do not allow bypassing
 □ GitHub Environments → "production":
-  □ Required reviewers: ти
+  □ Required reviewers: ти (для public на Free або private на Pro/Team)
   □ Environment secrets (або з repo secrets)
 □ Додати всі GitHub Secrets (перелік у секції 9.1)
 □ Перевірити що GITHUB_TOKEN має права на ghcr.io (Settings → Actions → Workflow permissions → Read and write)

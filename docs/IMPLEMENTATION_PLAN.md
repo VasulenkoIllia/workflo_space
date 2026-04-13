@@ -1443,11 +1443,11 @@ Week 8-10: [Всі] QA + polish + launch → v0.1.0 (S7-S8)
 □ packages/db (schema.prisma + перша міграція + seed)
 □ docker-compose.dev.yml (postgres + mailpit)
 □ .env.example заповнений
-□ GitHub repo + branch protection
+□ GitHub repo + branch protection (public repo on Free, or private with Pro/Team)
 □ Сервер: PostgreSQL, Traefik, DNS
 □ GitHub Secrets заповнені
 □ staging.yml + production.yml — перший деплой
-□ GitHub Environment "production" з reviewer
+□ GitHub Environment "production" з reviewer (public on Free, or private with Pro/Team)
 □ Skeleton apps — GET /health → { status: 'ok' }
 □ turbo build без помилок
 ```

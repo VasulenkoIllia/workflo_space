@@ -15,14 +15,20 @@ fi
 
 gh auth status >/dev/null
 
+IS_PRIVATE="$(gh api "/repos/$REPO" --jq '.private')"
+
 apply_protection() {
   local branch="$1"
+  local output
+  local status
 
-  gh api \
+  set +e
+  output="$(
+    gh api \
     --method PUT \
     -H "Accept: application/vnd.github+json" \
     "/repos/$REPO/branches/$branch/protection" \
-    --input - <<'JSON'
+    --input - <<'JSON' 2>&1
 {
   "required_status_checks": {
     "strict": true,
@@ -42,7 +48,34 @@ apply_protection() {
   "lock_branch": false
 }
 JSON
+  )"
+  status=$?
+  set -e
+
+  if [[ "$status" -ne 0 ]]; then
+    if [[ "$output" == *"Upgrade to GitHub Pro"* || "$output" == *"HTTP 403"* ]]; then
+      cat <<EOF >&2
+Branch protection is not available for private repositories on GitHub Free.
+Repository: $REPO
+Current visibility: private
+
+Options:
+1) Make repository public:
+   gh repo edit $REPO --visibility public
+2) Upgrade account plan to GitHub Pro/Team and retry.
+EOF
+      exit 2
+    fi
+
+    echo "$output" >&2
+    exit "$status"
+  fi
 }
+
+if [[ "$IS_PRIVATE" == "true" ]]; then
+  echo "Detected private repository: $REPO"
+  echo "If your plan is GitHub Free, branch protection will fail. Public repo is required."
+fi
 
 apply_protection "main"
 apply_protection "dev"

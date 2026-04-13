@@ -20,6 +20,16 @@ cp .env.github.secrets.example .env.github.secrets
 gh auth login
 ```
 
+Для `GitHub Free`:
+- `branch protection` і `required reviewer` працюють на `public` репозиторіях
+- для `private` потрібен платний план (`Pro/Team`)
+
+Зробити репозиторій public (якщо ти на Free):
+
+```bash
+gh repo edit your-org/your-repo --visibility public
+```
+
 Застосувати branch protection для `main` і `dev`:
 
 ```bash
@@ -36,6 +46,12 @@ gh auth login
 
 ```bash
 ./scripts/s0/github-production-environment.sh your-org/your-repo your-github-login
+```
+
+Якщо reviewer-policy недоступна для поточного плану/visibility:
+
+```bash
+./scripts/s0/github-production-environment.sh your-org/your-repo none
 ```
 
 ## 3) Hetzner bootstrap (S0-12, S0-13, S0-14)
@@ -61,7 +77,19 @@ bash /srv/workflo/scripts/s0/hetzner-bootstrap.sh --apply
 
 ## 4) Traefik (S0-15)
 
-На сервері:
+Якщо Traefik вже встановлений і працює:
+- не перевстановлюй його
+- використовуй існуючий `certResolver` (наприклад `cf`)
+- переконайся, що є Docker network для роутінгу (`traefik_network` або твій кастомний)
+
+Перевірка існуючого Traefik:
+
+```bash
+docker ps --filter name=traefik
+docker network ls | grep traefik
+```
+
+Якщо Traefik ще не піднятий, тоді:
 
 ```bash
 mkdir -p /srv/traefik

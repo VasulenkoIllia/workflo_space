@@ -213,7 +213,7 @@ packages/
 ## КОНТАКТИ ПРОЕКТУ
 
 ```
-GitHub:     github.com/yourname/workflo (private)
+GitHub:     github.com/yourname/workflo (public for GitHub Free, or private with Pro/Team)
 Server:     Hetzner (IP: xxx.xxx.xxx.xxx)
 Registry:   ghcr.io/yourname/workflo-*
 Mail:       hello@workflo.space
