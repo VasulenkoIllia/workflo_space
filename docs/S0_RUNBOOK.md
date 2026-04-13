@@ -79,8 +79,8 @@ gh repo edit your-org/your-repo --visibility public
 export DEPLOY_USER=workflo  # твій існуючий юзер на сервері
 export RUNTIME_ROOT=/var/www/srv/workflo
 export TRAEFIK_ROOT=/var/www/srv/traefik
-export PROD_DB_PASSWORD='replace-me'
-export STAGING_DB_PASSWORD='replace-me'
+export DB_MODE=docker  # default, PostgreSQL у docker-compose
+export UFW_RESET=0     # не чіпати існуючі firewall-правила інших проєктів
 
 # dry-run
 bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh
@@ -90,10 +90,10 @@ bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 ```
 
 Що робить скрипт:
-- встановлює Docker + Compose plugin + PostgreSQL + UFW
+- встановлює Docker + Compose plugin + UFW
 - створює `deploy` user і системні директорії `/var/www/srv/workflo/*`, `/var/www/srv/traefik`
-- створює staging/prod БД і ролі
-- вмикає UFW правила для `22/80/443`, закриває `5432/19999`
+- вмикає UFW правила для `22/80/443` і закриває `5432/19999`
+- якщо потрібен host PostgreSQL: `DB_MODE=host` + `PROD_DB_PASSWORD/STAGING_DB_PASSWORD`
 
 ## 4) Traefik (S0-15)
 
@@ -151,6 +151,10 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 ```
 
 В `.env` значення `GITHUB_REPOSITORY_OWNER` вкажи в lowercase (наприклад `vasulenkoillia`), бо GHCR чутливий до регістру.
+Для dockerized PostgreSQL заповни:
+- `POSTGRES_DB_STAGING`, `POSTGRES_USER_STAGING`, `POSTGRES_PASSWORD_STAGING`
+- `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`
+- `DATABASE_URL_STAGING` / `DATABASE_URL_PROD` з host `postgres`
 
 Push у `dev` запускає `staging.yml`.
 

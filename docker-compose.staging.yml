@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_STAGING:-workflo_staging}
+      POSTGRES_USER: ${POSTGRES_USER_STAGING:-workflo_stg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
   landing:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-landing:${LANDING_TAG}
     restart: unless-stopped
@@ -43,12 +61,15 @@ services:
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-api:${API_TAG}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL_STAGING}
+      DATABASE_URL: ${DATABASE_URL_STAGING:-postgresql://${POSTGRES_USER_STAGING:-workflo_stg}:${POSTGRES_PASSWORD_STAGING}@postgres:5432/${POSTGRES_DB_STAGING:-workflo_staging}}
       JWT_SECRET: ${JWT_SECRET_STAGING}
       SMTP_HOST: ${SMTP_HOST:-mail.workflo.space}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -77,6 +98,7 @@ services:
       start_period: 30s
     networks:
       - traefik_network
+      - app_network
 
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-bot:${BOT_TAG}
@@ -86,9 +108,15 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       SENTRY_DSN: ${SENTRY_DSN:-}
     networks:
-      - traefik_network
+      - app_network
 
 networks:
+  app_network:
+    driver: bridge
+
   traefik_network:
     external: true
     name: ${TRAEFIK_NETWORK:-traefik_network}
+
+volumes:
+  postgres_data:
