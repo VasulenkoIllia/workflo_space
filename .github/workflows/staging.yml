@@ -105,6 +105,21 @@ jobs:
               docker compose --project-name "${{ env.STAGING_COMPOSE_PROJECT }}" --env-file .env -f docker-compose.staging.yml "$@"
             }
 
+            cleanup_legacy_project_if_conflicting() {
+              project_name="$1"
+              label_filter="$2"
+              legacy_ids="$(docker ps -q --filter "label=com.docker.compose.project=${project_name}" --filter "label=${label_filter}")"
+              if [[ -n "$legacy_ids" ]]; then
+                echo "Found legacy compose project '${project_name}' with conflicting Traefik labels. Stopping it."
+                docker compose --project-name "${project_name}" --env-file .env -f docker-compose.staging.yml down --remove-orphans || true
+              fi
+            }
+
+            cleanup_legacy_project_if_conflicting staging 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting staging 'traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting workflo_space 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting workflo_space 'traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)'
+
             export LANDING_TAG=sha-${{ github.sha }}
             export PORTAL_TAG=sha-${{ github.sha }}
             export WORKSPACE_TAG=sha-${{ github.sha }}

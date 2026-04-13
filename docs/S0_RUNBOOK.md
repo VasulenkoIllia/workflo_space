@@ -163,6 +163,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 - build/push Docker images у GHCR
 - sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance`)
 - deploy контейнерів у `/var/www/srv/workflo/staging` з фіксованим compose project name `workflo-staging`
+- автоматично прибирає legacy compose-проєкти (`staging` / `workflo_space`), якщо вони конфліктують по `dev-api.workflo.space` Traefik router
 - перевіряє, що після деплою реально запущені `postgres`, `api`, `bot`, `landing`, `portal`, `workspace`
 - прогріває TLS/SNI для `dev`, `dev-portal`, `dev-work`, `dev-api` і чекає, поки зникне `TRAEFIK DEFAULT CERT`
 
@@ -180,7 +181,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 ./scripts/healthcheck.sh --env production --delay 20 --retries 6 --retry-delay 10
 ```
 
-`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
+`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy conflict-стеків, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
 
 ## 7) Backup/Rollback
 
