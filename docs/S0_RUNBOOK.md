@@ -142,6 +142,8 @@ cp .env.server.example /srv/workflo/production/.env
 # заповнити реальними значеннями
 ```
 
+В `.env` значення `GITHUB_REPOSITORY_OWNER` вкажи в lowercase (наприклад `vasulenkoillia`), бо GHCR чутливий до регістру.
+
 Push у `dev` запускає `staging.yml`.
 
 Перевірка:
