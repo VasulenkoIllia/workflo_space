@@ -210,6 +210,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 - `CREATE EXTENSION IF NOT EXISTS pg_cron` і валідацію наявності `pg_cron` перед стартом API/Bot
 - автоматично прибирає legacy compose-проєкти (`staging` / `workflo_space`) і будь-які сторонні конфліктні контейнери, якщо вони перехоплюють `dev-api.workflo.space` Traefik router
 - перевіряє, що після деплою реально запущені `postgres`, `api`, `bot`, `landing`, `portal`, `workspace`
+- авто-очищає старі Docker images `ghcr.io/<owner>/workflo-*` (retention: `IMAGE_RETENTION=5`), плюс прибирає dangling layers
 - прогріває TLS/SNI для `dev`, `dev-portal`, `dev-work`, `dev-api` і чекає, поки зникне `TRAEFIK DEFAULT CERT`
 
 Перевірка:
@@ -228,7 +229,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 ./scripts/healthcheck.sh --env production --delay 20 --retries 6 --retry-delay 10
 ```
 
-`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, build/enable `pg_cron` у postgres, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
+`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, build/enable `pg_cron` у postgres, auto-cleanup старих `workflo-*` images (retention: `IMAGE_RETENTION=5`), перевіркою запущених сервісів і TLS warmup на всіх публічних host.
 
 Перед rerun/production deploy перевір, що в `/var/www/srv/workflo/production/.env` не лишилось placeholder-значень:
 

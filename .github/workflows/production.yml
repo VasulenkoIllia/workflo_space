@@ -12,6 +12,7 @@ env:
   REGISTRY: ghcr.io
   RUNTIME_ROOT: /var/www/srv/workflo
   PRODUCTION_COMPOSE_PROJECT: workflo-production
+  IMAGE_RETENTION: 5
 
 jobs:
   check:
@@ -97,8 +98,8 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "docker-compose.production.yml,infra/maintenance/**,infra/postgres/**"
-          target: "${{ env.RUNTIME_ROOT }}/production"
+          source: 'docker-compose.production.yml,infra/maintenance/**,infra/postgres/**'
+          target: '${{ env.RUNTIME_ROOT }}/production'
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -207,6 +208,30 @@ jobs:
             for svc in postgres api bot landing portal workspace; do
               assert_service_started "$svc"
             done
+
+            cleanup_old_workflo_images() {
+              keep_count="${{ env.IMAGE_RETENTION }}"
+              if ! [[ "$keep_count" =~ ^[0-9]+$ ]] || (( keep_count < 1 )); then
+                keep_count=5
+              fi
+
+              for app in landing portal workspace api bot; do
+                repo="ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-${app}"
+                mapfile -t image_ids < <(docker image ls "$repo" --format '{{.ID}}' | awk '!seen[$0]++')
+                if (( ${#image_ids[@]} <= keep_count )); then
+                  continue
+                fi
+
+                for image_id in "${image_ids[@]:$keep_count}"; do
+                  docker image rm "$image_id" >/dev/null 2>&1 || true
+                done
+              done
+
+              # Remove dangling layers (including leftovers from local postgres builds).
+              docker image prune -f >/dev/null 2>&1 || true
+            }
+
+            cleanup_old_workflo_images
 
             wait_for_non_default_cert() {
               host="$1"
