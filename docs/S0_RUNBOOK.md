@@ -2,6 +2,20 @@
 
 Цей runbook закриває задачі `S0-09..S0-17`, `S0-28`, `S0-30` через підготовлені скрипти та конфіги в репозиторії.
 
+## 0) Поточний стан (станом на 13 квітня 2026)
+
+- `dev` і `main` працюють через PR flow; production deploy йде через manual approval в GitHub Environment `production`.
+- Staging/production деплої працюють із runtime-директоріями:
+  - `/var/www/srv/workflo/staging`
+  - `/var/www/srv/workflo/production`
+- Домени зафіксовані:
+  - staging: `dev.workflo.space`, `dev-portal.workflo.space`, `dev-work.workflo.space`, `dev-api.workflo.space`
+  - production: `workflo.space`, `portal.workflo.space`, `work.workflo.space`, `api.workflo.space`
+- API стабілізовано:
+  - `/health` = liveness (без БД, HTTP 200)
+  - `/ready` = readiness (200/503 залежно від БД)
+  - Prisma/OpenSSL сумісність зафіксована для production runtime (`debian-openssl-3.0.x`).
+
 ## 1) Підготовка локально
 
 ```bash
@@ -127,7 +141,7 @@ cd /var/www/srv/traefik
 docker compose up -d
 ```
 
-## 5) DNS + Mailcow (S0-16, S0-17)
+## 5) DNS + Mail (S0-16, S0-17)
 
 DNS записи перевести на Hetzner IP:
 - `workflo.space`, `www.workflo.space`
@@ -139,6 +153,9 @@ Mailcow:
 - встановити окремим stack
 - налаштувати `SPF`, `DKIM`, `DMARC`
 - створити скриньки `hello@`, `noreply@`, `support@`
+
+Важливо: відсутність Mailcow/SMTP на S0 не блокує staging/production deploy.  
+`SMTP_USER`, `SMTP_PASS` можуть бути порожніми, доки email-функції не вводяться в експлуатацію.
 
 ## 6) Staging/Production deploy (S0-30)
 
@@ -187,6 +204,31 @@ Push у `dev` запускає `staging.yml`, який робить:
 ```
 
 `production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
+
+Перед rerun/production deploy перевір, що в `/var/www/srv/workflo/production/.env` не лишилось placeholder-значень:
+- `GITHUB_REPOSITORY_OWNER` = реальний lowercase owner (`vasulenkoillia`)
+- `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`, `DATABASE_URL_PROD`
+- `JWT_SECRET_PROD`
+
+Швидка перевірка:
+
+```bash
+cd /var/www/srv/workflo/production
+for v in GITHUB_REPOSITORY_OWNER POSTGRES_DB_PROD POSTGRES_USER_PROD POSTGRES_PASSWORD_PROD DATABASE_URL_PROD JWT_SECRET_PROD; do
+  val="$(grep -E "^${v}=" .env | tail -n1 | cut -d= -f2-)"
+  [ -z "$val" ] && echo "MISSING/EMPTY: $v" || echo "OK: $v"
+done
+```
+
+Post-deploy smoke-check (production):
+
+```bash
+curl -skI https://workflo.space
+curl -skI https://portal.workflo.space/health
+curl -skI https://api.workflo.space/health
+curl -sk -i https://api.workflo.space/ready
+curl -skI https://work.workflo.space/health
+```
 
 ## 7) Backup/Rollback
 
