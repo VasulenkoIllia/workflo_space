@@ -30,6 +30,8 @@ services:
       - traefik.http.routers.workflo-landing-staging.entrypoints=websecure
       - traefik.http.routers.workflo-landing-staging.tls=true
       - traefik.http.routers.workflo-landing-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-landing-staging.tls.domains[0].main=dev.workflo.space
+      - traefik.http.routers.workflo-landing-staging.tls.domains[0].sans=dev-portal.workflo.space,dev-work.workflo.space,dev-api.workflo.space
       - traefik.http.routers.workflo-landing-staging.priority=10000
       - traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000
     networks:

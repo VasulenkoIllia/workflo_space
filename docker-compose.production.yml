@@ -30,6 +30,8 @@ services:
       - traefik.http.routers.workflo-landing.entrypoints=websecure
       - traefik.http.routers.workflo-landing.tls=true
       - traefik.http.routers.workflo-landing.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-landing.tls.domains[0].main=workflo.space
+      - traefik.http.routers.workflo-landing.tls.domains[0].sans=www.workflo.space,portal.workflo.space,work.workflo.space,api.workflo.space
       - traefik.http.routers.workflo-landing.priority=10000
       - traefik.http.services.workflo-landing.loadbalancer.server.port=3000
       - traefik.http.middlewares.workflo-www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)
