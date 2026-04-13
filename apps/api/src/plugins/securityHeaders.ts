@@ -1,20 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify'
+import helmet from '@fastify/helmet'
 
-const securityHeadersPlugin: FastifyPluginAsync = (fastify) => {
-  fastify.addHook('onRequest', async (_request, reply) => {
-    reply.header('X-Content-Type-Options', 'nosniff')
-    reply.header('X-Frame-Options', 'DENY')
-    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
-    reply.header('X-DNS-Prefetch-Control', 'off')
-    reply.header('X-Download-Options', 'noopen')
-    reply.header('X-Permitted-Cross-Domain-Policies', 'none')
-
-    if (process.env.NODE_ENV === 'production') {
-      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-    }
+const securityHeadersPlugin: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(helmet, {
+    global: true,
+    contentSecurityPolicy: false,
+    hsts:
+      process.env.NODE_ENV === 'production'
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true,
+          }
+        : false,
   })
-
-  return Promise.resolve()
 }
 
 export default securityHeadersPlugin

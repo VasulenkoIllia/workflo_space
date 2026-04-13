@@ -1,9 +1,11 @@
 # WORKFLO.SPACE — Інфраструктура
+
 > Статус: Фінальна v2.0
-> Дата: 13 квітня 2026
+> Дата: 14 квітня 2026
 >
 > Примітка: якщо є розбіжності з фактичними S0 скриптами/compose/workflows, джерелом істини є `docs/S0_RUNBOOK.md`.
 > Поточний S0-факт: staging/production PostgreSQL працює dockerized (custom `infra/postgres` image з `postgresql-16-cron`), а повний Mailcow rollout винесено за межі S0 (залишено mail DNS + SMTP env readiness).
+> Поточний hardening-факт: runtime контейнери запускаються non-root, `portal/workspace` працюють на unprivileged `8080`, у staging/prod compose є resource + log rotation limits, API security headers через `@fastify/helmet`, а в Prisma застосовано міграцію `20260413215510_timestamptz_and_index_cleanup`.
 
 ---
 
@@ -30,6 +32,7 @@
 ## 1. ПРИНЦИПИ
 
 **Незмінні правила:**
+
 - `main` — завжди production-ready. Нічого не пушиться напряму, тільки PR.
 - Кожен деплой в production = ручне підтвердження в GitHub UI.
 - Кожна production міграція = автоматичний pg_dump перед нею.
@@ -347,12 +350,12 @@ services:
       POSTGRES_PASSWORD: workflo_dev
       POSTGRES_DB: workflo_dev
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U workflo"]
+      test: ['CMD-SHELL', 'pg_isready -U workflo']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -360,17 +363,18 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1025:1025"    # SMTP — Nodemailer підключається сюди
-      - "8025:8025"    # Web UI → http://localhost:8025
+      - '1025:1025' # SMTP — Nodemailer підключається сюди
+      - '8025:8025' # Web UI → http://localhost:8025
     environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: "true"
-      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
 
 volumes:
   postgres_dev_data:
 ```
 
 **Як використовувати:**
+
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 # Mailpit UI: http://localhost:8025  ← всі листи видно тут
@@ -394,11 +398,11 @@ services:
       - NEXT_PUBLIC_API_URL=https://dev-api.workflo.space
       - SENTRY_DSN=${SENTRY_DSN}
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-landing-staging.rule=Host(`dev.workflo.space`)"
-      - "traefik.http.routers.workflo-landing-staging.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-landing-staging.entrypoints=websecure"
-      - "traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-landing-staging.rule=Host(`dev.workflo.space`)'
+      - 'traefik.http.routers.workflo-landing-staging.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-landing-staging.entrypoints=websecure'
+      - 'traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000'
     networks:
       - traefik_network
 
@@ -406,11 +410,11 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-portal:${PORTAL_TAG}
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-portal-staging.rule=Host(`dev-portal.workflo.space`)"
-      - "traefik.http.routers.workflo-portal-staging.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-portal-staging.entrypoints=websecure"
-      - "traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-portal-staging.rule=Host(`dev-portal.workflo.space`)'
+      - 'traefik.http.routers.workflo-portal-staging.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-portal-staging.entrypoints=websecure'
+      - 'traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80'
     networks:
       - traefik_network
 
@@ -418,14 +422,14 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-workspace:${WORKSPACE_TAG}
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-workspace-staging.rule=Host(`dev-work.workflo.space`)"
-      - "traefik.http.routers.workflo-workspace-staging.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-workspace-staging.entrypoints=websecure"
-      - "traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-workspace-staging.rule=Host(`dev-work.workflo.space`)'
+      - 'traefik.http.routers.workflo-workspace-staging.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-workspace-staging.entrypoints=websecure'
+      - 'traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80'
       # IP whitelist — тільки ваші IP навіть на staging
-      - "traefik.http.middlewares.workflo-workspace-staging-auth.ipwhitelist.sourcerange=${TEAM_IPS}"
-      - "traefik.http.routers.workflo-workspace-staging.middlewares=workflo-workspace-staging-auth"
+      - 'traefik.http.middlewares.workflo-workspace-staging-auth.ipwhitelist.sourcerange=${TEAM_IPS}'
+      - 'traefik.http.routers.workflo-workspace-staging.middlewares=workflo-workspace-staging-auth'
     networks:
       - traefik_network
 
@@ -446,11 +450,11 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - FRONTEND_URL=https://dev-portal.workflo.space
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)"
-      - "traefik.http.routers.workflo-api-staging.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-api-staging.entrypoints=websecure"
-      - "traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+      - 'traefik.http.routers.workflo-api-staging.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-api-staging.entrypoints=websecure'
+      - 'traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000'
     networks:
       - traefik_network
 
@@ -487,16 +491,16 @@ services:
       - NEXT_PUBLIC_API_URL=https://api.workflo.space
       - SENTRY_DSN=${SENTRY_DSN}
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)"
-      - "traefik.http.routers.workflo-landing.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-landing.entrypoints=websecure"
-      - "traefik.http.services.workflo-landing.loadbalancer.server.port=3000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)'
+      - 'traefik.http.routers.workflo-landing.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-landing.entrypoints=websecure'
+      - 'traefik.http.services.workflo-landing.loadbalancer.server.port=3000'
       # www → без www
       - "traefik.http.middlewares.workflo-www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)"
-      - "traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}"
-      - "traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true"
-      - "traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect"
+      - 'traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}'
+      - 'traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true'
+      - 'traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect'
     networks:
       - traefik_network
 
@@ -504,11 +508,11 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-portal:${PORTAL_TAG}
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)"
-      - "traefik.http.routers.workflo-portal.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-portal.entrypoints=websecure"
-      - "traefik.http.services.workflo-portal.loadbalancer.server.port=80"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)'
+      - 'traefik.http.routers.workflo-portal.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-portal.entrypoints=websecure'
+      - 'traefik.http.services.workflo-portal.loadbalancer.server.port=80'
     networks:
       - traefik_network
 
@@ -516,14 +520,14 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-workspace:${WORKSPACE_TAG}
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)"
-      - "traefik.http.routers.workflo-workspace.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-workspace.entrypoints=websecure"
-      - "traefik.http.services.workflo-workspace.loadbalancer.server.port=80"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)'
+      - 'traefik.http.routers.workflo-workspace.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-workspace.entrypoints=websecure'
+      - 'traefik.http.services.workflo-workspace.loadbalancer.server.port=80'
       # IP whitelist — ТІЛЬКИ ваші статичні IP
-      - "traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS}"
-      - "traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist"
+      - 'traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS}'
+      - 'traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist'
     networks:
       - traefik_network
 
@@ -544,11 +548,11 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - FRONTEND_URL=https://portal.workflo.space
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)"
-      - "traefik.http.routers.workflo-api.tls.certresolver=cf"
-      - "traefik.http.routers.workflo-api.entrypoints=websecure"
-      - "traefik.http.services.workflo-api.loadbalancer.server.port=4000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)'
+      - 'traefik.http.routers.workflo-api.tls.certresolver=cf'
+      - 'traefik.http.routers.workflo-api.entrypoints=websecure'
+      - 'traefik.http.services.workflo-api.loadbalancer.server.port=4000'
     networks:
       - traefik_network
 
@@ -569,9 +573,9 @@ services:
     volumes:
       - ./infra/maintenance:/usr/share/nginx/html:ro
     profiles:
-      - maintenance    # запускається тільки явно: --profile maintenance
+      - maintenance # запускається тільки явно: --profile maintenance
     labels:
-      - "traefik.enable=false"   # вмикається вручну при потребі
+      - 'traefik.enable=false' # вмикається вручну при потребі
     networks:
       - traefik_network
 
@@ -682,7 +686,7 @@ jobs:
           script: |
             set -e
             cd /srv/workflo/staging
-            
+
             # Оновити SHA теги
             export LANDING_TAG=sha-${{ github.sha }}
             export PORTAL_TAG=sha-${{ github.sha }}
@@ -690,23 +694,23 @@ jobs:
             export API_TAG=sha-${{ github.sha }}
             export BOT_TAG=sha-${{ github.sha }}
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            
+
             # Pull нових образів
             docker compose -f docker-compose.staging.yml pull
-            
+
             # Міграція БД (staging — автоматично, безпечно)
             docker run --rm \
               -e DATABASE_URL=${{ secrets.DATABASE_URL_STAGING }} \
               ${{ env.IMAGE_PREFIX }}-api:sha-${{ github.sha }} \
               node -e "const {execSync} = require('child_process'); execSync('npx prisma migrate deploy', {stdio:'inherit'})"
-            
+
             # Restart сервісів (rolling — по одному)
             docker compose -f docker-compose.staging.yml up -d --no-deps landing
             docker compose -f docker-compose.staging.yml up -d --no-deps portal
             docker compose -f docker-compose.staging.yml up -d --no-deps workspace
             docker compose -f docker-compose.staging.yml up -d --no-deps api
             docker compose -f docker-compose.staging.yml up -d --no-deps bot
-            
+
             # Зберегти SHA для rollback
             echo "sha-${{ github.sha }}" > .last_deploy
 
@@ -719,7 +723,7 @@ jobs:
       - name: Check all services
         run: |
           sleep 15   # чекаємо поки контейнери запустяться
-          
+
           check() {
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$1")
             if [ "$STATUS" != "200" ]; then
@@ -728,7 +732,7 @@ jobs:
             fi
             echo "OK: $1"
           }
-          
+
           check https://dev.workflo.space
           check https://dev-portal.workflo.space/health
           check https://dev-work.workflo.space/health
@@ -810,7 +814,7 @@ jobs:
     name: Waiting for approval
     needs: build
     runs-on: ubuntu-latest
-    environment: production   # ← тут чекає підтвердження в GitHub UI
+    environment: production # ← тут чекає підтвердження в GitHub UI
     steps:
       - name: Approved
         run: echo "Production deployment approved. Starting..."
@@ -832,7 +836,7 @@ jobs:
             BACKUP_DIR=/srv/workflo/production/backups
             DATE=$(date +%Y-%m-%d_%H-%M)
             BACKUP_FILE=$BACKUP_DIR/pre-deploy_$DATE.sql.gz
-            
+
             pg_dump ${{ secrets.DATABASE_URL_PROD }} | gzip > $BACKUP_FILE
             echo "Backup created: $BACKUP_FILE"
             ls -lh $BACKUP_FILE
@@ -852,29 +856,29 @@ jobs:
           script: |
             set -e
             cd /srv/workflo/production
-            
+
             # Зберегти поточний тег (для rollback)
             CURRENT_TAG=$(cat .last_deploy 2>/dev/null || echo "none")
             echo "$CURRENT_TAG" > .previous_deploy
-            
+
             NEW_TAG=sha-${{ github.sha }}
-            
+
             export LANDING_TAG=$NEW_TAG
             export PORTAL_TAG=$NEW_TAG
             export WORKSPACE_TAG=$NEW_TAG
             export API_TAG=$NEW_TAG
             export BOT_TAG=$NEW_TAG
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            
+
             # Pull нових образів
             docker compose -f docker-compose.production.yml pull
-            
+
             # Міграція БД
             docker run --rm \
               -e DATABASE_URL=${{ secrets.DATABASE_URL_PROD }} \
               ${{ env.IMAGE_PREFIX }}-api:$NEW_TAG \
               node -e "const {execSync} = require('child_process'); execSync('npx prisma migrate deploy', {stdio:'inherit'})"
-            
+
             # Rolling deploy — API першим (backend → frontend)
             docker compose -f docker-compose.production.yml up -d --no-deps api
             sleep 5
@@ -883,7 +887,7 @@ jobs:
             docker compose -f docker-compose.production.yml up -d --no-deps portal
             docker compose -f docker-compose.production.yml up -d --no-deps workspace
             docker compose -f docker-compose.production.yml up -d --no-deps landing
-            
+
             echo "$NEW_TAG" > .last_deploy
 
   # ── 6. Health check + auto rollback ──────────────────────────
@@ -896,7 +900,7 @@ jobs:
         id: healthcheck
         run: |
           sleep 20
-          
+
           check() {
             for i in 1 2 3; do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$1")
@@ -906,7 +910,7 @@ jobs:
             echo "FAIL: $1 returned $STATUS"
             return 1
           }
-          
+
           check https://workflo.space || exit 1
           check https://portal.workflo.space/health || exit 1
           check https://api.workflo.space/health || exit 1
@@ -921,16 +925,16 @@ jobs:
           script: |
             cd /srv/workflo/production
             PREV_TAG=$(cat .previous_deploy)
-            
+
             echo "⚠️ Health check failed. Rolling back to $PREV_TAG"
-            
+
             export LANDING_TAG=$PREV_TAG
             export PORTAL_TAG=$PREV_TAG
             export WORKSPACE_TAG=$PREV_TAG
             export API_TAG=$PREV_TAG
             export BOT_TAG=$PREV_TAG
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            
+
             docker compose -f docker-compose.production.yml up -d
             echo "Rollback complete."
 
@@ -966,6 +970,7 @@ hotfix/xyz ───────────────────────
 ```
 
 **Branch protection rules для `main`:**
+
 ```
 ✅ Require pull request before merging
 ✅ Require 1 approval
@@ -991,7 +996,7 @@ api:
 
 entryPoints:
   web:
-    address: ":80"
+    address: ':80'
     http:
       redirections:
         entryPoint:
@@ -1000,7 +1005,7 @@ entryPoints:
           permanent: true
 
   websecure:
-    address: ":443"
+    address: ':443'
     http:
       tls:
         certResolver: cf
@@ -1009,14 +1014,14 @@ certificatesResolvers:
   cf:
     acme:
       email: hello@workflo.space
-      storage: /acme/acme.json      # volume, зберігається на сервері
+      storage: /acme/acme.json # volume, зберігається на сервері
       httpChallenge:
         entryPoint: web
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
-    exposedByDefault: false         # ← важливо: сервіси НЕ відкриті без traefik.enable=true
+    endpoint: 'unix:///var/run/docker.sock'
+    exposedByDefault: false # ← важливо: сервіси НЕ відкриті без traefik.enable=true
     network: traefik_network
 
 log:
@@ -1038,8 +1043,8 @@ services:
     image: traefik:v3.2
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
@@ -1048,10 +1053,10 @@ services:
     networks:
       - traefik_network
     labels:
-      - "traefik.enable=true"
+      - 'traefik.enable=true'
       # Dashboard доступний тільки локально через SSH tunnel
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.internal`)"
-      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - 'traefik.http.routers.traefik-dashboard.rule=Host(`traefik.internal`)'
+      - 'traefik.http.routers.traefik-dashboard.service=api@internal'
 
 volumes:
   traefik_acme:
@@ -1073,7 +1078,7 @@ cd /srv/traefik && docker compose up -d
 
 ```yaml
 # У docker-compose.production.yml для workspace:
-- "traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=11.22.33.44/32,55.66.77.88/32"
+- 'traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=11.22.33.44/32,55.66.77.88/32'
 # Перераховуєш статичні IP всіх членів команди
 # При зміні IP — оновити змінну TEAM_IPS в GitHub Secrets + restart workspace
 ```
@@ -1240,16 +1245,16 @@ TEAM_IPS=                 # IP команди через кому: 11.22.33.44/3
 
 ### 8.2 Які змінні до яких apps
 
-| Змінна | landing | portal | workspace | api | bot |
-|---|:---:|:---:|:---:|:---:|:---:|
-| DATABASE_URL | — | — | — | ✅ | ✅ |
-| JWT_SECRET | — | — | — | ✅ | — |
-| SMTP_* | — | — | — | ✅ | — |
-| TELEGRAM_BOT_TOKEN | — | — | — | ✅ | ✅ |
-| OPENAI_API_KEY | — | — | — | ✅ | — |
-| SENTRY_DSN | ✅ | build | build | ✅ | ✅ |
-| VITE_API_URL | — | build | build | — | — |
-| NEXT_PUBLIC_API_URL | ✅ runtime | — | — | — | — |
+| Змінна              |  landing   | portal | workspace | api | bot |
+| ------------------- | :--------: | :----: | :-------: | :-: | :-: |
+| DATABASE_URL        |     —      |   —    |     —     | ✅  | ✅  |
+| JWT_SECRET          |     —      |   —    |     —     | ✅  |  —  |
+| SMTP\_\*            |     —      |   —    |     —     | ✅  |  —  |
+| TELEGRAM_BOT_TOKEN  |     —      |   —    |     —     | ✅  | ✅  |
+| OPENAI_API_KEY      |     —      |   —    |     —     | ✅  |  —  |
+| SENTRY_DSN          |     ✅     | build  |   build   | ✅  | ✅  |
+| VITE_API_URL        |     —      | build  |   build   |  —  |  —  |
+| NEXT_PUBLIC_API_URL | ✅ runtime |   —    |     —     |  —  |  —  |
 
 Frontend apps **не мають** DATABASE_URL. Ніколи.
 
@@ -1330,6 +1335,7 @@ ssh-copy-id -i ~/.ssh/workflo_deploy.pub deploy@server-ip
 ### 10.1 Zero-downtime правила
 
 **✅ Безпечні зміни (завжди):**
+
 ```sql
 -- Додати nullable колонку
 ALTER TABLE orders ADD COLUMN notes TEXT;
@@ -1345,6 +1351,7 @@ CREATE INDEX CONCURRENTLY idx_orders_company_id ON orders(company_id);
 ```
 
 **⚠️ Небезпечні зміни (потребують окремого деплою):**
+
 ```sql
 -- НЕ МОЖНА в одному деплої:
 -- 1. Видалити колонку яку ще читає код
@@ -1395,6 +1402,7 @@ RUN pnpm --filter db prisma generate   # генерує для Linux (Docker)
 ```
 
 Локально:
+
 ```bash
 pnpm --filter db prisma generate       # генерує для macOS
 ```
@@ -1430,7 +1438,7 @@ pg_dump "$DATABASE_URL_PROD" | gzip > "$BACKUP_FILE"
 if [ $? -eq 0 ]; then
   SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
   echo "[$(date)] Backup OK: $BACKUP_FILE ($SIZE)" >> $LOG_FILE
-  
+
   # Telegram notification
   curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
     -d chat_id="$TELEGRAM_DEPLOY_CHAT_ID" \
@@ -1564,20 +1572,21 @@ gunzip -c backups/pre-deploy_2026-04-12_14-30.sql.gz | psql workflo_production
 
 ```typescript
 // apps/api/src/server.ts
-import * as Sentry from "@sentry/node";
+import * as Sentry from '@sentry/node'
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV,
-  tracesSampleRate: 0.1,    // 10% запитів трейсяться
-});
+  tracesSampleRate: 0.1, // 10% запитів трейсяться
+})
 
 // apps/landing/src/app/layout.tsx
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from '@sentry/nextjs'
 // sentry.client.config.ts, sentry.server.config.ts — стандартна ініціалізація
 ```
 
 **Alerts в Sentry:**
+
 - New issue → email + Telegram
 - Error rate > 10/min → email + Telegram
 - Performance > 3s p95 → email
@@ -1594,6 +1603,7 @@ import * as Sentry from "@sentry/nextjs";
 ```
 
 **API /health endpoint:**
+
 ```typescript
 // apps/api/src/routes/health.ts
 fastify.get('/health', async (req, reply) => {
@@ -1601,12 +1611,12 @@ fastify.get('/health', async (req, reply) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-  });
-});
+  })
+})
 
 fastify.get('/ready', async (req, reply) => {
   // Readiness перевіряє БД і повертає 200/503
-});
+})
 ```
 
 Примітка: для прод runtime API використовує Debian + OpenSSL 3, а Prisma Client генерується з `binaryTargets = ["native", "debian-openssl-3.0.x"]`.
@@ -1709,8 +1719,8 @@ pnpm --filter bot dev           # polling mode
 
 ```yaml
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 ```
 
 ### 14.4 Hot reload для shared packages
@@ -1719,7 +1729,7 @@ packages:
 // packages/ui/package.json
 {
   "name": "@workflo/ui",
-  "main": "./src/index.ts",       // ← src, не dist
+  "main": "./src/index.ts", // ← src, не dist
   "types": "./src/index.ts"
 }
 ```
@@ -1730,9 +1740,9 @@ Vite і Next.js підхоплюють TypeScript-джерела напряму 
 
 ```typescript
 // packages/db/prisma/seed.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
   // Owner profile
@@ -1745,7 +1755,7 @@ async function main() {
       role: 'owner',
       passwordHash: '...', // bcrypt hash of "password123"
     },
-  });
+  })
 
   // Тестова компанія
   const company = await prisma.company.upsert({
@@ -1756,7 +1766,7 @@ async function main() {
       slug: 'test-company',
       ownerId: owner.id,
     },
-  });
+  })
 
   // Тестове замовлення
   await prisma.order.create({
@@ -1769,12 +1779,14 @@ async function main() {
       billingType: 'fixed',
       fixedPrice: 500,
     },
-  });
+  })
 
-  console.log('Seed complete');
+  console.log('Seed complete')
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect())
 ```
 
 ```json

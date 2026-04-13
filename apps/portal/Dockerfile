@@ -8,10 +8,10 @@ COPY . .
 RUN pnpm install --frozen-lockfile --filter @workflo/portal...
 RUN pnpm --filter @workflo/portal... build
 
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY apps/portal/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/apps/portal/dist /usr/share/nginx/html
+COPY --from=builder --chown=101:101 /app/apps/portal/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

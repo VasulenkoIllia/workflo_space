@@ -2,7 +2,7 @@
 
 Цей runbook закриває задачі `S0-09..S0-17`, `S0-28`, `S0-30` через підготовлені скрипти та конфіги в репозиторії.
 
-## 0) Поточний стан (станом на 13 квітня 2026)
+## 0) Поточний стан (станом на 14 квітня 2026)
 
 - S0 foundation закрито в технічному обсязі інфри: staging/prod CI/CD, dockerized services, Traefik routing, DNS.
 - `dev` і `main` працюють через PR flow; production deploy йде через manual approval в GitHub Environment `production`.
@@ -17,6 +17,12 @@
   - `/ready` = readiness (200/503 залежно від БД)
   - Prisma/OpenSSL сумісність зафіксована для production runtime (`debian-openssl-3.0.x`).
 - PostgreSQL у staging/prod працює в Docker (`postgres:16-bookworm` + `postgresql-16-cron`), `pg_cron` вмикається автоматично під час deploy workflow.
+- Пакет audit-hardening закрито:
+  - усі runtime Docker images запускаються non-root (`node` або `nginx-unprivileged`)
+  - `portal` і `workspace` працюють на внутрішньому порту `8080` (через unprivileged nginx), Traefik labels оновлені
+  - у staging/prod compose додані `mem_limit`, `cpus`, ротація Docker-логів (`json-file`, `10m x 3`)
+  - API security headers тепер через `@fastify/helmet` (власний plugin-загортка з `contentSecurityPolicy: false`)
+  - додано Prisma migration `20260413215510_timestamptz_and_index_cleanup` (TIMESTAMPTZ + cleanup дублюючих індексів)
 
 ## 1) Підготовка локально
 
@@ -198,6 +204,12 @@ Compose тепер працює у fail-fast режимі для критичн�
 
 - staging: `POSTGRES_PASSWORD_STAGING`, `DATABASE_URL_STAGING`, `JWT_SECRET_STAGING`
 - production: `POSTGRES_PASSWORD_PROD`, `DATABASE_URL_PROD`, `JWT_SECRET_PROD`
+
+Hardening налаштування в compose (staging + production):
+
+- resource limits (`mem_limit`, `cpus`) для всіх сервісів
+- логування з ротацією (`json-file`, `max-size=10m`, `max-file=3`)
+- `portal/workspace` сервіси за Traefik публікуються з внутрішнього порту `8080`
 
 Опційні змінні (`SMTP_USER`, `SMTP_PASS`, `BOT_TOKEN`) можуть бути порожніми на S0 етапі; compose-файли мають `:-` fallback і не повинні сипати warning під час `docker compose up`.
 

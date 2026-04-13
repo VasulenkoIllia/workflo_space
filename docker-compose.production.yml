@@ -4,6 +4,8 @@ services:
       context: ./infra/postgres
       dockerfile: Dockerfile
     restart: unless-stopped
+    mem_limit: 2g
+    cpus: '2.00'
     command:
       - postgres
       - -c
@@ -20,6 +22,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -28,6 +35,8 @@ services:
   landing:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-landing:${LANDING_TAG}
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: '1.00'
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: https://api.workflo.space
@@ -46,12 +55,19 @@ services:
       - traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}
       - traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true
       - traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   portal:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-portal:${PORTAL_TAG}
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: '0.75'
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -60,13 +76,20 @@ services:
       - traefik.http.routers.workflo-portal.tls=true
       - traefik.http.routers.workflo-portal.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-portal.priority=10000
-      - traefik.http.services.workflo-portal.loadbalancer.server.port=80
+      - traefik.http.services.workflo-portal.loadbalancer.server.port=8080
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   workspace:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-workspace:${WORKSPACE_TAG}
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: '0.75'
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -75,15 +98,22 @@ services:
       - traefik.http.routers.workflo-workspace.tls=true
       - traefik.http.routers.workflo-workspace.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-workspace.priority=10000
-      - traefik.http.services.workflo-workspace.loadbalancer.server.port=80
+      - traefik.http.services.workflo-workspace.loadbalancer.server.port=8080
       - traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
       - traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-api:${API_TAG}
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: '1.50'
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,6 +154,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
       - app_network
@@ -131,22 +166,36 @@ services:
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-bot:${BOT_TAG}
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: '0.75'
     environment:
       NODE_ENV: production
       BOT_TOKEN: ${BOT_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - app_network
 
   maintenance:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.25'
     volumes:
       - ./infra/maintenance:/usr/share/nginx/html:ro
     profiles:
       - maintenance
     labels:
       - traefik.enable=false
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 

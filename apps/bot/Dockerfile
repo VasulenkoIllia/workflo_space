@@ -7,7 +7,9 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile --filter @workflo/bot...
 RUN pnpm --filter @workflo/bot... build
+RUN chown -R node:node /app
 
 ENV NODE_ENV=production
+USER node
 
 CMD ["pnpm", "--filter", "@workflo/bot", "start"]

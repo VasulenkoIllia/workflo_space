@@ -4,6 +4,8 @@ services:
       context: ./infra/postgres
       dockerfile: Dockerfile
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: '1.50'
     command:
       - postgres
       - -c
@@ -20,6 +22,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -28,6 +35,8 @@ services:
   landing:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-landing:${LANDING_TAG}
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: '0.75'
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: https://dev-api.workflo.space
@@ -42,12 +51,19 @@ services:
       - traefik.http.routers.workflo-landing-staging.tls.domains[0].sans=dev-portal.workflo.space,dev-work.workflo.space,dev-api.workflo.space
       - traefik.http.routers.workflo-landing-staging.priority=10000
       - traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   portal:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-portal:${PORTAL_TAG}
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.50'
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -56,13 +72,20 @@ services:
       - traefik.http.routers.workflo-portal-staging.tls=true
       - traefik.http.routers.workflo-portal-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-portal-staging.priority=10000
-      - traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80
+      - traefik.http.services.workflo-portal-staging.loadbalancer.server.port=8080
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   workspace:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-workspace:${WORKSPACE_TAG}
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.50'
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -71,15 +94,22 @@ services:
       - traefik.http.routers.workflo-workspace-staging.tls=true
       - traefik.http.routers.workflo-workspace-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-workspace-staging.priority=10000
-      - traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80
+      - traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=8080
       - traefik.http.middlewares.workflo-workspace-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
       - traefik.http.routers.workflo-workspace-staging.middlewares=workflo-workspace-staging-ipwhitelist
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
 
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-api:${API_TAG}
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: '1.00'
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,6 +150,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - traefik_network
       - app_network
@@ -127,10 +162,17 @@ services:
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-bot:${BOT_TAG}
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.50'
     environment:
       NODE_ENV: production
       BOT_TOKEN: ${BOT_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     networks:
       - app_network
 
