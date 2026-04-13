@@ -126,4 +126,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check staging endpoints
-        run: ./scripts/healthcheck.sh --env staging --delay 15 --retries 1
+        run: ./scripts/healthcheck.sh --env staging --delay 30 --retries 3 --retry-delay 10
