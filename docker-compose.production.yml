@@ -25,6 +25,7 @@ services:
       NEXT_PUBLIC_API_URL: https://api.workflo.space
     labels:
       - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
       - traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)
       - traefik.http.routers.workflo-landing.entrypoints=websecure
       - traefik.http.routers.workflo-landing.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
@@ -41,6 +42,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
       - traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)
       - traefik.http.routers.workflo-portal.entrypoints=websecure
       - traefik.http.routers.workflo-portal.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
@@ -53,6 +55,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
       - traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)
       - traefik.http.routers.workflo-workspace.entrypoints=websecure
       - traefik.http.routers.workflo-workspace.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
@@ -84,6 +87,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
     labels:
       - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
       - traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)
       - traefik.http.routers.workflo-api.entrypoints=websecure
       - traefik.http.routers.workflo-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
