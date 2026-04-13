@@ -175,7 +175,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 ```
 
 Примітка: `dev-work.workflo.space` тепер входить у дефолтний staging healthcheck, але з допустимими статусами `200/401/403` (через IP whitelist).
-Примітка: в API `/health` використовується як liveness (HTTP 200 навіть при деградованій БД), а `/ready` — як readiness (200/503 залежно від доступності БД).
+Примітка: в API `/health` використовується як чистий liveness (без звернення до БД, завжди HTTP 200), а `/ready` — як readiness (200/503 залежно від доступності БД).
 
 Після merge `dev -> main` і manual approval у GitHub:
 

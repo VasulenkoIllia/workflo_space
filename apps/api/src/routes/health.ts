@@ -12,21 +12,16 @@ async function getDbStatus(): Promise<'ok' | 'error'> {
 
 const healthRoute: FastifyPluginAsync = (fastify) => {
   fastify.get('/health', async (request, reply) => {
-    const dbStatus = await getDbStatus()
-
     const checks = {
-      db: dbStatus,
       uptime: Math.floor(process.uptime()),
       version: process.env.npm_package_version ?? '0.1.0',
       timestamp: new Date().toISOString(),
     }
 
-    const overallStatus = dbStatus === 'ok' ? 'ok' : 'degraded'
-
-    request.log.debug({ checks, status: overallStatus }, 'Liveness check requested')
+    request.log.debug({ checks, status: 'ok' }, 'Liveness check requested')
 
     return reply.status(200).send({
-      status: overallStatus,
+      status: 'ok',
       checks,
     })
   })
