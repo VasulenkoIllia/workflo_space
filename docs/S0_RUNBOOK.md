@@ -54,6 +54,11 @@ gh repo edit your-org/your-repo --visibility public
 ./scripts/s0/github-secrets.sh your-org/your-repo .env.github.secrets
 ```
 
+Мінімально для деплою через SSH мають бути:
+- `HETZNER_HOST`
+- `HETZNER_SSH_USER` (твій існуючий юзер на сервері)
+- `HETZNER_SSH_KEY`
+
 Створити/оновити environment `production` з required reviewer:
 
 ```bash
