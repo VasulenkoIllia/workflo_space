@@ -62,14 +62,14 @@ if [[ "${#TARGETS[@]}" -eq 0 ]]; then
     staging)
       TARGETS=(
         "https://dev.workflo.space"
-        "https://dev-app.workflo.space/health"
+        "https://dev-portal.workflo.space/health"
         "https://dev-api.workflo.space/health"
       )
       ;;
     production)
       TARGETS=(
         "https://workflo.space"
-        "https://app.workflo.space/health"
+        "https://portal.workflo.space/health"
         "https://api.workflo.space/health"
       )
       ;;

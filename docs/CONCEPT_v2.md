@@ -600,7 +600,7 @@ invite_tokens
 workflo.space/                    ← Монорепо (Turborepo + pnpm)
 ├── apps/
 │   ├── landing/                  ← Next.js 15 — workflo.space
-│   ├── portal/                   ← React 18 + Vite — app.workflo.space (клієнти)
+│   ├── portal/                   ← React 18 + Vite — portal.workflo.space (клієнти)
 │   ├── workspace/                ← React 18 + Vite — work.workflo.space (команда)
 │   ├── api/                      ← Node.js Fastify — api.workflo.space
 │   └── bot/                      ← Telegram bot (grammY)
@@ -616,7 +616,7 @@ workflo.space/                    ← Монорепо (Turborepo + pnpm)
 | App | Домен | Аудиторія |
 |---|---|---|
 | landing | workflo.space | Всі відвідувачі, SEO |
-| portal | app.workflo.space | Клієнти (компанії) |
+| portal | portal.workflo.space | Клієнти (компанії) |
 | workspace | work.workflo.space | Команда (owner + executors) |
 | api | api.workflo.space | Backend для portal і workspace |
 | bot | — | Telegram нотифікації |
@@ -638,7 +638,7 @@ packages/notifications ← логіка email + Telegram
 traefik     — reverse proxy + SSL (вже є на сервері)
 postgres    — PostgreSQL 16
 landing     — Next.js (workflo.space)
-portal      — React SPA (app.workflo.space)
+portal      — React SPA (portal.workflo.space)
 workspace   — React SPA (work.workflo.space)
 api         — Fastify (api.workflo.space)
 bot         — Telegram bot
@@ -647,7 +647,7 @@ mailcow     — Email server (mail.workflo.space)
 
 **Середовища:**
 - `main` → production
-- `dev` → staging (dev.workflo.space, dev-app.workflo.space, dev-work.workflo.space)
+- `dev` → staging (dev.workflo.space, dev-portal.workflo.space, dev-work.workflo.space)
 - Окрема PostgreSQL БД для staging
 
 **CI/CD:** GitHub Actions → Docker build → push to ghcr.io → SSH → docker compose pull → up
@@ -743,7 +743,7 @@ created_at, updated_at, published_at
 
 ## СТРУКТУРА APPS
 
-### app.workflo.space — Portal (клієнти)
+### portal.workflo.space — Portal (клієнти)
 
 Чистий, мінімалістичний. Тільки те що потрібно клієнту.
 
@@ -802,7 +802,7 @@ created_at, updated_at, published_at
 - UA + EN повністю
 - SEO + OG images + Analytics
 
-**app.workflo.space — Portal (клієнти):**
+**portal.workflo.space — Portal (клієнти):**
 - Реєстрація (створює компанію) / логін / скидання пароля
 - Запрошення членів компанії + налаштування їх прав
 - Вітальний email після реєстрації

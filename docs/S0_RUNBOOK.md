@@ -127,8 +127,8 @@ docker compose up -d
 
 DNS записи перевести на Hetzner IP:
 - `workflo.space`, `www.workflo.space`
-- `app.workflo.space`, `work.workflo.space`, `api.workflo.space`
-- `dev.workflo.space`, `dev-app.workflo.space`, `dev-work.workflo.space`, `dev-api.workflo.space`
+- `portal.workflo.space`, `work.workflo.space`, `api.workflo.space`
+- `dev.workflo.space`, `dev-portal.workflo.space`, `dev-work.workflo.space`, `dev-api.workflo.space`
 - `mail.workflo.space`
 
 Mailcow:

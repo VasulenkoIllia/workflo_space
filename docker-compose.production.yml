@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portal.rule=Host(`app.workflo.space`)
+      - traefik.http.routers.portal.rule=Host(`portal.workflo.space`)
       - traefik.http.routers.portal.entrypoints=websecure
       - traefik.http.routers.portal.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.services.portal.loadbalancer.server.port=80

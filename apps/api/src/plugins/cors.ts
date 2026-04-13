@@ -2,7 +2,7 @@ import cors from '@fastify/cors'
 import type { FastifyPluginAsync } from 'fastify'
 
 const ALLOWED_ORIGINS_PROD = [
-  'https://app.workflo.space',
+  'https://portal.workflo.space',
   'https://work.workflo.space',
   'https://workflo.space',
 ]

@@ -69,7 +69,7 @@ fastify.post('/bot/webhook', {
 Привіт! 👋 Я бот Workflo.Space.
 
 Щоб отримувати сповіщення, прив'яжи свій акаунт:
-1. Відкрий налаштування на app.workflo.space або work.workflo.space
+1. Відкрий налаштування на portal.workflo.space або work.workflo.space
 2. Перейди в розділ "Безпека"
 3. Натисни "Підключити Telegram"
 4. Перейди по отриманому посиланню
@@ -164,7 +164,7 @@ bot.command('start', async (ctx) => {
 📋 <b>Замовлення:</b> Автоматизація звітності
 📊 <b>Новий статус:</b> ✅ Виконано, очікує вашого підтвердження
 
-<a href="https://app.workflo.space/orders/uuid">Переглянути →</a>
+<a href="https://portal.workflo.space/orders/uuid">Переглянути →</a>
 ```
 
 #### Нове повідомлення в чаті
@@ -175,7 +175,7 @@ bot.command('start', async (ctx) => {
 📋 <b>Замовлення:</b> Автоматизація звітності
 ✉️ Підготували фінальний звіт, перевірте будь ласка...
 
-<a href="https://app.workflo.space/orders/uuid#chat">Відповісти →</a>
+<a href="https://portal.workflo.space/orders/uuid#chat">Відповісти →</a>
 ```
 
 #### Рахунок виставлено
@@ -187,7 +187,7 @@ bot.command('start', async (ctx) => {
 💰 <b>Сума:</b> $500 / ₴20,750
 📅 <b>Дата:</b> 12 квітня 2026
 
-<a href="https://app.workflo.space/documents/uuid">Завантажити PDF →</a>
+<a href="https://portal.workflo.space/documents/uuid">Завантажити PDF →</a>
 ```
 
 ---

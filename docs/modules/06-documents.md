@@ -1,5 +1,5 @@
 # DOCUMENTS MODULE
-> App: Workspace (work.workflo.space) / Portal (app.workflo.space) / API (api.workflo.space)
+> App: Workspace (work.workflo.space) / Portal (portal.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/templates`, `packages/storage`
 > Оновлено: 12 квітня 2026

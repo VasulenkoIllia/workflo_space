@@ -1,5 +1,5 @@
 # UX PAGES — Структура сторінок та Dashboard
-> Portal (app.workflo.space) / Workspace (work.workflo.space)
+> Portal (portal.workflo.space) / Workspace (work.workflo.space)
 > Версія: 1.0 | Оновлено: 12 квітня 2026
 
 ---
@@ -17,7 +17,7 @@
 
 ## 1. PORTAL — МАРШРУТИ ТА СТОРІНКИ
 
-> app.workflo.space — для клієнтів (Company Owner + Company Members)
+> portal.workflo.space — для клієнтів (Company Owner + Company Members)
 
 ### Маршрути (React Router v6)
 

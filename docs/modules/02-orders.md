@@ -1,5 +1,5 @@
 # ORDERS MODULE
-> App: Portal (app.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
+> App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
 > Оновлено: 12 квітня 2026

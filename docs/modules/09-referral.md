@@ -1,5 +1,5 @@
 # MODULE 09 — REFERRAL SYSTEM
-> App: Portal (`app.workflo.space`) + Workspace (`work.workflo.space`)
+> App: Portal (`portal.workflo.space`) + Workspace (`work.workflo.space`)
 > Статус: MVP
 > Залежить від: [01-auth, 02-company, 07-billing-payments]
 > Оновлено: 12 квітня 2026
@@ -54,7 +54,7 @@ function generateReferralCode(): string {
 
 1. Користувач відкриває `https://workflo.space?ref=workflo-K7X2QM`
 2. Landing зберігає `ref` параметр у `localStorage` (TTL 30 днів)
-3. При переході на реєстрацію (`https://app.workflo.space/register`) — Portal зчитує значення з `localStorage` і підставляє прихований `referralCode` у форму
+3. При переході на реєстрацію (`https://portal.workflo.space/register`) — Portal зчитує значення з `localStorage` і підставляє прихований `referralCode` у форму
 4. `POST /auth/register { email, password, companyName, referralCode? }`:
    - Якщо `referralCode` передано → шукаємо компанію за `companies.referralCode`
    - Якщо знайдена → встановлюємо `newCompany.referredById = referrerCompany.id`
@@ -400,7 +400,7 @@ Query: ?page=1&perPage=20&search=
 Ваш бонус (10%): $47.50 зараховано на бонусний баланс.
 
 Поточний баланс: $47.50
-Ваша сторінка рефералів: https://app.workflo.space/referrals
+Ваша сторінка рефералів: https://portal.workflo.space/referrals
 ```
 
 **Email шаблон — новий рівень ставки:**

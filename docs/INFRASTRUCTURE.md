@@ -404,7 +404,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.portal-staging.rule=Host(`dev-app.workflo.space`)"
+      - "traefik.http.routers.portal-staging.rule=Host(`dev-portal.workflo.space`)"
       - "traefik.http.routers.portal-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.portal-staging.entrypoints=websecure"
       - "traefik.http.services.portal-staging.loadbalancer.server.port=80"
@@ -441,7 +441,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SENTRY_DSN=${SENTRY_DSN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FRONTEND_URL=https://dev-app.workflo.space
+      - FRONTEND_URL=https://dev-portal.workflo.space
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)"
@@ -502,7 +502,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.portal.rule=Host(`app.workflo.space`)"
+      - "traefik.http.routers.portal.rule=Host(`portal.workflo.space`)"
       - "traefik.http.routers.portal.tls.certresolver=letsencrypt"
       - "traefik.http.routers.portal.entrypoints=websecure"
       - "traefik.http.services.portal.loadbalancer.server.port=80"
@@ -539,7 +539,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SENTRY_DSN=${SENTRY_DSN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FRONTEND_URL=https://app.workflo.space
+      - FRONTEND_URL=https://portal.workflo.space
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`api.workflo.space`)"
@@ -727,7 +727,7 @@ jobs:
           }
           
           check https://dev.workflo.space
-          check https://dev-app.workflo.space/health
+          check https://dev-portal.workflo.space/health
           check https://dev-work.workflo.space/health
           check https://dev-api.workflo.space/health
 ```
@@ -905,7 +905,7 @@ jobs:
           }
           
           check https://workflo.space || exit 1
-          check https://app.workflo.space/health || exit 1
+          check https://portal.workflo.space/health || exit 1
           check https://api.workflo.space/health || exit 1
 
       - name: Auto rollback on failure
@@ -1215,7 +1215,7 @@ SENTRY_DSN=
 # ═══════════════════════════════════════
 # URLS (API використовує для CORS і email links)
 # ═══════════════════════════════════════
-FRONTEND_URL=http://localhost:3001   # prod: https://app.workflo.space
+FRONTEND_URL=http://localhost:3001   # prod: https://portal.workflo.space
 WORKSPACE_URL=http://localhost:3002  # prod: https://work.workflo.space
 
 # ═══════════════════════════════════════
@@ -1584,7 +1584,7 @@ import * as Sentry from "@sentry/nextjs";
 ```
 Моніторить кожні 5 хвилин:
 - https://workflo.space                    (HTTP 200)
-- https://app.workflo.space/health         (HTTP 200)
+- https://portal.workflo.space/health         (HTTP 200)
 - https://api.workflo.space/health         (HTTP 200)
 
 Алерт: Telegram notification при downtime > 2 хв
@@ -1859,11 +1859,11 @@ http://localhost:8025
 DNS записи → твій Hetzner IP:
 □ workflo.space          A    server-ip
 □ www.workflo.space      A    server-ip
-□ app.workflo.space      A    server-ip
+□ portal.workflo.space      A    server-ip
 □ work.workflo.space     A    server-ip
 □ api.workflo.space      A    server-ip
 □ dev.workflo.space      A    server-ip
-□ dev-app.workflo.space  A    server-ip
+□ dev-portal.workflo.space  A    server-ip
 □ dev-work.workflo.space A    server-ip
 □ dev-api.workflo.space  A    server-ip
 □ mail.workflo.space     A    server-ip
@@ -1895,13 +1895,13 @@ DNS записи → твій Hetzner IP:
 □ Deploy на staging проходить
 □ Перевірити:
   □ https://dev.workflo.space — landing
-  □ https://dev-app.workflo.space — portal
+  □ https://dev-portal.workflo.space — portal
   □ https://dev-api.workflo.space/health — api
 □ SSL сертифікати видані Let's Encrypt (перший раз може взяти ~2 хв)
 □ PR dev → main → затвердити → production deploy
 □ Перевірити production:
   □ https://workflo.space
-  □ https://app.workflo.space
+  □ https://portal.workflo.space
   □ https://api.workflo.space/health
   □ https://work.workflo.space — доступний тільки з твого IP
 □ Налаштувати cron для backup:

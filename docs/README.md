@@ -129,7 +129,7 @@ turbo dev
 | App | Production | Staging |
 |---|---|---|
 | Landing | workflo.space | dev.workflo.space |
-| Portal | app.workflo.space | dev-app.workflo.space |
+| Portal | portal.workflo.space | dev-portal.workflo.space |
 | Workspace | work.workflo.space *(IP whitelist)* | dev-work.workflo.space |
 | API | api.workflo.space | dev-api.workflo.space |
 | Mail | mail.workflo.space | — |

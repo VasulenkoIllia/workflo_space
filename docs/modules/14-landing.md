@@ -84,7 +84,7 @@ export const config = {
 ### 1. Hero Section
 - Заголовок: "Автоматизуй свій бізнес. Делегуй задачі. Ростіть разом."
 - Підзаголовок: короткий опис що робить Workflo.Space
-- CTA кнопки: "Спробувати безкоштовно" → `app.workflo.space/register` + "Дізнатися більше" → anchor scroll
+- CTA кнопки: "Спробувати безкоштовно" → `portal.workflo.space/register` + "Дізнатися більше" → anchor scroll
 - Фоновий animated gradient або ілюстрація
 
 ### 2. Features Section

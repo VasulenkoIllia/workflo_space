@@ -117,7 +117,7 @@ export function renderEmailTemplate(
 ### `password-reset`
 ```
 {{name}}
-{{resetUrl}}       — https://app.workflo.space/reset-password?token=...
+{{resetUrl}}       — https://portal.workflo.space/reset-password?token=...
 {{expiresIn}}      — "1 година"
 ```
 

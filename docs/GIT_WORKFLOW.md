@@ -421,7 +421,7 @@ git pull
 git branch -d feature/S2-05-order-comments
 
 # Перевіряємо staging
-# https://dev.workflo.space або https://dev-app.workflo.space
+# https://dev.workflo.space або https://dev-portal.workflo.space
 ```
 
 ### Корисні аліаси (додати в ~/.gitconfig)

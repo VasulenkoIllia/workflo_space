@@ -1,5 +1,5 @@
 # AUTH MODULE
-> App: Portal (app.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
+> App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/notifications`, `packages/types`
 > Оновлено: 12 квітня 2026
@@ -24,8 +24,8 @@
 |---|---|---|
 | `owner` | Вручну (перший акаунт) | Пряма реєстрація або seed |
 | `executor` | Тільки через invite від owner | `work.workflo.space/invite/{token}` |
-| `client` (Company Owner) | Самореєстрація | `app.workflo.space/register` + referral |
-| `client` (Company Member) | Тільки через invite від Company Owner | `app.workflo.space/invite/{token}` |
+| `client` (Company Owner) | Самореєстрація | `portal.workflo.space/register` + referral |
+| `client` (Company Member) | Тільки через invite від Company Owner | `portal.workflo.space/invite/{token}` |
 
 > Workspace (`work.workflo.space`) захищений на рівні Traefik — IP whitelist для команди. Клієнт фізично не може відкрити сторінку навіть якщо знає URL.
 
@@ -80,7 +80,7 @@
 1. Приймаємо `{ email }`.
 2. Якщо email не знайдено — **відповідаємо 200** (не розкриваємо чи існує акаунт).
 3. Генеруємо `PasswordResetToken` (UUID, `expiresAt = now + 1 година`).
-4. Відправляємо email із посиланням: `app.workflo.space/reset-password/{token}`.
+4. Відправляємо email із посиланням: `portal.workflo.space/reset-password/{token}`.
 
 ### Reset Password (`POST /auth/reset-password`)
 
@@ -113,7 +113,7 @@
 1. Приймаємо `{ email, permissions: { can_create_tasks, can_view_billing, can_approve_estimates, can_invite_members } }`.
 2. Якщо переданий email вже є профілем в системі і вже є member цієї компанії → 409.
 3. Створюємо `Invite`: `type = company_member`, `companyId = поточна компанія`, `permissions = JSON`, `expiresAt = now + 7 днів`.
-4. Надсилаємо email: `app.workflo.space/invite/{token}`.
+4. Надсилаємо email: `portal.workflo.space/invite/{token}`.
 5. Якщо email вже є профілем (клієнт іншої компанії або новий) — invite page дозволяє прив'язати існуючий акаунт або зареєструватись.
 6. Після прийняття: `company_members` запис із переданими permissions.
 
@@ -466,7 +466,7 @@ Company Owner або member із `can_invite_members`.
 
 ## UI Flows
 
-### Portal (app.workflo.space) — клієнтська сторона
+### Portal (portal.workflo.space) — клієнтська сторона
 
 **Реєстрація:**
 1. `/register` — форма: email, ім'я, пароль, (опціонально) referral code
@@ -548,7 +548,7 @@ Company Owner або member із `can_invite_members`.
 // apps/api/src/plugins/cors.ts
 fastify.register(cors, {
   origin: [
-    'https://app.workflo.space',
+    'https://portal.workflo.space',
     'https://work.workflo.space',
     'http://localhost:3001',
     'http://localhost:3002',

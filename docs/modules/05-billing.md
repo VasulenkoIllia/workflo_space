@@ -1,5 +1,5 @@
 # MODULE 05 — BILLING
-> App: api.workflo.space / workspace (work.workflo.space) / portal (app.workflo.space)
+> App: api.workflo.space / workspace (work.workflo.space) / portal (portal.workflo.space)
 > Статус: MVP
 > Залежить від: [01-auth, 02-companies, 03-orders, 04-services]
 > Оновлено: 12 квітня 2026
