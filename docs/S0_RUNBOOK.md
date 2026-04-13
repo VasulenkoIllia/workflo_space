@@ -36,6 +36,12 @@ gh repo edit your-org/your-repo --visibility public
 ./scripts/s0/github-branch-protection.sh your-org/your-repo
 ```
 
+Для solo-розробки (щоб не блокувати merge власних PR) можна тимчасово:
+
+```bash
+./scripts/s0/github-branch-protection.sh your-org/your-repo --approvals 0
+```
+
 Заповнити GitHub secrets:
 
 ```bash

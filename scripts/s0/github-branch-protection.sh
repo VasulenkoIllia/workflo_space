@@ -2,9 +2,14 @@
 set -euo pipefail
 
 REPO="${1:-}"
+APPROVALS="${APPROVALS:-1}"
+
+if [[ "${2:-}" == "--approvals" ]]; then
+  APPROVALS="${3:-1}"
+fi
 
 if [[ -z "$REPO" ]]; then
-  echo "Usage: $0 <owner/repo>" >&2
+  echo "Usage: $0 <owner/repo> [--approvals <0|1|2...>]" >&2
   exit 1
 fi
 
@@ -16,6 +21,11 @@ fi
 gh auth status >/dev/null
 
 IS_PRIVATE="$(gh api "/repos/$REPO" --jq '.private')"
+REQUIRE_CODEOWNERS="true"
+
+if [[ "$APPROVALS" == "0" ]]; then
+  REQUIRE_CODEOWNERS="false"
+fi
 
 apply_protection() {
   local branch="$1"
@@ -28,7 +38,7 @@ apply_protection() {
     --method PUT \
     -H "Accept: application/vnd.github+json" \
     "/repos/$REPO/branches/$branch/protection" \
-    --input - <<'JSON' 2>&1
+    --input - <<JSON 2>&1
 {
   "required_status_checks": {
     "strict": true,
@@ -37,8 +47,8 @@ apply_protection() {
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
-    "require_code_owner_reviews": true,
-    "required_approving_review_count": 1,
+    "require_code_owner_reviews": $REQUIRE_CODEOWNERS,
+    "required_approving_review_count": $APPROVALS,
     "require_last_push_approval": false
   },
   "restrictions": null,

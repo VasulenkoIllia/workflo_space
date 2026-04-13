@@ -337,6 +337,7 @@ git push origin dev
 
 > Примітка: для private репозиторію на GitHub Free ці правила недоступні.
 > Варіанти: зробити repo public або перейти на GitHub Pro/Team.
+> Якщо ти єдиний розробник — став `required approvals = 0`, інакше власний PR не змерджиться.
 
 ### `dev` (staging)
 
