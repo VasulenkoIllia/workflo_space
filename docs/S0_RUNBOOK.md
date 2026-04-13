@@ -162,23 +162,25 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 Push у `dev` запускає `staging.yml`, який робить:
 - build/push Docker images у GHCR
 - sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance`)
-- deploy контейнерів у `/var/www/srv/workflo/staging`
+- deploy контейнерів у `/var/www/srv/workflo/staging` з фіксованим compose project name `workflo-staging`
+- перевіряє, що після деплою реально запущені `postgres`, `api`, `bot`, `landing`, `portal`, `workspace`
+- прогріває TLS/SNI для `dev`, `dev-portal`, `dev-work`, `dev-api` і чекає, поки зникне `TRAEFIK DEFAULT CERT`
 
 Перевірка:
 
 ```bash
-./scripts/healthcheck.sh --env staging --delay 20 --retries 3
+./scripts/healthcheck.sh --env staging --delay 20 --retries 6 --retry-delay 10
 ```
 
-Примітка: `dev-work.workflo.space` не входить у дефолтний staging healthcheck, бо зазвичай захищений IP whitelist.
+Примітка: `dev-work.workflo.space` тепер входить у дефолтний staging healthcheck, але з допустимими статусами `200/401/403` (через IP whitelist).
 
 Після merge `dev -> main` і manual approval у GitHub:
 
 ```bash
-./scripts/healthcheck.sh --env production --delay 20 --retries 3
+./scripts/healthcheck.sh --env production --delay 20 --retries 6 --retry-delay 10
 ```
 
-`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` після manual approval.
+`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
 
 ## 7) Backup/Rollback
 

@@ -393,7 +393,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-landing-staging.rule=Host(`dev.workflo.space`)"
-      - "traefik.http.routers.workflo-landing-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-landing-staging.tls.certresolver=cf"
       - "traefik.http.routers.workflo-landing-staging.entrypoints=websecure"
       - "traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000"
     networks:
@@ -405,7 +405,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-portal-staging.rule=Host(`dev-portal.workflo.space`)"
-      - "traefik.http.routers.workflo-portal-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-portal-staging.tls.certresolver=cf"
       - "traefik.http.routers.workflo-portal-staging.entrypoints=websecure"
       - "traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80"
     networks:
@@ -417,7 +417,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-workspace-staging.rule=Host(`dev-work.workflo.space`)"
-      - "traefik.http.routers.workflo-workspace-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-workspace-staging.tls.certresolver=cf"
       - "traefik.http.routers.workflo-workspace-staging.entrypoints=websecure"
       - "traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80"
       # IP whitelist — тільки ваші IP навіть на staging
@@ -445,7 +445,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)"
-      - "traefik.http.routers.workflo-api-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-api-staging.tls.certresolver=cf"
       - "traefik.http.routers.workflo-api-staging.entrypoints=websecure"
       - "traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000"
     networks:
@@ -486,7 +486,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)"
-      - "traefik.http.routers.workflo-landing.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-landing.tls.certresolver=cf"
       - "traefik.http.routers.workflo-landing.entrypoints=websecure"
       - "traefik.http.services.workflo-landing.loadbalancer.server.port=3000"
       # www → без www
@@ -503,7 +503,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)"
-      - "traefik.http.routers.workflo-portal.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-portal.tls.certresolver=cf"
       - "traefik.http.routers.workflo-portal.entrypoints=websecure"
       - "traefik.http.services.workflo-portal.loadbalancer.server.port=80"
     networks:
@@ -515,7 +515,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)"
-      - "traefik.http.routers.workflo-workspace.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-workspace.tls.certresolver=cf"
       - "traefik.http.routers.workflo-workspace.entrypoints=websecure"
       - "traefik.http.services.workflo-workspace.loadbalancer.server.port=80"
       # IP whitelist — ТІЛЬКИ ваші статичні IP
@@ -543,7 +543,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)"
-      - "traefik.http.routers.workflo-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.workflo-api.tls.certresolver=cf"
       - "traefik.http.routers.workflo-api.entrypoints=websecure"
       - "traefik.http.services.workflo-api.loadbalancer.server.port=4000"
     networks:
@@ -1000,10 +1000,10 @@ entryPoints:
     address: ":443"
     http:
       tls:
-        certResolver: letsencrypt
+        certResolver: cf
 
 certificatesResolvers:
-  letsencrypt:
+  cf:
     acme:
       email: hello@workflo.space
       storage: /acme/acme.json      # volume, зберігається на сервері

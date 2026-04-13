@@ -11,6 +11,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   RUNTIME_ROOT: /var/www/srv/workflo
+  STAGING_COMPOSE_PROJECT: workflo-staging
 
 jobs:
   check:
@@ -100,6 +101,10 @@ jobs:
             set -e
             cd "${{ env.RUNTIME_ROOT }}/staging"
 
+            compose() {
+              docker compose --project-name "${{ env.STAGING_COMPOSE_PROJECT }}" --env-file .env -f docker-compose.staging.yml "$@"
+            }
+
             export LANDING_TAG=sha-${{ github.sha }}
             export PORTAL_TAG=sha-${{ github.sha }}
             export WORKSPACE_TAG=sha-${{ github.sha }}
@@ -107,14 +112,49 @@ jobs:
             export BOT_TAG=sha-${{ github.sha }}
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            docker compose --env-file .env -f docker-compose.staging.yml pull
-            docker compose --env-file .env -f docker-compose.staging.yml up -d postgres
+            compose pull
+            compose up -d postgres
 
-            docker compose --env-file .env -f docker-compose.staging.yml up -d --no-deps api
-            docker compose --env-file .env -f docker-compose.staging.yml up -d --no-deps bot
-            docker compose --env-file .env -f docker-compose.staging.yml up -d --no-deps landing
-            docker compose --env-file .env -f docker-compose.staging.yml up -d --no-deps portal
-            docker compose --env-file .env -f docker-compose.staging.yml up -d --no-deps workspace
+            compose up -d --no-deps api
+            compose up -d --no-deps bot
+            compose up -d --no-deps landing
+            compose up -d --no-deps portal
+            compose up -d --no-deps workspace
+
+            running_services="$(compose ps --status running --services)"
+            for svc in postgres api bot landing portal workspace; do
+              if ! echo "$running_services" | grep -qx "$svc"; then
+                echo "Service '$svc' is not running after deploy"
+                compose ps
+                exit 1
+              fi
+            done
+
+            wait_for_non_default_cert() {
+              host="$1"
+              check_path="$2"
+              retries=12
+
+              for attempt in $(seq 1 "$retries"); do
+                cert_info="$(openssl s_client -connect 127.0.0.1:443 -servername "$host" </dev/null 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName 2>/dev/null || true)"
+                if echo "$cert_info" | grep -Fq "DNS:${host}" && ! echo "$cert_info" | grep -Fq "TRAEFIK DEFAULT CERT"; then
+                  echo "TLS OK: $host"
+                  return 0
+                fi
+
+                curl -ksS -o /dev/null "https://${host}${check_path}" || true
+                sleep 5
+              done
+
+              echo "TLS FAIL: non-default cert was not issued for ${host}"
+              openssl s_client -connect 127.0.0.1:443 -servername "$host" </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName || true
+              return 1
+            }
+
+            wait_for_non_default_cert dev.workflo.space /
+            wait_for_non_default_cert dev-portal.workflo.space /health
+            wait_for_non_default_cert dev-work.workflo.space /health
+            wait_for_non_default_cert dev-api.workflo.space /health
 
             echo "sha-${{ github.sha }}" > .last_deploy
 
@@ -126,4 +166,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check staging endpoints
-        run: ./scripts/healthcheck.sh --env staging --delay 30 --retries 3 --retry-delay 10
+        run: ./scripts/healthcheck.sh --env staging --delay 20 --retries 6 --retry-delay 10
