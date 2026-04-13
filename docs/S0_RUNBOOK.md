@@ -152,6 +152,8 @@ Push у `dev` запускає `staging.yml`.
 ./scripts/healthcheck.sh --env staging --delay 20 --retries 3
 ```
 
+Примітка: `dev-work.workflo.space` не входить у дефолтний staging healthcheck, бо зазвичай захищений IP whitelist.
+
 Після merge `dev -> main` і manual approval у GitHub:
 
 ```bash
