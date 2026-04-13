@@ -76,6 +76,7 @@ gh repo edit your-org/your-repo --visibility public
 На сервері як `root`:
 
 ```bash
+export DEPLOY_USER=workflo  # твій існуючий юзер на сервері
 export PROD_DB_PASSWORD='replace-me'
 export STAGING_DB_PASSWORD='replace-me'
 

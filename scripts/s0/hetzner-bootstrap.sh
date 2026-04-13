@@ -45,7 +45,12 @@ run() {
 }
 
 run "apt-get update"
-run "apt-get install -y ca-certificates curl gnupg ufw docker.io docker-compose-plugin postgresql postgresql-contrib"
+if command -v docker >/dev/null 2>&1; then
+  echo "Docker is already installed. Skipping docker package installation."
+  run "apt-get install -y ca-certificates curl gnupg ufw postgresql postgresql-contrib"
+else
+  run "apt-get install -y ca-certificates curl gnupg ufw docker.io docker-compose-plugin postgresql postgresql-contrib"
+fi
 run "systemctl enable --now docker"
 run "systemctl enable --now postgresql"
 
