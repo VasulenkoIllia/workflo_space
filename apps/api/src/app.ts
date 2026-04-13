@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import corsPlugin from './plugins/cors.js'
 import errorHandlerPlugin from './plugins/errorHandler.js'
 import rateLimitingPlugin from './plugins/rateLimiting.js'
+import securityHeadersPlugin from './plugins/securityHeaders.js'
 import healthRoute from './routes/health.js'
 
 function buildLoggerConfig() {
@@ -50,9 +51,11 @@ function buildLoggerConfig() {
 export function buildApp() {
   const app = Fastify({
     logger: buildLoggerConfig(),
+    trustProxy: true,
   })
 
   app.register(corsPlugin)
+  app.register(securityHeadersPlugin)
   app.register(rateLimitingPlugin)
 
   app.register(healthRoute)

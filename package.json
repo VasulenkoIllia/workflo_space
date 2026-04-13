@@ -29,7 +29,11 @@
   },
   "packageManager": "pnpm@9.15.9",
   "lint-staged": {
-    "**/*.{ts,tsx,js,jsx}": [
+    "apps/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "packages/**/src/**/*.{ts,tsx,js,jsx}": [
       "eslint --fix --max-warnings=0",
       "prettier --write"
     ],
@@ -37,7 +41,7 @@
       "prettier --write"
     ],
     "packages/db/prisma/schema.prisma": [
-      "prisma format"
+      "pnpm --filter @workflo/db exec prisma format"
     ]
   }
 }

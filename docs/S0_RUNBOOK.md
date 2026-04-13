@@ -37,6 +37,7 @@ gh auth login
 ```
 
 Для `GitHub Free`:
+
 - `branch protection` і `required reviewer` працюють на `public` репозиторіях
 - для `private` потрібен платний план (`Pro/Team`)
 
@@ -71,6 +72,7 @@ gh repo edit your-org/your-repo --visibility public
 ```
 
 Мінімально для деплою через SSH мають бути:
+
 - `HETZNER_HOST`
 - `HETZNER_SSH_USER` (твій існуючий юзер на сервері)
 - `HETZNER_SSH_KEY`
@@ -106,6 +108,7 @@ bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 ```
 
 Що робить скрипт:
+
 - встановлює Docker + Compose plugin + UFW
 - створює `deploy` user і системні директорії `/var/www/srv/workflo/*`, `/var/www/srv/traefik`
 - вмикає UFW правила для `22/80/443` і закриває `5432/19999`
@@ -115,6 +118,7 @@ bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 ## 4) Traefik (S0-15)
 
 Якщо Traefik вже встановлений і працює:
+
 - не перевстановлюй його
 - використовуй існуючий `certResolver` (наприклад `cf`)
 - переконайся, що є Docker network для роутінгу (`traefik_network` або твій кастомний)
@@ -147,17 +151,20 @@ docker compose up -d
 ## 5) DNS + Mail baseline (S0-16, S0-17)
 
 DNS записи перевести на Hetzner IP:
+
 - `workflo.space`, `www.workflo.space`
 - `portal.workflo.space`, `work.workflo.space`, `api.workflo.space`
 - `dev.workflo.space`, `dev-portal.workflo.space`, `dev-work.workflo.space`, `dev-api.workflo.space`
 - `mail.workflo.space`
 
 Mail baseline для S0:
+
 - DNS `mail.workflo.space` має резолвитись на твій сервер
 - в `.env` задані `SMTP_HOST`/`SMTP_PORT`
 - `SMTP_USER`/`SMTP_PASS` можуть бути порожніми до вводу email-функцій у прод експлуатацію
 
 Mailcow rollout:
+
 - встановити окремим stack
 - налаштувати `SPF`, `DKIM`, `DMARC`
 - створити скриньки `hello@`, `noreply@`, `support@`
@@ -181,13 +188,21 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 
 В `.env` значення `GITHUB_REPOSITORY_OWNER` вкажи в lowercase (наприклад `vasulenkoillia`), бо GHCR чутливий до регістру.
 Для dockerized PostgreSQL заповни:
+
 - `POSTGRES_DB_STAGING`, `POSTGRES_USER_STAGING`, `POSTGRES_PASSWORD_STAGING`
 - `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`
 - `DATABASE_URL_STAGING` / `DATABASE_URL_PROD` з host `postgres`
+- `CORS_ALLOWED_ORIGINS_STAGING` / `CORS_ALLOWED_ORIGINS_PROD`
+
+Compose тепер працює у fail-fast режимі для критичних змінних:
+
+- staging: `POSTGRES_PASSWORD_STAGING`, `DATABASE_URL_STAGING`, `JWT_SECRET_STAGING`
+- production: `POSTGRES_PASSWORD_PROD`, `DATABASE_URL_PROD`, `JWT_SECRET_PROD`
 
 Опційні змінні (`SMTP_USER`, `SMTP_PASS`, `BOT_TOKEN`) можуть бути порожніми на S0 етапі; compose-файли мають `:-` fallback і не повинні сипати warning під час `docker compose up`.
 
 Push у `dev` запускає `staging.yml`, який робить:
+
 - build/push Docker images у GHCR
 - sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance` + `infra/postgres`)
 - deploy контейнерів у `/var/www/srv/workflo/staging` з фіксованим compose project name `workflo-staging`
@@ -216,6 +231,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 `production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, build/enable `pg_cron` у postgres, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
 
 Перед rerun/production deploy перевір, що в `/var/www/srv/workflo/production/.env` не лишилось placeholder-значень:
+
 - `GITHUB_REPOSITORY_OWNER` = реальний lowercase owner (`vasulenkoillia`)
 - `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`, `DATABASE_URL_PROD`
 - `JWT_SECRET_PROD`

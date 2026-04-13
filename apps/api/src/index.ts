@@ -1,8 +1,11 @@
 import { prisma } from '@workflo/db'
 import { buildApp } from './app.js'
+import { validateRuntimeEnv } from './config/env.js'
 
 const port = Number(process.env.API_PORT ?? 4000)
 const host = process.env.API_HOST ?? '0.0.0.0'
+
+validateRuntimeEnv()
 
 const app = buildApp()
 

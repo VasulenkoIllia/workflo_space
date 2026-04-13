@@ -3,22 +3,6 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { ApiErrorCode } from '@workflo/types'
 
 function getRateLimitKey(request: FastifyRequest): string {
-  const forwardedFor = request.headers['x-forwarded-for']
-
-  if (typeof forwardedFor === 'string') {
-    const first = forwardedFor.split(',')[0]?.trim()
-    if (first) {
-      return first
-    }
-  }
-
-  if (Array.isArray(forwardedFor)) {
-    const first = forwardedFor[0]?.trim()
-    if (first) {
-      return first
-    }
-  }
-
   return request.ip
 }
 

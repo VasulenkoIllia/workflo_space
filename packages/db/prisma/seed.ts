@@ -53,7 +53,7 @@ async function main() {
       isActive: true,
     },
   })
-  console.log(`✅ Owner: ${ownerEmail} / ${ownerPassword}`)
+  console.log(`✅ Owner seeded: ${ownerEmail}`)
 
   const executor = await prisma.profile.upsert({
     where: { email: DEFAULT_EXECUTOR_EMAIL },
@@ -74,7 +74,7 @@ async function main() {
       isActive: true,
     },
   })
-  console.log(`✅ Executor: ${DEFAULT_EXECUTOR_EMAIL} / ${DEFAULT_EXECUTOR_PASSWORD}`)
+  console.log(`✅ Executor seeded: ${DEFAULT_EXECUTOR_EMAIL}`)
 
   const clientProfile = await prisma.profile.upsert({
     where: { email: DEFAULT_CLIENT_EMAIL },
@@ -133,7 +133,7 @@ async function main() {
       permissions: {},
     },
   })
-  console.log(`✅ Company: ${company.name} (${DEFAULT_CLIENT_EMAIL} / ${DEFAULT_CLIENT_PASSWORD})`)
+  console.log(`✅ Company seeded: ${company.name} (${DEFAULT_CLIENT_EMAIL})`)
 
   await prisma.notificationSettings.upsert({
     where: { profileId: owner.id },
