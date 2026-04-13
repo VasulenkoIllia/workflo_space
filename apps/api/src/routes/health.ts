@@ -1,15 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { prisma } from '@workflo/db'
 
+async function getDbStatus(): Promise<'ok' | 'error'> {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    return 'ok'
+  } catch {
+    return 'error'
+  }
+}
+
 const healthRoute: FastifyPluginAsync = (fastify) => {
   fastify.get('/health', async (request, reply) => {
-    let dbStatus: 'ok' | 'error' = 'ok'
-
-    try {
-      await prisma.$queryRaw`SELECT 1`
-    } catch {
-      dbStatus = 'error'
-    }
+    const dbStatus = await getDbStatus()
 
     const checks = {
       db: dbStatus,
@@ -20,18 +23,26 @@ const healthRoute: FastifyPluginAsync = (fastify) => {
 
     const overallStatus = dbStatus === 'ok' ? 'ok' : 'degraded'
 
-    request.log.info({ checks, status: overallStatus }, 'Health check requested')
+    request.log.debug({ checks, status: overallStatus }, 'Liveness check requested')
 
-    if (overallStatus === 'ok') {
-      return reply.status(200).send({
-        status: overallStatus,
-        checks,
-      })
-    }
-
-    return reply.status(503).send({
+    return reply.status(200).send({
       status: overallStatus,
       checks,
+    })
+  })
+
+  fastify.get('/ready', async (request, reply) => {
+    const dbStatus = await getDbStatus()
+    const isReady = dbStatus === 'ok'
+
+    request.log.debug({ db: dbStatus, ready: isReady }, 'Readiness check requested')
+
+    return reply.status(isReady ? 200 : 503).send({
+      status: isReady ? 'ready' : 'not-ready',
+      checks: {
+        db: dbStatus,
+      },
+      timestamp: new Date().toISOString(),
     })
   })
 
