@@ -15,4 +15,4 @@ ENV API_PORT=4000
 
 EXPOSE 4000
 
-CMD ["pnpm", "--filter", "@workflo/api", "start"]
+CMD ["node", "apps/api/dist/index.js"]
