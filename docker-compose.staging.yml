@@ -84,9 +84,9 @@ services:
       JWT_SECRET: ${JWT_SECRET_STAGING}
       SMTP_HOST: ${SMTP_HOST:-mail.workflo.space}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      BOT_TOKEN: ${BOT_TOKEN}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      BOT_TOKEN: ${BOT_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     labels:
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_TOKEN: ${BOT_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     networks:
       - app_network

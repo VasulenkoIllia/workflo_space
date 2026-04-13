@@ -160,6 +160,8 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 - `POSTGRES_DB_PROD`, `POSTGRES_USER_PROD`, `POSTGRES_PASSWORD_PROD`
 - `DATABASE_URL_STAGING` / `DATABASE_URL_PROD` з host `postgres`
 
+Опційні змінні (`SMTP_USER`, `SMTP_PASS`, `BOT_TOKEN`) можуть бути порожніми на S0 етапі; compose-файли мають `:-` fallback і не повинні сипати warning під час `docker compose up`.
+
 Push у `dev` запускає `staging.yml`, який робить:
 - build/push Docker images у GHCR
 - sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance`)
@@ -176,6 +178,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 
 Примітка: `dev-work.workflo.space` тепер входить у дефолтний staging healthcheck, але з допустимими статусами `200/401/403` (через IP whitelist).
 Примітка: в API `/health` використовується як чистий liveness (без звернення до БД, завжди HTTP 200), а `/ready` — як readiness (200/503 залежно від доступності БД).
+Примітка: API image використовує `node:20-bookworm-slim` + встановлений `openssl`, а Prisma Client генерується з `binaryTargets = ["native", "debian-openssl-3.0.x"]`. Це прибирає runtime-помилку `libssl.so.1.1` на staging/production.
 
 Після merge `dev -> main` і manual approval у GitHub:
 

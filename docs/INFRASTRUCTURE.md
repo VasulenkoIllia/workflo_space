@@ -1594,15 +1594,19 @@ import * as Sentry from "@sentry/nextjs";
 ```typescript
 // apps/api/src/routes/health.ts
 fastify.get('/health', async (req, reply) => {
-  // Перевірка БД
-  await prisma.$queryRaw`SELECT 1`;
   return reply.send({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
 });
+
+fastify.get('/ready', async (req, reply) => {
+  // Readiness перевіряє БД і повертає 200/503
+});
 ```
+
+Примітка: для прод runtime API використовує Debian + OpenSSL 3, а Prisma Client генерується з `binaryTargets = ["native", "debian-openssl-3.0.x"]`.
 
 ### 13.3 Netdata (CPU/RAM/Disk сервера)
 
