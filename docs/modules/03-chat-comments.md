@@ -1,5 +1,5 @@
 # CHAT & COMMENTS MODULE
-> App: Portal (app.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
+> App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
 > Оновлено: 12 квітня 2026
@@ -212,7 +212,7 @@ enum CommentType {
 - Редагування inline: клік на повідомлення → edit mode → Save / Cancel
 - Drag & drop файлів у вікно чату
 
-### Portal (app.workflo.space)
+### Portal (portal.workflo.space)
 
 - Чат у секції замовлення
 - Тільки публічні повідомлення

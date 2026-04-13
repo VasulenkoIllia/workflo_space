@@ -1,5 +1,9 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
@@ -15,4 +19,4 @@ ENV API_PORT=4000
 
 EXPOSE 4000
 
-CMD ["pnpm", "--filter", "@workflo/api", "start"]
+CMD ["node", "apps/api/dist/index.js"]

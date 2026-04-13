@@ -10,7 +10,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/workflo
+  RUNTIME_ROOT: /var/www/srv/workflo
+  STAGING_COMPOSE_PROJECT: workflo-staging
 
 jobs:
   check:
@@ -21,7 +22,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.9
 
       - uses: actions/setup-node@v4
         with:
@@ -30,6 +31,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @workflo/db db:generate
 
       - name: Type check
         run: pnpm turbo type-check
@@ -47,6 +51,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Normalize registry owner (lowercase)
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -63,7 +71,7 @@ jobs:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.app }}:sha-${{ github.sha }}
+          tags: ghcr.io/${{ steps.owner.outputs.value }}/workflo-${{ matrix.app }}:sha-${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
@@ -72,30 +80,126 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync runtime manifests
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "docker-compose.staging.yml,infra/maintenance/**"
+          target: "${{ env.RUNTIME_ROOT }}/staging"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.HETZNER_HOST }}
-          username: deploy
+          username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/staging
+            cd "${{ env.RUNTIME_ROOT }}/staging"
+
+            compose() {
+              docker compose --project-name "${{ env.STAGING_COMPOSE_PROJECT }}" --env-file .env -f docker-compose.staging.yml "$@"
+            }
+
+            cleanup_legacy_project_if_conflicting() {
+              project_name="$1"
+              label_filter="$2"
+              legacy_ids="$(docker ps -q --filter "label=com.docker.compose.project=${project_name}" --filter "label=${label_filter}")"
+              if [[ -n "$legacy_ids" ]]; then
+                echo "Found legacy compose project '${project_name}' with conflicting Traefik labels. Stopping it."
+                docker compose --project-name "${project_name}" --env-file .env -f docker-compose.staging.yml down --remove-orphans || true
+              fi
+            }
+
+            cleanup_conflicting_router_containers() {
+              label_filter="$1"
+              current_project="${{ env.STAGING_COMPOSE_PROJECT }}"
+              ids="$(docker ps -q --filter "label=${label_filter}")"
+              if [[ -z "$ids" ]]; then
+                return 0
+              fi
+
+              for cid in $ids; do
+                project="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || true)"
+                name="$(docker inspect -f '{{ .Name }}' "$cid" 2>/dev/null | sed 's#^/##' || true)"
+                if [[ "$project" != "$current_project" ]]; then
+                  echo "Removing conflicting container '${name}' (project='${project}') for label '${label_filter}'"
+                  docker rm -f "$cid" || true
+                fi
+              done
+            }
+
+            cleanup_legacy_project_if_conflicting staging 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting staging 'traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting workflo_space 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_legacy_project_if_conflicting workflo_space 'traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_conflicting_router_containers 'traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)'
+            cleanup_conflicting_router_containers 'traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)'
 
             export LANDING_TAG=sha-${{ github.sha }}
             export PORTAL_TAG=sha-${{ github.sha }}
             export WORKSPACE_TAG=sha-${{ github.sha }}
             export API_TAG=sha-${{ github.sha }}
             export BOT_TAG=sha-${{ github.sha }}
-            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+            export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            docker compose -f docker-compose.staging.yml pull
+            compose pull
+            compose up -d postgres
 
-            docker compose -f docker-compose.staging.yml up -d --no-deps api
-            docker compose -f docker-compose.staging.yml up -d --no-deps bot
-            docker compose -f docker-compose.staging.yml up -d --no-deps landing
-            docker compose -f docker-compose.staging.yml up -d --no-deps portal
-            docker compose -f docker-compose.staging.yml up -d --no-deps workspace
+            compose up -d --no-deps api
+            compose up -d --no-deps bot
+            compose up -d --no-deps landing
+            compose up -d --no-deps portal
+            compose up -d --no-deps workspace
+
+            assert_service_started() {
+              svc="$1"
+              service_row="$(compose ps "$svc" | sed -n '2p' || true)"
+              if [[ -z "$service_row" ]]; then
+                echo "Service '$svc' is missing from compose ps output"
+                compose ps
+                exit 1
+              fi
+              if echo "$service_row" | grep -Eq 'Exited|Exit|Restarting|Dead'; then
+                echo "Service '$svc' is not healthy enough for deploy continuation"
+                compose ps
+                exit 1
+              fi
+            }
+
+            for svc in postgres api bot landing portal workspace; do
+              assert_service_started "$svc"
+            done
+
+            wait_for_non_default_cert() {
+              host="$1"
+              check_path="$2"
+              retries=12
+
+              for attempt in $(seq 1 "$retries"); do
+                cert_info="$(openssl s_client -connect 127.0.0.1:443 -servername "$host" </dev/null 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName 2>/dev/null || true)"
+                if echo "$cert_info" | grep -Fq "DNS:${host}" && ! echo "$cert_info" | grep -Fq "TRAEFIK DEFAULT CERT"; then
+                  echo "TLS OK: $host"
+                  return 0
+                fi
+
+                curl -ksS -o /dev/null "https://${host}${check_path}" || true
+                sleep 5
+              done
+
+              echo "TLS FAIL: non-default cert was not issued for ${host}"
+              openssl s_client -connect 127.0.0.1:443 -servername "$host" </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName || true
+              return 1
+            }
+
+            wait_for_non_default_cert dev.workflo.space /
+            wait_for_non_default_cert dev-portal.workflo.space /health
+            wait_for_non_default_cert dev-work.workflo.space /health
+            wait_for_non_default_cert dev-api.workflo.space /health
 
             echo "sha-${{ github.sha }}" > .last_deploy
 
@@ -107,4 +211,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check staging endpoints
-        run: ./scripts/healthcheck.sh --env staging --delay 15 --retries 1
+        run: ./scripts/healthcheck.sh --env staging --delay 20 --retries 6 --retry-delay 10

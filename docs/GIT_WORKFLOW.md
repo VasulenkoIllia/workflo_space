@@ -20,7 +20,7 @@
 
 ```
 main          ← production (захищена, тільки через PR)
-dev           ← staging (захищена, тільки через PR)
+dev           ← staging (team-mode: через PR, solo-mode: direct push)
 
 feature/*     ← нова функція
 fix/*         ← виправлення бага
@@ -220,6 +220,19 @@ chore(infra): setup Dockerfile for all 5 apps (S0-20)
 feature/* ──→ dev ──→ staging (автоматично) ──→ main ──→ production (ручний approve)
 ```
 
+### Solo mode (тимчасово, коли 1 розробник)
+
+```
+локальні коміти ──→ dev (direct push) ──→ staging (автоматично)
+release PR: dev ──→ main ──→ production (manual approval)
+```
+
+Команда для включення такого режиму:
+
+```bash
+./scripts/s0/github-branch-protection.sh your-org/your-repo --solo
+```
+
 ### Staging (автоматично при push в dev)
 
 ```yaml
@@ -230,6 +243,10 @@ on:
 ```
 
 Після merge будь-якого PR в `dev` → staging автоматично оновлюється за ~5 хвилин.
+CI автоматично:
+- збирає і публікує Docker images
+- синхронізує `docker-compose.staging.yml` та `infra/maintenance` на сервер
+- виконує `docker compose up -d` у runtime директорії staging
 
 ### Production (ручний approve)
 
@@ -335,6 +352,10 @@ git push origin dev
 ✅ Do not allow bypassing the above settings
 ```
 
+> Примітка: для private репозиторію на GitHub Free ці правила недоступні.
+> Варіанти: зробити repo public або перейти на GitHub Pro/Team.
+> Якщо ти єдиний розробник — став `required approvals = 0`, інакше власний PR не змерджиться.
+
 ### `dev` (staging)
 
 ```
@@ -404,7 +425,7 @@ git pull
 git branch -d feature/S2-05-order-comments
 
 # Перевіряємо staging
-# https://dev.workflo.space або https://dev-app.workflo.space
+# https://dev.workflo.space або https://dev-portal.workflo.space
 ```
 
 ### Корисні аліаси (додати в ~/.gitconfig)

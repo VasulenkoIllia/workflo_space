@@ -129,7 +129,7 @@ turbo dev
 | App | Production | Staging |
 |---|---|---|
 | Landing | workflo.space | dev.workflo.space |
-| Portal | app.workflo.space | dev-app.workflo.space |
+| Portal | portal.workflo.space | dev-portal.workflo.space |
 | Workspace | work.workflo.space *(IP whitelist)* | dev-work.workflo.space |
 | API | api.workflo.space | dev-api.workflo.space |
 | Mail | mail.workflo.space | — |
@@ -213,7 +213,7 @@ packages/
 ## КОНТАКТИ ПРОЕКТУ
 
 ```
-GitHub:     github.com/yourname/workflo (private)
+GitHub:     github.com/yourname/workflo (public for GitHub Free, or private with Pro/Team)
 Server:     Hetzner (IP: xxx.xxx.xxx.xxx)
 Registry:   ghcr.io/yourname/workflo-*
 Mail:       hello@workflo.space

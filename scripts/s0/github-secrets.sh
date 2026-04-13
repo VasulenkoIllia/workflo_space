@@ -28,6 +28,7 @@ set +a
 
 REQUIRED_SECRETS=(
   HETZNER_HOST
+  HETZNER_SSH_USER
   HETZNER_SSH_KEY
   DATABASE_URL_PROD
   DATABASE_URL_STAGING
@@ -48,6 +49,19 @@ REQUIRED_SECRETS=(
 missing=0
 for key in "${REQUIRED_SECRETS[@]}"; do
   value="${!key:-}"
+  file_var="${key}_FILE"
+  file_path="${!file_var:-}"
+
+  if [[ -z "$value" && -n "$file_path" ]]; then
+    if [[ -f "$file_path" ]]; then
+      value="$(cat "$file_path")"
+    else
+      echo "Secret file not found for $key: $file_path" >&2
+      missing=$((missing + 1))
+      continue
+    fi
+  fi
+
   if [[ -z "$value" ]]; then
     echo "Missing secret value: $key" >&2
     missing=$((missing + 1))

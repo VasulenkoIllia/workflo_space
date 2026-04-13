@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_PROD:-workflo_production}
+      POSTGRES_USER: ${POSTGRES_USER_PROD:-workflo_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PROD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
   landing:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-landing:${LANDING_TAG}
     restart: unless-stopped
@@ -7,14 +25,19 @@ services:
       NEXT_PUBLIC_API_URL: https://api.workflo.space
     labels:
       - traefik.enable=true
-      - traefik.http.routers.landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)
-      - traefik.http.routers.landing.entrypoints=websecure
-      - traefik.http.routers.landing.tls.certresolver=letsencrypt
-      - traefik.http.services.landing.loadbalancer.server.port=3000
-      - traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)
-      - traefik.http.middlewares.www-redirect.redirectregex.replacement=https://workflo.space/$${1}
-      - traefik.http.middlewares.www-redirect.redirectregex.permanent=true
-      - traefik.http.routers.landing.middlewares=www-redirect
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
+      - traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)
+      - traefik.http.routers.workflo-landing.entrypoints=websecure
+      - traefik.http.routers.workflo-landing.tls=true
+      - traefik.http.routers.workflo-landing.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-landing.tls.domains[0].main=workflo.space
+      - traefik.http.routers.workflo-landing.tls.domains[0].sans=www.workflo.space,portal.workflo.space,work.workflo.space,api.workflo.space
+      - traefik.http.routers.workflo-landing.priority=10000
+      - traefik.http.services.workflo-landing.loadbalancer.server.port=3000
+      - traefik.http.middlewares.workflo-www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)
+      - traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}
+      - traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true
+      - traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect
     networks:
       - traefik_network
 
@@ -23,10 +46,13 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portal.rule=Host(`app.workflo.space`)
-      - traefik.http.routers.portal.entrypoints=websecure
-      - traefik.http.routers.portal.tls.certresolver=letsencrypt
-      - traefik.http.services.portal.loadbalancer.server.port=80
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
+      - traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)
+      - traefik.http.routers.workflo-portal.entrypoints=websecure
+      - traefik.http.routers.workflo-portal.tls=true
+      - traefik.http.routers.workflo-portal.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-portal.priority=10000
+      - traefik.http.services.workflo-portal.loadbalancer.server.port=80
     networks:
       - traefik_network
 
@@ -35,38 +61,47 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.workspace.rule=Host(`work.workflo.space`)
-      - traefik.http.routers.workspace.entrypoints=websecure
-      - traefik.http.routers.workspace.tls.certresolver=letsencrypt
-      - traefik.http.services.workspace.loadbalancer.server.port=80
-      - traefik.http.middlewares.workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
-      - traefik.http.routers.workspace.middlewares=workspace-ipwhitelist
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
+      - traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)
+      - traefik.http.routers.workflo-workspace.entrypoints=websecure
+      - traefik.http.routers.workflo-workspace.tls=true
+      - traefik.http.routers.workflo-workspace.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-workspace.priority=10000
+      - traefik.http.services.workflo-workspace.loadbalancer.server.port=80
+      - traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
+      - traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist
     networks:
       - traefik_network
 
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-api:${API_TAG}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL_PROD}
+      DATABASE_URL: ${DATABASE_URL_PROD:-postgresql://${POSTGRES_USER_PROD:-workflo_prod}:${POSTGRES_PASSWORD_PROD}@postgres:5432/${POSTGRES_DB_PROD:-workflo_production}}
       JWT_SECRET: ${JWT_SECRET_PROD}
       SMTP_HOST: ${SMTP_HOST:-mail.workflo.space}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      BOT_TOKEN: ${BOT_TOKEN}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      BOT_TOKEN: ${BOT_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.api.rule=Host(`api.workflo.space`)
-      - traefik.http.routers.api.entrypoints=websecure
-      - traefik.http.routers.api.tls.certresolver=letsencrypt
-      - traefik.http.services.api.loadbalancer.server.port=4000
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
+      - traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)
+      - traefik.http.routers.workflo-api.entrypoints=websecure
+      - traefik.http.routers.workflo-api.tls=true
+      - traefik.http.routers.workflo-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-api.priority=10000
+      - traefik.http.services.workflo-api.loadbalancer.server.port=4000
     healthcheck:
       test:
         [
@@ -81,16 +116,17 @@ services:
       start_period: 30s
     networks:
       - traefik_network
+      - app_network
 
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/workflo-bot:${BOT_TAG}
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_TOKEN: ${BOT_TOKEN:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     networks:
-      - traefik_network
+      - app_network
 
   maintenance:
     image: nginx:1.27-alpine
@@ -105,6 +141,12 @@ services:
       - traefik_network
 
 networks:
+  app_network:
+    driver: bridge
+
   traefik_network:
     external: true
-    name: traefik_network
+    name: ${TRAEFIK_NETWORK:-traefik_network}
+
+volumes:
+  postgres_data:

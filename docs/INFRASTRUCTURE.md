@@ -392,10 +392,10 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.landing-staging.rule=Host(`dev.workflo.space`)"
-      - "traefik.http.routers.landing-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.landing-staging.entrypoints=websecure"
-      - "traefik.http.services.landing-staging.loadbalancer.server.port=3000"
+      - "traefik.http.routers.workflo-landing-staging.rule=Host(`dev.workflo.space`)"
+      - "traefik.http.routers.workflo-landing-staging.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-landing-staging.entrypoints=websecure"
+      - "traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000"
     networks:
       - traefik_network
 
@@ -404,10 +404,10 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.portal-staging.rule=Host(`dev-app.workflo.space`)"
-      - "traefik.http.routers.portal-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.portal-staging.entrypoints=websecure"
-      - "traefik.http.services.portal-staging.loadbalancer.server.port=80"
+      - "traefik.http.routers.workflo-portal-staging.rule=Host(`dev-portal.workflo.space`)"
+      - "traefik.http.routers.workflo-portal-staging.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-portal-staging.entrypoints=websecure"
+      - "traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80"
     networks:
       - traefik_network
 
@@ -416,13 +416,13 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.workspace-staging.rule=Host(`dev-work.workflo.space`)"
-      - "traefik.http.routers.workspace-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.workspace-staging.entrypoints=websecure"
-      - "traefik.http.services.workspace-staging.loadbalancer.server.port=80"
+      - "traefik.http.routers.workflo-workspace-staging.rule=Host(`dev-work.workflo.space`)"
+      - "traefik.http.routers.workflo-workspace-staging.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-workspace-staging.entrypoints=websecure"
+      - "traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80"
       # IP whitelist — тільки ваші IP навіть на staging
-      - "traefik.http.middlewares.workspace-staging-auth.ipwhitelist.sourcerange=${TEAM_IPS}"
-      - "traefik.http.routers.workspace-staging.middlewares=workspace-staging-auth"
+      - "traefik.http.middlewares.workflo-workspace-staging-auth.ipwhitelist.sourcerange=${TEAM_IPS}"
+      - "traefik.http.routers.workflo-workspace-staging.middlewares=workflo-workspace-staging-auth"
     networks:
       - traefik_network
 
@@ -441,13 +441,13 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SENTRY_DSN=${SENTRY_DSN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FRONTEND_URL=https://dev-app.workflo.space
+      - FRONTEND_URL=https://dev-portal.workflo.space
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)"
-      - "traefik.http.routers.api-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.api-staging.entrypoints=websecure"
-      - "traefik.http.services.api-staging.loadbalancer.server.port=4000"
+      - "traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)"
+      - "traefik.http.routers.workflo-api-staging.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-api-staging.entrypoints=websecure"
+      - "traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000"
     networks:
       - traefik_network
 
@@ -485,15 +485,15 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)"
-      - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.landing.entrypoints=websecure"
-      - "traefik.http.services.landing.loadbalancer.server.port=3000"
+      - "traefik.http.routers.workflo-landing.rule=Host(`workflo.space`) || Host(`www.workflo.space`)"
+      - "traefik.http.routers.workflo-landing.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-landing.entrypoints=websecure"
+      - "traefik.http.services.workflo-landing.loadbalancer.server.port=3000"
       # www → без www
-      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)"
-      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://workflo.space/$${1}"
-      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
-      - "traefik.http.routers.landing.middlewares=www-redirect"
+      - "traefik.http.middlewares.workflo-www-redirect.redirectregex.regex=^https://www\\.workflo\\.space/(.*)"
+      - "traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}"
+      - "traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true"
+      - "traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect"
     networks:
       - traefik_network
 
@@ -502,10 +502,10 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.portal.rule=Host(`app.workflo.space`)"
-      - "traefik.http.routers.portal.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.portal.entrypoints=websecure"
-      - "traefik.http.services.portal.loadbalancer.server.port=80"
+      - "traefik.http.routers.workflo-portal.rule=Host(`portal.workflo.space`)"
+      - "traefik.http.routers.workflo-portal.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-portal.entrypoints=websecure"
+      - "traefik.http.services.workflo-portal.loadbalancer.server.port=80"
     networks:
       - traefik_network
 
@@ -514,13 +514,13 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.workspace.rule=Host(`work.workflo.space`)"
-      - "traefik.http.routers.workspace.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.workspace.entrypoints=websecure"
-      - "traefik.http.services.workspace.loadbalancer.server.port=80"
+      - "traefik.http.routers.workflo-workspace.rule=Host(`work.workflo.space`)"
+      - "traefik.http.routers.workflo-workspace.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-workspace.entrypoints=websecure"
+      - "traefik.http.services.workflo-workspace.loadbalancer.server.port=80"
       # IP whitelist — ТІЛЬКИ ваші статичні IP
-      - "traefik.http.middlewares.workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS}"
-      - "traefik.http.routers.workspace.middlewares=workspace-ipwhitelist"
+      - "traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS}"
+      - "traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist"
     networks:
       - traefik_network
 
@@ -539,13 +539,13 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SENTRY_DSN=${SENTRY_DSN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FRONTEND_URL=https://app.workflo.space
+      - FRONTEND_URL=https://portal.workflo.space
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.workflo.space`)"
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.api.entrypoints=websecure"
-      - "traefik.http.services.api.loadbalancer.server.port=4000"
+      - "traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)"
+      - "traefik.http.routers.workflo-api.tls.certresolver=cf"
+      - "traefik.http.routers.workflo-api.entrypoints=websecure"
+      - "traefik.http.services.workflo-api.loadbalancer.server.port=4000"
     networks:
       - traefik_network
 
@@ -727,7 +727,7 @@ jobs:
           }
           
           check https://dev.workflo.space
-          check https://dev-app.workflo.space/health
+          check https://dev-portal.workflo.space/health
           check https://dev-work.workflo.space/health
           check https://dev-api.workflo.space/health
 ```
@@ -800,7 +800,9 @@ jobs:
 
   # ── 3. ⏸ РУЧНЕ ПІДТВЕРДЖЕННЯ ─────────────────────────────────
   # GitHub Environment "production" → Settings → Environments
-  # Required reviewers: ти (owner)
+  # Required reviewers працює:
+  # - public repo на GitHub Free
+  # - private repo на GitHub Pro/Team
   approval:
     name: Waiting for approval
     needs: build
@@ -903,7 +905,7 @@ jobs:
           }
           
           check https://workflo.space || exit 1
-          check https://app.workflo.space/health || exit 1
+          check https://portal.workflo.space/health || exit 1
           check https://api.workflo.space/health || exit 1
 
       - name: Auto rollback on failure
@@ -967,6 +969,7 @@ hotfix/xyz ───────────────────────
 ✅ Require status checks to pass (check job)
 ✅ Require branches to be up to date
 ✅ Do not allow bypassing the above settings
+ℹ️ На GitHub Free для private repo ця функція недоступна (потрібен public або Pro/Team)
 ```
 
 ---
@@ -997,10 +1000,10 @@ entryPoints:
     address: ":443"
     http:
       tls:
-        certResolver: letsencrypt
+        certResolver: cf
 
 certificatesResolvers:
-  letsencrypt:
+  cf:
     acme:
       email: hello@workflo.space
       storage: /acme/acme.json      # volume, зберігається на сервері
@@ -1067,7 +1070,7 @@ cd /srv/traefik && docker compose up -d
 
 ```yaml
 # У docker-compose.production.yml для workspace:
-- "traefik.http.middlewares.workspace-ipwhitelist.ipwhitelist.sourcerange=11.22.33.44/32,55.66.77.88/32"
+- "traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=11.22.33.44/32,55.66.77.88/32"
 # Перераховуєш статичні IP всіх членів команди
 # При зміні IP — оновити змінну TEAM_IPS в GitHub Secrets + restart workspace
 ```
@@ -1212,7 +1215,7 @@ SENTRY_DSN=
 # ═══════════════════════════════════════
 # URLS (API використовує для CORS і email links)
 # ═══════════════════════════════════════
-FRONTEND_URL=http://localhost:3001   # prod: https://app.workflo.space
+FRONTEND_URL=http://localhost:3001   # prod: https://portal.workflo.space
 WORKSPACE_URL=http://localhost:3002  # prod: https://work.workflo.space
 
 # ═══════════════════════════════════════
@@ -1581,7 +1584,7 @@ import * as Sentry from "@sentry/nextjs";
 ```
 Моніторить кожні 5 хвилин:
 - https://workflo.space                    (HTTP 200)
-- https://app.workflo.space/health         (HTTP 200)
+- https://portal.workflo.space/health         (HTTP 200)
 - https://api.workflo.space/health         (HTTP 200)
 
 Алерт: Telegram notification при downtime > 2 хв
@@ -1591,15 +1594,19 @@ import * as Sentry from "@sentry/nextjs";
 ```typescript
 // apps/api/src/routes/health.ts
 fastify.get('/health', async (req, reply) => {
-  // Перевірка БД
-  await prisma.$queryRaw`SELECT 1`;
   return reply.send({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
 });
+
+fastify.get('/ready', async (req, reply) => {
+  // Readiness перевіряє БД і повертає 200/503
+});
 ```
+
+Примітка: для прод runtime API використовує Debian + OpenSSL 3, а Prisma Client генерується з `binaryTargets = ["native", "debian-openssl-3.0.x"]`.
 
 ### 13.3 Netdata (CPU/RAM/Disk сервера)
 
@@ -1792,7 +1799,9 @@ http://localhost:8025
 ### GitHub репозиторій
 
 ```
-□ Створити private GitHub репозиторій
+□ Створити GitHub репозиторій:
+  □ public (рекомендовано для GitHub Free)
+  □ private (потребує Pro/Team для branch protection та required reviewers)
 □ Додати .gitignore (node_modules, .env*, .next, dist, .turbo)
 □ Branch protection → main:
   □ Require PR before merge
@@ -1800,7 +1809,7 @@ http://localhost:8025
   □ Require status checks (check job)
   □ Do not allow bypassing
 □ GitHub Environments → "production":
-  □ Required reviewers: ти
+  □ Required reviewers: ти (для public на Free або private на Pro/Team)
   □ Environment secrets (або з repo secrets)
 □ Додати всі GitHub Secrets (перелік у секції 9.1)
 □ Перевірити що GITHUB_TOKEN має права на ghcr.io (Settings → Actions → Workflow permissions → Read and write)
@@ -1854,11 +1863,11 @@ http://localhost:8025
 DNS записи → твій Hetzner IP:
 □ workflo.space          A    server-ip
 □ www.workflo.space      A    server-ip
-□ app.workflo.space      A    server-ip
+□ portal.workflo.space      A    server-ip
 □ work.workflo.space     A    server-ip
 □ api.workflo.space      A    server-ip
 □ dev.workflo.space      A    server-ip
-□ dev-app.workflo.space  A    server-ip
+□ dev-portal.workflo.space  A    server-ip
 □ dev-work.workflo.space A    server-ip
 □ dev-api.workflo.space  A    server-ip
 □ mail.workflo.space     A    server-ip
@@ -1890,13 +1899,13 @@ DNS записи → твій Hetzner IP:
 □ Deploy на staging проходить
 □ Перевірити:
   □ https://dev.workflo.space — landing
-  □ https://dev-app.workflo.space — portal
+  □ https://dev-portal.workflo.space — portal
   □ https://dev-api.workflo.space/health — api
 □ SSL сертифікати видані Let's Encrypt (перший раз може взяти ~2 хв)
 □ PR dev → main → затвердити → production deploy
 □ Перевірити production:
   □ https://workflo.space
-  □ https://app.workflo.space
+  □ https://portal.workflo.space
   □ https://api.workflo.space/health
   □ https://work.workflo.space — доступний тільки з твого IP
 □ Налаштувати cron для backup:

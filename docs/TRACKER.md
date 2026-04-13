@@ -18,9 +18,9 @@
 | S0-06 | packages/db seed.ts | [db] | — | ✅ | — | — |
 | S0-07 | docker-compose.dev.yml (postgres + mailpit) | Infra | — | ✅ | — | — |
 | S0-08 | .env.example повний | Infra | — | ✅ | — | — |
-| S0-09 | GitHub repo + branch protection rules | Infra | — | 🔄 | — | — |
+| S0-09 | GitHub repo + branch protection rules | Infra | — | ✅ | — | — |
 | S0-10 | GitHub Secrets заповнені | Infra | — | 🔄 | — | — |
-| S0-11 | GitHub Environment "production" + reviewer | Infra | — | 🔄 | — | — |
+| S0-11 | GitHub Environment "production" + reviewer | Infra | — | ✅ | — | — |
 | S0-12 | Hetzner сервер — PostgreSQL 16 + pg_cron | Infra | — | 🔄 | — | — |
 | S0-13 | Hetzner — deploy user + SSH key | Infra | — | 🔄 | — | — |
 | S0-14 | Hetzner — UFW firewall rules | Infra | — | 🔄 | — | — |
@@ -37,7 +37,7 @@
 | S0-25 | Husky + lint-staged налаштування | [Infra] | — | ✅ | — | — |
 | S0-26 | .env.example — повний файл в репо | [Infra] | — | ✅ | — | — |
 | S0-27 | CODEOWNERS + PR template в .github/ | [Infra] | — | ✅ | — | — |
-| S0-28 | Branch protection rules (main + dev) | [Infra] | — | 🔄 | — | — |
+| S0-28 | Branch protection rules (main + dev) | [Infra] | — | ✅ | — | — |
 | S0-29 | turbo build без помилок (CI green) | Infra | — | ✅ | — | — |
 | S0-30 | Перший деплой на staging | Infra | — | 🔄 | — | 🚀 |
 
@@ -248,7 +248,7 @@
 
 | Sprint | Всього | ✅ Done | 🧪 Tested | 🚀 Deployed |
 |---|---|---|---|---|
-| S0 Foundation | 30 | 19 | 0 | 0 |
+| S0 Foundation | 30 | 22 | 0 | 0 |
 | S1 Auth | 22 | 0 | 0 | 0 |
 | S2 Orders API | 19 | 0 | 0 | 0 |
 | S3 Portal | 22 | 0 | 0 | 0 |
@@ -257,4 +257,4 @@
 | S6 Docs+Bot | 15 | 0 | 0 | 0 |
 | S7 Landing | 16 | 0 | 0 | 0 |
 | S8 QA+Launch | 14 | 0 | 0 | 0 |
-| **TOTAL** | **171** | **19** | **0** | **0** |
+| **TOTAL** | **171** | **22** | **0** | **0** |

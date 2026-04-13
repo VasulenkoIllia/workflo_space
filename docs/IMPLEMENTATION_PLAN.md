@@ -80,7 +80,7 @@ reply.setCookie('refreshToken', token, {
 
 **CORS:**
 ```typescript
-origin: ['https://app.workflo.space', 'https://work.workflo.space',
+origin: ['https://portal.workflo.space', 'https://work.workflo.space',
          'http://localhost:3001', 'http://localhost:3002'],
 credentials: true,
 ```
@@ -96,7 +96,7 @@ owner → POST /workspace/team/invite { email, name }
 **Invite flow (company member):**
 ```
 company owner → POST /portal/team/invite { email, permissions }
-→ invite_token → app.workflo.space/invite/{token}
+→ invite_token → portal.workflo.space/invite/{token}
 → реєстрація або прив'язка до існуючого profile
 ```
 
@@ -104,7 +104,7 @@ company owner → POST /portal/team/invite { email, permissions }
 ```
 POST /auth/forgot-password { email }
 → reset_token (UUID, TTL 1 год)
-→ email → app.workflo.space/reset-password/{token}
+→ email → portal.workflo.space/reset-password/{token}
 POST /auth/reset-password { token, newPassword }
 → змінює пароль + анулює всі refresh tokens
 ```
@@ -1443,11 +1443,11 @@ Week 8-10: [Всі] QA + polish + launch → v0.1.0 (S7-S8)
 □ packages/db (schema.prisma + перша міграція + seed)
 □ docker-compose.dev.yml (postgres + mailpit)
 □ .env.example заповнений
-□ GitHub repo + branch protection
+□ GitHub repo + branch protection (public repo on Free, or private with Pro/Team)
 □ Сервер: PostgreSQL, Traefik, DNS
 □ GitHub Secrets заповнені
 □ staging.yml + production.yml — перший деплой
-□ GitHub Environment "production" з reviewer
+□ GitHub Environment "production" з reviewer (public on Free, or private with Pro/Team)
 □ Skeleton apps — GET /health → { status: 'ok' }
 □ turbo build без помилок
 ```
@@ -1908,7 +1908,7 @@ export function setupErrorHandler(fastify: FastifyInstance) {
 import cors from '@fastify/cors'
 
 const ALLOWED_ORIGINS_PROD = [
-  'https://app.workflo.space',
+  'https://portal.workflo.space',
   'https://work.workflo.space',
   'https://workflo.space',
 ]
