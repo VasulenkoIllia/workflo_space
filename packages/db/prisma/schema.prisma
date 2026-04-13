@@ -1,0 +1,671 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  passwordHash         String
+  name                 String
+  role                 Role      @default(client)
+  avatarUrl            String?
+  language             Language  @default(uk)
+  theme                Theme     @default(system)
+  isActive             Boolean   @default(true)
+  telegramChatId       String?   @unique
+  telegramConnected    Boolean   @default(false)
+  telegramOtp          String?
+  telegramOtpExpiresAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  company              Company?              @relation("CompanyOwner")
+  companyMembership    CompanyMember[]
+  ordersAssigned       Order[]               @relation("OrderAssignee")
+  ordersCreated        Order[]               @relation("OrderCreatedBy")
+  comments             OrderComment[]
+  timeLogs             TimeLog[]
+  notificationSettings NotificationSettings?
+  refreshTokens        RefreshToken[]
+  invitesSent          Invite[]              @relation("InvitedBy")
+  executorRate         ExecutorRate?
+  blogPosts            BlogPost[]
+  uploadedFiles        OrderFile[]
+  notifications        Notification[]
+  activityLogsAsActor  ActivityLog[]
+  otpTokens            OtpToken[]
+  documentsCreated     Document[]            @relation("DocumentCreatedBy")
+  documentsForExecutor Document[]            @relation("DocumentExecutor")
+
+  @@index([email])
+  @@index([role])
+  @@map("profiles")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  profileId String
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([token])
+  @@index([profileId])
+  @@map("refresh_tokens")
+}
+
+model Invite {
+  id          String     @id @default(uuid())
+  email       String
+  token       String     @unique @default(uuid())
+  type        InviteType
+  invitedById String
+  invitedBy   Profile    @relation("InvitedBy", fields: [invitedById], references: [id])
+  companyId   String?
+  permissions Json?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("invites")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  email     String
+  token     String    @unique @default(uuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+model Company {
+  id           String      @id @default(uuid())
+  name         String
+  slug         String      @unique
+  ownerId      String      @unique
+  owner        Profile     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  language     Language    @default(uk)
+  currency     String      @default("USD")
+  notes        String?
+  loyaltyTier  LoyaltyTier @default(new)
+  totalSpent   Decimal     @default(0) @db.Decimal(12, 2)
+  bonusBalance Decimal     @default(0) @db.Decimal(12, 2)
+  referralCode String      @unique @default(uuid())
+  referredById String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  members           CompanyMember[]
+  orders            Order[]
+  serviceAssigns    CompanyService[]
+  charges           ServiceCharge[]
+  payments          Payment[]
+  referralsSent     Referral[]       @relation("ReferrerCompany")
+  referralsReceived Referral[]       @relation("ReferredCompany")
+  documents         Document[]
+
+  @@index([slug])
+  @@index([ownerId])
+  @@index([referralCode])
+  @@map("companies")
+}
+
+model CompanyMember {
+  id          String            @id @default(uuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role        CompanyMemberRole @default(member)
+  permissions Json              @default("{}")
+  joinedAt    DateTime          @default(now())
+
+  @@unique([companyId, profileId])
+  @@index([companyId])
+  @@index([profileId])
+  @@map("company_members")
+}
+
+model Order {
+  id             String              @id @default(uuid())
+  title          String
+  description    String?
+  type           OrderType           @default(client_order)
+  priority       OrderPriority       @default(medium)
+  companyId      String?
+  company        Company?            @relation(fields: [companyId], references: [id])
+  assigneeId     String?
+  assignee       Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
+  createdById    String
+  createdBy      Profile             @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  internalStatus OrderInternalStatus @default(new)
+  clientStatus   OrderClientStatus   @default(in_progress)
+  billingType    BillingType         @default(fixed)
+  fixedPrice     Decimal?            @db.Decimal(10, 2)
+  hourlyRate     Decimal?            @db.Decimal(10, 2)
+  estimatedHours Decimal?            @db.Decimal(8, 2)
+  totalAmount    Decimal?            @db.Decimal(10, 2)
+  currency       String              @default("USD")
+  deadline       DateTime?
+  paidAt         DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  stages        OrderStage[]
+  comments      OrderComment[]
+  timeLogs      TimeLog[]
+  files         OrderFile[]
+  internalTasks InternalTask[]
+  activityLogs  ActivityLog[]
+  payments      Payment[]
+  documents     Document[]
+
+  @@index([companyId])
+  @@index([assigneeId])
+  @@index([internalStatus])
+  @@index([clientStatus])
+  @@index([type])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("orders")
+}
+
+model OrderStage {
+  id          String      @id @default(uuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      StageStatus @default(pending)
+  position    Int
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([orderId, position])
+  @@map("order_stages")
+}
+
+model OrderComment {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     Profile  @relation(fields: [authorId], references: [id])
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([orderId, isInternal])
+  @@map("order_comments")
+}
+
+model OrderFile {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedBy String
+  uploader   Profile  @relation(fields: [uploadedBy], references: [id])
+  filename   String
+  storedAs   String
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_files")
+}
+
+model InternalTask {
+  id         String             @id @default(uuid())
+  orderId    String
+  order      Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title      String
+  assigneeId String?
+  status     InternalTaskStatus @default(todo)
+  position   Int                @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([orderId])
+  @@map("internal_tasks")
+}
+
+model TimeLog {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  executorId String
+  executor   Profile  @relation(fields: [executorId], references: [id])
+  hours      Decimal  @db.Decimal(5, 2)
+  comment    String?
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@index([executorId])
+  @@index([date])
+  @@map("time_logs")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companyAssigns CompanyService[]
+
+  @@map("services")
+}
+
+model CompanyService {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  customPrice Decimal  @db.Decimal(10, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  charges ServiceCharge[]
+
+  @@unique([companyId, serviceId])
+  @@index([companyId])
+  @@map("company_services")
+}
+
+model ServiceCharge {
+  id               String         @id @default(uuid())
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id])
+  companyServiceId String
+  companyService   CompanyService @relation(fields: [companyServiceId], references: [id])
+  amount           Decimal        @db.Decimal(10, 2)
+  uahRate          Decimal?       @db.Decimal(8, 4)
+  month            DateTime       @db.Date
+  status           ChargeStatus   @default(pending)
+  dueDate          DateTime?
+  paidAt           DateTime?
+  notes            String?
+  createdAt        DateTime       @default(now())
+
+  @@unique([companyServiceId, month])
+  @@index([companyId, month])
+  @@map("service_charges")
+}
+
+model Payment {
+  id                String      @id @default(uuid())
+  companyId         String
+  company           Company     @relation(fields: [companyId], references: [id])
+  orderId           String?
+  order             Order?      @relation(fields: [orderId], references: [id])
+  amount            Decimal     @db.Decimal(10, 2)
+  currency          String      @default("USD")
+  type              PaymentType @default(final)
+  provider          String      @default("manual")
+  providerPaymentId String?
+  paymentLink       String?
+  paymentMethod     String?
+  paymentReference  String?
+  note              String?
+  confirmedBy       String
+  confirmedAt       DateTime    @default(now())
+
+  @@index([companyId])
+  @@index([orderId])
+  @@index([confirmedAt])
+  @@map("payments")
+}
+
+model PaymentSettings {
+  id              String   @id @default(cuid())
+  bankName        String?
+  iban            String?
+  accountName     String?
+  cryptoUsdt      String?
+  notes           String?
+  invoiceCurrency String   @default("UAH")
+  updatedAt       DateTime @updatedAt
+
+  @@map("payment_settings")
+}
+
+model ExecutorRate {
+  id                String   @id @default(uuid())
+  executorId        String   @unique
+  executor          Profile  @relation(fields: [executorId], references: [id], onDelete: Cascade)
+  monthlySalary     Decimal? @db.Decimal(10, 2)
+  commissionPercent Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt         DateTime @updatedAt
+
+  @@map("executor_rates")
+}
+
+model Referral {
+  id          String   @id @default(uuid())
+  referrerId  String
+  referrer    Company  @relation("ReferrerCompany", fields: [referrerId], references: [id])
+  referredId  String
+  referred    Company  @relation("ReferredCompany", fields: [referredId], references: [id])
+  totalEarned Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  bonuses ReferralBonus[]
+
+  @@unique([referrerId, referredId])
+  @@index([referrerId])
+  @@map("referrals")
+}
+
+model ReferralBonus {
+  id         String   @id @default(uuid())
+  referralId String
+  referral   Referral @relation(fields: [referralId], references: [id])
+  amount     Decimal  @db.Decimal(10, 2)
+  percent    Decimal  @db.Decimal(5, 2)
+  sourceType String
+  sourceId   String
+  createdAt  DateTime @default(now())
+
+  @@index([referralId])
+  @@map("referral_bonuses")
+}
+
+model NotificationSettings {
+  id                     String  @id @default(uuid())
+  profileId              String  @unique
+  profile                Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  emailOnStatusChange    Boolean @default(true)
+  emailOnNewComment      Boolean @default(true)
+  emailOnPayment         Boolean @default(true)
+  telegramOnStatusChange Boolean @default(true)
+  telegramOnNewComment   Boolean @default(false)
+  telegramOnPayment      Boolean @default(true)
+
+  @@map("notification_settings")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([profileId, isRead])
+  @@index([profileId, createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     Profile  @relation(fields: [actorId], references: [id])
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("activity_logs")
+}
+
+model Document {
+  id          String         @id @default(uuid())
+  type        DocumentType
+  number      String
+  orderId     String?
+  order       Order?         @relation(fields: [orderId], references: [id])
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id])
+  status      DocumentStatus @default(draft)
+  storedAs    String?
+  sentAt      DateTime?
+  generatedAt DateTime       @default(now())
+  createdById String
+  createdBy   Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  executorId  String?
+  executor    Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+
+  @@index([companyId])
+  @@index([orderId])
+  @@index([type])
+  @@map("documents")
+}
+
+model DocumentCounter {
+  type  DocumentType @id
+  count Int          @default(0)
+  year  Int
+
+  @@map("document_counters")
+}
+
+model BlogPost {
+  id          String       @id @default(uuid())
+  slug        String       @unique
+  type        BlogPostType
+  titleUk     String
+  titleEn     String
+  excerptUk   String
+  excerptEn   String
+  contentUk   Json
+  contentEn   Json
+  tags        String[]
+  authorId    String
+  author      Profile      @relation(fields: [authorId], references: [id])
+  published   Boolean      @default(false)
+  featured    Boolean      @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([slug])
+  @@index([type, published])
+  @@index([publishedAt])
+  @@map("blog_posts")
+}
+
+model ContactForm {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  message   String
+  source    String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([isRead, createdAt])
+  @@map("contact_forms")
+}
+
+model ExchangeRate {
+  id        String   @id @default("singleton")
+  usdToUah  Decimal  @db.Decimal(8, 4)
+  eurToUah  Decimal? @db.Decimal(8, 4)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("exchange_rates")
+}
+
+model OtpToken {
+  id        String     @id @default(uuid())
+  profileId String
+  profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  code      String
+  purpose   OtpPurpose
+  channel   OtpChannel
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime   @default(now())
+
+  @@index([profileId, purpose])
+  @@index([code, purpose])
+  @@map("otp_tokens")
+}
+
+model BillingPlan {
+  id         String   @id @default(uuid())
+  name       String
+  slug       String   @unique
+  priceUsd   Decimal  @db.Decimal(10, 2)
+  maxOrders  Int?
+  maxMembers Int?
+  features   Json
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("billing_plans")
+}
+
+enum Role {
+  owner
+  executor
+  client
+}
+
+enum Language {
+  uk
+  en
+}
+
+enum Theme {
+  light
+  dark
+  system
+}
+
+enum LoyaltyTier {
+  new
+  regular
+  partner
+  vip
+}
+
+enum CompanyMemberRole {
+  owner
+  member
+}
+
+enum OrderType {
+  client_order
+  internal_task
+}
+
+enum OrderPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum OrderInternalStatus {
+  new
+  clarification
+  estimated
+  in_progress
+  review
+  revision
+  done
+  cancelled
+  on_hold
+}
+
+enum OrderClientStatus {
+  in_progress
+  pending_approval
+  completed
+  cancelled
+}
+
+enum BillingType {
+  fixed
+  hourly
+}
+
+enum StageStatus {
+  pending
+  in_progress
+  done
+}
+
+enum InternalTaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum ChargeStatus {
+  pending
+  paid
+  overdue
+}
+
+enum InviteType {
+  executor
+  company_member
+}
+
+enum BlogPostType {
+  article
+  case_study
+}
+
+enum DocumentType {
+  contract
+  advance_invoice
+  invoice
+  completion_act
+  specification
+}
+
+enum DocumentStatus {
+  draft
+  generated
+  sent
+}
+
+enum PaymentType {
+  advance
+  final
+  partial
+}
+
+enum OtpPurpose {
+  telegram_link
+  two_fa
+  phone_verify
+  email_verify
+}
+
+enum OtpChannel {
+  email
+  telegram
+  sms
+}

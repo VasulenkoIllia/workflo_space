@@ -1,0 +1,17 @@
+.git
+.idea
+.turbo
+.pnpm-store
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+*.log

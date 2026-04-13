@@ -1,0 +1,14 @@
+# .github/CODEOWNERS
+# Owner review обов'язковий для критичних файлів
+
+# DB schema — тільки owner може approve
+packages/db/prisma/schema.prisma    @owner-github-username
+packages/db/prisma/migrations/      @owner-github-username
+
+# Infrastructure — тільки owner
+docker/                             @owner-github-username
+.github/workflows/                  @owner-github-username
+scripts/                            @owner-github-username
+
+# Решта — будь-хто з команди може review
+*                                   @owner-github-username

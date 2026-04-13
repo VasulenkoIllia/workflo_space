@@ -1,0 +1,146 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/workflo
+
+jobs:
+  check:
+    name: Type check & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm turbo type-check
+
+      - name: Lint
+        run: pnpm turbo lint
+
+  build:
+    name: Build ${{ matrix.app }}
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [landing, portal, workspace, api, bot]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.app }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  approval:
+    name: Waiting for approval
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Approved
+        run: echo "Production deployment approved"
+
+  deploy-production:
+    name: Deploy to production
+    needs: approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/workflo/production
+
+            current_tag=$(cat .last_deploy 2>/dev/null || echo "none")
+            echo "$current_tag" > .previous_deploy
+
+            new_tag=sha-${{ github.sha }}
+
+            export LANDING_TAG=$new_tag
+            export PORTAL_TAG=$new_tag
+            export WORKSPACE_TAG=$new_tag
+            export API_TAG=$new_tag
+            export BOT_TAG=$new_tag
+            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+
+            docker compose -f docker-compose.production.yml pull
+
+            docker compose -f docker-compose.production.yml up -d --no-deps api
+            docker compose -f docker-compose.production.yml up -d --no-deps bot
+            docker compose -f docker-compose.production.yml up -d --no-deps portal
+            docker compose -f docker-compose.production.yml up -d --no-deps workspace
+            docker compose -f docker-compose.production.yml up -d --no-deps landing
+
+            echo "$new_tag" > .last_deploy
+
+  verify:
+    name: Verify and rollback
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Health check
+        run: ./scripts/healthcheck.sh --env production --delay 20 --retries 3 --retry-delay 5
+
+      - name: Auto rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/workflo/production
+
+            prev_tag=$(cat .previous_deploy)
+
+            export LANDING_TAG=$prev_tag
+            export PORTAL_TAG=$prev_tag
+            export WORKSPACE_TAG=$prev_tag
+            export API_TAG=$prev_tag
+            export BOT_TAG=$prev_tag
+            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+
+            docker compose -f docker-compose.production.yml up -d

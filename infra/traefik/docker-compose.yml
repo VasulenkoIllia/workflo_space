@@ -1,0 +1,27 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./acme.json:/acme/acme.json
+      - traefik_logs:/logs
+    networks:
+      - traefik_network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.internal`)
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+
+volumes:
+  traefik_logs:
+
+networks:
+  traefik_network:
+    external: true
+    name: traefik_network
