@@ -101,6 +101,7 @@ bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 - не перевстановлюй його
 - використовуй існуючий `certResolver` (наприклад `cf`)
 - переконайся, що є Docker network для роутінгу (`traefik_network` або твій кастомний)
+- в docker-compose для Workflo використовуй унікальні `traefik.http.routers/services/middlewares` імена з префіксом `workflo-`, щоб уникнути конфліктів із іншими проектами на тому ж Traefik host
 
 Перевірка існуючого Traefik:
 

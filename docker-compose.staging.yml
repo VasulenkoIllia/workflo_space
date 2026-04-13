@@ -25,10 +25,10 @@ services:
       NEXT_PUBLIC_API_URL: https://dev-api.workflo.space
     labels:
       - traefik.enable=true
-      - traefik.http.routers.landing-staging.rule=Host(`dev.workflo.space`)
-      - traefik.http.routers.landing-staging.entrypoints=websecure
-      - traefik.http.routers.landing-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
-      - traefik.http.services.landing-staging.loadbalancer.server.port=3000
+      - traefik.http.routers.workflo-landing-staging.rule=Host(`dev.workflo.space`)
+      - traefik.http.routers.workflo-landing-staging.entrypoints=websecure
+      - traefik.http.routers.workflo-landing-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.services.workflo-landing-staging.loadbalancer.server.port=3000
     networks:
       - traefik_network
 
@@ -37,10 +37,10 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portal-staging.rule=Host(`dev-portal.workflo.space`)
-      - traefik.http.routers.portal-staging.entrypoints=websecure
-      - traefik.http.routers.portal-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
-      - traefik.http.services.portal-staging.loadbalancer.server.port=80
+      - traefik.http.routers.workflo-portal-staging.rule=Host(`dev-portal.workflo.space`)
+      - traefik.http.routers.workflo-portal-staging.entrypoints=websecure
+      - traefik.http.routers.workflo-portal-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.services.workflo-portal-staging.loadbalancer.server.port=80
     networks:
       - traefik_network
 
@@ -49,12 +49,12 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.workspace-staging.rule=Host(`dev-work.workflo.space`)
-      - traefik.http.routers.workspace-staging.entrypoints=websecure
-      - traefik.http.routers.workspace-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
-      - traefik.http.services.workspace-staging.loadbalancer.server.port=80
-      - traefik.http.middlewares.workspace-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
-      - traefik.http.routers.workspace-staging.middlewares=workspace-staging-ipwhitelist
+      - traefik.http.routers.workflo-workspace-staging.rule=Host(`dev-work.workflo.space`)
+      - traefik.http.routers.workflo-workspace-staging.entrypoints=websecure
+      - traefik.http.routers.workflo-workspace-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.services.workflo-workspace-staging.loadbalancer.server.port=80
+      - traefik.http.middlewares.workflo-workspace-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
+      - traefik.http.routers.workflo-workspace-staging.middlewares=workflo-workspace-staging-ipwhitelist
     networks:
       - traefik_network
 
@@ -80,10 +80,10 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.api-staging.rule=Host(`dev-api.workflo.space`)
-      - traefik.http.routers.api-staging.entrypoints=websecure
-      - traefik.http.routers.api-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
-      - traefik.http.services.api-staging.loadbalancer.server.port=4000
+      - traefik.http.routers.workflo-api-staging.rule=Host(`dev-api.workflo.space`)
+      - traefik.http.routers.workflo-api-staging.entrypoints=websecure
+      - traefik.http.routers.workflo-api-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000
     healthcheck:
       test:
         [
