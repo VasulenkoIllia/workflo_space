@@ -10,6 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  RUNTIME_ROOT: /var/www/srv/workflo
 
 jobs:
   check:
@@ -95,7 +96,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/production
+            cd "${{ env.RUNTIME_ROOT }}/production"
 
             current_tag=$(cat .last_deploy 2>/dev/null || echo "none")
             echo "$current_tag" > .previous_deploy
@@ -138,7 +139,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/production
+            cd "${{ env.RUNTIME_ROOT }}/production"
 
             prev_tag=$(cat .previous_deploy)
 

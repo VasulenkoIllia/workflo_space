@@ -3,6 +3,8 @@ set -euo pipefail
 
 APPLY=0
 DEPLOY_USER="${DEPLOY_USER:-deploy}"
+RUNTIME_ROOT="${RUNTIME_ROOT:-/var/www/srv/workflo}"
+TRAEFIK_ROOT="${TRAEFIK_ROOT:-/var/www/srv/traefik}"
 PROD_DB_USER="${PROD_DB_USER:-workflo_prod}"
 STAGING_DB_USER="${STAGING_DB_USER:-workflo_stg}"
 PROD_DB_NAME="${PROD_DB_NAME:-workflo_production}"
@@ -61,8 +63,8 @@ else
 fi
 run "usermod -aG docker $DEPLOY_USER"
 
-run "mkdir -p /srv/workflo/production/backups /srv/workflo/staging /srv/traefik"
-run "chown -R $DEPLOY_USER:$DEPLOY_USER /srv/workflo /srv/traefik"
+run "mkdir -p $RUNTIME_ROOT/production/backups $RUNTIME_ROOT/staging $TRAEFIK_ROOT"
+run "chown -R $DEPLOY_USER:$DEPLOY_USER $RUNTIME_ROOT $TRAEFIK_ROOT"
 
 run "sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='$PROD_DB_USER'\" | grep -q 1 || sudo -u postgres psql -c \"CREATE ROLE $PROD_DB_USER LOGIN PASSWORD '$PROD_DB_PASSWORD';\""
 run "sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='$STAGING_DB_USER'\" | grep -q 1 || sudo -u postgres psql -c \"CREATE ROLE $STAGING_DB_USER LOGIN PASSWORD '$STAGING_DB_PASSWORD';\""

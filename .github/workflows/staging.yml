@@ -10,6 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  RUNTIME_ROOT: /var/www/srv/workflo
 
 jobs:
   check:
@@ -86,7 +87,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/staging
+            cd "${{ env.RUNTIME_ROOT }}/staging"
 
             export LANDING_TAG=sha-${{ github.sha }}
             export PORTAL_TAG=sha-${{ github.sha }}

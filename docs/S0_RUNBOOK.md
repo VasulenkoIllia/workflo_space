@@ -77,19 +77,21 @@ gh repo edit your-org/your-repo --visibility public
 
 ```bash
 export DEPLOY_USER=workflo  # твій існуючий юзер на сервері
+export RUNTIME_ROOT=/var/www/srv/workflo
+export TRAEFIK_ROOT=/var/www/srv/traefik
 export PROD_DB_PASSWORD='replace-me'
 export STAGING_DB_PASSWORD='replace-me'
 
 # dry-run
-bash /srv/workflo/scripts/s0/hetzner-bootstrap.sh
+bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh
 
 # apply
-bash /srv/workflo/scripts/s0/hetzner-bootstrap.sh --apply
+bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 ```
 
 Що робить скрипт:
 - встановлює Docker + Compose plugin + PostgreSQL + UFW
-- створює `deploy` user і системні директорії `/srv/workflo/*`, `/srv/traefik`
+- створює `deploy` user і системні директорії `/var/www/srv/workflo/*`, `/var/www/srv/traefik`
 - створює staging/prod БД і ролі
 - вмикає UFW правила для `22/80/443`, закриває `5432/19999`
 
@@ -110,14 +112,14 @@ docker network ls | grep traefik
 Якщо Traefik ще не піднятий, тоді:
 
 ```bash
-mkdir -p /srv/traefik
-cp infra/traefik/traefik.yml /srv/traefik/traefik.yml
-cp infra/traefik/docker-compose.yml /srv/traefik/docker-compose.yml
-touch /srv/traefik/acme.json
-chmod 600 /srv/traefik/acme.json
+mkdir -p /var/www/srv/traefik
+cp infra/traefik/traefik.yml /var/www/srv/traefik/traefik.yml
+cp infra/traefik/docker-compose.yml /var/www/srv/traefik/docker-compose.yml
+touch /var/www/srv/traefik/acme.json
+chmod 600 /var/www/srv/traefik/acme.json
 
 docker network create traefik_network || true
-cd /srv/traefik
+cd /var/www/srv/traefik
 docker compose up -d
 ```
 
@@ -139,12 +141,12 @@ Mailcow:
 На сервері:
 
 ```bash
-mkdir -p /srv/workflo/staging /srv/workflo/production
-cp docker-compose.staging.yml /srv/workflo/staging/
-cp docker-compose.production.yml /srv/workflo/production/
+mkdir -p /var/www/srv/workflo/staging /var/www/srv/workflo/production
+cp docker-compose.staging.yml /var/www/srv/workflo/staging/
+cp docker-compose.production.yml /var/www/srv/workflo/production/
 
-cp .env.server.example /srv/workflo/staging/.env
-cp .env.server.example /srv/workflo/production/.env
+cp .env.server.example /var/www/srv/workflo/staging/.env
+cp .env.server.example /var/www/srv/workflo/production/.env
 # заповнити реальними значеннями
 ```
 
@@ -171,13 +173,13 @@ Push у `dev` запускає `staging.yml`.
 Backup:
 
 ```bash
-bash /srv/workflo/scripts/backup.sh
+bash /var/www/projects/workflo_space/scripts/backup.sh
 ```
 
 Rollback:
 
 ```bash
-bash /srv/workflo/scripts/rollback.sh
+bash /var/www/projects/workflo_space/scripts/rollback.sh
 # або на конкретний тег:
-bash /srv/workflo/scripts/rollback.sh sha-xxxxxxxx
+bash /var/www/projects/workflo_space/scripts/rollback.sh sha-xxxxxxxx
 ```

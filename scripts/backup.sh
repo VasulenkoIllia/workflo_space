@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROD_DIR="${PROD_DIR:-/srv/workflo/production}"
+PROD_DIR="${PROD_DIR:-/var/www/srv/workflo/production}"
 ENV_FILE="${ENV_FILE:-$PROD_DIR/.env}"
 BACKUP_DIR="${BACKUP_DIR:-$PROD_DIR/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
