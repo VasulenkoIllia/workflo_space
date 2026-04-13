@@ -4,6 +4,7 @@
 
 ## 0) Поточний стан (станом на 13 квітня 2026)
 
+- S0 foundation закрито в технічному обсязі інфри: staging/prod CI/CD, dockerized services, Traefik routing, DNS.
 - `dev` і `main` працюють через PR flow; production deploy йде через manual approval в GitHub Environment `production`.
 - Staging/production деплої працюють із runtime-директоріями:
   - `/var/www/srv/workflo/staging`
@@ -15,6 +16,7 @@
   - `/health` = liveness (без БД, HTTP 200)
   - `/ready` = readiness (200/503 залежно від БД)
   - Prisma/OpenSSL сумісність зафіксована для production runtime (`debian-openssl-3.0.x`).
+- PostgreSQL у staging/prod працює в Docker (`postgres:16-bookworm` + `postgresql-16-cron`), `pg_cron` вмикається автоматично під час deploy workflow.
 
 ## 1) Підготовка локально
 
@@ -108,6 +110,7 @@ bash /var/www/projects/workflo_space/scripts/s0/hetzner-bootstrap.sh --apply
 - створює `deploy` user і системні директорії `/var/www/srv/workflo/*`, `/var/www/srv/traefik`
 - вмикає UFW правила для `22/80/443` і закриває `5432/19999`
 - якщо потрібен host PostgreSQL: `DB_MODE=host` + `PROD_DB_PASSWORD/STAGING_DB_PASSWORD`
+- якщо `DB_MODE=docker` (default): хостовий PostgreSQL не піднімається, використовується Postgres контейнер із compose.
 
 ## 4) Traefik (S0-15)
 
@@ -141,7 +144,7 @@ cd /var/www/srv/traefik
 docker compose up -d
 ```
 
-## 5) DNS + Mail (S0-16, S0-17)
+## 5) DNS + Mail baseline (S0-16, S0-17)
 
 DNS записи перевести на Hetzner IP:
 - `workflo.space`, `www.workflo.space`
@@ -149,12 +152,17 @@ DNS записи перевести на Hetzner IP:
 - `dev.workflo.space`, `dev-portal.workflo.space`, `dev-work.workflo.space`, `dev-api.workflo.space`
 - `mail.workflo.space`
 
-Mailcow:
+Mail baseline для S0:
+- DNS `mail.workflo.space` має резолвитись на твій сервер
+- в `.env` задані `SMTP_HOST`/`SMTP_PORT`
+- `SMTP_USER`/`SMTP_PASS` можуть бути порожніми до вводу email-функцій у прод експлуатацію
+
+Mailcow rollout:
 - встановити окремим stack
 - налаштувати `SPF`, `DKIM`, `DMARC`
 - створити скриньки `hello@`, `noreply@`, `support@`
 
-Важливо: відсутність Mailcow/SMTP на S0 не блокує staging/production deploy.  
+Важливо: відсутність Mailcow на S0 не блокує staging/production deploy.  
 `SMTP_USER`, `SMTP_PASS` можуть бути порожніми, доки email-функції не вводяться в експлуатацію.
 
 ## 6) Staging/Production deploy (S0-30)
@@ -169,7 +177,7 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 # заповнити реальними значеннями
 ```
 
-Важливо: `docker-compose.staging.yml`, `docker-compose.production.yml` і `infra/maintenance` тепер синхронізуються автоматично з GitHub Actions на кожному deploy. Ручний `cp` цих файлів перед кожним релізом більше не потрібен.
+Важливо: `docker-compose.staging.yml`, `docker-compose.production.yml`, `infra/maintenance`, `infra/postgres` тепер синхронізуються автоматично з GitHub Actions на кожному deploy. Ручний `cp` цих файлів перед кожним релізом більше не потрібен.
 
 В `.env` значення `GITHUB_REPOSITORY_OWNER` вкажи в lowercase (наприклад `vasulenkoillia`), бо GHCR чутливий до регістру.
 Для dockerized PostgreSQL заповни:
@@ -181,8 +189,10 @@ cp .env.server.example /var/www/srv/workflo/production/.env
 
 Push у `dev` запускає `staging.yml`, який робить:
 - build/push Docker images у GHCR
-- sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance`)
+- sync runtime-manifests на сервер (`docker-compose.staging.yml` + `infra/maintenance` + `infra/postgres`)
 - deploy контейнерів у `/var/www/srv/workflo/staging` з фіксованим compose project name `workflo-staging`
+- `compose build postgres` + `compose up -d postgres`
+- `CREATE EXTENSION IF NOT EXISTS pg_cron` і валідацію наявності `pg_cron` перед стартом API/Bot
 - автоматично прибирає legacy compose-проєкти (`staging` / `workflo_space`) і будь-які сторонні конфліктні контейнери, якщо вони перехоплюють `dev-api.workflo.space` Traefik router
 - перевіряє, що після деплою реально запущені `postgres`, `api`, `bot`, `landing`, `portal`, `workspace`
 - прогріває TLS/SNI для `dev`, `dev-portal`, `dev-work`, `dev-api` і чекає, поки зникне `TRAEFIK DEFAULT CERT`
@@ -203,7 +213,7 @@ Push у `dev` запускає `staging.yml`, який робить:
 ./scripts/healthcheck.sh --env production --delay 20 --retries 6 --retry-delay 10
 ```
 
-`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
+`production.yml` працює аналогічно: sync runtime-manifests + deploy у `/var/www/srv/workflo/production` з compose project name `workflo-production` після manual approval, cleanup legacy/conflict-стеків по `api.workflo.space`, build/enable `pg_cron` у postgres, перевіркою запущених сервісів і TLS warmup на всіх публічних host.
 
 Перед rerun/production deploy перевір, що в `/var/www/srv/workflo/production/.env` не лишилось placeholder-значень:
 - `GITHUB_REPOSITORY_OWNER` = реальний lowercase owner (`vasulenkoillia`)
@@ -228,6 +238,14 @@ curl -skI https://portal.workflo.space/health
 curl -skI https://api.workflo.space/health
 curl -sk -i https://api.workflo.space/ready
 curl -skI https://work.workflo.space/health
+```
+
+Швидка перевірка `pg_cron` після deploy:
+
+```bash
+cd /var/www/srv/workflo/staging
+docker compose --project-name workflo-staging --env-file .env -f docker-compose.staging.yml exec -T postgres \
+  sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT extname FROM pg_extension WHERE extname='\''pg_cron'\'';"'
 ```
 
 ## 7) Backup/Rollback

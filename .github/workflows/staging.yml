@@ -88,7 +88,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "docker-compose.staging.yml,infra/maintenance/**"
+          source: "docker-compose.staging.yml,infra/maintenance/**,infra/postgres/**"
           target: "${{ env.RUNTIME_ROOT }}/staging"
 
       - name: Deploy via SSH
@@ -148,7 +148,26 @@ jobs:
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
             compose pull
+            compose build postgres
             compose up -d postgres
+
+            ensure_pg_cron_enabled() {
+              retries=20
+
+              for attempt in $(seq 1 "$retries"); do
+                if compose exec -T postgres sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS pg_cron;" && psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT extname FROM pg_extension WHERE extname='\''pg_cron'\''" | grep -q pg_cron'; then
+                  echo "pg_cron extension is enabled"
+                  return 0
+                fi
+                sleep 3
+              done
+
+              echo "Failed to enable pg_cron extension"
+              compose logs postgres || true
+              return 1
+            }
+
+            ensure_pg_cron_enabled
 
             compose up -d --no-deps api
             compose up -d --no-deps bot

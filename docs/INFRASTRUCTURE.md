@@ -1,8 +1,9 @@
 # WORKFLO.SPACE — Інфраструктура
 > Статус: Фінальна v2.0
-> Дата: 12 квітня 2026
+> Дата: 13 квітня 2026
 >
 > Примітка: якщо є розбіжності з фактичними S0 скриптами/compose/workflows, джерелом істини є `docs/S0_RUNBOOK.md`.
+> Поточний S0-факт: staging/production PostgreSQL працює dockerized (custom `infra/postgres` image з `postgresql-16-cron`), а повний Mailcow rollout винесено за межі S0 (залишено mail DNS + SMTP env readiness).
 
 ---
 

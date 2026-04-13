@@ -1,5 +1,5 @@
 # WORKFLO.SPACE — Tracker
-> Оновлено: 13 квітня 2026 (S0 infra synced with actual deploy state)
+> Оновлено: 13 квітня 2026 (S0 closed: pg_cron dockerized, mail baseline fixed)
 > Статуси: ⬜ pending | 🔄 in progress | ✅ done | 🧪 tested | 🚀 deployed | ❌ blocked
 
 ---
@@ -21,12 +21,12 @@
 | S0-09 | GitHub repo + branch protection rules | Infra | — | ✅ | — | — |
 | S0-10 | GitHub Secrets заповнені | Infra | — | ✅ | — | — |
 | S0-11 | GitHub Environment "production" + reviewer | Infra | — | ✅ | — | — |
-| S0-12 | Hetzner сервер — PostgreSQL 16 (dockerized), pg_cron deferred | Infra | — | 🔄 | — | — |
+| S0-12 | Hetzner сервер — PostgreSQL 16 (dockerized) + pg_cron enablement в CI deploy | Infra | — | ✅ | — | — |
 | S0-13 | Hetzner — deploy user + SSH key | Infra | — | ✅ | — | — |
 | S0-14 | Hetzner — UFW firewall rules | Infra | — | ✅ | — | — |
 | S0-15 | Traefik launch + traefik_network | Infra | — | ✅ | — | — |
 | S0-16 | DNS records (всі домени → Hetzner IP) | Infra | — | ✅ | — | — |
-| S0-17 | Mailcow install + SPF/DKIM/DMARC | Infra | — | 🔄 | — | — |
+| S0-17 | Mail baseline для S0: DNS `mail.*` + SMTP env readiness (Mailcow rollout відкладено до S1 Ops) | Infra | — | ✅ | — | — |
 | S0-18 | staging.yml GitHub Actions | Infra | — | ✅ | — | — |
 | S0-19 | production.yml GitHub Actions | Infra | — | ✅ | — | — |
 | S0-20 | Skeleton apps — Dockerfiles для всіх 5 | Infra | — | ✅ | — | — |
@@ -248,7 +248,7 @@
 
 | Sprint | Всього | ✅ Done | 🧪 Tested | 🚀 Deployed |
 |---|---|---|---|---|
-| S0 Foundation | 30 | 28 | 2 | 1 |
+| S0 Foundation | 30 | 30 | 2 | 1 |
 | S1 Auth | 22 | 0 | 0 | 0 |
 | S2 Orders API | 19 | 0 | 0 | 0 |
 | S3 Portal | 22 | 0 | 0 | 0 |
@@ -257,4 +257,4 @@
 | S6 Docs+Bot | 15 | 0 | 0 | 0 |
 | S7 Landing | 16 | 0 | 0 | 0 |
 | S8 QA+Launch | 14 | 0 | 0 | 0 |
-| **TOTAL** | **171** | **28** | **2** | **1** |
+| **TOTAL** | **171** | **30** | **2** | **1** |
