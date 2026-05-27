@@ -12,9 +12,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "nodemailer": "^8.0.5"
+    "@workflo/types": "workspace:*",
+    "grammy": "^1.30.0",
+    "nodemailer": "^8.0.5",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@types/nodemailer": "^6.4.17",
     "vitest": "^1.6.1"
   }
 }
