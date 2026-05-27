@@ -25,7 +25,6 @@ model Profile {
   createdAt            DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
 
-  company               Company?              @relation("CompanyOwner")
   companyMembership     CompanyMember[]
   ordersAssigned        Order[]               @relation("OrderAssignee")
   ordersCreated         Order[]               @relation("OrderCreatedBy")
@@ -44,6 +43,7 @@ model Profile {
   otpTokens             OtpToken[]
   documentsCreated      Document[]            @relation("DocumentCreatedBy")
   documentsForExecutor  Document[]            @relation("DocumentExecutor")
+  auditLogsAsActor      AuditLog[]
 
   @@index([role])
   @@map("profiles")
@@ -94,8 +94,6 @@ model Company {
   id           String      @id @default(uuid())
   name         String
   slug         String      @unique
-  ownerId      String      @unique
-  owner        Profile     @relation("CompanyOwner", fields: [ownerId], references: [id])
   language     Language    @default(uk)
   currency     String      @default("USD")
   notes        String?
@@ -391,17 +389,73 @@ model ReferralBonus {
 }
 
 model NotificationSettings {
-  id                     String  @id @default(uuid())
-  profileId              String  @unique
-  profile                Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  emailOnStatusChange    Boolean @default(true)
-  emailOnNewComment      Boolean @default(true)
-  emailOnPayment         Boolean @default(true)
-  telegramOnStatusChange Boolean @default(true)
-  telegramOnNewComment   Boolean @default(false)
-  telegramOnPayment      Boolean @default(true)
+  id             String   @id @default(uuid())
+  profileId      String   @unique
+  profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language       Language @default(uk)
+  telegramChatId String?  @unique
+  telegramLinkedAt DateTime? @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  preferences NotificationPreference[]
+  logs        NotificationLog[]
 
   @@map("notification_settings")
+}
+
+/// Matrix: settingsId × category × channel → enabled.
+/// CRITICAL_EVENTS (auth/billing email) bypass this table via resolver logic.
+model NotificationPreference {
+  id         String              @id @default(uuid())
+  settingsId String
+  settings   NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  category   String               // matches NotificationCategory in @workflo/types
+  channel    String               // matches NotificationChannel in @workflo/types
+  enabled    Boolean              @default(true)
+  updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([settingsId, category, channel])
+  @@index([settingsId])
+  @@map("notification_preferences")
+}
+
+/// Delivery log — every dispatch attempt (success/fail/skipped/rolled_up).
+/// Used by rollup detection (≥3 events / 10s) and adapter retry tracking.
+model NotificationLog {
+  id             String               @id @default(uuid())
+  settingsId     String
+  settings       NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  event          String               // matches NotificationEvent string literal
+  channel        String               // NotificationChannel
+  status         String               // 'sent' | 'failed' | 'skipped' | 'rolled_up'
+  errorCode      String?              // adapter-specific: 'blocked', 'invalid_chat', 'rate_limited', ...
+  rollupTargetId String?              // when status='rolled_up', points to the consolidated message log row
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([settingsId, createdAt])
+  @@index([settingsId, event, createdAt]) // rollup detection window query
+  @@map("notification_logs")
+}
+
+/// Audit log for can() denials, ownership transfers, credential reveals, etc.
+/// Retention: 365 days (see docs/RETENTION.md).
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  actor        Profile? @relation(fields: [actorId], references: [id])
+  action       String   // e.g. 'order.create', 'company.transfer_ownership'
+  resourceType String?  // 'company' | 'order' | 'credentials' | ...
+  resourceId   String?
+  result       String   // 'allowed' | 'denied' | 'error'
+  metadata     Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([actorId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }
 
 model Notification {
@@ -589,7 +643,7 @@ enum OrderPriority {
 enum OrderInternalStatus {
   new
   clarification
-  estimated
+  estimating
   in_progress
   review
   revision
@@ -644,6 +698,7 @@ enum DocumentType {
   invoice
   completion_act
   specification
+  reconciliation_act
 }
 
 enum DocumentStatus {

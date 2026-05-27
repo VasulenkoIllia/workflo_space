@@ -10,6 +10,40 @@ const DEFAULT_EXECUTOR_PASSWORD = 'Exec123!'
 const DEFAULT_CLIENT_EMAIL = 'client@example.com'
 const DEFAULT_CLIENT_PASSWORD = 'Client123!'
 
+const NOTIFICATION_CATEGORIES = ['auth', 'orders', 'chat', 'billing', 'documents', 'loyalty', 'system'] as const
+const NOTIFICATION_DEFAULT_CHANNELS = ['email', 'telegram', 'in_app'] as const
+
+async function ensureNotificationSettings(profileId: string, language: 'uk' | 'en' = 'uk') {
+  const settings = await prisma.notificationSettings.upsert({
+    where: { profileId },
+    update: { language },
+    create: { profileId, language },
+  })
+
+  for (const category of NOTIFICATION_CATEGORIES) {
+    for (const channel of NOTIFICATION_DEFAULT_CHANNELS) {
+      await prisma.notificationPreference.upsert({
+        where: {
+          settingsId_category_channel: {
+            settingsId: settings.id,
+            category,
+            channel,
+          },
+        },
+        update: {}, // do not overwrite user choices on reseed
+        create: {
+          settingsId: settings.id,
+          category,
+          channel,
+          enabled: true,
+        },
+      })
+    }
+  }
+
+  return settings
+}
+
 async function ensurePaymentSettings() {
   const existing = await prisma.paymentSettings.findFirst()
 
@@ -98,7 +132,6 @@ async function main() {
     where: { slug: 'test-company' },
     update: {
       name: 'ТОВ Тестова Компанія',
-      ownerId: clientProfile.id,
       language: 'uk',
       currency: 'USD',
       referralCode: 'workflo-TEST01',
@@ -107,7 +140,6 @@ async function main() {
     create: {
       name: 'ТОВ Тестова Компанія',
       slug: 'test-company',
-      ownerId: clientProfile.id,
       language: 'uk',
       currency: 'USD',
       referralCode: 'workflo-TEST01',
@@ -135,21 +167,10 @@ async function main() {
   })
   console.log(`✅ Company seeded: ${company.name} (${DEFAULT_CLIENT_EMAIL})`)
 
-  await prisma.notificationSettings.upsert({
-    where: { profileId: owner.id },
-    update: {},
-    create: { profileId: owner.id },
-  })
-  await prisma.notificationSettings.upsert({
-    where: { profileId: executor.id },
-    update: {},
-    create: { profileId: executor.id },
-  })
-  await prisma.notificationSettings.upsert({
-    where: { profileId: clientProfile.id },
-    update: {},
-    create: { profileId: clientProfile.id },
-  })
+  await ensureNotificationSettings(owner.id, 'uk')
+  await ensureNotificationSettings(executor.id, 'uk')
+  await ensureNotificationSettings(clientProfile.id, 'uk')
+  console.log('✅ Notification settings + default preferences initialized')
 
   await prisma.executorRate.upsert({
     where: { executorId: executor.id },
