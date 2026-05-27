@@ -1,11 +1,12 @@
 # WORKFLO.SPACE — Інфраструктура
 
-> Статус: Фінальна v2.0
-> Дата: 14 квітня 2026
+> Статус: Фінальна v2.1
+> Дата: 16 квітня 2026
 >
 > Примітка: якщо є розбіжності з фактичними S0 скриптами/compose/workflows, джерелом істини є `docs/S0_RUNBOOK.md`.
-> Поточний S0-факт: staging/production PostgreSQL працює dockerized (custom `infra/postgres` image з `postgresql-16-cron`), а повний Mailcow rollout винесено за межі S0 (залишено mail DNS + SMTP env readiness).
+> Поточний S0-факт: staging/production PostgreSQL працює dockerized (custom `infra/postgres` image з `postgresql-16-cron`).
 > Поточний hardening-факт: runtime контейнери запускаються non-root, `portal/workspace` працюють на unprivileged `8080`, у staging/prod compose є resource + log rotation limits, API security headers через `@fastify/helmet`, а в Prisma застосовано міграцію `20260413215510_timestamptz_and_index_cleanup`.
+> Mailcow-факт: сервер встановлено і повністю налаштовано (16 квітня 2026). Реальні шляхи: `/var/www/mail/` (Mailcow) і `/var/www/proxy/` (Traefik). Docker network: `proxy`.
 
 ---
 
@@ -25,7 +26,8 @@
 12. [Rollback](#12-rollback)
 13. [Моніторинг](#13-моніторинг)
 14. [Локальна розробка](#14-локальна-розробка)
-15. [Day-1 Checklist](#15-day-1-checklist)
+15. [Mailcow — Поштовий сервер](#15-mailcow--поштовий-сервер)
+16. [Day-1 Checklist](#16-day-1-checklist)
 
 ---
 
@@ -685,7 +687,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/staging
+            cd /var/www/srv/workflo/staging
 
             # Оновити SHA теги
             export LANDING_TAG=sha-${{ github.sha }}
@@ -833,7 +835,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            BACKUP_DIR=/srv/workflo/production/backups
+            BACKUP_DIR=/var/www/srv/workflo/production/backups
             DATE=$(date +%Y-%m-%d_%H-%M)
             BACKUP_FILE=$BACKUP_DIR/pre-deploy_$DATE.sql.gz
 
@@ -855,7 +857,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/workflo/production
+            cd /var/www/srv/workflo/production
 
             # Зберегти поточний тег (для rollback)
             CURRENT_TAG=$(cat .last_deploy 2>/dev/null || echo "none")
@@ -923,7 +925,7 @@ jobs:
           username: deploy
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
-            cd /srv/workflo/production
+            cd /var/www/srv/workflo/production
             PREV_TAG=$(cat .previous_deploy)
 
             echo "⚠️ Health check failed. Rolling back to $PREV_TAG"
@@ -1195,14 +1197,14 @@ JWT_EXPIRES_IN=15m        # access token TTL
 JWT_REFRESH_EXPIRES_IN=30d
 
 # ═══════════════════════════════════════
-# EMAIL (Nodemailer → Mailcow/Mailpit)
+# EMAIL (Nodemailer → Mailpit dev / Mailcow prod)
 # ═══════════════════════════════════════
-SMTP_HOST=localhost        # prod: mail.workflo.space
+SMTP_HOST=mailpit          # prod: mail.workflo.space
 SMTP_PORT=1025             # prod: 587
-SMTP_SECURE=false          # prod: false (STARTTLS на 587)
+SMTP_SECURE=false          # false і в dev і в prod (STARTTLS на 587)
 SMTP_USER=                 # prod: noreply@workflo.space
-SMTP_PASS=
-EMAIL_FROM="workflo.space <noreply@workflo.space>"
+SMTP_PASS=                 # prod: пароль скриньки
+SMTP_FROM="workflo.space <noreply@workflo.space>"
 
 # ═══════════════════════════════════════
 # TELEGRAM
@@ -1292,18 +1294,42 @@ OPENAI_API_KEY
 SENTRY_DSN
 ```
 
-### 9.2 Сервер — /srv/workflo/production/.env
+### 9.2 Сервер — .env файли
 
 ```bash
-# Права: chmod 600 /srv/workflo/production/.env
-# Власник: root або deploy user
-# Читається тільки docker compose на сервері
+# /var/www/srv/workflo/staging/.env  (chmod 600)
+DATABASE_URL_STAGING=postgresql://workflo_stg:...@localhost:5433/workflo_staging
+JWT_SECRET_STAGING=...
+JWT_REFRESH_SECRET_STAGING=...
 
+# EMAIL — Mailcow (той самий сервер для staging і prod)
+SMTP_HOST=mail.workflo.space
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=noreply@workflo.space
+SMTP_PASS=...
+SMTP_FROM="workflo.space <noreply@workflo.space>"
+
+TELEGRAM_BOT_TOKEN=...
+SENTRY_DSN=...
+TEAM_IPS=11.22.33.44/32,55.66.77.88/32
+GITHUB_REPOSITORY_OWNER=yourname
+```
+
+```bash
+# /var/www/srv/workflo/production/.env  (chmod 600)
 DATABASE_URL_PROD=postgresql://workflo_prod:...@localhost:5432/workflo_production
 JWT_SECRET_PROD=...
 JWT_REFRESH_SECRET_PROD=...
+
+# EMAIL — Mailcow
+SMTP_HOST=mail.workflo.space
+SMTP_PORT=587
+SMTP_SECURE=false
 SMTP_USER=noreply@workflo.space
 SMTP_PASS=...
+SMTP_FROM="workflo.space <noreply@workflo.space>"
+
 TELEGRAM_BOT_TOKEN=...
 OPENAI_API_KEY=...
 SENTRY_DSN=...
@@ -1422,13 +1448,13 @@ pnpm --filter db prisma generate       # генерує для macOS
 
 set -e
 
-BACKUP_DIR=/srv/workflo/production/backups
+BACKUP_DIR=/var/www/srv/workflo/production/backups
 DATE=$(date +%Y-%m-%d_%H-%M)
 BACKUP_FILE=$BACKUP_DIR/$DATE.sql.gz
 LOG_FILE=$BACKUP_DIR/backup.log
 
 # Завантажити env (DATABASE_URL_PROD)
-source /srv/workflo/production/.env
+source /var/www/srv/workflo/production/.env
 
 echo "[$(date)] Starting backup..." >> $LOG_FILE
 
@@ -1460,7 +1486,7 @@ echo "[$(date)] Old backups cleaned" >> $LOG_FILE
 # Cron на сервері:
 crontab -e
 # Додати:
-0 3 * * * /srv/workflo/infra/scripts/backup.sh
+0 3 * * * /var/www/srv/workflo/infra/scripts/backup.sh
 ```
 
 ### 11.2 Відновлення з бекапу
@@ -1468,11 +1494,11 @@ crontab -e
 ```bash
 # ТЕСТ ВІДНОВЛЕННЯ (щомісяця):
 # 1. Знайти останній бекап
-ls -lh /srv/workflo/production/backups/ | tail -5
+ls -lh /var/www/srv/workflo/production/backups/ | tail -5
 
 # 2. Відновити в тестову БД
 createdb workflo_test
-gunzip -c /srv/workflo/production/backups/2026-04-12_03-00.sql.gz | psql workflo_test
+gunzip -c /var/www/srv/workflo/production/backups/2026-04-12_03-00.sql.gz | psql workflo_test
 
 # 3. Перевірити що дані є
 psql workflo_test -c "SELECT COUNT(*) FROM orders;"
@@ -1484,7 +1510,7 @@ dropdb workflo_test
 # ВІДНОВЛЕННЯ В PRODUCTION (екстрений випадок):
 # Тільки після зупинки всіх сервісів!
 docker compose -f docker-compose.production.yml stop
-gunzip -c /srv/workflo/production/backups/BACKUP_FILE.sql.gz | psql workflo_production
+gunzip -c /var/www/srv/workflo/production/backups/BACKUP_FILE.sql.gz | psql workflo_production
 docker compose -f docker-compose.production.yml up -d
 ```
 
@@ -1501,7 +1527,7 @@ docker compose -f docker-compose.production.yml up -d
 
 set -e
 
-PROD_DIR=/srv/workflo/production
+PROD_DIR=/var/www/srv/workflo/production
 source $PROD_DIR/.env
 
 CURRENT_TAG=$(cat $PROD_DIR/.last_deploy 2>/dev/null || echo "none")
@@ -1534,7 +1560,7 @@ echo "✅ Rollback complete to $PREV_TAG"
 
 ```bash
 # Якщо треба відкотитись не на попередній а на конкретний:
-cd /srv/workflo/production
+cd /var/www/srv/workflo/production
 
 export LANDING_TAG=sha-a1b2c3
 export PORTAL_TAG=sha-a1b2c3
@@ -1809,129 +1835,436 @@ http://localhost:8025
 
 ---
 
-## 15. DAY-1 CHECKLIST
+## 15. MAILCOW — ПОШТОВИЙ СЕРВЕР
+
+> Статус: ✅ ПОВНІСТЮ НАЛАШТОВАНО (16 квітня 2026) | ✅ mail-tester.com: 10/10
+
+### 15.1 Архітектура
+
+```
+Internet
+  │
+  ├─ :80, :443 ──→ Traefik ──→ mail.workflo.space (webui + SOGo)
+  │                               └─ nginx-mailcow:8443 (HTTPS backend)
+  │                                    insecureSkipVerify=true (self-signed → Traefik cert)
+  │
+  ├─ :25  ──────────────────────→ Mailcow postfix (⏳ Hetzner тікет)
+  ├─ :587 ──────────────────────→ Mailcow postfix STARTTLS (✅ працює)
+  ├─ :465 ──────────────────────→ Mailcow postfix SMTPS
+  ├─ :143 ──────────────────────→ Mailcow dovecot IMAP
+  └─ :993 ──────────────────────→ Mailcow dovecot IMAPS
+
+TLS:
+  Traefik (CF DNS challenge) → acme.json
+    └─→ traefik-certs-dumper → /var/www/mail/data/assets/ssl/mail.workflo.space/
+         └─→ sync-mailcow-certs.sh (cron) → cert.pem / key.pem + postfix/dovecot reload
+```
+
+**Ключові рішення:**
+- `SKIP_LETS_ENCRYPT=y` — Mailcow не отримує власний ACME-сертифікат
+- Traefik проксує на **HTTPS** порт 8443 (не HTTP 8880), бо Mailcow nginx завжди редіректить HTTP → HTTPS
+- `insecureSkipVerify=true` в Traefik serversTransport — дозволяє Traefik підключатися до Mailcow nginx за HTTPS без валідації самопідписаного сертифіката бекенду
+- `traefik-certs-dumper --clean=false` — критично, щоб не видалити `dhparams.pem`
+
+### 15.2 Фактичні шляхи на сервері
+
+```
+/var/www/mail/                          ← Mailcow root (git clone)
+/var/www/mail/mailcow.conf              ← основна конфігурація
+/var/www/mail/docker-compose.override.yml
+/var/www/mail/data/assets/ssl/          ← SSL директорія
+/var/www/mail/data/assets/ssl/cert.pem  ← активний сертифікат
+/var/www/mail/data/assets/ssl/key.pem   ← активний ключ
+/var/www/mail/data/assets/ssl/dhparams.pem  ← DH параметри (потрібні Dovecot!)
+/var/www/mail/data/assets/ssl/mail.workflo.space/
+    cert.crt  ← certs-dumper кладе сюди
+    key.key   ← certs-dumper кладе сюди
+/var/www/mail/sync-mailcow-certs.sh     ← скрипт синхронізації
+
+/var/www/proxy/traefik/                 ← Traefik root
+/var/www/proxy/traefik/dynamic/mailcow.yml  ← serversTransport конфіг
+```
+
+**Docker network:** `proxy` (не `traefik_network` — так налаштований Traefik на цьому сервері)
+
+### 15.3 Встановлення
+
+```bash
+# 1. Клонувати Mailcow
+cd /var/www
+git clone https://github.com/mailcow/mailcow-dockerized mail
+cd /var/www/mail
+
+# 2. ВАЖЛИВО: перед generate_config.sh створити daemon.json (потрібно для IPv6-питання)
+echo '{"ipv6": true}' > /etc/docker/daemon.json
+
+# 3. Запустити конфігуратор
+./generate_config.sh
+# MAILCOW_HOSTNAME: mail.workflo.space
+# Timezone: Europe/Kyiv
+# Enable IPv6: Y
+```
+
+### 15.4 /var/www/mail/mailcow.conf — ключові параметри
+
+```ini
+MAILCOW_HOSTNAME=mail.workflo.space
+HTTP_PORT=8880
+HTTPS_PORT=8443
+TZ=Europe/Kyiv
+SKIP_LETS_ENCRYPT=y          # Traefik керує сертифікатами
+SKIP_CLAMD=y                 # ~1GB RAM економія; увімкнути пізніше якщо треба
+ENABLE_IPV6=true
+IPV4_NETWORK=172.26.1        # ЗМІНЕНО з 172.22.1 — конфлікт з іншим проектом на сервері!
+```
+
+> **Чому IPV4_NETWORK=172.26.1:** На сервері вже існував контейнер з мережею `172.22.0.0/16`.
+> Mailcow за замовчуванням теж хоче `172.22.x` → конфлікт при `docker compose up`.
+> Вирішення: змінити `IPV4_NETWORK` в `mailcow.conf` **до першого запуску**.
+
+### 15.5 /var/www/mail/docker-compose.override.yml
+
+```yaml
+services:
+  nginx-mailcow:
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailcow.rule=Host(`mail.workflo.space`)"
+      - "traefik.http.routers.mailcow.entrypoints=websecure"
+      - "traefik.http.routers.mailcow.tls.certresolver=cf"
+      # HTTPS backend (8443), не HTTP (8880) — бо nginx завжди редіректить 8880 → 8443
+      - "traefik.http.services.mailcow.loadbalancer.server.port=8443"
+      - "traefik.http.services.mailcow.loadbalancer.server.scheme=https"
+      - "traefik.http.services.mailcow.loadbalancer.serversTransport=mailcow-transport@file"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true
+```
+
+### 15.6 /var/www/proxy/traefik/dynamic/mailcow.yml
+
+```yaml
+http:
+  serversTransports:
+    mailcow-transport:
+      insecureSkipVerify: true  # Mailcow nginx має self-signed cert на бекенді
+```
+
+> Цей файл підхоплюється Traefik автоматично через `providers.file` (директорія `dynamic/`).
+> Без `insecureSkipVerify` Traefik відмовляє з'єднання через невалідний сертифікат бекенду.
+
+### 15.7 traefik-certs-dumper (в /var/www/proxy/traefik/docker-compose.yml)
+
+```yaml
+  certs-dumper:
+    image: ldez/traefik-certs-dumper:v2.8.3
+    container_name: certs-dumper
+    restart: unless-stopped
+    entrypoint: sh -c "traefik-certs-dumper file --version v2 --watch --clean=false --source /acme/acme.json --dest /output --domain-subdir --crt-name cert --key-name key"
+    volumes:
+      - ./acme/acme.json:/acme/acme.json:ro
+      - /var/www/mail/data/assets/ssl:/output
+```
+
+**Критичні прапори:**
+- `--clean=false` — без цього certs-dumper **видалить** `dhparams.pem` і `cert.pem/key.pem` при запуску
+- `--domain-subdir` — створює піддиректорію `mail.workflo.space/`
+- `--crt-name cert --key-name key` — файли будуть `cert.crt` і `key.key` (не `.pem`!)
+
+### 15.8 /var/www/mail/sync-mailcow-certs.sh
+
+```bash
+#!/bin/bash
+# Копіює cert.crt/key.key → cert.pem/key.pem і перезавантажує postfix+dovecot
+DOMAIN="mail.workflo.space"
+SRC_DIR="/var/www/mail/data/assets/ssl/$DOMAIN"
+SSL_DIR="/var/www/mail/data/assets/ssl"
+
+if [ ! -f "$SRC_DIR/cert.crt" ] || [ ! -f "$SRC_DIR/key.key" ]; then
+    exit 0
+fi
+
+if [ "$SRC_DIR/cert.crt" -nt "$SSL_DIR/cert.pem" ]; then
+    cp "$SRC_DIR/cert.crt" "$SSL_DIR/cert.pem"
+    cp "$SRC_DIR/key.key"  "$SSL_DIR/key.pem"
+    cd /var/www/mail
+    docker compose exec -T postfix-mailcow postfix reload
+    docker compose exec -T dovecot-mailcow dovecot reload
+    echo "[$(date)] Mailcow certs synced and reloaded"
+fi
+```
+
+```bash
+chmod +x /var/www/mail/sync-mailcow-certs.sh
+
+# Cron (crontab -e):
+30 3 * * * /var/www/mail/sync-mailcow-certs.sh >> /var/log/mailcow-certs.log 2>&1
+```
+
+### 15.9 DH параметри (обов'язково перед запуском!)
+
+Dovecot вимагає `dhparams.pem`. Без нього Dovecot падає з:
+`ssl_dh: Can't open file /etc/ssl/mail/dhparams.pem`
+
+```bash
+openssl dhparam -out /var/www/mail/data/assets/ssl/dhparams.pem 2048
+# Займає ~1-2 хвилини
+```
+
+### 15.10 Запуск Mailcow
+
+```bash
+cd /var/www/mail
+
+# Pull образів (~2-3 GB)
+docker compose pull
+
+# Запуск
+docker compose up -d
+
+# Перевірка
+docker compose ps
+# Всі контейнери мають бути Up (healthy)
+
+# Перевірити webui
+curl -I https://mail.workflo.space
+# → HTTP/2 200
+```
+
+### 15.11 DNS записи (всі налаштовані ✅)
+
+```
+Type   Name                     Content                                    Notes
+──────────────────────────────────────────────────────────────────────────────────
+A      mail                     49.12.219.133                              DNS only (не Proxied!)
+MX     @                        mail.workflo.space (Priority 10)
+PTR    49.12.219.133            mail.workflo.space                         Hetzner Console
+TXT    @                        v=spf1 mx a:mail.workflo.space ~all
+TXT    dkim._domainkey          v=DKIM1; k=rsa; p=<2048-bit ключ>         З Mailcow Admin UI
+TXT    _dmarc                   v=DMARC1; p=none; rua=mailto:hello@workflo.space; fo=1
+TXT    _mta-sts                 v=STSv1; id=<timestamp>
+TXT    _smtp._tls               v=TLSRPTv1; rua=mailto:hello@workflo.space
+CNAME  mta-sts                  mail.workflo.space
+```
+
+DKIM: Mailcow Admin → Configuration → ARC/DKIM keys → Add domain `workflo.space`, 2048 bit → скопіювати публічний ключ в Cloudflare
+
+### 15.12 Mailcow Admin UI налаштування
+
+```
+URL:      https://mail.workflo.space
+Login:    admin / <змінений пароль>
+
+Після першого входу:
+1. Configuration → Mail Setup → Domains → Add: workflo.space
+2. Configuration → ARC/DKIM keys → Add (workflo.space, 2048 bit) → скопіювати в DNS
+3. E-Mail → Mailboxes → Add:
+   - noreply@workflo.space  (для Nodemailer/API)
+   - hello@workflo.space
+   - support@workflo.space
+4. Configuration → Spam Filter → налаштувати за потреби
+```
+
+### 15.13 SOGo Webmail
+
+```
+URL: https://mail.workflo.space/SOGo/
+Login: email@workflo.space + пароль mailbox
+
+⚠️ Якщо після логіну перекидає на адмін-панель:
+   Відкрити в режимі інкогніто (конфлікт session cookie між /SOGo/ та /admin/)
+   або очистити cookies для mail.workflo.space
+```
+
+### 15.14 SMTP credentials для API
+
+```bash
+# /var/www/srv/workflo/production/.env і GitHub Secrets
+SMTP_HOST=mail.workflo.space
+SMTP_PORT=587
+SMTP_SECURE=false      # false = STARTTLS (не SSL from start)
+SMTP_USER=noreply@workflo.space
+SMTP_PASS=<пароль скриньки noreply>
+SMTP_FROM="workflo.space <noreply@workflo.space>"
+```
+
+### 15.15 Тест SMTP
+
+```bash
+# Тест порту 587 (STARTTLS):
+swaks --to test@example.com \
+      --from noreply@workflo.space \
+      --server mail.workflo.space \
+      --port 587 \
+      --tls \
+      --auth LOGIN \
+      --auth-user noreply@workflo.space \
+      --auth-password '<пароль>'
+# Очікується: 250 2.0.0 Ok: queued as XXXXXXXX
+
+# Тест mail-tester.com (після розблокування порту 25):
+# 1. Перейти на mail-tester.com → отримати одноразовий email
+# 2. Надіслати лист через swaks або SOGo
+# 3. Перевірити рейтинг (ціль: 9+/10)
+```
+
+### 15.16 Статус порту 25
+
+✅ Hetzner розблокував вихідний порт 25 (16 квітня 2026).
+✅ mail-tester.com: **10/10** — SPF, DKIM, DMARC, SpamAssassin, Blacklist — всі зелені.
+
+```bash
+# Перевірити чергу (якщо є накопичені листи):
+docker compose exec postfix-mailcow mailq
+
+# Примусово відправити чергу:
+docker compose exec postfix-mailcow postqueue -f
+```
+
+### 15.17 Відомі проблеми та рішення
+
+| Проблема | Причина | Рішення |
+|---|---|---|
+| `generate_config.sh` виходить при питанні IPv6 | Відсутній `/etc/docker/daemon.json` | `echo '{"ipv6": true}' > /etc/docker/daemon.json` перед запуском |
+| Docker network conflict `172.22.x` | Інший проект на сервері використовує ту ж підмережу | `IPV4_NETWORK=172.26.1` в `mailcow.conf` |
+| Traefik → Mailcow 301 redirect loop | Mailcow nginx завжди редіректить HTTP(8880)→HTTPS(8443) | Traefik має роутити на порт **8443** з `scheme=https` + `insecureSkipVerify` |
+| Dovecot падає: `Can't open file dhparams.pem` | Файл не існує після свіжого клону | `openssl dhparam -out .../ssl/dhparams.pem 2048` |
+| `certs-dumper` видаляє `dhparams.pem` та `cert.pem` | Прапор `--clean=true` за замовчуванням | Обов'язково `--clean=false` |
+| `certs-dumper` створює `cert.crt`/`key.key` а не `.pem` | Прапори `--crt-name cert --key-name key` | Sync-скрипт копіює `.crt`→`.pem` і `.key`→`.pem` |
+| SOGo відкриває адмін-панель замість webmail | Сесійний cookie від `/admin/` перекриває `/SOGo/` | Відкривати SOGo в інкогніто або очистити cookies |
+
+---
+
+## 16. DAY-1 CHECKLIST
 
 ### GitHub репозиторій
 
 ```
-□ Створити GitHub репозиторій:
-  □ public (рекомендовано для GitHub Free)
-  □ private (потребує Pro/Team для branch protection та required reviewers)
-□ Додати .gitignore (node_modules, .env*, .next, dist, .turbo)
-□ Branch protection → main:
-  □ Require PR before merge
-  □ Require 1 approval
-  □ Require status checks (check job)
-  □ Do not allow bypassing
-□ GitHub Environments → "production":
-  □ Required reviewers: ти (для public на Free або private на Pro/Team)
-  □ Environment secrets (або з repo secrets)
-□ Додати всі GitHub Secrets (перелік у секції 9.1)
-□ Перевірити що GITHUB_TOKEN має права на ghcr.io (Settings → Actions → Workflow permissions → Read and write)
+✅ Створити GitHub репозиторій (private)
+✅ Додати .gitignore (node_modules, .env*, .next, dist, .turbo)
+✅ Branch protection → main:
+  ✅ Require PR before merge
+  ✅ Require 1 approval
+  ✅ Require status checks (check job)
+  ✅ Do not allow bypassing
+✅ GitHub Environments → "production" + required reviewer
+✅ GITHUB_TOKEN права на ghcr.io (Read and write)
+
+GitHub Secrets — стан:
+  ✅ HETZNER_HOST
+  ✅ HETZNER_SSH_KEY
+  ✅ HETZNER_SSH_USER
+  ✅ DATABASE_URL_PROD
+  ✅ DATABASE_URL_STAGING
+  □ GITHUB_REPOSITORY_OWNER   ← додати (твій GitHub username lowercase)
+  □ TEAM_IPS                  ← додати (curl ifconfig.me → <ip>/32)
+  □ TELEGRAM_DEPLOY_BOT_TOKEN ← коли буде бот
+  □ TELEGRAM_DEPLOY_CHAT_ID   ← коли буде бот
+  □ SENTRY_DSN                ← коли зареєструєш на sentry.io
 ```
 
 ### Сервер Hetzner
 
 ```
-□ Створити deploy user:
-  adduser --disabled-password deploy && usermod -aG docker deploy
-□ SSH ключ для deploy user (з GitHub Actions)
-□ Встановити Docker + Docker Compose
-□ Створити структуру директорій:
-  mkdir -p /srv/workflo/production/backups
-  mkdir -p /srv/workflo/staging
-  mkdir -p /srv/traefik
-□ Встановити PostgreSQL 16 напряму (не в Docker):
-  apt install postgresql-16 postgresql-16-cron
-□ Створити БД і users:
-  createuser workflo_prod && createdb -O workflo_prod workflo_production
-  createuser workflo_stg && createdb -O workflo_stg workflo_staging
-□ Налаштувати pg_cron у postgresql.conf:
-  shared_preload_libraries = 'pg_cron'
-  cron.database_name = 'workflo_production'
-□ Налаштувати firewall (UFW):
-  ufw allow 22    (SSH)
-  ufw allow 80    (HTTP → redirect)
-  ufw allow 443   (HTTPS)
-  ufw deny 5432   (PostgreSQL — тільки localhost)
-  ufw deny 19999  (Netdata — тільки SSH tunnel)
-  ufw enable
+✅ Deploy user створено + SSH key
+✅ Docker + Docker Compose встановлено
+✅ UFW firewall налаштовано (22, 80, 443, 25, 465, 587, 143, 993)
+✅ PostgreSQL 16 (dockerized) + pg_cron
+✅ Структура директорій /var/www/srv/workflo/
+✅ staging/.env та production/.env заповнені (SMTP + DB + JWT)
 ```
 
 ### Traefik
 
 ```
-□ Скопіювати infra/traefik/traefik.yml на сервер → /srv/traefik/
-□ Створити порожній acme.json:
-  touch /srv/traefik/acme.json && chmod 600 /srv/traefik/acme.json
-□ Створити Docker network:
-  docker network create traefik_network
-□ Запустити Traefik:
-  cd /srv/traefik && docker compose up -d
-□ Перевірити що Traefik запущений:
-  docker logs traefik
+✅ Traefik запущено (/var/www/proxy/)
+✅ Docker network "proxy" створено
+✅ Cloudflare DNS challenge (certresolver=cf)
+✅ dynamic/ провайдер для Mailcow serversTransport
 ```
 
-### DNS (Cloudflare або інший provider)
+### DNS (Cloudflare)
 
 ```
-DNS записи → твій Hetzner IP:
-□ workflo.space          A    server-ip
-□ www.workflo.space      A    server-ip
-□ portal.workflo.space      A    server-ip
-□ work.workflo.space     A    server-ip
-□ api.workflo.space      A    server-ip
-□ dev.workflo.space      A    server-ip
-□ dev-portal.workflo.space  A    server-ip
-□ dev-work.workflo.space A    server-ip
-□ dev-api.workflo.space  A    server-ip
-□ mail.workflo.space     A    server-ip
-□ MX запис для поштового домену
-□ TTL: 300 (для першого запуску), потім 3600
+✅ workflo.space          A    49.12.219.133
+✅ www.workflo.space      A    49.12.219.133
+✅ portal.workflo.space   A    49.12.219.133
+✅ work.workflo.space     A    49.12.219.133
+✅ api.workflo.space      A    49.12.219.133
+✅ dev.workflo.space      A    49.12.219.133
+✅ dev-portal.workflo.space  A  49.12.219.133
+✅ dev-work.workflo.space A    49.12.219.133
+✅ dev-api.workflo.space  A    49.12.219.133
+✅ mail.workflo.space     A    49.12.219.133  (DNS only, не Proxied)
+✅ MX workflo.space → mail.workflo.space (Priority 10)
 ```
 
 ### Mailcow
 
 ```
-□ Встановити Mailcow на сервері (окремий Docker stack)
-□ Налаштувати SPF запис: v=spf1 mx ~all
-□ Налаштувати DKIM (генерується в Mailcow UI)
-□ Налаштувати DMARC: v=DMARC1; p=none; rua=mailto:hello@workflo.space
-□ Перевірити deliverability: mail-tester.com (мета: 9+/10)
-□ Створити поштові скриньки:
-  hello@workflo.space
-  noreply@workflo.space
-  support@workflo.space
-□ Налаштувати SMTP credentials в .env
+✅ DNS: A mail.workflo.space → 49.12.219.133 (DNS only, не Proxied)
+✅ DNS: MX workflo.space → mail.workflo.space (Priority 10)
+✅ PTR: 49.12.219.133 → mail.workflo.space (Hetzner Console)
+✅ UFW: порти 25, 465, 587, 143, 993, 995 відкриті
+✅ Cloudflare API Token для Traefik DNS challenge
+✅ Traefik: dnsChallenge + CF token
+✅ Встановлено Mailcow: git clone → /var/www/mail/
+✅ mailcow.conf: HTTP_PORT=8880, HTTPS_PORT=8443, SKIP_LETS_ENCRYPT=y, IPV4_NETWORK=172.26.1
+✅ docker-compose.override.yml: Traefik labels (HTTPS бекенд 8443 + insecureSkipVerify)
+✅ /var/www/proxy/traefik/dynamic/mailcow.yml: serversTransport insecureSkipVerify
+✅ traefik-certs-dumper: додано в Traefik compose (--clean=false!)
+✅ dhparams.pem: згенеровано (openssl dhparam 2048)
+✅ sync-mailcow-certs.sh: створено + cron 3:30
+✅ docker compose up -d: всі контейнери запущені та здорові
+✅ https://mail.workflo.space: webui доступний (200 OK)
+✅ Пароль admin: змінено
+✅ Домен workflo.space: додано в Mailcow
+✅ DKIM: 2048-bit ключ згенеровано
+✅ DNS TXT dkim._domainkey: налаштовано в Cloudflare
+✅ DNS TXT SPF: v=spf1 mx a:mail.workflo.space ~all
+✅ DNS TXT DMARC: v=DMARC1; p=none; rua=mailto:hello@workflo.space; fo=1
+✅ DNS MTA-STS + TLS-RPT: налаштовано
+✅ SMTP порт 587 (STARTTLS): перевірено через swaks — TLS v1.3, auth OK, 250 queued
+✅ Поштові скриньки створено:
+    noreply@workflo.space  (для Nodemailer/API)
+    hello@workflo.space
+    support@workflo.space
+✅ SOGo Webmail: доступний на https://mail.workflo.space/SOGo/
+✅ Hetzner port 25: розблоковано
+✅ mail-tester.com: 10/10 (SPF ✅ DKIM ✅ DMARC ✅ SpamAssassin ✅ Blacklist ✅)
+✅ SMTP credentials → /var/www/srv/workflo/staging/.env
+✅ SMTP credentials → /var/www/srv/workflo/production/.env
+□ SMTP credentials → GitHub Secrets (не потрібні для CI, тільки якщо є потреба)
 ```
 
 ### Перший деплой
 
 ```
-□ Push початкового коду в dev гілку
-□ CI/CD запускається → перевірити GitHub Actions logs
-□ Docker образи з'являються в ghcr.io
-□ Deploy на staging проходить
-□ Перевірити:
-  □ https://dev.workflo.space — landing
-  □ https://dev-portal.workflo.space — portal
-  □ https://dev-api.workflo.space/health — api
-□ SSL сертифікати видані Let's Encrypt (перший раз може взяти ~2 хв)
-□ PR dev → main → затвердити → production deploy
-□ Перевірити production:
+✅ Push початкового коду в dev гілку
+✅ CI/CD запускається — GitHub Actions green
+✅ Docker образи в ghcr.io
+✅ Deploy на staging
+✅ https://dev.workflo.space — landing
+✅ https://dev-portal.workflo.space — portal
+✅ https://dev-api.workflo.space/health — api
+✅ SSL сертифікати (Cloudflare DNS challenge)
+□ PR dev → main → production deploy (після S1)
+□ Перевірити production після першого prod-деплою:
   □ https://workflo.space
   □ https://portal.workflo.space
   □ https://api.workflo.space/health
-  □ https://work.workflo.space — доступний тільки з твого IP
-□ Налаштувати cron для backup:
-  crontab -e → 0 3 * * * /srv/workflo/infra/scripts/backup.sh
-□ Зробити перший ручний backup і перевірити:
-  bash /srv/workflo/infra/scripts/backup.sh
-□ Запустити pg_cron task для recurring charges (SQL з init.sql)
-□ Налаштувати UptimeRobot (4 monitors)
-□ Налаштувати Sentry projects (5: landing, portal, workspace, api, bot)
-□ Встановити Netdata: wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh && sh /tmp/netdata-kickstart.sh
-□ Тег першого релізу:
+  □ https://work.workflo.space — тільки з TEAM_IPS
+□ Backup cron:
+  0 3 * * * /var/www/srv/workflo/infra/scripts/backup.sh
+□ pg_cron task для recurring charges (SQL з init.sql)
+□ UptimeRobot (4 monitors)
+□ Sentry projects (5: landing, portal, workspace, api, bot)
+□ Netdata: wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh && sh /tmp/netdata-kickstart.sh
+□ Тег першого релізу після production deploy:
   git tag -a v0.1.0 -m "Infrastructure ready" && git push origin v0.1.0
 ```
 
