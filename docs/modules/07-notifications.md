@@ -1,271 +1,260 @@
 # NOTIFICATIONS MODULE
-> App: API (api.workflo.space) / Bot (Telegram)
-> Статус: MVP
+
+> App: API (api.workflo.space) + всі consumer-додатки
+> Статус: S1 (multi-channel matrix architecture)
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
-> Оновлено: 12 квітня 2026
+> Оновлено: 27 травня 2026
 
 ---
 
 ## Огляд
 
-Централізований модуль нотифікацій. Всі нотифікації в системі відправляються через єдину функцію `notify()` з `packages/notifications`. Підтримувані канали в MVP: **Email** + **Telegram**. SMS — Phase 3.
+Централізований сервіс нотифікацій з **матричною архітектурою**: 7 категорій × 6 каналів × 27 events. Все надсилається через єдину функцію `notify()` з `@workflo/notifications`. MVP підтримує **email + telegram + in_app**; sms / push / webhook зареєстровані в `CHANNELS` registry але `enabled: false` (готові до S7+).
+
+Дивись також: **ADR-003** (channels strategy + critical events lock).
 
 ---
 
-## Архітектура (Channel Adapter Pattern)
+## 1. Категорії (NotificationCategory)
 
-```typescript
-// packages/notifications/src/NotificationAdapter.ts
-interface NotificationAdapter {
-  send(to: string, payload: NotificationPayload): Promise<void>
-}
+7 категорій з `@workflo/types`:
 
-interface NotificationPayload {
-  subject?: string      // для email
-  text: string          // plain text fallback
-  html?: string         // для email
-}
-
-// packages/notifications/src/adapters/EmailAdapter.ts
-class EmailAdapter implements NotificationAdapter {
-  async send(email: string, payload): Promise<void> {
-    await nodemailer.sendMail({ to: email, subject: payload.subject, html: payload.html })
-  }
-}
-
-// packages/notifications/src/adapters/TelegramAdapter.ts
-class TelegramAdapter implements NotificationAdapter {
-  async send(chatId: string, payload): Promise<void> {
-    await bot.api.sendMessage(chatId, payload.text, { parse_mode: 'HTML' })
-  }
-}
-
-// packages/notifications/src/notify.ts
-export async function notify(
-  profileId: string,
-  event: NotificationEvent,
-  context: Record<string, any>
-): Promise<void> {
-  const settings = await getNotificationSettings(profileId)
-  const profile = await getProfile(profileId)
-
-  const channels = resolveChannels(event, settings)  // визначаємо які канали активні
-
-  for (const channel of channels) {
-    if (channel === 'email' && profile.email && settings.emailEnabled) {
-      const html = renderEmailTemplate(event, context, profile.language)
-      await emailAdapter.send(profile.email, { subject: getSubject(event), html })
-    }
-    if (channel === 'telegram' && profile.telegramChatId && settings.telegramEnabled) {
-      const text = renderTelegramMessage(event, context, profile.language)
-      await telegramAdapter.send(profile.telegramChatId, { text })
-    }
-  }
-
-  // Зберігаємо в таблицю notifications (для in-app history)
-  await saveNotification(profileId, event, context)
-}
-```
-
-### Додавання нового каналу (Phase 3 — SMS)
-
-1. Створити `SmsAdapter implements NotificationAdapter`
-2. Додати `smsEnabled` в `NotificationSettings` + міграція
-3. Додати `profile.phoneNumber` lookup
-4. Зареєструвати в `resolveChannels()`
-5. **Нуль змін у бізнес-логіці замовлень/чату**
-
----
-
-## Events (NotificationEvent enum)
-
-```typescript
-enum NotificationEvent {
-  // Orders
-  ORDER_CREATED = 'order.created',
-  ORDER_STATUS_CHANGED = 'order.status_changed',
-  ORDER_ASSIGNED = 'order.assigned',
-  ORDER_DUE_SOON = 'order.due_soon',
-
-  // Chat
-  COMMENT_CREATED = 'comment.created',
-  COMMENT_MENTION = 'comment.mention',
-
-  // Billing
-  PAYMENT_RECEIVED = 'payment.received',
-  INVOICE_SENT = 'invoice.sent',
-  SUBSCRIPTION_RENEWED = 'subscription.renewed',
-  SUBSCRIPTION_EXPIRING = 'subscription.expiring',
-
-  // Documents
-  DOCUMENT_SENT = 'document.sent',
-  DOCUMENT_SIGNED = 'document.signed',
-
-  // Auth
-  WELCOME = 'auth.welcome',
-  PASSWORD_RESET = 'auth.password_reset',
-  INVITE_SENT = 'auth.invite_sent',
-
-  // Referral
-  REFERRAL_ACTIVATED = 'referral.activated',
-  REFERRAL_BONUS = 'referral.bonus',
-
-  // System
-  BACKUP_DONE = 'system.backup_done',
-  BACKUP_FAILED = 'system.backup_failed',
-  DEPLOY_DONE = 'system.deploy_done',
-}
-```
-
----
-
-## NotificationSettings (налаштування юзера)
-
-```prisma
-model NotificationSettings {
-  id              String  @id @default(uuid())
-  profileId       String  @unique
-  emailEnabled    Boolean @default(true)
-  telegramEnabled Boolean @default(true)
-
-  // Які події надсилати по email
-  emailOrderStatus    Boolean @default(true)
-  emailComments       Boolean @default(true)
-  emailBilling        Boolean @default(true)
-  emailDocuments      Boolean @default(true)
-
-  // Які події надсилати в Telegram
-  telegramOrderStatus Boolean @default(true)
-  telegramComments    Boolean @default(true)
-  telegramBilling     Boolean @default(true)
-  telegramMentions    Boolean @default(true)
-
-  profile Profile @relation(fields: [profileId], references: [id])
-}
-```
-
----
-
-## Таблиця notifications (in-app history)
-
-```prisma
-model Notification {
-  id        String            @id @default(uuid())
-  profileId String
-  event     String            // NotificationEvent value
-  title     String
-  body      String
-  meta      Json?             // orderId, commentId, etc. для клікабельних лінків
-  isRead    Boolean           @default(false)
-  createdAt DateTime          @default(now())
-
-  profile Profile @relation(fields: [profileId], references: [id])
-
-  @@index([profileId, isRead])
-  @@index([profileId, createdAt])
-}
-```
-
-In-app нотифікації (bell icon) показуються з `notifications` таблиці. SSE stream для bell — при `INSERT` в `notifications` → `pg_notify('notifications_{profileId}', ...)`.
-
----
-
-## API Endpoints
-
-| Метод | URL | Опис |
+| Category | Опис | Приклади events |
 |---|---|---|
-| `GET` | `/notifications` | Список нотифікацій юзера (з пагінацією) |
-| `PATCH` | `/notifications/:id/read` | Позначити як прочитано |
-| `PATCH` | `/notifications/read-all` | Позначити всі як прочитано |
-| `GET` | `/notifications/stream` | SSE stream для bell icon |
-| `GET` | `/notifications/settings` | Налаштування нотифікацій |
-| `PATCH` | `/notifications/settings` | Оновити налаштування |
+| `auth` | автентифікація, відновлення доступу | welcome, password_reset, email_verification, login_from_new_device |
+| `orders` | життєвий цикл замовлень | created, status_changed, assigned, file_uploaded, due_soon, overdue, specification_ready |
+| `chat` | коментарі та згадки | new_comment, mention |
+| `billing` | фінансові події | invoice_sent, invoice_paid, invoice_overdue, payment_failed, refund_issued, subscription_charged, subscription_expiring |
+| `documents` | згенеровані документи | completion_act_ready, reconciliation_act_ready |
+| `loyalty` | програма лояльності | tier_upgraded, discount_applied |
+| `system` | системні події | maintenance_planned, invite_sent, company_member_added |
+
+Event → Category mapping — у `EVENT_TO_CATEGORY` (`packages/types/src/constants.ts`).
 
 ---
 
-## DTO
+## 2. Канали (NotificationChannel)
 
-### `GET /notifications`
+| Channel | enabled | cost | requiresUserOptIn | Note |
+|---|---|---|---|---|
+| `email` | ✅ true | low | false | Базовий канал; mailcow прод, mailpit dev. |
+| `telegram` | ✅ true | low | true | grammY bot; opt-in через `/start <code>`. |
+| `in_app` | ✅ true | free | false | Запис у `notifications` table; SSE push. |
+| `sms` | ❌ false | high | true | S7+; Twilio або SMSC. |
+| `push` | ❌ false | free | true | S8+; PWA / native app. |
+| `webhook` | ❌ false | free | true | Enterprise; per-tenant webhook URL. |
+
+`disabled` канали мовчки пропускаються resolver'ом (forward-compat).
+
+---
+
+## 3. User preferences (matrix)
+
+Таблиця `notification_preferences`:
+
+```
+settingsId × category × channel → enabled
+```
+
+Тобто 7 × 6 = до 42 рядків на користувача (реально 7 × 3 = 21 рядок для MVP-каналів).
+
+При `POST /auth/register` створюється `NotificationSettings` + дефолтні preferences (all categories × {email, telegram, in_app} = enabled by default).
+
+UI у `/profile/settings/notifications`:
+- Матриця 7×3 (категорія × email/telegram/in_app).
+- Чекбокси.
+- Кнопка "Підключити Telegram" якщо `telegramChatId` ще не linked.
+- **Disabled state** для auth+billing email column з tooltip: "Критичні події завжди надходять на email (ADR-003)".
+
+---
+
+## 4. Critical events (lock)
+
+Список у `CRITICAL_EVENTS` (`packages/types/src/constants.ts`):
+
+```
+auth.password_reset
+auth.email_verification
+auth.login_from_new_device
+billing.invoice_sent
+billing.invoice_paid
+billing.invoice_overdue
+billing.payment_failed
+billing.refund_issued
+```
+
+Для цих events **email завжди надсилається**, незалежно від user preferences (resolver додає email у targetChannels override).
+
+---
+
+## 5. Архітектура коду
+
+```
+packages/notifications/src/
+├── config.ts                       # Zod env validation
+├── resolver.ts                     # resolveTargetChannels()
+├── dispatch.ts                     # per-channel render + dispatch routers
+├── notify.ts                       # main orchestrator (DI via NotifyDeps)
+├── index.ts                        # public exports
+├── channels.ts (re-exports from @workflo/types)
+├── adapters/
+│   ├── EmailAdapter.ts             # sendEmail() → typed result
+│   └── TelegramAdapter.ts          # sendTelegram() → typed error states
+├── email/
+│   ├── mailer.ts                   # Nodemailer transport singleton
+│   ├── i18n.ts                     # uk/en translate()
+│   ├── render.ts                   # HTML layout + escapeText/Attr
+│   └── templates/
+│       ├── welcome.ts
+│       ├── inviteExecutor.ts
+│       ├── inviteCompanyMember.ts
+│       └── passwordReset.ts
+└── telegram/
+    ├── bot.ts                      # grammY Bot singleton
+    ├── escape.ts                   # HTML parse_mode escape
+    └── templates/
+        └── index.ts                # 7 telegram templates
+```
+
+---
+
+## 6. Flow: `notify(deps, input)` step-by-step
+
+1. Load `NotificationSettings` (через `prisma.notificationSettings.findUnique` за `profileId`).
+2. Load `Profile` (для email + name + language).
+3. `resolveTargetChannels(prisma, settings.id, event)`:
+   - look up category from `EVENT_TO_CATEGORY[event]`,
+   - fetch enabled prefs for that category,
+   - filter by `CHANNELS[c].enabled === true`,
+   - if event in `CRITICAL_EVENTS` → force-add 'email',
+   - return stable-ordered array.
+4. For each channel:
+   - **Email** → `renderEmailForEvent()` → `sendEmail()` → typed result.
+   - **Telegram** → `renderTelegramForEvent()` → `sendTelegram()`. If result = `'failed' / reason='blocked'` → call `deps.onTelegramBlocked(profileId)` (API layer auto-disables telegram channel prefs).
+   - **in_app** → write row у `notifications` table (якщо `input.inApp = {title, body}` надано).
+5. Persist `NotificationLog` row per channel: `{ event, channel, status, errorCode?, metadata }`.
+6. Return `NotifyOutcome { results, attempted }`.
+
+`notify()` **ніколи не кидає** — всі помилки збираються у `results`.
+
+---
+
+## 7. Anti-spam: rollup
+
+Якщо для одного `settingsId` за останні **10 секунд** вже є ≥ **3** `NotificationLog` records з тим самим `event` → надсилаємо 1 rollup-message замість N окремих:
+
+- Email: subject "X нових подій у [order/company/etc]" + дайджест.
+- Telegram: 1 повідомлення з bullet-list.
+- Решта N-1 events маркуються `rollup_target_id` → id master log row.
+
+Параметри: `NOTIFICATION_ROLLUP_WINDOW_MS = 10_000`, `NOTIFICATION_ROLLUP_THRESHOLD = 3` (`@workflo/types/constants`).
+
+Implementation note: rollup-detection query використовує index `notification_logs_rollup_idx ON (settingsId, event, createdAt DESC)`. Запит limit 3 + check first row's `createdAt > now() - 10s`.
+
+---
+
+## 8. Escalation: order overdue
+
+Окремий від rollup механізм. Якщо order має `deadline < now()` і немає transition в done за останні **4 години**:
+- надсилаємо `orders.overdue` event owner'у замовлення (escalation),
+- логуємо у audit_logs.
+
+Виконується кроном `C16:overdue_escalation` (кожні 30хв; див. `CRON_JOBS.md`).
+
+---
+
+## 9. Telegram opt-in flow
+
+1. User у `/profile/settings/notifications` натискає "Підключити Telegram".
+2. API генерує `OtpToken(purpose='telegram_link', value=6-digit code)`, повертає deep link `https://t.me/<bot>?start=<code>`.
+3. User відкриває посилання → Telegram bot отримує `/start <code>`.
+4. Bot endpoint `/bot/webhook` (`packages/bot`) перевіряє код:
+   - валідний + не expired → save `chatId` у `NotificationSettings.telegramChatId` + `telegramLinkedAt = now()`.
+   - rate limit: 5 спроб / 15 хв per IP — захист від OTP brute force (`docs/modules/15-bot.md`).
+5. Bot відповідає "✅ Telegram підключено!" + надсилає welcome telegram via `notify()`.
+
+---
+
+## 10. Telegram blocked handling
+
+Коли bot заблокований користувачем (Telegram повертає 403):
+- `TelegramAdapter` повертає `{ status: 'failed', reason: 'blocked' }`.
+- `notify()` викликає `deps.onTelegramBlocked(profileId)`.
+- API-callback виконує: `UPDATE notification_preferences SET enabled=false WHERE settings_id=$1 AND channel='telegram'` (всі категорії).
+- Audit log: `notifications.telegram_auto_disabled` з reason='blocked_by_user'.
+- Email-fallback автоматично активується для критичних events (CRITICAL_EVENTS).
+
+User може знову увімкнути в `/profile/settings/notifications` (це reset bot block через unblock у Telegram).
+
+---
+
+## 11. Адаптери
+
+### EmailAdapter
 
 ```typescript
-// Query
-{
-  page?: number
-  limit?: number  // default 20
-  isRead?: boolean
-}
-
-// Response
-{
-  items: {
-    id: string
-    event: string
-    title: string
-    body: string
-    meta: { orderId?: string; commentId?: string } | null
-    isRead: boolean
-    createdAt: string
-  }[]
-  unreadCount: number
-  total: number
-}
+type EmailSendResult =
+  | { status: 'sent'; messageId?: string; response?: string }
+  | { status: 'rejected'; reason: 'address_rejected'; rejectedAddresses: ReadonlyArray<string> }
+  | { status: 'failed'; reason: 'transport_error'; error: string }
 ```
 
-### `PATCH /notifications/settings`
+Ніколи не throws. Помилки SMTP → status='failed'.
+
+### TelegramAdapter
 
 ```typescript
-{
-  emailEnabled?: boolean
-  telegramEnabled?: boolean
-  emailOrderStatus?: boolean
-  emailComments?: boolean
-  emailBilling?: boolean
-  emailDocuments?: boolean
-  telegramOrderStatus?: boolean
-  telegramComments?: boolean
-  telegramBilling?: boolean
-  telegramMentions?: boolean
-}
+type TelegramSendResult =
+  | { status: 'sent'; messageId: number }
+  | { status: 'skipped'; reason: 'bot_not_configured' }
+  | { status: 'failed'; reason: 'blocked'; error: string }
+  | { status: 'failed'; reason: 'invalid_chat'; error: string }
+  | { status: 'failed'; reason: 'rate_limited'; retryAfter: number; error: string }
+  | { status: 'failed'; reason: 'transport_error'; error: string }
 ```
 
----
-
-## Telegram прив'язка
-
-Прив'язка Telegram акаунту до профілю через OTP flow:
-
-1. Юзер відкриває "Підключити Telegram" в налаштуваннях
-2. API генерує OTP (`otp_tokens` з `purpose=telegram_link`, `channel=telegram`)
-3. Юзеру показується посилання на бота: `https://t.me/workflo_bot?start=OTP_CODE`
-4. Юзер натискає → бот отримує `/start OTP_CODE`
-5. Бот перевіряє OTP, знаходить `profileId`, зберігає `telegramChatId` в `profiles`
-6. Бот відправляє підтвердження: "✅ Telegram успішно прив'язано до вашого акаунту Workflo"
-
-```prisma
-// В profiles:
-telegramChatId String?  // chat_id від Telegram
-```
+Distinguishes між:
+- 403 → `blocked` (user заблокував bot),
+- 400 + "chat not found" → `invalid_chat` (chatId недійсний),
+- 429 → `rate_limited` (з `retryAfter` секунд для backoff).
 
 ---
 
-## Черга нотифікацій (Phase 2)
+## 12. Тести
 
-В MVP `notify()` викликається синхронно (fire-and-forget з `catch` щоб не блокувати API). В Phase 2 — перехід на Redis Queue (BullMQ) для:
-- Retry при невдачі
-- Rate limiting (Telegram: 30 msg/sec)
-- Пріоритети
-- Dead letter queue
+`packages/notifications/tests/`:
+- `config.test.ts` — Zod env validation, missing/short/coerce paths.
+- `i18n.test.ts` — locale lookup + fallback uk→en→key + var interpolation.
+- `render.test.ts` — escape helpers + layout structure.
+- `templates.test.ts` — render output, XSS escape in vars (welcome/invites/reset + 7 telegram).
+- `escape.test.ts` — Telegram HTML parse_mode compliance.
+- `resolver.test.ts` — critical lock, disabled-channel filter, ordering, dedup.
+- `notify.test.ts` — missing settings/profile graceful exit, log persistence, telegram-no-chat skip.
+
+`pnpm --filter @workflo/notifications test`
 
 ---
 
-## Зв'язки з іншими модулями
+## 13. Метрики (production)
 
-| Модуль | Де викликається `notify()` |
-|---|---|
-| **Auth** | welcome, password_reset, invite_sent |
-| **Orders** | order_created, status_changed, assigned, due_soon |
-| **Chat** | comment_created, mention |
-| **Billing** | payment_received, invoice_sent, subscription events |
-| **Documents** | document_sent, document_signed |
-| **Referral** | referral_activated, referral_bonus |
-| **Bot** | Telegram-бік: відправляє повідомлення через `TelegramAdapter` |
+Збирати в `audit_logs` через cron + експонувати:
+- `notify.dispatch.total{event, channel, status}` — лічильник.
+- `notify.dispatch.duration_ms{channel}` — histogram.
+- `notify.rollup.applied{event}` — скільки разів спрацював rollup.
+- `notify.telegram.blocked_total` — auto-disable events.
+
+Алерт: `notify.dispatch.failed_rate{channel=email} > 5%` за 10хв → PagerDuty.
+
+---
+
+## 14. Migration path для нових каналів
+
+Щоб додати SMS:
+1. Поставити `enabled: true` для `sms` у `CHANNELS` registry (`@workflo/types/constants.ts`).
+2. Створити `packages/notifications/src/adapters/SmsAdapter.ts` з тим самим shape result-union.
+3. Додати dispatch branch у `notify.ts`.
+4. Додати SMS templates у `src/sms/templates/` (короткі, 160-char limit, без HTML).
+5. Опціонально: додати UI картку "SMS" у `/profile/settings/notifications`.
+6. `requiresUserOptIn: true` → потрібен phone verification flow (відрізняється від email — SMS може йти лише після SMS OTP).
+
+Решта `notify()` логіки **не змінюється** — resolver автоматично підхопить новий канал.

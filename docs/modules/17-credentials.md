@@ -1,0 +1,183 @@
+# CREDENTIALS VAULT MODULE
+
+> App: API + Workspace
+> Статус: S5+ (post-MVP)
+> Залежить від: `packages/db`, `packages/types`, KEK через env
+> Оновлено: 27 травня 2026
+
+---
+
+## Огляд
+
+Сейф для зберігання чутливих даних клієнта (CRM логіни, API keys, FTP-доступи, банкінг credentials etc) **прив'язаний до картки компанії**. Шифрування envelope: AES-256-GCM з master KEK у env + per-record DEK у БД.
+
+**Access control:** ТІЛЬКИ owner компанії може bачити plaintext. Виконавці (executor role) — НЕ мають доступу навіть якщо назначені на orders цієї company.
+
+---
+
+## Чому envelope encryption
+
+- Master KEK у env (`CREDENTIALS_KEK_BASE64`) ніколи не торкається БД.
+- Кожен запис має свій DEK, зашифрований KEK. Якщо KEK rotated — перешифровуємо лише DEKs (швидко), не всі ciphertexts.
+- Compromise однієї БД-таблиці ≠ compromise credentials (бо KEK у env, не в БД).
+
+---
+
+## Schema (Prisma)
+
+```prisma
+model CredentialVault {
+  id           String    @id @default(uuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label        String    // "Bitrix24 admin", "FTP клієнта", etc — plain
+  service      String?   // "bitrix24" | "ftp" | "wordpress" | ...  — for filter/icon
+  url          String?   // login URL — plain (UI шукає за URL)
+  username     String?   // plain (для preview без reveal)
+  encryptedDek Bytes     // DEK encrypted з KEK (AES-256-GCM)
+  dekIv        Bytes     // 12-byte IV для DEK encryption
+  dekAuthTag   Bytes     // 16-byte GCM auth tag для DEK
+  ciphertext   Bytes     // password (or full JSON blob) encrypted з DEK
+  ciphertextIv Bytes
+  ciphertextAuthTag Bytes
+  notes        String?   // plain notes (без секретів!)
+  revokedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  createdById  String
+  createdBy    Profile   @relation("CredentialCreatedBy", fields: [createdById], references: [id])
+
+  @@index([companyId, revokedAt])
+  @@map("credential_vault")
+}
+```
+
+---
+
+## Crypto flow
+
+### Створення
+
+```typescript
+import { randomBytes, createCipheriv } from 'node:crypto'
+
+function encryptCredential(plainPassword: string, kek: Buffer) {
+  // 1. Generate fresh DEK + IVs
+  const dek = randomBytes(32)            // 256-bit
+  const dekIv = randomBytes(12)
+  const ctIv = randomBytes(12)
+
+  // 2. Encrypt DEK with KEK
+  const dekCipher = createCipheriv('aes-256-gcm', kek, dekIv)
+  const encryptedDek = Buffer.concat([dekCipher.update(dek), dekCipher.final()])
+  const dekAuthTag = dekCipher.getAuthTag()
+
+  // 3. Encrypt ciphertext with DEK
+  const ctCipher = createCipheriv('aes-256-gcm', dek, ctIv)
+  const ciphertext = Buffer.concat([ctCipher.update(plainPassword, 'utf8'), ctCipher.final()])
+  const ciphertextAuthTag = ctCipher.getAuthTag()
+
+  // 4. Wipe DEK from memory
+  dek.fill(0)
+
+  return { encryptedDek, dekIv, dekAuthTag, ciphertext, ciphertextIv: ctIv, ciphertextAuthTag }
+}
+```
+
+### Reveal (decrypt)
+
+```typescript
+function decryptCredential(row: CredentialVault, kek: Buffer): string {
+  // 1. Decrypt DEK
+  const dekDecipher = createDecipheriv('aes-256-gcm', kek, row.dekIv)
+  dekDecipher.setAuthTag(row.dekAuthTag)
+  const dek = Buffer.concat([dekDecipher.update(row.encryptedDek), dekDecipher.final()])
+
+  // 2. Decrypt ciphertext
+  const ctDecipher = createDecipheriv('aes-256-gcm', dek, row.ciphertextIv)
+  ctDecipher.setAuthTag(row.ciphertextAuthTag)
+  const plain = Buffer.concat([ctDecipher.update(row.ciphertext), ctDecipher.final()]).toString('utf8')
+
+  dek.fill(0)
+  return plain
+}
+```
+
+---
+
+## Endpoints
+
+| Method | Path | Auth | Опис |
+|---|---|---|---|
+| `GET` | `/companies/:id/credentials` | **owner of company** | List (без plaintext — лише label/service/url/username/notes) |
+| `POST` | `/companies/:id/credentials` | owner | Create new (приймає plain password у body, encrypts before store) |
+| `PUT` | `/companies/:id/credentials/:credId` | owner | Update (full re-encrypt if password changed; partial if just label) |
+| `POST` | `/companies/:id/credentials/:credId/reveal` | owner | Returns plaintext одноразово; audit-logged + rate-limited |
+| `POST` | `/companies/:id/credentials/:credId/revoke` | owner | revokedAt = now |
+| `DELETE` | `/companies/:id/credentials/:credId` | owner | Hard delete після 2FA confirmation |
+| `GET` | `/companies/:id/credentials/:credId/audit` | owner | History reveal-ів + updates |
+
+`can(user, 'credentials.read', { companyId })` → потребує `memberships.find(...).role === 'owner'`. **Executor НЕ має доступу навіть для assigned orders.**
+
+---
+
+## Reveal rate limit
+
+- 10 reveals / 60 min per (profileId, companyId) pair.
+- Перевищення → 429 + audit_log entry `credentials.reveal_rate_limited`.
+- Захист від exfiltration через ущемлений account.
+
+---
+
+## Audit logging
+
+Кожна дія з credentials → `audit_logs`:
+
+| Action | Включає |
+|---|---|
+| `credentials.created` | actor, credId, label |
+| `credentials.updated` | actor, credId, fields_changed (без значень!) |
+| `credentials.revealed` | actor, credId, IP, user_agent |
+| `credentials.revoked` | actor, credId, reason |
+| `credentials.deleted` | actor, credId |
+
+Перегляд audit owner може у `/companies/:id/audit?type=credentials`.
+
+---
+
+## KEK rotation procedure
+
+Раз на квартал (або на security incident):
+
+1. Згенерувати новий KEK: `openssl rand -base64 32`.
+2. Запустити `pnpm run rotate-credentials-kek --old=$OLD_KEK --new=$NEW_KEK`:
+   - For each row: decrypt DEK with OLD_KEK → encrypt with NEW_KEK → update encryptedDek + dekIv + dekAuthTag.
+   - Ciphertext НЕ змінюється (DEK той самий, тільки його обгортка).
+   - Transaction-safe: всі updates у 1 transaction; rollback at first failure.
+3. Replace `CREDENTIALS_KEK_BASE64` у production env → redeploy API.
+4. Audit log: 1 row per rotated record + 1 row summary з `actor=admin, action=credentials.kek_rotated`.
+
+Tooling: `tools/rotate-credentials-kek.ts` (admin-only script).
+
+---
+
+## UI у Workspace
+
+Сторінка `/workspace/companies/:id/credentials`:
+- Таблиця: label / service icon / url / username / actions.
+- "Reveal" button — modal з confirmation + 2FA prompt (якщо налаштовано).
+- Reveal результат показується **тимчасово** (10 секунд autohide + clipboard copy кнопка).
+- "Edit" — інлайн форма.
+- "Revoke" — sets `revokedAt`, з confirm dialog.
+- Filter: active / revoked / by service.
+
+**Не показуємо** plaintext у listing — лише label/url/username.
+
+---
+
+## Edge cases
+
+- **Owner transfers company** → новий owner отримує доступ автоматично (credentials прив'язані до company, не до person). Audit log відмічає transfer.
+- **KEK loss** → catastrophic, ВСІ credentials втрачені. Backup of KEK кладемо у Vault/1Password (manual procedure).
+- **Executor вимагає доступ** → flow: executor → запит owner'у через chat → owner вирішує (можливо створити окремий "executor credentials" з обмеженим scope).
+- **Credentials у файлі (PDF з API specs)** → НЕ кладемо в vault; файли у `order_files` без шифрування (захищено лише ACL).
