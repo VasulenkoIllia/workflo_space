@@ -50,30 +50,31 @@
 
 > Ціль: реєстрація, логін, JWT, invite flow
 
-| ID    | Задача                                    | Модуль             | Хто | Статус | Тест | Deploy |
-| ----- | ----------------------------------------- | ------------------ | --- | ------ | ---- | ------ |
-| S1-01 | packages/notifications — email functions  | [07-notifications] | —   | ⬜     | —    | —      |
-| S1-02 | packages/notifications — telegram adapter | [07-notifications] | —   | ⬜     | —    | —      |
-| S1-03 | packages/notifications — notify() unified | [07-notifications] | —   | ⬜     | —    | —      |
-| S1-04 | POST /auth/register (profile + company)   | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-05 | POST /auth/login                          | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-06 | POST /auth/logout                         | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-07 | POST /auth/refresh (token rotation)       | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-08 | POST /auth/forgot-password                | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-09 | POST /auth/reset-password                 | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-10 | GET /auth/me                              | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-11 | JWT middleware + role guard               | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-12 | Rate limiting /auth/\* (10 req/15min)     | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-13 | PATCH /profile, /profile/password         | [13-settings]      | —   | ⬜     | ⬜   | —      |
-| S1-14 | PATCH /profile/notifications              | [13-settings]      | —   | ⬜     | —    | —      |
-| S1-15 | POST /workspace/team/invite (executor)    | [12-team]          | —   | ⬜     | ⬜   | —      |
-| S1-16 | GET /invite/:token + прийняти запрошення  | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-17 | POST /company/members/invite              | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-18 | Welcome email при реєстрації              | [08-email]         | —   | ⬜     | ⬜   | —      |
-| S1-19 | Invite email (executor + company member)  | [08-email]         | —   | ⬜     | ⬜   | —      |
-| S1-20 | Reset password email                      | [08-email]         | —   | ⬜     | ⬜   | —      |
-| S1-21 | packages/i18n — uk/en локалі базові       | [13-settings]      | —   | ⬜     | —    | —      |
-| S1-22 | Deploy Sprint 1 → staging                 | Infra              | —   | ⬜     | —    | 🚀     |
+| ID    | Задача                                                                  | Модуль             | Хто | Статус | Тест | Deploy |
+| ----- | ----------------------------------------------------------------------- | ------------------ | --- | ------ | ---- | ------ |
+| S1-00 | DB migration multi-company (drop Company.ownerId, partial unique owner) | [01-auth]          | —   | ✅     | —    | —      |
+| S1-01 | packages/notifications — email functions                                | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-02 | packages/notifications — telegram adapter                               | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-03 | packages/notifications — notify() unified + matrix migration            | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-04 | POST /auth/register (profile + company)                                 | [01-auth]          | —   | 🔄     | ⬜   | —      |
+| S1-05 | POST /auth/login                                                        | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-06 | POST /auth/logout                                                       | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-07 | POST /auth/refresh (token rotation)                                     | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-08 | POST /auth/forgot-password                                              | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-09 | POST /auth/reset-password                                               | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-10 | GET /auth/me                                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-11 | JWT middleware + role guard                                             | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-12 | Rate limiting /auth/\* (10 req/15min)                                   | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-13 | PATCH /profile, /profile/password                                       | [13-settings]      | —   | ⬜     | ⬜   | —      |
+| S1-14 | PATCH /profile/notifications                                            | [13-settings]      | —   | ⬜     | —    | —      |
+| S1-15 | POST /workspace/team/invite (executor)                                  | [12-team]          | —   | ⬜     | ⬜   | —      |
+| S1-16 | GET /invite/:token + прийняти запрошення                                | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-17 | POST /company/members/invite                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-18 | Welcome email при реєстрації                                            | [08-email]         | —   | ⬜     | ⬜   | —      |
+| S1-19 | Invite email (executor + company member)                                | [08-email]         | —   | ⬜     | ⬜   | —      |
+| S1-20 | Reset password email                                                    | [08-email]         | —   | ⬜     | ⬜   | —      |
+| S1-21 | packages/i18n — uk/en локалі базові                                     | [13-settings]      | —   | ⬜     | —    | —      |
+| S1-22 | Deploy Sprint 1 → staging                                               | Infra              | —   | ⬜     | —    | 🚀     |
 
 ---
 
@@ -161,27 +162,30 @@
 
 ## SPRINT 5 — Billing + Services + Team (Тиждень 6-7)
 
-| ID    | Задача                                             | Модуль        | Хто | Статус | Тест | Deploy |
-| ----- | -------------------------------------------------- | ------------- | --- | ------ | ---- | ------ |
-| S5-01 | API — /billing/summary, /charges                   | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-02 | API — POST /workspace/billing/payments             | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-03 | Advance payment логіка (orderId + type)            | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-04 | ExchangeRate — НБУ API cron (09:10 Kyiv)           | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-05 | API — Services CRUD + assign to company            | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-06 | pg_cron — recurring charges 1-го числа             | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-07 | API — Team invite + rates + earnings               | [12-team]     | —   | ⬜     | ⬜   | —      |
-| S5-08 | API — Company members + permissions                | [01-auth]     | —   | ⬜     | ⬜   | —      |
-| S5-09 | API — Referral bonus при payment                   | [09-referral] | —   | ⬜     | ⬜   | —      |
-| S5-10 | API — Loyalty tier update при payment              | [10-loyalty]  | —   | ⬜     | ⬜   | —      |
-| S5-11 | Portal — /billing                                  | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-12 | Portal — /referrals                                | [09-referral] | —   | ⬜     | —    | —      |
-| S5-13 | Portal — /loyalty                                  | [10-loyalty]  | —   | ⬜     | —    | —      |
-| S5-14 | Workspace — /billing dashboard                     | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-15 | Workspace — /billing/payouts                       | [12-team]     | —   | ⬜     | —    | —      |
-| S5-16 | Workspace — /services                              | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-17 | Workspace — /team                                  | [12-team]     | —   | ⬜     | —    | —      |
-| S5-18 | Workspace — /settings (payment settings, referral) | [13-settings] | —   | ⬜     | —    | —      |
-| S5-19 | Deploy Sprint 5 → staging                          | Infra         | —   | ⬜     | —    | 🚀     |
+| ID     | Задача                                                                                     | Модуль        | Хто | Статус | Тест | Deploy |
+| ------ | ------------------------------------------------------------------------------------------ | ------------- | --- | ------ | ---- | ------ |
+| S5-00a | packages/payments — PaymentProvider interface + ManualProvider                             | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-00b | packages/payments — race guard (UNIQUE sourceType+sourceId + FOR UPDATE + idempotency-key) | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-00c | packages/payments — LiqPay/Stripe provider (research у BACKLOG)                            | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-01  | API — /billing/summary, /charges                                                           | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-02  | API — POST /workspace/billing/payments                                                     | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-03  | Advance payment логіка (orderId + type)                                                    | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-04  | ExchangeRate — НБУ API cron (09:10 Kyiv)                                                   | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-05  | API — Services CRUD + assign to company                                                    | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-06  | pg_cron — recurring charges 1-го числа                                                     | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-07  | API — Team invite + rates + earnings                                                       | [12-team]     | —   | ⬜     | ⬜   | —      |
+| S5-08  | API — Company members + permissions                                                        | [01-auth]     | —   | ⬜     | ⬜   | —      |
+| S5-09  | API — Referral bonus при payment                                                           | [09-referral] | —   | ⬜     | ⬜   | —      |
+| S5-10  | API — Loyalty tier update при payment                                                      | [10-loyalty]  | —   | ⬜     | ⬜   | —      |
+| S5-11  | Portal — /billing                                                                          | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-12  | Portal — /referrals                                                                        | [09-referral] | —   | ⬜     | —    | —      |
+| S5-13  | Portal — /loyalty                                                                          | [10-loyalty]  | —   | ⬜     | —    | —      |
+| S5-14  | Workspace — /billing dashboard                                                             | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-15  | Workspace — /billing/payouts                                                               | [12-team]     | —   | ⬜     | —    | —      |
+| S5-16  | Workspace — /services                                                                      | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-17  | Workspace — /team                                                                          | [12-team]     | —   | ⬜     | —    | —      |
+| S5-18  | Workspace — /settings (payment settings, referral)                                         | [13-settings] | —   | ⬜     | —    | —      |
+| S5-19  | Deploy Sprint 5 → staging                                                                  | Infra         | —   | ⬜     | —    | 🚀     |
 
 ---
 
@@ -256,11 +260,11 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 22      | 0       | 0         | 0           |
+| S1 Auth       | 23      | 4       | 3         | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
-| S5 Billing    | 19      | 0       | 0         | 0           |
+| S5 Billing    | 22      | 0       | 0         | 0           |
 | S6 Docs+Bot   | 15      | 0       | 0         | 0           |
 | S7 Landing    | 16      | 0       | 0         | 0           |
 | S8 QA+Launch  | 14      | 0       | 0         | 0           |
