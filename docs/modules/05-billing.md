@@ -740,3 +740,69 @@ Modal:
 - **Інвойс scheduling:** клієнт обирає дату виставлення рахунку
 - **Multi-currency:** додати EUR як третю валюту
 - **Partial payment allocation:** розподіл часткової оплати між кількома замовленнями
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Payment race guard
+
+**Проблема:** клієнт натискає "Confirm payment" двічі → дві Payment rows для одного charge → balance подвоюється.
+
+**Рішення:**
+1. **UNIQUE(sourceType, sourceId)** на `payments` — два payments не можуть посилатися на той самий external source (bank transaction id, Stripe charge id, manual confirmation token).
+2. **SELECT FOR UPDATE** на `service_charges` всередині Serializable transaction.
+3. Idempotency key required для всіх POST payment endpoints (`Idempotency-Key` header, valid 24h per key+endpoint).
+
+```typescript
+await prisma.$transaction(async (tx) => {
+  await tx.$executeRaw`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`
+  const charge = await tx.$queryRaw`
+    SELECT * FROM service_charges WHERE id = ${chargeId} FOR UPDATE
+  `
+  if (charge.status === 'paid') {
+    throw new ConflictError('charge_already_paid')
+  }
+  // ... insert payment + update charge.status='paid'
+}, { isolationLevel: 'Serializable' })
+```
+
+Duplicate payment INSERT → unique constraint error → 409 to caller з reference до існуючого payment.
+
+### Auto-invoicing flow
+
+Owner налаштовує **recurring billing** для company:
+- Frequency: monthly / quarterly / annual.
+- Items: fixed nomenclature codes + quantities.
+- Day of month: 1st / 15th / last (configurable).
+
+Cron `C02:recurring_billing` (щодня 00:30):
+- Знаходить всі `company_billing_subscriptions` де `next_invoice_at <= now()`.
+- Для кожної: create `Document(type='invoice')` + `ServiceCharge` + send via `notify(event='billing.invoice_sent')`.
+- Update `next_invoice_at` = next period.
+
+Idempotency: cron записує lock у `cron_runs.metadata.processed_ids` — повторний run skip-ить уже processed.
+
+### Debtors dashboard
+
+Див. **19-reports.md → секція "3. Debtors Report"**. UI у `/workspace/reports/debtors`.
+
+Auto-notification: cron `C07:invoice_overdue_marker` ставить `service_charges.status = 'overdue'` де `due_date < now()` AND `status = 'pending'`. Тригер `notify(event='billing.invoice_overdue')` до company owner.
+
+### Acts of reconciliation
+
+Новий document type `reconciliation_act` (добавлено в S1-03 migration).
+
+Owner генерує сверку:
+1. `POST /companies/:id/reconciliation-acts { from, to }`
+2. Backend агрегує всі invoices + payments + adjustments за період.
+3. Generates PDF з branding (модуль 20).
+4. Save як `Document(type='reconciliation_act', status='generated')`.
+5. Owner reviews → "Send to client" → `notify(event='documents.reconciliation_act_ready')`.
+
+### Currency handling
+
+- `payments.amount_native` — у валюті operation.
+- `payments.amount_usd` — конвертовано через `exchange_rates` на дату payment (захоплюємо моментальний rate, не latest, щоб history стабільна).
+- `service_charges` similarly зберігає `base_amount_native + base_amount_usd + currency_native`.
+- Reports завжди в USD (single source of truth для KPI).

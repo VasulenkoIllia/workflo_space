@@ -279,3 +279,69 @@ volumes:
 | **Chat** | Вкладення до коментарів |
 | **Documents** | PDF зберігається як `FileAttachment` |
 | **Auth** | Перевірка доступу при завантаженні |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Path traversal guard
+
+Всі file serving endpoints (`GET /files/:id`, `GET /orders/:id/files/:fileId`, etc.) **обов'язково** валідують:
+
+```typescript
+import { resolve, sep } from 'node:path'
+
+function safeResolve(uploadsRoot: string, requested: string): string {
+  const resolved = resolve(uploadsRoot, requested)
+  if (!resolved.startsWith(uploadsRoot + sep) && resolved !== uploadsRoot) {
+    throw new ForbiddenError('path_traversal_blocked')
+  }
+  return resolved
+}
+```
+
+`requested` ніколи не приходить з URL прямо — це **завжди** `stored_as` колонка з `order_files` row (lookup by id). Захист на випадок SQL injection / data corruption.
+
+### MIME allowlist (SVG removed)
+
+Старий allowlist дозволяв `image/svg+xml`. **SVG видалено** через XSS risk (SVG може містити `<script>` теги, який рендериться браузером якщо відкритий як `Content-Type: image/svg+xml`).
+
+Поточний allowlist:
+- `image/png`, `image/jpeg`, `image/webp`, `image/gif`
+- `application/pdf`
+- `text/plain`, `text/csv`
+- `application/zip`
+- `application/vnd.openxmlformats-officedocument.*` (docx, xlsx, pptx)
+- `application/vnd.ms-excel`, `application/msword`
+- `video/mp4`, `video/webm` (max 100MB)
+
+Будь-який інший MIME → 415 Unsupported Media Type.
+
+### Content-Disposition
+
+Завжди `Content-Disposition: attachment; filename="<escaped>"` — навіть для inline-friendly types (PDF, images). Захист від ransom-via-malicious-html.
+
+Single exception: thumbnails preview через `?inline=1` + `attachment-thumbnail` access (still escaped).
+
+### Storage layout
+
+```
+/var/lib/workflo/uploads/
+  ├── orders/
+  │   └── <orderId>/
+  │       ├── <fileId>.<ext>   ← stored file
+  │       └── ...
+  ├── documents/
+  │   └── <documentId>.pdf
+  └── avatars/
+      └── <profileId>.<ext>
+```
+
+Permissions: `0640` files, `0750` directories. Owner `workflo`, group `workflo`. Web server has read-only access (`workflo-web` group).
+
+### Backup of uploads
+
+Окремий cron `C13:uploads_backup` (щодня о 04:00):
+- `rsync --delete /var/lib/workflo/uploads → /backup/uploads/`
+- Compress weekly to `/backup/uploads-weekly-<date>.tar.gz`.
+- Encrypt + upload to Hetzner Object Storage (GPG AES-256, див. `INFRASTRUCTURE.md` секція "Backups").

@@ -317,3 +317,78 @@ workflo.space — платформа для управління замовле�
 | **Orders** | Посилання на замовлення в повідомленнях |
 | **Billing** | Повідомлення про рахунки та платежі |
 | **Documents** | Повідомлення про нові документи |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### OTP rate limit
+
+`/start <code>` flow для Telegram linking:
+- 5 attempts / 15 min per (chat_id OR ip).
+- 6-digit code, 10 min TTL у `otp_tokens`.
+- Wrong code → `otp_tokens.attempts++`, при `attempts >= 5` → invalidate token.
+- Audit log: `auth.otp_failed` per attempt; `auth.otp_blocked` коли rate-limited.
+
+```typescript
+const recentAttempts = await prisma.otpToken.count({
+  where: {
+    purpose: 'telegram_link',
+    createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
+    metadata: { path: ['ip'], equals: requestIp },
+  },
+})
+if (recentAttempts >= 5) {
+  return ctx.reply('Забагато спроб. Спробуйте через 15 хв.')
+}
+```
+
+### BOT_WEBHOOK_SECRET — fail-fast
+
+При старті bot процесу:
+
+```typescript
+import { loadTelegramConfig } from '@workflo/notifications'
+
+const cfg = loadTelegramConfig()
+if (process.env.NODE_ENV !== 'development' && !cfg.BOT_WEBHOOK_SECRET) {
+  console.error('FATAL: BOT_WEBHOOK_SECRET required in non-dev environments')
+  process.exit(1)
+}
+```
+
+У dev (Mailpit / local PG) — webhook не використовується, працюємо в long-polling. У staging/prod — обов'язковий webhook з secret для верифікації:
+
+```typescript
+fastify.post('/bot/webhook', async (req, reply) => {
+  const secret = req.headers['x-telegram-bot-api-secret-token']
+  if (secret !== env.BOT_WEBHOOK_SECRET) {
+    return reply.code(401).send({ error: 'invalid_secret' })
+  }
+  await bot.handleUpdate(req.body)
+  return { ok: true }
+})
+```
+
+### Bot commands
+
+| Command | Опис |
+|---|---|
+| `/start [<code>]` | Welcome / link account if code provided |
+| `/help` | Показує доступні команди |
+| `/orders` | Список активних orders (для linked client) |
+| `/timer` | Поточний таймер (для linked executor) |
+| `/balance` | Баланс company (для linked client) |
+| `/unsubscribe` | Розриває link (chatId removed з NotificationSettings) |
+
+`/unsubscribe` flow:
+1. Bot отримує команду.
+2. Знаходить `NotificationSettings` за `telegramChatId`.
+3. Set `telegramChatId = null`, `telegramLinkedAt = null`.
+4. Disable всі telegram preference rows для цих settings.
+5. Audit log: `notifications.telegram_unsubscribed`.
+6. Reply "Ви відписані. Знову підключити можна у /profile/settings."
+
+### Sentry для bot
+
+Окремий DSN (`SENTRY_DSN_BOT`). Tag `tag.module=bot`. Captures unhandled errors з grammY handlers.

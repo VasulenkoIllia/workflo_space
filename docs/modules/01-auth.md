@@ -589,3 +589,79 @@ fastify.register(rateLimit, {
 - **SMS OTP:** `channel = sms` в `otp_tokens`, Twilio або ukrainian provider
 - **Session management UI:** сторінка в налаштуваннях "Активні сесії" — список refresh tokens з можливістю відкликати
 - **IP-based suspicious login detection:** якщо логін з нового IP → email сповіщення
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Multi-company per profile
+
+Архітектурне рішення (S1-00 migration): один `profile` може мати **N companies** через `CompanyMember` rows з `role='owner'`. Унікальність забезпечена частковим унікальним індексом `company_members_one_owner_per_company` на `(company_id) WHERE role='owner'`.
+
+`Company.ownerId` поле **видалено** в міграції `20260527_s1_00_multi_company`. Власника визначаємо через `CompanyMember`.
+
+#### Нові endpoints
+
+| Method | Path | Auth | Опис |
+|---|---|---|---|
+| `GET` | `/companies` | client+ | Список компаній поточного profile (де я owner АБО member). Активна підсвічена. |
+| `POST` | `/auth/switch-company` | client+ | Body `{ companyId }`. Перевіряє membership → видає новий access token з активною `companyId` у claims. |
+| `POST` | `/companies` | client+ | Створити нову компанію. Auto-creates `CompanyMember(role='owner')` для актора. |
+| `POST` | `/companies/:id/transfer-ownership` | owner | Body `{ newOwnerProfileId }`. Запускає transfer flow з accept-step (див. LIFECYCLE.md). |
+| `POST` | `/companies/:id/accept-ownership` | invited | Підтверджує отримання ownership. |
+| `POST` | `/companies/:id/members` | owner | Запросити member (створює Invite, email/telegram через `notify()`). |
+| `DELETE` | `/companies/:id/members/:profileId` | owner | Видалити member (не себе). |
+| `POST` | `/companies/:id/archive` | owner | Архівувати компанію (див. LIFECYCLE.md). |
+| `POST` | `/companies/:id/restore` | owner | Розархівувати. |
+
+#### Access token claims (multi-company)
+
+```json
+{
+  "sub": "profile-uuid",
+  "email": "user@example.com",
+  "role": "client",
+  "activeCompanyId": "company-uuid",
+  "memberships": [
+    { "companyId": "co-1", "role": "owner" },
+    { "companyId": "co-2", "role": "owner" },
+    { "companyId": "co-3", "role": "member" }
+  ],
+  "iat": 1234567890,
+  "exp": 1234568790
+}
+```
+
+`activeCompanyId` — поточна "робоча" компанія (з якою працює user у поточній session). Перемикається через `/auth/switch-company`. UI у Portal: company switcher у header.
+
+### Refresh cookie strategy
+
+Див. **ADR-001** (`docs/adr/001-refresh-cookie-strategy.md`).
+
+Короко: `SameSite=Lax; Path=/auth/refresh; HttpOnly=true; Secure=production-only; Domain=.workflo.space у prod`. CSRF guard через Origin-check.
+
+### Welcome notification на register
+
+Після успішного `POST /auth/register`:
+1. Create `Profile` + `Company` + `CompanyMember(role='owner')` у 1 transaction.
+2. Create `NotificationSettings` + 21 default `NotificationPreference` rows (`ensureNotificationSettings()` helper).
+3. Issue access + refresh tokens.
+4. Async dispatch (не блокує response):
+   ```typescript
+   await notify(deps, {
+     profileId,
+     event: 'auth.welcome',
+     vars: { portalUrl: env.APP_PORTAL_URL },
+   })
+   ```
+
+### Password reset rate limit
+
+Окремо від email-критичності (`CRITICAL_EVENTS`) — захист від abuse:
+- `POST /auth/forgot-password`: 3 req / 15 min per email.
+- `POST /auth/reset-password`: 5 attempts / 1h per token.
+- Перевищення → 429 + audit_log entry.
+
+### Auth-related audit_logs events
+
+Див. **модуль 21 → секцію "Audit log → Authentication"**. Все логуємо: success/failed login, refresh used, password change, account deactivation.

@@ -235,3 +235,61 @@ enum CommentType {
 | **Files** | `FileAttachment` прив'язується до `commentId` |
 | **Notifications** | Нові коментарі → push/email |
 | **Auth** | `authorId` = `profileId`, визначає `type` доступних коментарів |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### SSE — multi-instance + reconnect strategy
+
+**Проблема:** при scale > 1 API replica, in-memory broadcaster per instance не бачить події з інших instances.
+
+**Рішення:** PostgreSQL LISTEN/NOTIFY як shared bus + per-instance in-memory broadcaster для local SSE clients.
+
+#### Архітектура
+
+```
+[Comment INSERT]
+       ↓
+   Postgres trigger pg_notify('chat_events', json_build_object(
+     'orderId', NEW.order_id,
+     'commentId', NEW.id,
+     'authorId', NEW.author_id,
+     'createdAt', NEW.created_at
+   )::text)
+       ↓
+   [API instance A] LISTEN chat_events
+       ↓
+   in-memory broadcaster.emit('chat:newComment', payload)
+       ↓
+   SSE streams subscribed to that order push event to client
+```
+
+Кожен API instance:
+- На старті: `LISTEN chat_events` + `LISTEN order_events`.
+- Single shared connection (через `pg.Client`, не Prisma — для постійного LISTEN).
+- Reconnect with backoff (1s → 2s → 4s → ... → max 60s) при втраті connection.
+
+#### Client-side reconnect
+
+EventSource у браузері auto-reconnects on disconnect. Стратегія:
+- Server відправляє `event: heartbeat\ndata: {}\n\n` кожні 30 секунд (proxies можуть kill idle streams).
+- Client: на reconnect, надсилає `Last-Event-ID` header → server повертає missed events з `notification_logs` (filter by createdAt > lastId).
+
+#### Backpressure
+
+Якщо client lagging > 100 messages → close stream, send 503. Client reconnects + does full refresh of conversation list.
+
+### Read tracking
+
+Див. **18-chat-hub.md** → `order_chat_reads` table.
+
+### Notification triggers від chat
+
+При новому коментарі:
+1. INSERT у `order_comments`.
+2. pg_notify відправляє у SSE (real-time live update).
+3. `notify(event='chat.new_comment')` для усіх **інших** учасників розмови (не для author).
+4. Якщо коментар містить `@username` → `notify(event='chat.mention')` adressed конкретно тій людині (separate event).
+
+Rollup для chat events: див. `07-notifications.md` секція "Anti-spam: rollup".

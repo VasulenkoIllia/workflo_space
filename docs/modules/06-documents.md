@@ -288,3 +288,38 @@ PDF генерується мовою компанії клієнта (`company.
 | **Billing** | Invoice → фінансовий запис |
 | **Notifications** | Відправка → нотифікація клієнту |
 | **Companies** | `preferredLanguage` для PDF мови |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### `reconciliation_act` document type
+
+В S1-03 migration додано `reconciliation_act` до `DocumentType` enum.
+
+Спосіб генерації + UI — див. `05-billing.md → секція "Acts of reconciliation"`.
+
+### Integration з auto-invoice
+
+Cron `C02:recurring_billing` (`05-billing.md`) створює `Document(type='invoice')` для кожної recurring subscription. Sequence number generation (для номера інвойсу):
+
+```sql
+INSERT INTO documents (type, number, ...)
+SELECT 'invoice', 'INV-' || EXTRACT(year FROM NOW()) || '-' || LPAD((MAX(seq)+1)::text, 6, '0'), ...
+FROM documents
+WHERE type = 'invoice' AND number ~ ('^INV-' || EXTRACT(year FROM NOW()))
+```
+
+Атомарність: всередині transaction з `SELECT FOR UPDATE` на спеціальному `document_sequences` row.
+
+### Specification flow (autogeneration)
+
+Див. `02-orders.md → секція "Specification flow (auto-generated)"`.
+
+При transition order у `review`, система creates draft Specification з усіх `time_logs.description` коментарів executor'а. Owner редагує + затверджує.
+
+### PDF branding
+
+Всі документи (invoice, completion_act, specification, reconciliation_act) використовують `pdf_branding` singleton (`20-admin-settings.md → секція 3`):
+- Logo, primary color, font family, footer.
+- Render via React-PDF (`packages/templates/src/pdf/`).

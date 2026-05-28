@@ -244,3 +244,76 @@ limit=50
 | **Notifications** | Нотифікації виконавцям |
 | **Billing** | Тайм-логи → розрахунок вартості (Phase 2) |
 | **Bot** | Telegram прив'язка виконавця |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Departments — CRUD table (НЕ enum)
+
+Departments — звичайна editable таблиця (модуль 20-admin-settings → секція 5).
+
+Schema:
+```prisma
+model Department {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  // ...
+}
+```
+
+Default seed (`@workflo/types/constants.DEFAULT_DEPARTMENT_SLUGS`):
+`design / dev / marketing / management / qa / devops / content`
+
+Кожен executor має `ExecutorRate.departmentId` — primary department.
+
+### Internal tasks + billing modes
+
+Внутрішні задачі (`InternalTask` model) можуть бути billable per `billingMode` (`@workflo/types.BillingMode`):
+
+| Mode | Behavior |
+|---|---|
+| `client_paid` | Час включається в client invoice (через order's company) |
+| `internal_paid` | Час оплачується компанією executor (не invoiced до клієнта) |
+| `unpaid` | Час tracked але не invoiced (research, training) |
+
+UI у workspace: задача має toggle "Billable" → owner вибирає mode.
+
+### Time tracking повна специфікація
+
+Див. **02-orders.md → секція "Time tracking (specification)"**.
+
+Ключове для team module:
+- `GET /executors/:id/time-logs?period=YYYY-MM` — список часу за період.
+- `GET /executors/:id/report?period=YYYY-MM` — агрегований звіт:
+  - Total hours.
+  - Billable hours (по billing mode).
+  - Per-department breakdown.
+  - Per-order/per-internal-task breakdown.
+
+### Executor rates (history)
+
+`ExecutorRate` тримає поточну ставку + monthly salary. **Не оновлюється in-place** — нова ставка = новий row з `effectiveFrom` date:
+
+```prisma
+model ExecutorRate {
+  id                  String   @id @default(uuid())
+  executorId          String
+  executor            Profile  @relation(fields: [executorId], references: [id])
+  departmentId        String?
+  department          Department? @relation(fields: [departmentId], references: [id])
+  hourlyRateUsd       Decimal  @db.Decimal(10, 2)
+  monthlySalaryUsd    Decimal  @db.Decimal(10, 2)
+  commissionPercent   Decimal? @db.Decimal(5, 2)
+  effectiveFrom       DateTime @db.Timestamptz(3)
+  effectiveUntil      DateTime? @db.Timestamptz(3)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([executorId, effectiveFrom])
+}
+```
+
+Для розрахунку cost в reports використовуємо rate active на дату payment / time_log.

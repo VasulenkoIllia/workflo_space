@@ -280,3 +280,106 @@ model OrderExecutor {
 | **Documents** | Рахунки, акти, специфікації прив'язані до `orderId` |
 | **Search** | `tsvector` по `title` + `description` |
 | **Notifications** | Статусні зміни → нотифікації |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Triage flow (variant B — owner-only)
+
+Коли клієнт створює нове замовлення через portal:
+- Order створюється з `internalStatus='new'`, `assigneeId=null`.
+- **Тільки owner агенції** бачить unassigned orders у `/workspace/triage`.
+- Executors бачать тільки order де `assigneeId = my profileId` (їх назначив owner).
+- Owner призначає executor через `PATCH /orders/:id { assigneeId }` + status transition new → clarification/in_progress.
+
+### Status enum: 9 internal → 4 client
+
+Канонічна таблиця у `packages/types/src/constants.ts` → `INTERNAL_TO_CLIENT_STATUS`:
+
+| Internal | Client | Owner control |
+|---|---|---|
+| `new` | `in_progress` | Triage queue |
+| `clarification` | `in_progress` | Awaiting client info |
+| `estimating` | `in_progress` | Executor оцінює (раніше `estimated`, перейменовано в S1-03) |
+| `in_progress` | `in_progress` | Active work |
+| `on_hold` | `in_progress` | Paused, з reason |
+| `review` | `pending_approval` | Owner перевіряє → схвалює done |
+| `revision` | `in_progress` | Owner повернув на доробку (тільки owner може зробити done→revision) |
+| `done` | `completed` | Final, тільки owner може transition |
+| `cancelled` | `cancelled` | Final |
+
+### Time tracking (specification)
+
+Окремий блок у замовленнях:
+
+#### Принципи
+- **1 active timer per executor** глобально (не per-order; перемикання auto-stops попередній).
+- Timer persistent у БД (`time_logs.started_at != null AND ended_at IS null`).
+- Auto-stop через **8 годин** (safety net for forgotten timers) — cron `C15:timer_auto_stop` кожні 5хв.
+- Manual time entry дозволено для historical work (ended_at < now()).
+- Time logs прив'язані до `orders` (або до `internal_tasks` через нову колонку).
+
+#### Schema (доповнення)
+```prisma
+model TimeLog {
+  id          String    @id @default(uuid())
+  orderId     String?
+  order       Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  internalTaskId String?
+  internalTask InternalTask? @relation(fields: [internalTaskId], references: [id], onDelete: Cascade)
+  executorId  String
+  executor    Profile   @relation(fields: [executorId], references: [id])
+  startedAt   DateTime  @db.Timestamptz(3)
+  endedAt     DateTime? @db.Timestamptz(3)
+  durationSec Int?      // computed when ended_at set
+  description String?   // executor comment (used by Specification flow)
+  autoStopped Boolean   @default(false)
+  autoStopReason String?  // 'timeout' | 'switched_timer' | 'user_deactivated' | 'company_archived'
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([executorId, endedAt])
+  @@index([orderId, startedAt])
+  @@map("time_logs")
+}
+```
+
+Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE ended_at IS NULL`.
+
+#### Endpoints
+- `POST /orders/:id/timer/start` (or `/internal-tasks/:id/timer/start`) — auto-stops previous active timer.
+- `POST /orders/:id/timer/stop` — sets ended_at, computes duration.
+- `POST /orders/:id/time-logs` — manual entry (started_at + ended_at + description).
+- `GET /executors/:id/time-logs?period=...` — list для звітів.
+
+### Specification flow (auto-generated)
+
+Послідовність:
+1. Executor під час роботи додає коментарі через `time_logs.description` (за task).
+2. При transition order → `review`, система автоматично формує draft Specification:
+   - Витягуємо всі `time_logs` для order, відсортовані за `startedAt`.
+   - Concat descriptions → bullet list.
+   - Зберігаємо як `Document(type='specification', status='draft')`.
+3. Owner відкриває specification у workspace, **редагує** (виправляє текст, видаляє непотрібне).
+4. Owner затверджує → `Document.status='generated'` → PDF render.
+5. PDF додається до `completion_act` як appendix при closure → `status='sent'` після email клієнту.
+
+### Departments (CRUD table)
+
+Замість enum, departments — CRUD таблиця (модуль 20-admin-settings + 12-team-executors). Defaults seeded з `DEFAULT_DEPARTMENT_SLUGS` у `@workflo/types/constants`.
+
+`ExecutorRate.departmentId` (FK на departments) — який відділ за замовчуванням для executor.
+
+### Triage / unassigned-only owner view
+
+`GET /orders?filter=unassigned`:
+- Owner only (`can(user, 'admin.access')` OR `memberships.role === 'owner'` of agency).
+- Returns orders WHERE `assigneeId IS NULL AND deletedAt IS NULL AND createdAt > now() - INTERVAL '30 days'`.
+- UI `/workspace/triage` показує count badge у sidebar.
+
+### Done → revision (owner-only)
+
+Старий механізм: будь-хто міг повернути order у revision. Нова політика:
+- Тільки **owner** компанії може transition done → revision (`can(user, 'order.transition_status', { companyId, from: 'done', to: 'revision' })`).
+- Audit log: `order.reopened` з reason.
+- Notification до executor `orders.status_changed` (revision = potentially negative для executor → email завжди + telegram).
