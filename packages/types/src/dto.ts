@@ -1,10 +1,10 @@
-import type { Language, OrderClientStatus, UserRole } from './enums.js'
+import type { Language, OrderClientStatus, Role } from './enums.js'
 
 export interface ProfileDto {
   id: string
   email: string
   displayName: string
-  role: UserRole
+  role: Role
   preferredLanguage: Language
 }
 

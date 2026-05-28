@@ -101,17 +101,18 @@ describe('telegram templates', () => {
   })
 
   it('newComment: truncates preview at 200 chars', () => {
-    const longPreview = 'x'.repeat(300)
+    const longPreview = 'z'.repeat(300)
     const r = renderNewCommentTelegram({
       orderTitle: 'Title',
       authorName: 'Bob',
       preview: longPreview,
-      orderUrl: 'https://x',
+      orderUrl: 'https://workflo.test/orders/1',
     })
     expect(r.text).toContain('…')
-    // text contains exactly 200 'x' + '…' (not 300)
-    const xCount = (r.text.match(/x/g) ?? []).length
-    expect(xCount).toBe(200)
+    // preview is truncated to exactly 200 chars (+ ellipsis); 'z' appears
+    // nowhere else in the template so the count is unambiguous.
+    const zCount = (r.text.match(/z/g) ?? []).length
+    expect(zCount).toBe(200)
   })
 
   it('invoiceSent: includes amount + due date', () => {

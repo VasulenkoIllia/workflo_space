@@ -34,13 +34,18 @@ export async function sendEmail(
   payload: EmailPayload,
   opts: SendEmailOpts = {}
 ): Promise<EmailSendResult> {
-  const tx = opts.transport ?? getMailer()
-  const from = payload.from ?? (() => {
-    const f = getActiveFrom()
-    return { name: f.name, address: f.address }
-  })()
-
+  // Resolve transport + From inside try/catch so a misconfigured SMTP env
+  // (missing SMTP_HOST etc.) surfaces as a 'failed' result rather than
+  // throwing — notify() relies on this never throwing.
   try {
+    const tx = opts.transport ?? getMailer()
+    const from =
+      payload.from ??
+      (() => {
+        const f = getActiveFrom()
+        return { name: f.name, address: f.address }
+      })()
+
     const info = (await tx.sendMail({
       from: { name: from.name, address: from.address },
       to: payload.to,
