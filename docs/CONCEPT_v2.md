@@ -1112,3 +1112,66 @@ Recurring послуга → Щомісячний звичний платіж
         ↓
 Telegram канал між задачами → Залишається в контексті бренду
 ```
+
+---
+
+## S1 ALIGNMENT UPDATE (27 травня 2026)
+
+Цей блок фіксує рішення, прийняті на pre-S1 + S1 фазі. Деталі — у відповідних `docs/modules/*` та `docs/adr/*`.
+
+### Multi-company per profile
+
+Один `profile` може володіти/бути членом **кількох компаній**. Власника визначаємо через `CompanyMember.role='owner'` (partial unique index), а НЕ через `Company.ownerId` (видалено в S1-00 migration).
+
+Користувач у Portal перемикається між компаніями через company switcher; `activeCompanyId` зберігається у access-token claims. Деталі — `modules/01-auth.md → Multi-company`.
+
+### Канонічна таблиця статусів (source of truth)
+
+`packages/types/src/enums.ts` + `constants.ts.INTERNAL_TO_CLIENT_STATUS`:
+
+| Internal (9) | Client (4) |
+|---|---|
+| new | in_progress |
+| clarification | in_progress |
+| estimating | in_progress |
+| in_progress | in_progress |
+| on_hold | in_progress |
+| review | pending_approval |
+| revision | in_progress |
+| done | completed |
+| cancelled | cancelled |
+
+**Зміни vs CONCEPT v2 baseline:**
+- `estimated` → `estimating` (verb form, S1-03 migration).
+- Видалено `approved` зі шкали (злито в transition estimating→in_progress).
+- OrderClientStatus: `PENDING/IN_WORK/DONE` → `IN_PROGRESS/PENDING_APPROVAL/COMPLETED`.
+
+### Loyalty: % знижка (не бали)
+
+Замінено points/cashback на **% знижка за tier**: NEW(0%) / REGULAR(3%) / PARTNER(7%) / VIP(12%) за порогами 0/1k/5k/15k USD lifetime. Tier per company. Деталі — `modules/10-loyalty.md`.
+
+### Notification matrix
+
+7 категорій × 6 каналів × 27 events. MVP-канали: email/telegram/in_app. Критичні події (auth/billing) завжди йдуть на email (ADR-003). Деталі — `modules/07-notifications.md`.
+
+### Нові модулі (post-MVP scope)
+
+- **17-credentials**: сейф для credentials клієнтів (envelope encryption, owner-only).
+- **18-chat-hub**: глобальний inbox замість per-order чатів.
+- **19-reports**: time/revenue/debtors звіти для owner.
+- **20-admin-settings**: templates editor, multi-SMTP, branding, nomenclature, departments, cron monitoring.
+- **21-system-monitoring**: Sentry + dashboard + audit log.
+
+### Нові foundation docs
+
+- **ADR 001/002/003**: cookie strategy / RBAC shim / channels MVP.
+- **BACKLOG.md / LIFECYCLE.md / RETENTION.md**: capture buffer / state machines / retention policy.
+- **DESIGN_BRIEF.md**: повне ТЗ для дизайнера.
+
+### Time tracking
+
+1 active timer per executor (global), auto-stop 8h, persistent у БД. Specification генерується з time_log коментарів при transition order→review. Деталі — `modules/02-orders.md → Time tracking`.
+
+### Internal tasks + billing modes
+
+Внутрішні задачі з billing mode: client_paid / internal_paid / unpaid. Departments = CRUD таблиця (не enum). Деталі — `modules/12-team-executors.md`.

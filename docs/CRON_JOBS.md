@@ -24,6 +24,12 @@
 | C06 | Expire запрошень (invites) | pg_cron | щодня 00:00 | UTC | `pg_cron SQL` |
 | C07 | Нагадування про закінчення підписки | Node.js | щодня 10:00 | Kyiv | `cron/subscriptionExpiry.ts` |
 | C08 | Моніторинг дискового простору | Bash | щодня 08:00 | UTC | `scripts/disk-check.sh` |
+| C13 | Backup uploads (rsync + GPG → Hetzner) | Bash | щодня 04:00 | UTC | `scripts/uploads-backup.sh` |
+| C15 | Auto-stop забутих таймерів (8h) | Node.js | кожні 5 хв | UTC | `cron/timerAutoStop.ts` |
+| C16 | Loyalty recalc + overdue escalation | Node.js | 02:30 + кожні 30хв | UTC | `cron/loyaltyRecalc.ts`, `cron/overdueEscalation.ts` |
+| C17 | Refresh revenue_monthly_mv | pg_cron | щодня 02:00 | UTC | `pg_cron SQL` |
+| C18 | Retention purge (anonymize + hard delete) | Node.js | щодня 03:00 | UTC | `cron/retentionPurge.ts` |
+| C19 | Cron heartbeat check (alerting) | Node.js | кожні 30 хв | UTC | `cron/heartbeatCheck.ts` |
 
 ---
 
@@ -307,3 +313,67 @@ info: Subscription expiry notifications sent { count: 2 }
 ```
 
 Якщо cron job завершується з помилкою → `logger.error` → Sentry захоплює автоматично.
+
+---
+
+## S1 alignment update (нові cron jobs)
+
+### C02 — Recurring charges (уточнення)
+
+Раніше планувалось `1-го числа 00:01`. Уточнено: configurable day of month per subscription (1 / 15 / last). Cron запускається **щодня 00:30** і обробляє тільки subscriptions де `next_invoice_at <= now()`.
+
+Idempotency: lock через `cron_runs.metadata.processed_ids` — повторний запуск skip-ить уже processed subscriptions. Створює `Document(type='invoice')` + `ServiceCharge` + `notify(event='billing.invoice_sent')`. Деталі — `05-billing.md → Auto-invoicing flow`.
+
+### C07 — Invoice overdue marker
+
+Розширено: окрім нагадування про закінчення підписки, ставить `service_charges.status = 'overdue'` де `due_date < now() AND status = 'pending'`. Для кожного нового overdue → `notify(event='billing.invoice_overdue')` до company owner.
+
+### C13 — Uploads backup
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SRC=/var/lib/workflo/uploads
+DEST=/backup/uploads
+rsync -a --delete "$SRC/" "$DEST/"
+# weekly compress + encrypt
+if [ "$(date +%u)" = "7" ]; then
+  TAR=/tmp/uploads-$(date +%F).tar.gz
+  tar czf "$TAR" -C /backup uploads
+  gpg --symmetric --cipher-algo AES256 --batch --passphrase-file /etc/workflo/backup.key "$TAR"
+  rclone copy "$TAR.gpg" hetzner:workflo-backups/uploads/
+  rm -f "$TAR" "$TAR.gpg"
+fi
+```
+
+### C15 — Timer auto-stop
+
+Кожні 5 хв: знаходить `time_logs WHERE ended_at IS NULL AND started_at < now() - INTERVAL '8 hours'` → ставить `ended_at = started_at + 8h`, `auto_stopped=true`, `auto_stop_reason='timeout'`. Notification executor'у про auto-stop. Деталі — `02-orders.md → Time tracking`.
+
+### C16 — Loyalty recalc + overdue escalation
+
+Два under-один-ID jobs:
+- **02:30 daily** — `loyaltyRecalc.ts`: перераховує tier кожної company за lifetime paid USD. Tier upgrade → `notify(event='loyalty.tier_upgraded')`. Tier ніколи не downgrade автоматично. Деталі — `10-loyalty.md`.
+- **кожні 30 хв** — `overdueEscalation.ts`: orders де `deadline < now()` і немає transition в done за 4 год → `notify(event='orders.overdue')` owner'у. Деталі — `07-notifications.md → Escalation`.
+
+### C17 — Refresh revenue_monthly_mv
+
+```sql
+SELECT cron.schedule('refresh_revenue_mv', '0 2 * * *', $$
+  REFRESH MATERIALIZED VIEW CONCURRENTLY revenue_monthly_mv;
+$$);
+```
+
+Materialized view для `19-reports.md → Revenue Report` heavy aggregation.
+
+### C18 — Retention purge
+
+Повна специфікація — `RETENTION.md → Cron C18`. Послідовність: anonymize stage → soft-to-hard-delete stage → TTL-purge stage → storage purge stage → report. Окремий DB connection з 30s statement timeout. Alert через C19 heartbeat при 3 consecutive failures.
+
+### C19 — Heartbeat check (alerting)
+
+Кожні 30 хв: для кожного active cron job перевіряє наявність свіжого successful `cron_runs` row у межах `2 × expected_interval`. Відсутність → PagerDuty + Slack `#alerts`. Деталі — `21-system-monitoring.md → Heartbeat для cron`.
+
+### Cron heartbeat table
+
+Всі Node.js cron jobs пишуть `cron_runs` row на старті (`status='running'`) + апдейт на завершенні (`success`/`failed` + `durationMs`). Schema — `20-admin-settings.md → секція 6`.

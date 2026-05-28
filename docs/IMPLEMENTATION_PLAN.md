@@ -2764,3 +2764,101 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   <Link href={`/${locale}/privacy`}>Політика конфіденційності</Link>
 </nav>
 ```
+
+---
+
+## S1 ALIGNMENT UPDATE (27 травня 2026) — endpoint paths source of truth
+
+Цей блок — канонічний список endpoints, доданих/змінених на S1 фазі. Старі секції вище зберігаємо для context, але **при розбіжностях цей блок має пріоритет**.
+
+### Auth + multi-company
+
+```
+POST   /auth/register              → profile + company + member(owner) + welcome email
+POST   /auth/login                 → access (15m) + refresh cookie (Lax, /auth/refresh)
+POST   /auth/refresh               → rotate access; Origin-check CSRF guard
+POST   /auth/logout                → clear refresh cookie (same path/domain)
+POST   /auth/forgot-password       → 3/15min rate limit
+POST   /auth/reset-password        → 5/1h per token
+POST   /auth/switch-company        → { companyId } → new access with activeCompanyId
+GET    /companies                  → my companies (owner + member)
+POST   /companies                  → create + auto owner membership
+POST   /companies/:id/transfer-ownership   → { newOwnerProfileId } (with accept step)
+POST   /companies/:id/accept-ownership
+POST   /companies/:id/members      → invite member
+DELETE /companies/:id/members/:profileId
+POST   /companies/:id/archive
+POST   /companies/:id/restore
+```
+
+### Orders + triage + time tracking
+
+```
+GET    /orders?filter=unassigned   → owner-only triage queue
+PATCH  /orders/:id                 → { assigneeId, ... } incl. assign executor
+POST   /orders/:id/transition      → { to } status; owner-only for done/revision/cancel
+POST   /orders/:id/timer/start     → auto-stops previous active timer
+POST   /orders/:id/timer/stop
+POST   /orders/:id/time-logs       → manual entry (started/ended/description)
+GET    /executors/:id/time-logs?period=YYYY-MM
+GET    /executors/:id/report?period=YYYY-MM
+```
+
+### Notifications
+
+```
+GET    /profile/settings/notifications          → matrix prefs
+PATCH  /profile/settings/notifications          → { category, channel, enabled }
+POST   /profile/settings/notifications/telegram → returns deep link with OTP
+```
+
+### Chat Hub
+
+```
+GET    /messages/conversations
+GET    /messages/conversations/:orderId
+POST   /messages/conversations/:orderId/read
+GET    /messages/unread-count
+GET    /sse/messages                            → SSE stream
+```
+
+### Billing + documents
+
+```
+POST   /payments                   → idempotency-key required; race-guarded
+POST   /companies/:id/reconciliation-acts  → { from, to }
+GET    /reports/time | /reports/revenue | /reports/debtors  (+ .csv variants)
+```
+
+### Credentials (owner-only)
+
+```
+GET    /companies/:id/credentials
+POST   /companies/:id/credentials
+PUT    /companies/:id/credentials/:credId
+POST   /companies/:id/credentials/:credId/reveal   → 10/h rate limit, audit-logged
+POST   /companies/:id/credentials/:credId/revoke
+DELETE /companies/:id/credentials/:credId
+GET    /companies/:id/credentials/:credId/audit
+```
+
+### Admin (admin-only)
+
+```
+GET/PUT  /admin/templates
+GET/PUT  /admin/smtp
+GET/PUT  /admin/branding
+CRUD     /admin/nomenclature
+CRUD     /admin/departments
+GET      /admin/crons   + POST /admin/crons/:name/run
+GET      /admin/system  → monitoring dashboard data
+```
+
+### Schema migrations (S1)
+
+- `20260527_s1_00_multi_company`: drop Company.ownerId, backfill CompanyMember(owner), partial unique index.
+- `20260527_s1_03_notification_matrix`: rename estimated→estimating, add reconciliation_act, refactor NotificationSettings, add NotificationPreference/NotificationLog/AuditLog.
+
+### Package: @workflo/notifications
+
+Public API: `notify(deps, input)`, `resolveTargetChannels()`, dispatchers, adapters, templates, config. Full implementation у `packages/notifications/src/`. Tests у `packages/notifications/tests/` (7 suites). Деталі — `modules/07-notifications.md`.

@@ -590,3 +590,70 @@ Mobile: кожен рядок → картка (card layout)
 ```
 
 Реалізація через `@container` queries (CSS) або `useMediaQuery` hook.
+
+---
+
+## S1 alignment update — нові routes
+
+### Portal (portal.workflo.space)
+
+| Route | Опис | Auth | Модуль |
+|---|---|---|---|
+| `/companies` | Список моїх компаній + company switcher | client | 01-auth |
+| `/loyalty` | Поточний tier + progress + переваги | client | 10-loyalty |
+| `/referrals` | Реферальний код + список запрошених + бонуси | client | 09-referral |
+| `/messages` | Chat Hub — inbox всіх чатів замовлень | client | 18-chat-hub |
+| `/messages/:orderId` | Деталі розмови (mobile: окремий екран) | client | 18-chat-hub |
+| `/profile/settings/notifications` | Матриця 7×3 preferences + Telegram link | client | 07-notifications |
+
+### Workspace (work.workflo.space)
+
+| Route | Опис | Auth | Модуль |
+|---|---|---|---|
+| `/triage` | Unassigned orders (owner only) | owner | 02-orders |
+| `/inbox` | Chat Hub для executors (assigned/mentioned/all) | executor+ | 18-chat-hub |
+| `/companies/:id/credentials` | Credentials vault (owner only) | owner | 17-credentials |
+| `/reports` | Звіти головна (3 картки) | owner | 19-reports |
+| `/reports/time` | Time report | owner | 19-reports |
+| `/reports/revenue` | Revenue report | owner | 19-reports |
+| `/reports/debtors` | Debtors report | owner | 19-reports |
+| `/admin/system` | System monitoring dashboard | admin | 21-system-monitoring |
+| `/admin/templates` | Notification templates editor | admin | 20-admin-settings |
+| `/admin/smtp` | Multi-sender SMTP config | admin | 20-admin-settings |
+| `/admin/branding` | PDF branding | admin | 20-admin-settings |
+| `/admin/nomenclature` | Service nomenclature CRUD | admin | 20-admin-settings |
+| `/admin/departments` | Departments CRUD | admin | 20-admin-settings |
+| `/admin/crons` | Cron monitoring + manual trigger | admin | 20-admin-settings |
+
+### Company switcher (header component, both apps)
+
+```
+┌─────────────────────────────┐
+│ [▼] Acme LLC (owner)         │  ← click opens dropdown
+├─────────────────────────────┤
+│ ✓ Acme LLC      (owner)      │
+│   Foo Corp      (owner)      │
+│   Bar Inc       (member)     │
+│ ──────────────────────────  │
+│ + Створити компанію          │
+└─────────────────────────────┘
+```
+
+Перемикання → `POST /auth/switch-company` → новий access token з `activeCompanyId` → reload поточної сторінки в контексті нової компанії.
+
+### Notification settings matrix UI
+
+```
+                  Email   Telegram   In-app
+Автентифікація     🔒✓      [✓]        [✓]
+Замовлення         [✓]      [✓]        [✓]
+Чат                [✓]      [ ]        [✓]
+Білінг             🔒✓      [✓]        [✓]
+Документи          [✓]      [ ]        [✓]
+Лояльність         [ ]      [✓]        [✓]
+Система            [✓]      [ ]        [✓]
+
+🔒 = критичні події, email завжди увімкнений (ADR-003)
+
+[Підключити Telegram] ← якщо ще не linked
+```
