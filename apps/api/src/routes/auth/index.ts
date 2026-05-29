@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import loginRoute from './login.js'
+import logoutRoute from './logout.js'
+import refreshRoute from './refresh.js'
 import registerRoute from './register.js'
 
 /**
@@ -9,6 +11,8 @@ import registerRoute from './register.js'
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(registerRoute)
   await fastify.register(loginRoute)
+  await fastify.register(logoutRoute)
+  await fastify.register(refreshRoute)
 }
 
 export default authRoutes
