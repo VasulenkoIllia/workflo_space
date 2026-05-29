@@ -73,7 +73,7 @@
 | S1-18 | Welcome email при реєстрації (wired у S1-04 register)                                               | [08-email]         | —   | ✅     | ✅   | —      |
 | S1-19 | Invite email (executor + company member) — wired у S1-15/17                                         | [08-email]         | —   | ✅     | ✅   | —      |
 | S1-20 | Reset password email (wired у S1-08 forgot-password)                                                | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-21 | packages/i18n — uk/en локалі базові                                                                 | [13-settings]      | —   | ⬜     | —    | —      |
+| S1-21 | packages/i18n — uk/en локалі базові (translate + namespaces + tests)                                | [13-settings]      | —   | ✅     | ✅   | —      |
 | S1-22 | Deploy Sprint 1 → staging                                                                           | Infra              | —   | ⬜     | —    | 🚀     |
 
 ---
@@ -264,7 +264,7 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 23      | 21      | 20        | 0           |
+| S1 Auth       | 23      | 22      | 21        | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
