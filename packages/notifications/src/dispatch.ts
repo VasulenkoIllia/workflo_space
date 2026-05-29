@@ -1,9 +1,5 @@
 import { NotificationChannel, type NotificationEvent } from '@workflo/types'
-import {
-  type EmailPayload,
-  type EmailSendResult,
-  sendEmail,
-} from './adapters/EmailAdapter.js'
+import { type EmailPayload, type EmailSendResult, sendEmail } from './adapters/EmailAdapter.js'
 import {
   type TelegramPayload,
   type TelegramSendResult,
@@ -50,11 +46,13 @@ export interface Recipient {
 export type EventPayloadMap = {
   'auth.welcome': { portalUrl: string }
   'auth.password_reset': { resetUrl: string }
-  'system.invite_sent.executor': { inviterName: string; acceptUrl: string; expiresAt: string }
-  'system.invite_sent.company_member': {
+  // One event, two templates: companyName present → company-member invite,
+  // else executor invite (expiresAt used by the executor template).
+  'system.invite_sent': {
     inviterName: string
-    companyName: string
     acceptUrl: string
+    companyName?: string
+    expiresAt?: string
   }
   'orders.status_changed': { orderTitle: string; orderUrl: string; newClientStatus: string }
   'chat.new_comment': { orderTitle: string; authorName: string; preview: string; orderUrl: string }
@@ -92,21 +90,26 @@ export function renderEmailForEvent(
         resetUrl: (vars as EventPayloadMap['auth.password_reset']).resetUrl,
         locale,
       })
-    case 'system.invite_sent.executor': {
-      const v = vars as EventPayloadMap['system.invite_sent.executor']
+    case 'system.invite_sent': {
+      // One event, two templates — disambiguated by presence of companyName.
+      const v = vars as {
+        inviterName: string
+        acceptUrl: string
+        companyName?: string
+        expiresAt?: string
+      }
+      if (v.companyName) {
+        return renderInviteCompanyMemberEmail({
+          inviterName: v.inviterName,
+          companyName: v.companyName,
+          acceptUrl: v.acceptUrl,
+          locale,
+        })
+      }
       return renderInviteExecutorEmail({
         inviterName: v.inviterName,
         acceptUrl: v.acceptUrl,
-        expiresAt: v.expiresAt,
-        locale,
-      })
-    }
-    case 'system.invite_sent.company_member': {
-      const v = vars as EventPayloadMap['system.invite_sent.company_member']
-      return renderInviteCompanyMemberEmail({
-        inviterName: v.inviterName,
-        companyName: v.companyName,
-        acceptUrl: v.acceptUrl,
+        expiresAt: v.expiresAt ?? '',
         locale,
       })
     }
@@ -134,19 +137,18 @@ export function renderTelegramForEvent(
         resetUrl: (vars as EventPayloadMap['auth.password_reset']).resetUrl,
         locale,
       })
-    case 'system.invite_sent.executor': {
-      const v = vars as EventPayloadMap['system.invite_sent.executor']
+    case 'system.invite_sent': {
+      const v = vars as { inviterName: string; acceptUrl: string; companyName?: string }
+      if (v.companyName) {
+        return renderInviteCompanyMemberTelegram({
+          inviterName: v.inviterName,
+          companyName: v.companyName,
+          acceptUrl: v.acceptUrl,
+          locale,
+        })
+      }
       return renderInviteExecutorTelegram({
         inviterName: v.inviterName,
-        acceptUrl: v.acceptUrl,
-        locale,
-      })
-    }
-    case 'system.invite_sent.company_member': {
-      const v = vars as EventPayloadMap['system.invite_sent.company_member']
-      return renderInviteCompanyMemberTelegram({
-        inviterName: v.inviterName,
-        companyName: v.companyName,
         acceptUrl: v.acceptUrl,
         locale,
       })

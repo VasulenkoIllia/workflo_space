@@ -6,6 +6,7 @@ import {
   type DispatchResult,
   type Recipient,
 } from './dispatch.js'
+export type { Recipient } from './dispatch.js'
 import { resolveTargetChannels, type ResolverPrisma } from './resolver.js'
 
 /**
@@ -15,10 +16,7 @@ import { resolveTargetChannels, type ResolverPrisma } from './resolver.js'
  */
 export interface NotifyPrisma extends ResolverPrisma {
   notificationSettings: {
-    findUnique: (args: {
-      where: { profileId: string }
-      select?: Record<string, true>
-    }) => Promise<{
+    findUnique: (args: { where: { profileId: string }; select?: Record<string, true> }) => Promise<{
       id: string
       profileId: string
       language: string
@@ -235,6 +233,46 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
         channel,
         error: logErr instanceof Error ? logErr.message : String(logErr),
       })
+    }
+  }
+
+  return { results, attempted }
+}
+
+export interface NotifyRecipientInput {
+  /** Explicit recipient — used when there is no Profile (external guest, invite). */
+  recipient: Recipient
+  event: NotificationEvent
+  vars: Record<string, unknown>
+  /** Channels to dispatch on. Defaults to email only (the always-available channel). */
+  channels?: ReadonlyArray<NotificationChannel>
+}
+
+/**
+ * Profile-less dispatch (audit D2). Sends to an explicit Recipient without
+ * loading NotificationSettings / preferences — for recipients who don't (yet)
+ * have a Profile: invite emails, calendar external guests, one-off transactional
+ * sends. No DB access, no notification_logs row (no settingsId to attach).
+ *
+ * Never throws — per-channel failures are collected in the returned results.
+ */
+export async function notifyRecipient(
+  input: NotifyRecipientInput,
+  logger: NotifyLogger = defaultLogger
+): Promise<NotifyOutcome> {
+  const channels = input.channels ?? [NotificationChannel.EMAIL]
+  const results: DispatchResult[] = []
+  const attempted: NotificationChannel[] = []
+
+  for (const channel of channels) {
+    attempted.push(channel)
+    if (channel === NotificationChannel.EMAIL) {
+      results.push(await dispatchEmail(input.event, input.recipient, input.vars))
+    } else if (channel === NotificationChannel.TELEGRAM) {
+      results.push(await dispatchTelegram(input.event, input.recipient, input.vars))
+    } else {
+      logger.warn('notifyRecipient.unsupported_channel', { channel, event: input.event })
+      results.push({ channel, result: { status: 'skipped', reason: 'unsupported_for_recipient' } })
     }
   }
 

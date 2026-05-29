@@ -1,16 +1,28 @@
-import {
-  type LocaleKey,
-  renderInviteCompanyMemberEmail,
-  renderInviteExecutorEmail,
-  sendEmail,
-} from '@workflo/notifications'
+import { type LocaleKey, notifyRecipient } from '@workflo/notifications'
 import type { FastifyBaseLogger } from 'fastify'
 
 /**
- * Invite emails go to an address that may NOT yet have a profile, so they
- * bypass the profile-centric notify() pipeline and render + send directly.
- * Fire-and-forget: never blocks or throws into the request path.
+ * Invite emails go to an address that may NOT yet have a profile, so they use
+ * the profile-less notifyRecipient() path (audit D2) — same dispatch/render
+ * pipeline as everything else (consistent templates + escaping), instead of a
+ * bespoke sendEmail call. Fire-and-forget: never blocks the request path.
  */
+function fireAndForget(
+  logger: FastifyBaseLogger,
+  label: string,
+  to: string,
+  promise: Promise<{ results: ReadonlyArray<{ result: { status: string } }> }>
+): void {
+  void promise
+    .then((outcome) => {
+      const ok = outcome.results.some((r) => r.result.status === 'sent')
+      if (!ok) logger.warn({ to, label, outcome }, 'invite email not sent')
+    })
+    .catch((err: unknown) => {
+      logger.error({ err, to, label }, 'invite email failed')
+    })
+}
+
 export function sendExecutorInviteEmail(
   logger: FastifyBaseLogger,
   opts: {
@@ -21,21 +33,17 @@ export function sendExecutorInviteEmail(
     locale?: LocaleKey
   }
 ): void {
-  const tpl = renderInviteExecutorEmail({
-    inviterName: opts.inviterName,
-    acceptUrl: opts.acceptUrl,
-    expiresAt: opts.expiresAt,
-    locale: opts.locale ?? 'uk',
-  })
-  void sendEmail({ to: opts.to, subject: tpl.subject, html: tpl.html })
-    .then((result) => {
-      if (result.status !== 'sent') {
-        logger.warn({ to: opts.to, result }, 'executor invite email not sent')
-      }
+  const locale = opts.locale ?? 'uk'
+  fireAndForget(
+    logger,
+    'executor_invite',
+    opts.to,
+    notifyRecipient({
+      recipient: { email: opts.to, locale },
+      event: 'system.invite_sent',
+      vars: { inviterName: opts.inviterName, acceptUrl: opts.acceptUrl, expiresAt: opts.expiresAt },
     })
-    .catch((err: unknown) => {
-      logger.error({ err, to: opts.to }, 'executor invite email failed')
-    })
+  )
 }
 
 export function sendCompanyMemberInviteEmail(
@@ -48,19 +56,19 @@ export function sendCompanyMemberInviteEmail(
     locale?: LocaleKey
   }
 ): void {
-  const tpl = renderInviteCompanyMemberEmail({
-    inviterName: opts.inviterName,
-    companyName: opts.companyName,
-    acceptUrl: opts.acceptUrl,
-    locale: opts.locale ?? 'uk',
-  })
-  void sendEmail({ to: opts.to, subject: tpl.subject, html: tpl.html })
-    .then((result) => {
-      if (result.status !== 'sent') {
-        logger.warn({ to: opts.to, result }, 'company member invite email not sent')
-      }
+  const locale = opts.locale ?? 'uk'
+  fireAndForget(
+    logger,
+    'company_member_invite',
+    opts.to,
+    notifyRecipient({
+      recipient: { email: opts.to, locale },
+      event: 'system.invite_sent',
+      vars: {
+        inviterName: opts.inviterName,
+        companyName: opts.companyName,
+        acceptUrl: opts.acceptUrl,
+      },
     })
-    .catch((err: unknown) => {
-      logger.error({ err, to: opts.to }, 'company member invite email failed')
-    })
+  )
 }

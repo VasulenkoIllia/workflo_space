@@ -15,7 +15,10 @@ const companyMemberFindUnique = vi.fn()
 const companyMemberUpsert = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
-const sendEmail = vi.fn().mockResolvedValue({ status: 'sent', messageId: '1' })
+const notifyRecipient = vi.fn().mockResolvedValue({
+  results: [{ channel: 'email', result: { status: 'sent' } }],
+  attempted: ['email'],
+})
 
 vi.mock('@workflo/db', () => ({
   prisma: {
@@ -34,12 +37,10 @@ vi.mock('@workflo/db', () => ({
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
 
-// Stub notifications so invite emails are inert in tests.
+// Stub notifications — inviteEmail.ts uses notifyRecipient (profile-less, D2).
 vi.mock('@workflo/notifications', () => ({
   notify: vi.fn(),
-  sendEmail,
-  renderInviteExecutorEmail: () => ({ subject: 's', html: 'h' }),
-  renderInviteCompanyMemberEmail: () => ({ subject: 's', html: 'h' }),
+  notifyRecipient,
 }))
 
 const { buildApp } = await import('../src/app.js')
@@ -93,7 +94,7 @@ describe('POST /workspace/team/invite (executor)', () => {
         data: expect.objectContaining({ type: 'executor', email: 'new@exec.com' }),
       })
     )
-    expect(sendEmail).toHaveBeenCalledOnce()
+    expect(notifyRecipient).toHaveBeenCalledOnce()
     await app.close()
   })
 
@@ -131,7 +132,7 @@ describe('POST /company/members/invite', () => {
       payload: { email: 'invitee@e.com' },
     })
     expect(res.statusCode).toBe(201)
-    expect(sendEmail).toHaveBeenCalledOnce()
+    expect(notifyRecipient).toHaveBeenCalledOnce()
     await app.close()
   })
 

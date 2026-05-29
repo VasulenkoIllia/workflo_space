@@ -3,11 +3,13 @@
 // Main entry point.
 export {
   notify,
+  notifyRecipient,
   type NotifyDeps,
   type NotifyInput,
   type NotifyLogger,
   type NotifyOutcome,
   type NotifyPrisma,
+  type NotifyRecipientInput,
 } from './notify.js'
 
 // Resolver — exported so API layer can preview channels in /profile/settings.
