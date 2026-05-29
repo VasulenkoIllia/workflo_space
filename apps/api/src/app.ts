@@ -6,6 +6,7 @@ import rateLimitingPlugin from './plugins/rateLimiting.js'
 import securityHeadersPlugin from './plugins/securityHeaders.js'
 import authRoutes from './routes/auth/index.js'
 import healthRoute from './routes/health.js'
+import profileRoutes from './routes/profile/index.js'
 
 function buildLoggerConfig() {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -63,6 +64,7 @@ export function buildApp() {
 
   app.register(healthRoute)
   app.register(authRoutes)
+  app.register(profileRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)
