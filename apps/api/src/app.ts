@@ -1,8 +1,10 @@
 import Fastify from 'fastify'
 import corsPlugin from './plugins/cors.js'
-import errorHandlerPlugin from './plugins/errorHandler.js'
+import { registerErrorHandlers } from './plugins/errorHandler.js'
+import jwtPlugin from './plugins/jwt.js'
 import rateLimitingPlugin from './plugins/rateLimiting.js'
 import securityHeadersPlugin from './plugins/securityHeaders.js'
+import authRoutes from './routes/auth/index.js'
 import healthRoute from './routes/health.js'
 
 function buildLoggerConfig() {
@@ -57,10 +59,13 @@ export function buildApp() {
   app.register(corsPlugin)
   app.register(securityHeadersPlugin)
   app.register(rateLimitingPlugin)
+  app.register(jwtPlugin)
 
   app.register(healthRoute)
+  app.register(authRoutes)
 
-  app.register(errorHandlerPlugin)
+  // Root-level error/not-found handlers (must not be encapsulated).
+  registerErrorHandlers(app)
 
   return app
 }

@@ -1,0 +1,85 @@
+import { randomBytes } from 'node:crypto'
+import type { PrismaClient } from '@workflo/db'
+import type { FastifyReply } from 'fastify'
+
+export const REFRESH_COOKIE_NAME = 'refresh_token'
+export const REFRESH_COOKIE_PATH = '/auth/refresh'
+const REFRESH_TTL_DAYS = 30
+
+export interface Membership {
+  companyId: string
+  role: 'owner' | 'member'
+}
+
+/**
+ * Access-token claims. Kept small (15m TTL) — `activeCompanyId` is the company
+ * the user is currently operating in; `memberships` lets the client render the
+ * company switcher without an extra round-trip. See modules/01-auth.md.
+ */
+export interface AccessClaims {
+  sub: string
+  email: string
+  role: 'owner' | 'executor' | 'client'
+  activeCompanyId: string | null
+  memberships: Membership[]
+}
+
+export function buildAccessClaims(params: {
+  profileId: string
+  email: string
+  role: 'owner' | 'executor' | 'client'
+  activeCompanyId: string | null
+  memberships: Membership[]
+}): AccessClaims {
+  return {
+    sub: params.profileId,
+    email: params.email,
+    role: params.role,
+    activeCompanyId: params.activeCompanyId,
+    memberships: params.memberships,
+  }
+}
+
+/**
+ * Create an opaque refresh token row and return its value. Opaque (not a JWT)
+ * so it can be revoked server-side via refresh_tokens.revokedAt.
+ * Accepts a tx client so it can run inside the registration transaction.
+ */
+export async function issueRefreshToken(
+  tx: Pick<PrismaClient, 'refreshToken'>,
+  profileId: string
+): Promise<{ token: string; expiresAt: Date }> {
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000)
+  // High-entropy opaque token (256 bits). base64url so it's cookie-safe.
+  const token = randomBytes(32).toString('base64url')
+  await tx.refreshToken.create({
+    data: { profileId, token, expiresAt },
+  })
+  return { token, expiresAt }
+}
+
+function cookieDomain(): string | undefined {
+  // In production cookies are shared across *.workflo.space subdomains.
+  return process.env.COOKIE_DOMAIN || undefined
+}
+
+/** Set the refresh cookie per ADR-001 (SameSite=Lax, Path=/auth/refresh). */
+export function setRefreshCookie(reply: FastifyReply, token: string): void {
+  reply.setCookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV !== 'development',
+    sameSite: 'lax',
+    path: REFRESH_COOKIE_PATH,
+    domain: cookieDomain(),
+    maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60,
+    signed: false,
+  })
+}
+
+/** Clear the refresh cookie (logout). Must match path+domain used to set it. */
+export function clearRefreshCookie(reply: FastifyReply): void {
+  reply.clearCookie(REFRESH_COOKIE_NAME, {
+    path: REFRESH_COOKIE_PATH,
+    domain: cookieDomain(),
+  })
+}

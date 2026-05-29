@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
 import { AppError, ApiErrorCode } from '@workflo/types'
 
@@ -22,7 +22,29 @@ function extractFastifyValidation(error: unknown): unknown {
   return null
 }
 
-const errorHandlerPlugin: FastifyPluginAsync = (fastify) => {
+/**
+ * Detect a ZodError robustly. `instanceof` can fail when the schema's Zod
+ * instance differs from this module's (cross-package module resolution), so
+ * we also structurally sniff the ZodError shape as a fallback.
+ */
+function isZodError(error: unknown): error is ZodError {
+  if (error instanceof ZodError) return true
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'ZodError' &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  )
+}
+
+/**
+ * Register the global error + not-found handlers directly on the ROOT instance.
+ *
+ * Must run on root (not via an encapsulated plugin) so it covers every route
+ * group — Fastify error handlers cascade down from the context they're set on,
+ * and an encapsulated plugin's handler would never reach sibling routes.
+ */
+export function registerErrorHandlers(fastify: FastifyInstance): void {
   fastify.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
       return reply.status(error.statusCode).send({
@@ -35,7 +57,7 @@ const errorHandlerPlugin: FastifyPluginAsync = (fastify) => {
       })
     }
 
-    if (error instanceof ZodError) {
+    if (isZodError(error)) {
       return reply.status(400).send({
         success: false,
         error: {
@@ -81,8 +103,4 @@ const errorHandlerPlugin: FastifyPluginAsync = (fastify) => {
       },
     })
   })
-
-  return Promise.resolve()
 }
-
-export default errorHandlerPlugin

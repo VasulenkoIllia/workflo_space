@@ -26,6 +26,7 @@
     "@workflo/types": "workspace:*",
     "bcryptjs": "^2.4.3",
     "fastify": "^5.3.1",
+    "fastify-plugin": "^5.1.0",
     "pino-pretty": "^13.0.0",
     "zod": "^3.24.3"
   },
