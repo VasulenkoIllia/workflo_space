@@ -192,7 +192,11 @@
 | S5-20a | Finance — Expense model + migration (recurring/one_time/category)                          | [22-finance]  | —   | ⬜     | ⬜   | —      |
 | S5-20b | Finance — Expense CRUD API (owner-only) + audit                                            | [22-finance]  | —   | ⬜     | ⬜   | —      |
 | S5-20c | Finance — P&L report (revenue − expenses, salary from ExecutorRate)                        | [22-finance]  | —   | ⬜     | ⬜   | —      |
-| S5-20d | Finance — Workspace /finance UI (P&L + expenses table + CSV)                               | [22-finance]  | —   | ⬜     | —    | —      |
+| S5-20d | Finance — Workspace /finance UI (P&L + expenses table + CSV)                               | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-21a | Wallet — WalletTransaction ledger model + migration + walletCredit/Debit service           | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-21b | Wallet — referral accrual → wallet credits + ReferralSettings (editable % tiers)           | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-21c | Wallet — admin /admin/wallet (history + manual adjust + % editor) + Portal /wallet         | [25-wallet]   | —   | ⬜     | —    | —      |
+| S5-21d | Wallet — spending: apply bonuses on invoice (walletDebit in invoice-flow)                  | [25-wallet]   | —   | ⬜     | ⬜   | —      |
 | S5-19  | Deploy Sprint 5 → staging                                                                  | Infra         | —   | ⬜     | —    | 🚀     |
 
 ---

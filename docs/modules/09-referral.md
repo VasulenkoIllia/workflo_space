@@ -1,4 +1,5 @@
 # MODULE 09 — REFERRAL SYSTEM
+
 > App: Portal (`portal.workflo.space`) + Workspace (`work.workflo.space`)
 > Статус: MVP
 > Залежить від: [01-auth, 02-company, 07-billing-payments]
@@ -11,6 +12,7 @@
 Реферальна програма дозволяє компаніям-клієнтам залучати нових клієнтів в обмін на бонусний баланс. Кожна зареєстрована компанія отримує унікальний реферальний код формату `workflo-XXXXXX`. При реєстрації нового клієнта за реферальним посиланням система фіксує зв'язок. Після кожного підтвердження оплати реферованого клієнта система автоматично нараховує бонус на баланс реферера.
 
 **MVP обмеження:**
+
 - Глибина дерева = 1 (тільки прямі реферали, depth=1)
 - Бонусний баланс відображається, але не може бути використаний для оплати (тільки в Phase 2)
 - Відсоток прогресивний і залежить від загальної суми зароблених бонусів реферера
@@ -19,12 +21,12 @@
 
 ## Актори та доступ
 
-| Актор | Доступ |
-|---|---|
-| Company Owner (Portal) | Бачить своє реферальне посилання, QR-код, список залучених компаній, зароблені бонуси |
-| Company Member | Не має доступу до реферальної сторінки (це білінгова інформація) |
-| Owner (Workspace) | Бачить реферальну статистику по всіх компаніях у `/settings/referral`, може вмикати/вимикати програму |
-| Executor | Немає доступу |
+| Актор                  | Доступ                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| Company Owner (Portal) | Бачить своє реферальне посилання, QR-код, список залучених компаній, зароблені бонуси                 |
+| Company Member         | Не має доступу до реферальної сторінки (це білінгова інформація)                                      |
+| Owner (Workspace)      | Бачить реферальну статистику по всіх компаніях у `/settings/referral`, може вмикати/вимикати програму |
+| Executor               | Немає доступу                                                                                         |
 
 ---
 
@@ -37,11 +39,12 @@
 ```typescript
 // apps/api/src/modules/company/company.service.ts
 function generateReferralCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const code = Array.from({ length: 6 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join('');
-  return `workflo-${code}`;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  const code = Array.from(
+    { length: 6 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join('')
+  return `workflo-${code}`
 }
 // Приклад: workflo-K7X2QM
 ```
@@ -74,16 +77,16 @@ function generateReferralCode(): string {
 ```typescript
 // packages/types/src/constants.ts
 export const REFERRAL_TIERS = [
-  { minEarned: 0,    maxEarned: 499.99,  percent: 10 },
-  { minEarned: 500,  maxEarned: 1999.99, percent: 12 },
+  { minEarned: 0, maxEarned: 499.99, percent: 10 },
+  { minEarned: 500, maxEarned: 1999.99, percent: 12 },
   { minEarned: 2000, maxEarned: Infinity, percent: 15 },
-] as const;
+] as const
 
 function getReferralPercent(totalReferralEarned: Decimal): number {
-  const earned = totalReferralEarned.toNumber();
-  if (earned < 500)  return 10;
-  if (earned < 2000) return 12;
-  return 15;
+  const earned = totalReferralEarned.toNumber()
+  if (earned < 500) return 10
+  if (earned < 2000) return 12
+  return 15
 }
 ```
 
@@ -99,28 +102,28 @@ async function processReferralBonus(payment: Payment): Promise<void> {
   const company = await prisma.company.findUnique({
     where: { id: payment.companyId },
     select: { referredById: true },
-  });
+  })
 
-  if (!company?.referredById) return; // не реферал — нічого не робимо
+  if (!company?.referredById) return // не реферал — нічого не робимо
 
   const referral = await prisma.referral.findFirst({
     where: {
       referrerId: company.referredById,
       referredId: payment.companyId,
     },
-  });
+  })
 
-  if (!referral) return;
+  if (!referral) return
 
   // Рахуємо загальний зароблений бонус реферера
   const totalEarned = await prisma.referralBonus.aggregate({
     _sum: { amount: true },
     where: { referrerId: company.referredById },
-  });
+  })
 
-  const currentTotal = totalEarned._sum.amount ?? new Decimal(0);
-  const percent = getReferralPercent(currentTotal);
-  const bonusAmount = payment.amount.mul(percent).div(100);
+  const currentTotal = totalEarned._sum.amount ?? new Decimal(0)
+  const percent = getReferralPercent(currentTotal)
+  const bonusAmount = payment.amount.mul(percent).div(100)
 
   await prisma.$transaction([
     // Запис бонусу
@@ -145,14 +148,14 @@ async function processReferralBonus(payment: Payment): Promise<void> {
       where: { id: referral.id },
       data: { totalEarned: { increment: bonusAmount } },
     }),
-  ]);
+  ])
 
   // Нотифікація реферера
   await notify(referrerOwnerUserId, 'referral_bonus_earned', {
     amount: bonusAmount,
     percent,
     referredCompanyName: payment.company.name,
-  });
+  })
 }
 ```
 
@@ -224,9 +227,11 @@ model ReferralBonus {
 ```
 GET /company/referral
 ```
+
 Повертає реферальну інформацію поточної компанії.
 
 **Response 200:**
+
 ```json
 {
   "data": {
@@ -254,9 +259,11 @@ GET /company/referral
 ```
 GET /bonus-balance
 ```
+
 Поточний бонусний баланс (використовується також для відображення в header).
 
 **Response 200:**
+
 ```json
 {
   "data": {
@@ -272,17 +279,19 @@ GET /bonus-balance
 ```
 GET /workspace/settings/referral
 ```
+
 Поточні налаштування реферальної програми.
 
 **Response 200:**
+
 ```json
 {
   "data": {
     "enabled": true,
     "tiers": [
-      { "minEarned": 0,    "maxEarned": 499.99,  "percent": 10 },
-      { "minEarned": 500,  "maxEarned": 1999.99, "percent": 12 },
-      { "minEarned": 2000, "maxEarned": null,     "percent": 15 }
+      { "minEarned": 0, "maxEarned": 499.99, "percent": 10 },
+      { "minEarned": 500, "maxEarned": 1999.99, "percent": 12 },
+      { "minEarned": 2000, "maxEarned": null, "percent": 15 }
     ],
     "totalReferredCompanies": 12,
     "totalBonusesPaid": "1240.50"
@@ -294,15 +303,18 @@ GET /workspace/settings/referral
 PATCH /workspace/settings/referral
 Body: { "enabled": false }
 ```
+
 Вмикає або вимикає реферальну програму. Якщо вимкнено — нові реферали не фіксуються, але існуючі зв'язки залишаються.
 
 ```
 GET /workspace/referrals
 Query: ?page=1&perPage=20&search=
 ```
+
 Список всіх реферальних зв'язків для аналітики.
 
 **Response 200:**
+
 ```json
 {
   "data": [
@@ -385,17 +397,18 @@ Query: ?page=1&perPage=20&search=
 
 ## Notifications
 
-| Подія | Канал | Отримувач |
-|---|---|---|
-| Реферований клієнт зареєструвався | Email + Telegram | Реферер (Company Owner) |
-| Нараховано бонус після оплати | Email + Telegram | Реферер (Company Owner) |
+| Подія                                        | Канал            | Отримувач               |
+| -------------------------------------------- | ---------------- | ----------------------- |
+| Реферований клієнт зареєструвався            | Email + Telegram | Реферер (Company Owner) |
+| Нараховано бонус після оплати                | Email + Telegram | Реферер (Company Owner) |
 | Досягнуто нового рівня ставки (10→12, 12→15) | Email + Telegram | Реферер (Company Owner) |
 
 **Email шаблон — нарахування бонусу:**
+
 ```
 Тема: Ви отримали реферальний бонус $47.50!
 
-Вітаємо! Компанія "ТОВ Ромашка", яку ви залучили, 
+Вітаємо! Компанія "ТОВ Ромашка", яку ви залучили,
 підтвердила оплату $475.00.
 Ваш бонус (10%): $47.50 зараховано на бонусний баланс.
 
@@ -404,10 +417,11 @@ Query: ?page=1&perPage=20&search=
 ```
 
 **Email шаблон — новий рівень ставки:**
+
 ```
 Тема: Ваша реферальна ставка підвищилась до 12%!
 
-Ви заробили вже $500+ бонусів. Тепер ваша ставка — 12% 
+Ви заробили вже $500+ бонусів. Тепер ваша ставка — 12%
 від кожної оплати залучених вами клієнтів.
 ```
 
@@ -434,14 +448,15 @@ MVP: `processReferralBonus()` викликається тільки при пі�
 Якщо `Company.isActive = false` — бонус все одно нараховується на `bonusBalance`, але використати його неможливо (Phase 2). Бізнес-рішення: не блокувати нарахування.
 
 **7. Колізія `referralCode` при генерації**
+
 ```typescript
 async function generateUniqueReferralCode(): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const code = generateReferralCode();
-    const existing = await prisma.company.findUnique({ where: { referralCode: code } });
-    if (!existing) return code;
+    const code = generateReferralCode()
+    const existing = await prisma.company.findUnique({ where: { referralCode: code } })
+    if (!existing) return code
   }
-  throw new Error('Failed to generate unique referral code after 3 attempts');
+  throw new Error('Failed to generate unique referral code after 3 attempts')
 }
 ```
 
@@ -454,3 +469,21 @@ async function generateUniqueReferralCode(): Promise<string> {
 - **Редагування ставок через UI:** owner може змінювати пороги і відсотки у `/settings/referral`.
 - **Реферальна аналітика:** графік залучення нових клієнтів, конверсія реферальних посилань.
 - **Кеш-вивід:** можливість конвертувати бонуси в реальну оплату (обговорюється).
+
+---
+
+## Аудит-оновлення (29 травня 2026) — wallet + редаговані %
+
+Уточнення після ревізії покриття (запит власника: гаманець, історія транзакцій, керування %, списання).
+
+### Гаманець — див. модуль 25-wallet
+
+Реферальні нарахування тепер ідуть у **гаманець** (`WalletTransaction` credit, source=`referral_bonus`), а не прямим `increment bonusBalance`. `Company.bonusBalance` лишається кешем балансу. Повна історія транзакцій + admin-екран — у модулі 25.
+
+### Відсотки тепер редаговані (не зашиті)
+
+`REFERRAL_TIERS` у коді стає **дефолтним сидом**; джерело істини — `ReferralSettings.tiers` (БД), редаговане адміном через `PATCH /admin/referral/settings`. `getReferralPercent()` читає з БД (кеш 5хв). Текст «тільки перегляд у MVP» на екрані `/settings/referral` → замінюється на редагований грід тірів (admin).
+
+### Списання бонусів — S5 (не Phase 2-невизначено)
+
+Списання балансу на оплату замовлень реалізуємо **разом з білінгом (S5)** через `walletDebit()` у invoice-flow. До S5 — баланс накопичується і видно історію, але не списується (бо нема invoice-flow). Деталі — модуль 25 секція «Списання на оплату».

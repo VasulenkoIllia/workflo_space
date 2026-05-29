@@ -79,6 +79,10 @@
 - [db] High-volume таблиці (notification_logs, audit_logs, activity_logs, time_logs) на UUIDv4 PK → фрагментація індексу. Розглянути UUIDv7/BIGINT для НОВИХ таблиць. (created: 2026-05-29)
 - [db] `Expense` (модуль 22): immutable history / `validFrom`/`validUntil` щоб історичний P&L не «їхав» при редагуванні; реальний FK замість `sourceRef` рядка; soft-delete. (created: 2026-05-29)
 
+## 💬 Chat @-mention picker (29 травня 2026)
+
+- [chat] `GET /orders/:id/participants` + frontend @-автокомпліт + explicit `mentionedUserIds` (замість крихкого regex по імені). Задокументовано в 03-chat-comments.md; реалізація з чатом у S2. (created: 2026-05-29)
+
 ## 🐛 Виявлені баги (без severity SEV0/1)
 
 - _(порожньо — критичні з аудиту виправлено в 711f506)_

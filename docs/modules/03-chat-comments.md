@@ -1,4 +1,5 @@
 # CHAT & COMMENTS MODULE
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
@@ -11,6 +12,7 @@
 Модуль коментарів дозволяє спілкуватися між командою та клієнтом у контексті конкретного замовлення. Коментарі прив'язані до `orderId`. Реальний час забезпечується через **SSE (Server-Sent Events)** з використанням PostgreSQL `LISTEN/NOTIFY`.
 
 Підтримуються:
+
 - Текстові повідомлення (Markdown-light: bold, italic, code block, lists)
 - Прикріплені файли (один або кілька на повідомлення)
 - Внутрішні нотатки (invisible для клієнта) — тільки для команди
@@ -67,10 +69,10 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 
 ### Типи повідомлень
 
-| Тип | Видно клієнту | Видно команді |
-|---|---|---|
-| `public` | ✅ | ✅ |
-| `internal` | ❌ | ✅ |
+| Тип        | Видно клієнту | Видно команді |
+| ---------- | ------------- | ------------- |
+| `public`   | ✅            | ✅            |
+| `internal` | ❌            | ✅            |
 
 - Внутрішні нотатки відображаються в workspace із жовтим/помаранчевим фоном
 - В portal внутрішні коментарі не повертаються взагалі (`WHERE type = 'public'`)
@@ -98,13 +100,13 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 
 ## API Endpoints
 
-| Метод | URL | Хто | Опис |
-|---|---|---|---|
-| `GET` | `/orders/:id/comments` | Portal + Workspace | Список коментарів (з пагінацією) |
-| `POST` | `/orders/:id/comments` | Portal + Workspace | Новий коментар |
-| `PATCH` | `/orders/:id/comments/:commentId` | Автор (15 хв) | Редагувати текст |
-| `DELETE` | `/orders/:id/comments/:commentId` | Автор / Owner | Soft delete |
-| `GET` | `/orders/:id/comments/stream` | Portal + Workspace | SSE stream |
+| Метод    | URL                               | Хто                | Опис                             |
+| -------- | --------------------------------- | ------------------ | -------------------------------- |
+| `GET`    | `/orders/:id/comments`            | Portal + Workspace | Список коментарів (з пагінацією) |
+| `POST`   | `/orders/:id/comments`            | Portal + Workspace | Новий коментар                   |
+| `PATCH`  | `/orders/:id/comments/:commentId` | Автор (15 хв)      | Редагувати текст                 |
+| `DELETE` | `/orders/:id/comments/:commentId` | Автор / Owner      | Soft delete                      |
+| `GET`    | `/orders/:id/comments/stream`     | Portal + Workspace | SSE stream                       |
 
 ### Query для `GET /orders/:id/comments`
 
@@ -153,7 +155,8 @@ before=commentId   // курсорна пагінація (older messages)
     fileSize: number
     mimeType: string
     url: string
-  }[]
+  }
+  ;[]
 }
 ```
 
@@ -191,12 +194,12 @@ enum CommentType {
 
 ## Нотифікації
 
-| Подія | Кому | Канал |
-|---|---|---|
-| Новий публічний коментар від клієнта | Owner + Executors замовлення | Telegram |
-| Новий публічний коментар від команди | Company Owner | Email + Telegram |
-| Внутрішній коментар | Всі executors замовлення | Telegram |
-| `@mention` | Згаданий користувач | Telegram |
+| Подія                                | Кому                         | Канал            |
+| ------------------------------------ | ---------------------------- | ---------------- |
+| Новий публічний коментар від клієнта | Owner + Executors замовлення | Telegram         |
+| Новий публічний коментар від команди | Company Owner                | Email + Telegram |
+| Внутрішній коментар                  | Всі executors замовлення     | Telegram         |
+| `@mention`                           | Згаданий користувач          | Telegram         |
 
 > Email при кожному коментарі — надто часто. Email надсилається **тільки з workspace** якщо новий публічний коментар від команди (як офіційна відповідь).
 
@@ -229,12 +232,12 @@ enum CommentType {
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Orders** | Коментарі завжди в контексті замовлення |
-| **Files** | `FileAttachment` прив'язується до `commentId` |
-| **Notifications** | Нові коментарі → push/email |
-| **Auth** | `authorId` = `profileId`, визначає `type` доступних коментарів |
+| Модуль            | Зв'язок                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| **Orders**        | Коментарі завжди в контексті замовлення                        |
+| **Files**         | `FileAttachment` прив'язується до `commentId`                  |
+| **Notifications** | Нові коментарі → push/email                                    |
+| **Auth**          | `authorId` = `profileId`, визначає `type` доступних коментарів |
 
 ---
 
@@ -266,6 +269,7 @@ enum CommentType {
 ```
 
 Кожен API instance:
+
 - На старті: `LISTEN chat_events` + `LISTEN order_events`.
 - Single shared connection (через `pg.Client`, не Prisma — для постійного LISTEN).
 - Reconnect with backoff (1s → 2s → 4s → ... → max 60s) при втраті connection.
@@ -273,6 +277,7 @@ enum CommentType {
 #### Client-side reconnect
 
 EventSource у браузері auto-reconnects on disconnect. Стратегія:
+
 - Server відправляє `event: heartbeat\ndata: {}\n\n` кожні 30 секунд (proxies можуть kill idle streams).
 - Client: на reconnect, надсилає `Last-Event-ID` header → server повертає missed events з `notification_logs` (filter by createdAt > lastId).
 
@@ -287,9 +292,60 @@ EventSource у браузері auto-reconnects on disconnect. Стратегі�
 ### Notification triggers від chat
 
 При новому коментарі:
+
 1. INSERT у `order_comments`.
 2. pg_notify відправляє у SSE (real-time live update).
 3. `notify(event='chat.new_comment')` для усіх **інших** учасників розмови (не для author).
 4. Якщо коментар містить `@username` → `notify(event='chat.mention')` adressed конкретно тій людині (separate event).
 
 Rollup для chat events: див. `07-notifications.md` секція "Anti-spam: rollup".
+
+---
+
+## @-mentions: participant picker (аудит-доповнення, 29 травня 2026)
+
+Поточний бекенд парсить `@ім'я` через regex по `displayName` — крихко (пробіли, кирилиця, тезки). Додаємо нормальний UX «показати людей у кімнаті + тегнути», який власник просив.
+
+### Учасники кімнати
+
+```
+GET /orders/:id/participants
+```
+
+Повертає людей, що мають доступ до чату цього замовлення (для @-автокомпліту):
+
+- усі члени company замовлення (`company_members` де companyId = order.companyId),
+- призначений виконавець (`order.assigneeId`),
+- owner агенції,
+- автори коментарів у цьому order (на випадок, якщо хтось уже писав).
+
+**Response 200:**
+
+```json
+{
+  "data": [
+    { "id": "uuid", "displayName": "Олена Петренко", "role": "owner", "avatarUrl": null },
+    { "id": "uuid", "displayName": "Іван Клієнт", "role": "member", "avatarUrl": null }
+  ]
+}
+```
+
+Authz: будь-який учасник чату (member company або executor на order).
+
+### Frontend @-picker
+
+- Користувач друкує `@` → дропдаун зі списком `GET /orders/:id/participants` (фільтр по введеному тексту).
+- Вибір вставляє токен `@[Ім'я](userId)` у текст (зберігає **explicit userId**, не покладаємось на ім'я).
+- При сабміті фронт надсилає `content` + витягнуті `mentionedUserIds: string[]`.
+
+### Бекенд
+
+- `POST /orders/:id/comments { content, mentionedUserIds? }`:
+  - якщо `mentionedUserIds` передані — використовуємо їх (надійно);
+  - **fallback**: якщо не передані, парсимо `@[...](id)`-токени з `content`; якщо й тих нема — старий regex по displayName (legacy, best-effort).
+  - валідація: кожен `mentionedUserId` має бути учасником кімнати (інакше ігноруємо — не можна тегнути сторонього).
+- Для кожного валідного mentioned → `notify(event='chat.mention')` (окремо від `chat.new_comment`).
+
+### DB
+
+`OrderComment.mentionedUserIds String[]` — зберігаємо явний список тегнутих (для підсвітки в UI + повторних нотифікацій). Додається у схему разом з реалізацією чату (S2).
