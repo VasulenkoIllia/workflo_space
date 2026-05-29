@@ -1,19 +1,27 @@
-# CLIENT WALLET MODULE
+# CLIENT FINANCIAL ACCOUNT (WALLET) MODULE
 
-> App: Portal (клієнт бачить свій баланс) + Workspace (owner/admin керує)
-> Статус: Проєктування — ledger + admin зараз (S5-сусід), спендинг разом з білінгом (S5)
-> Залежить від: `09-referral` (джерело кредитів), `05-billing` (спендинг), `21-system-monitoring` (audit)
+> App: Portal (клієнт бачить свої рахунки) + Workspace (owner/admin керує)
+> Статус: Проєктування — bonus ledger + admin зараз; money-account + спендинг разом з білінгом (S5)
+> Залежить від: `09-referral` (кредити бонусів), `05-billing` (charges/payments), `06-documents` (інвойси), `21-system-monitoring` (audit)
 > Оновлено: 29 травня 2026
 
 ---
 
 ## Огляд
 
-**Гаманець компанії-клієнта** — єдиний баланс бонусів з повним журналом транзакцій (ledger). Кошти **нараховуються** (кредити) з реферальної програми та ручних коригувань адміна; **списуються** (дебети) на оплату замовлень (реалізація списання — у S5 разом з invoice-flow).
+Фінансовий центр компанії-клієнта — **ДВА рахунки** з повною історією:
 
-Замінює модель «баланс = одне число»: `Company.bonusBalance` лишається **кешем поточного балансу**, а `WalletTransaction` — джерелом істини (ledger), щоб була історія і point-in-time баланс.
+1. **Бонусний рахунок** (`bonus`) — бонуси з рефералів + ручні корекції. Можна списувати на оплату (S5). Ledger = `WalletTransaction`.
+2. **Грошовий рахунок** (`money` / AR — accounts receivable) — реальні гроші: виставлені рахунки (борг), отримані платежі, **куди кожен платіж зараховано**, та похідні стани: **переплата** (prepaid credit), **очікування оплати**, **часткова / неповна оплата**. Повна історія рахунків і платежів клієнта.
 
-**Рішення власника (29.05):** ledger + адмін-екран + редаговані % робимо зараз (проєктування), фактичне СПИСАННЯ на оплату — у S5, бо немає куди списувати поки немає invoice-flow.
+Однакова картина у двох ролях:
+
+- **Клієнт** (Portal `/wallet`) — бачить свої 2 баланси + повну історію «що нарахували, що сплатив, куди пішло».
+- **Admin** (Workspace `/admin/wallet`) — те саме по будь-якій компанії: всі суми, звідки взялися, куди зараховані, хто винен / хто переплатив.
+
+`Company.bonusBalance` = кеш бонусного балансу; `Company.moneyBalance` (нове) = кеш грошового сальдо (− = винен, + = переплата). Джерело істини — ledger-таблиці; кеші оновлюються атомарно.
+
+**Рішення власника (29.05):** bonus ledger + адмін + редаговані % проєктуємо зараз; money-account (AR + allocations + переплати) і списання бонусів — у S5 разом з invoice-flow (бо без рахунків немає що зараховувати).
 
 ---
 
@@ -58,6 +66,88 @@ model WalletTransaction {
 ### Інваріант
 
 `Company.bonusBalance == SUM(credit.amount) − SUM(debit.amount)` для компанії. Кожна зміна балансу — атомарна транзакція: `INSERT WalletTransaction` + `UPDATE company.bonusBalance` в одному `$transaction`. `balanceAfter` пишемо з обчисленого нового балансу (під `SELECT ... FOR UPDATE` на company, щоб уникнути гонки — як у payment race guard, модуль 05).
+
+---
+
+## Грошовий рахунок (money / AR) — S5
+
+Будується на наявних `ServiceCharge`/`Document(invoice)` (борг клієнта) + `Payment` (надходження) + новій `PaymentAllocation` (куди зараховано). Не дублює їх — додає зв'язок і похідні стани.
+
+### PaymentAllocation — «куди зараховано платіж»
+
+Один платіж може покрити кілька рахунків; один рахунок — кількома платежами (часткова оплата). Залишок платежу, не прив'язаний до жодного рахунку → **переплата (prepaid credit)**.
+
+```prisma
+model PaymentAllocation {
+  id        String   @id @default(uuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  chargeId  String                       // ServiceCharge або Document(invoice) id
+  amount    Decimal  @db.Decimal(12, 2)  // скільки цього платежу пішло на цей рахунок
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([paymentId])
+  @@index([chargeId])
+  @@map("payment_allocations")
+}
+```
+
+- `Σ allocation.amount(payment)` ≤ `payment.amount`. Залишок `payment.amount − Σallocations` = аванс без прив'язки → prepaid credit (+ до moneyBalance).
+- `Σ allocation.amount(charge)` vs `charge.amount` → визначає стан рахунку.
+
+### Похідні стани рахунку (для відображення)
+
+| Стан                      | Умова                                         |
+| ------------------------- | --------------------------------------------- |
+| **awaiting** (очікує)     | charge.status=pending, Σalloc = 0             |
+| **partial** (часткова)    | 0 < Σalloc < charge.amount                    |
+| **paid** (оплачено)       | Σalloc ≥ charge.amount                        |
+| **overdue** (прострочено) | awaiting/partial і dueDate < now()            |
+| **overpaid** (переплата)  | Σ payments − Σ charges > 0 → moneyBalance > 0 |
+
+`Company.moneyBalance` (новий кеш) = `Σ confirmed payments − Σ issued charges`. Від'ємний → клієнт винен; додатній → переплата (зараховується на майбутні рахунки).
+
+### Зарахування переплати
+
+Prepaid credit (moneyBalance > 0) автоматично пропонується на нові `ServiceCharge`: створюється `PaymentAllocation` з авансового залишку. Реалізація — S5.
+
+---
+
+## Виписка (statement) — обидва рахунки разом
+
+`GET /wallet/statement?from=&to=` (клієнт) / `GET /admin/wallet/companies/:id/statement` (admin) — зведена історія обох рахунків в одній стрічці:
+
+```json
+{
+  "bonus": { "balance": "47.50" },
+  "money": { "balance": "-120.00", "status": "owes" },
+  "timeline": [
+    {
+      "kind": "charge",
+      "date": "2026-04-01",
+      "title": "Інвойс INV-2026-001",
+      "amount": "-200.00",
+      "state": "partial"
+    },
+    {
+      "kind": "payment",
+      "date": "2026-04-03",
+      "title": "Оплата (картка)",
+      "amount": "+80.00",
+      "allocatedTo": ["INV-2026-001"]
+    },
+    {
+      "kind": "bonus",
+      "date": "2026-04-05",
+      "title": "Реферальний бонус",
+      "amount": "+47.50",
+      "account": "bonus"
+    }
+  ]
+}
+```
+
+Admin-вид ідентичний + фільтр по компанії + трасування «звідки взялося» (sourceId кожного руху). Це і є «повне розуміння всіх сум: що, де, як і звідки» для адміна.
 
 ---
 

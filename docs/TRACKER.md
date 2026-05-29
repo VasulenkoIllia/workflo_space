@@ -166,38 +166,39 @@
 
 ## SPRINT 5 — Billing + Services + Team (Тиждень 6-7)
 
-| ID     | Задача                                                                                     | Модуль        | Хто | Статус | Тест | Deploy |
-| ------ | ------------------------------------------------------------------------------------------ | ------------- | --- | ------ | ---- | ------ |
-| S5-00a | packages/payments — PaymentProvider interface + ManualProvider                             | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-00b | packages/payments — race guard (UNIQUE sourceType+sourceId + FOR UPDATE + idempotency-key) | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-00c | packages/payments — LiqPay/Stripe provider (research у BACKLOG)                            | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-01  | API — /billing/summary, /charges                                                           | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-02  | API — POST /workspace/billing/payments                                                     | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-03  | Advance payment логіка (orderId + type)                                                    | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-04  | ExchangeRate — НБУ API cron (09:10 Kyiv)                                                   | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-05  | API — Services CRUD + assign to company                                                    | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-06  | pg_cron — recurring charges 1-го числа                                                     | [05-billing]  | —   | ⬜     | ⬜   | —      |
-| S5-07  | API — Team invite + rates + earnings                                                       | [12-team]     | —   | ⬜     | ⬜   | —      |
-| S5-08  | API — Company members + permissions                                                        | [01-auth]     | —   | ⬜     | ⬜   | —      |
-| S5-09  | API — Referral bonus при payment                                                           | [09-referral] | —   | ⬜     | ⬜   | —      |
-| S5-10  | API — Loyalty tier update при payment                                                      | [10-loyalty]  | —   | ⬜     | ⬜   | —      |
-| S5-11  | Portal — /billing                                                                          | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-12  | Portal — /referrals                                                                        | [09-referral] | —   | ⬜     | —    | —      |
-| S5-13  | Portal — /loyalty                                                                          | [10-loyalty]  | —   | ⬜     | —    | —      |
-| S5-14  | Workspace — /billing dashboard                                                             | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-15  | Workspace — /billing/payouts                                                               | [12-team]     | —   | ⬜     | —    | —      |
-| S5-16  | Workspace — /services                                                                      | [05-billing]  | —   | ⬜     | —    | —      |
-| S5-17  | Workspace — /team                                                                          | [12-team]     | —   | ⬜     | —    | —      |
-| S5-18  | Workspace — /settings (payment settings, referral)                                         | [13-settings] | —   | ⬜     | —    | —      |
-| S5-20a | Finance — Expense model + migration (recurring/one_time/category)                          | [22-finance]  | —   | ⬜     | ⬜   | —      |
-| S5-20b | Finance — Expense CRUD API (owner-only) + audit                                            | [22-finance]  | —   | ⬜     | ⬜   | —      |
-| S5-20c | Finance — P&L report (revenue − expenses, salary from ExecutorRate)                        | [22-finance]  | —   | ⬜     | ⬜   | —      |
-| S5-20d | Finance — Workspace /finance UI (P&L + expenses table + CSV)                               | [22-finance]  | —   | ⬜     | ⬜   | —      |
-| S5-21a | Wallet — WalletTransaction ledger model + migration + walletCredit/Debit service           | [25-wallet]   | —   | ⬜     | ⬜   | —      |
-| S5-21b | Wallet — referral accrual → wallet credits + ReferralSettings (editable % tiers)           | [25-wallet]   | —   | ⬜     | ⬜   | —      |
-| S5-21c | Wallet — admin /admin/wallet (history + manual adjust + % editor) + Portal /wallet         | [25-wallet]   | —   | ⬜     | —    | —      |
-| S5-21d | Wallet — spending: apply bonuses on invoice (walletDebit in invoice-flow)                  | [25-wallet]   | —   | ⬜     | ⬜   | —      |
-| S5-19  | Deploy Sprint 5 → staging                                                                  | Infra         | —   | ⬜     | —    | 🚀     |
+| ID     | Задача                                                                                        | Модуль        | Хто | Статус | Тест | Deploy |
+| ------ | --------------------------------------------------------------------------------------------- | ------------- | --- | ------ | ---- | ------ |
+| S5-00a | packages/payments — PaymentProvider interface + ManualProvider                                | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-00b | packages/payments — race guard (UNIQUE sourceType+sourceId + FOR UPDATE + idempotency-key)    | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-00c | packages/payments — LiqPay/Stripe provider (research у BACKLOG)                               | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-01  | API — /billing/summary, /charges                                                              | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-02  | API — POST /workspace/billing/payments                                                        | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-03  | Advance payment логіка (orderId + type)                                                       | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-04  | ExchangeRate — НБУ API cron (09:10 Kyiv)                                                      | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-05  | API — Services CRUD + assign to company                                                       | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-06  | pg_cron — recurring charges 1-го числа                                                        | [05-billing]  | —   | ⬜     | ⬜   | —      |
+| S5-07  | API — Team invite + rates + earnings                                                          | [12-team]     | —   | ⬜     | ⬜   | —      |
+| S5-08  | API — Company members + permissions                                                           | [01-auth]     | —   | ⬜     | ⬜   | —      |
+| S5-09  | API — Referral bonus при payment                                                              | [09-referral] | —   | ⬜     | ⬜   | —      |
+| S5-10  | API — Loyalty tier update при payment                                                         | [10-loyalty]  | —   | ⬜     | ⬜   | —      |
+| S5-11  | Portal — /billing                                                                             | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-12  | Portal — /referrals                                                                           | [09-referral] | —   | ⬜     | —    | —      |
+| S5-13  | Portal — /loyalty                                                                             | [10-loyalty]  | —   | ⬜     | —    | —      |
+| S5-14  | Workspace — /billing dashboard                                                                | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-15  | Workspace — /billing/payouts                                                                  | [12-team]     | —   | ⬜     | —    | —      |
+| S5-16  | Workspace — /services                                                                         | [05-billing]  | —   | ⬜     | —    | —      |
+| S5-17  | Workspace — /team                                                                             | [12-team]     | —   | ⬜     | —    | —      |
+| S5-18  | Workspace — /settings (payment settings, referral)                                            | [13-settings] | —   | ⬜     | —    | —      |
+| S5-20a | Finance — Expense model + migration (recurring/one_time/category)                             | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20b | Finance — Expense CRUD API (owner-only) + audit                                               | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20c | Finance — P&L report (revenue − expenses, salary from ExecutorRate)                           | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20d | Finance — Workspace /finance UI (P&L + expenses table + CSV)                                  | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-21a | Wallet — WalletTransaction ledger model + migration + walletCredit/Debit service              | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-21b | Wallet — referral accrual → wallet credits + ReferralSettings (editable % tiers)              | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-21c | Wallet — money account: PaymentAllocation + moneyBalance + states (overpaid/awaiting/partial) | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-21d | Wallet — unified statement (2 accounts + timeline) Portal /wallet + admin /admin/wallet       | [25-wallet]   | —   | ⬜     | —    | —      |
+| S5-21e | Wallet — admin (manual adjust + % editor) + spending bonus/prepaid on invoice                 | [25-wallet]   | —   | ⬜     | ⬜   | —      |
+| S5-19  | Deploy Sprint 5 → staging                                                                     | Infra         | —   | ⬜     | —    | 🚀     |
 
 ---
 
