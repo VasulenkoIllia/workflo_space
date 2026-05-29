@@ -56,7 +56,7 @@
 | S1-01 | packages/notifications — email functions                                | [07-notifications] | —   | ✅     | ✅   | —      |
 | S1-02 | packages/notifications — telegram adapter                               | [07-notifications] | —   | ✅     | ✅   | —      |
 | S1-03 | packages/notifications — notify() unified + matrix migration            | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-04 | POST /auth/register (profile + company)                                 | [01-auth]          | —   | 🔄     | ⬜   | —      |
+| S1-04 | POST /auth/register (profile + company)                                 | [01-auth]          | —   | ✅     | ✅   | —      |
 | S1-05 | POST /auth/login                                                        | [01-auth]          | —   | ⬜     | ⬜   | —      |
 | S1-06 | POST /auth/logout                                                       | [01-auth]          | —   | ⬜     | ⬜   | —      |
 | S1-07 | POST /auth/refresh (token rotation)                                     | [01-auth]          | —   | ⬜     | ⬜   | —      |
@@ -260,7 +260,7 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 23      | 4       | 3         | 0           |
+| S1 Auth       | 23      | 5       | 4         | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
