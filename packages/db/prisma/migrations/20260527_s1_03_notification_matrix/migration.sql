@@ -10,15 +10,15 @@
 -- All steps are forward-only and idempotent where possible. Each step is reversible
 -- with a follow-up migration if needed (see down_<step>.sql siblings — not Prisma-managed).
 
-BEGIN;
-
--- ─── 1. OrderInternalStatus: rename 'estimated' → 'estimating' ─────────────
--- Postgres ALTER TYPE ... RENAME VALUE is atomic and safe; existing rows are
--- updated transparently.
+-- ─── 0. Enum changes — MUST run OUTSIDE a transaction ──────────────────────
+-- Postgres forbids `ALTER TYPE ... ADD VALUE` inside a transaction block on
+-- many versions (and it is non-transactional regardless), so it is issued here
+-- in autocommit, before BEGIN. `RENAME VALUE` is transaction-safe but kept here
+-- too so all enum DDL is grouped and never mixes with the data transaction.
 ALTER TYPE "OrderInternalStatus" RENAME VALUE 'estimated' TO 'estimating';
-
--- ─── 2. DocumentType: add 'reconciliation_act' ─────────────────────────────
 ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'reconciliation_act';
+
+BEGIN;
 
 -- ─── 3a. NotificationSettings refactor ─────────────────────────────────────
 -- Backfill: capture each row's old flat-boolean state, drop them, add the new

@@ -62,6 +62,15 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         }
         const companyId = invite.companyId
         await prisma.$transaction(async (tx) => {
+          // Atomic claim: only the first concurrent accept flips usedAt; a racing
+          // second request sees count=0 and aborts before mutating membership.
+          const claimed = await tx.invite.updateMany({
+            where: { id: invite.id, usedAt: null },
+            data: { usedAt: new Date() },
+          })
+          if (claimed.count === 0) {
+            throw gone()
+          }
           await tx.companyMember.upsert({
             where: { companyId_profileId: { companyId, profileId } },
             update: {}, // already a member → idempotent
@@ -72,7 +81,6 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
               permissions: (invite.permissions as object) ?? {},
             },
           })
-          await tx.invite.update({ where: { id: invite.id }, data: { usedAt: new Date() } })
         })
 
         writeAuditAsync(request.log, {
@@ -92,8 +100,14 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
 
       // executor invite → promote profile to executor
       await prisma.$transaction(async (tx) => {
+        const claimed = await tx.invite.updateMany({
+          where: { id: invite.id, usedAt: null },
+          data: { usedAt: new Date() },
+        })
+        if (claimed.count === 0) {
+          throw gone()
+        }
         await tx.profile.update({ where: { id: profileId }, data: { role: 'executor' } })
-        await tx.invite.update({ where: { id: invite.id }, data: { usedAt: new Date() } })
       })
 
       writeAuditAsync(request.log, {

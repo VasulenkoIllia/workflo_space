@@ -43,9 +43,9 @@ function wireValidToken() {
   // Execute the real callback with a complete tx so issueRefreshToken() runs
   // (it calls tx.refreshToken.create and returns its own random token).
   transaction.mockImplementation(async (cb: (tx: Record<string, unknown>) => unknown) =>
-    cb({ refreshToken: { update: refreshTokenUpdate, create: refreshTokenCreate } })
+    cb({ refreshToken: { updateMany: refreshTokenUpdateMany, create: refreshTokenCreate } })
   )
-  refreshTokenUpdate.mockResolvedValue({})
+  refreshTokenUpdateMany.mockResolvedValue({ count: 1 })
   refreshTokenCreate.mockResolvedValue({})
   auditLogCreate.mockResolvedValue({})
 }
@@ -64,9 +64,9 @@ describe('POST /auth/refresh', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(typeof res.json().data.accessToken).toBe('string')
-    // old token revoked (by id) + new token issued inside the transaction
-    expect(refreshTokenUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'rt-1' } })
+    // old token revoked atomically (conditional on revokedAt:null) + new issued
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'rt-1', revokedAt: null } })
     )
     expect(refreshTokenCreate).toHaveBeenCalledOnce()
     // a fresh cookie is set, and it is NOT the old token value
@@ -154,31 +154,62 @@ describe('POST /auth/logout', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.clearAllMocks())
 
-  it('revokes the token from body and clears the cookie', async () => {
+  const CLAIMS = {
+    sub: 'profile-1',
+    email: 'u@e.com',
+    role: 'client',
+    activeCompanyId: null,
+    memberships: [],
+  }
+
+  it('requires authentication → 401 without a token', async () => {
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/logout', payload: {} })
+    expect(res.statusCode).toBe(401)
+    expect(refreshTokenUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('revokes a single token scoped to the authenticated user + clears cookie', async () => {
     refreshTokenUpdateMany.mockResolvedValue({ count: 1 })
-    refreshTokenFindUnique.mockResolvedValue({ profileId: 'profile-1' })
     auditLogCreate.mockResolvedValue({})
     const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS as never)
     const res = await app.inject({
       method: 'POST',
       url: '/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
       payload: { refreshToken: 'some-token' },
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.loggedOut).toBe(true)
+    // Scoped to profileId — a leaked token can't log out someone else.
     expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { token: 'some-token', revokedAt: null } })
+      expect.objectContaining({
+        where: { token: 'some-token', profileId: 'profile-1', revokedAt: null },
+      })
     )
-    // cookie cleared (Max-Age=0 / Expires in the past)
     expect(String(res.headers['set-cookie'])).toContain('refresh_token=')
     await app.close()
   })
 
-  it('is idempotent — 200 even with no token', async () => {
+  it('revokes ALL the user tokens when no body token (logout everywhere)', async () => {
+    refreshTokenUpdateMany.mockResolvedValue({ count: 3 })
+    auditLogCreate.mockResolvedValue({})
     const app = buildApp()
-    const res = await app.inject({ method: 'POST', url: '/auth/logout', payload: {} })
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS as never)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    })
     expect(res.statusCode).toBe(200)
-    expect(refreshTokenUpdateMany).not.toHaveBeenCalled()
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { profileId: 'profile-1', revokedAt: null } })
+    )
     await app.close()
   })
 })

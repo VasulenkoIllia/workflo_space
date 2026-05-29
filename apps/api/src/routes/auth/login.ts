@@ -63,6 +63,8 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
       }
 
       if (!profile.isActive) {
+        // Same generic 401 as bad credentials — never reveal (via a distinct
+        // 403) that a known-good credential belongs to a deactivated account.
         writeAuditAsync(request.log, {
           actorId: profile.id,
           action: 'auth.login_failed',
@@ -71,7 +73,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
           result: 'denied',
           metadata: { reason: 'account_deactivated', ip: request.ip },
         })
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Акаунт деактивовано', 403)
+        throw invalidCredentials()
       }
 
       const memberRows = await prisma.companyMember.findMany({

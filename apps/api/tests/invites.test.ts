@@ -230,10 +230,11 @@ describe('POST /invite/:token/accept', () => {
       expiresAt: new Date(Date.now() + 100000),
     })
     profileFindUnique.mockResolvedValue({ id: 'member-1', email: 'member@e.com' })
+    inviteUpdateMany.mockResolvedValue({ count: 1 }) // atomic claim succeeds
     transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
         companyMember: { upsert: companyMemberUpsert },
-        invite: { update: inviteUpdate },
+        invite: { updateMany: inviteUpdateMany },
       })
     )
     auditLogCreate.mockResolvedValue({})

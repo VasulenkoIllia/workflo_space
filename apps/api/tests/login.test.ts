@@ -121,12 +121,12 @@ describe('POST /auth/login', () => {
     await app2.close()
   })
 
-  it('returns 403 for a deactivated account', async () => {
+  it('returns generic 401 for a deactivated account (no enumeration)', async () => {
     wireProfile({ isActive: false })
     const app = buildApp()
     const res = await app.inject({ method: 'POST', url: '/auth/login', payload: validBody })
-    expect(res.statusCode).toBe(403)
-    expect(res.json().error.code).toBe('FORBIDDEN')
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe('UNAUTHORIZED')
     await app.close()
   })
 

@@ -41,8 +41,9 @@ function isAllowedOrigin(request: FastifyRequest): boolean {
   }
 
   const allowed = allowedOrigins()
-  // If no allowlist is configured, fall back to allowing (SameSite=Lax still guards).
-  if (allowed.length === 0) return true
+  // Fail CLOSED in production if no allowlist is configured — never silently
+  // disable the CSRF guard. In dev, allow (DX).
+  if (allowed.length === 0) return process.env.NODE_ENV !== 'production'
   return allowed.includes(origin)
 }
 
@@ -96,12 +97,18 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
       }))
       const activeCompanyId = memberships[0]?.companyId ?? null
 
-      // Rotate: revoke the used token and issue a fresh one in one transaction.
+      // Rotate atomically: the conditional updateMany (revokedAt IS NULL in the
+      // WHERE) is the optimistic lock — a concurrent request that already rotated
+      // this token sees count=0 and is rejected, so a token can't be forked into
+      // two valid successors.
       const rotated = await prisma.$transaction(async (tx) => {
-        await tx.refreshToken.update({
-          where: { id: stored.id },
+        const revoked = await tx.refreshToken.updateMany({
+          where: { id: stored.id, revokedAt: null },
           data: { revokedAt: new Date() },
         })
+        if (revoked.count === 0) {
+          throw invalid()
+        }
         return issueRefreshToken(tx, stored.profileId)
       })
 

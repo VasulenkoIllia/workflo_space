@@ -40,10 +40,12 @@ const getInviteRoute: FastifyPluginAsync = (fastify) => {
         ? 'expired'
         : 'pending'
 
+    // NB: invite.email is intentionally NOT returned — this endpoint is public
+    // (token may be guessable as a UUID) and the email is PII. The email match
+    // is enforced at accept-time against the authenticated user.
     return reply.status(200).send({
       success: true,
       data: {
-        email: invite.email,
         type: invite.type,
         status,
         inviterName: invite.invitedBy?.name ?? null,
