@@ -1,4 +1,5 @@
 # WORKFLO.SPACE — Концепція v3.0
+
 > Статус: **ФІНАЛЬНА. Готова до технічного плану.**
 > Дата: 12 квітня 2026
 > Режим проекту (AGENTS.md): **Pro**
@@ -10,6 +11,7 @@
 Workflo.space — цифровий офіс команди автоматизаторів. Бізнес знаходить рішення своїх проблем, переконується через кейси і отримує зручний інструмент для спільної роботи.
 
 **Дві core концепції:**
+
 1. Ми вирішуємо бізнес-проблеми (не продаємо технології)
 2. Команда з досвідом, доведеним через кейси з конкретними цифрами
 
@@ -103,6 +105,7 @@ client_status    →  що бачить клієнт (спрощений)
 ```
 
 **Client statuses (4, незмінні):**
+
 - Нова заявка / New request
 - В роботі / In progress
 - На перевірці / Under review
@@ -110,17 +113,17 @@ client_status    →  що бачить клієнт (спрощений)
 
 **Internal statuses (фіксовані в MVP):**
 
-| Internal | → Client |
-|---|---|
-| new | Нова заявка |
-| assigned | Нова заявка |
-| in_progress | В роботі |
-| stuck | В роботі |
-| internal_review | В роботі |
-| testing | На перевірці |
-| delivered | На перевірці |
-| revision | В роботі |
-| closed | Завершено |
+| Internal        | → Client     |
+| --------------- | ------------ |
+| new             | Нова заявка  |
+| assigned        | Нова заявка  |
+| in_progress     | В роботі     |
+| stuck           | В роботі     |
+| internal_review | В роботі     |
+| testing         | На перевірці |
+| delivered       | На перевірці |
+| revision        | В роботі     |
+| closed          | Завершено    |
 
 Owner може вручну перевизначити `client_status` незалежно від внутрішнього.
 
@@ -231,6 +234,7 @@ MonobankProvider       — Phase 2, Monobank acquiring
 Єдиний `PaymentProvider` інтерфейс: `createPaymentLink()` + `handleWebhook()` + `verifySignature()`. Додавання нового провайдера = новий файл, без змін в існуючому коді.
 
 При підтвердженні оплати фіксується:
+
 ```
 provider:          manual | liqpay | stripe | monobank
 provider_payment_id: ID транзакції в провайдері (якщо є)
@@ -242,6 +246,7 @@ payment_reference: номер переказу або txid
 ### Спосіб оплати:
 
 При підтвердженні оплати фіксується:
+
 ```
 payment_method: bank_transfer | cash | crypto | freelance_platform | other
 payment_reference: номер транзакції або ID на біржі
@@ -271,6 +276,7 @@ executor_rates:
 - При кожній оплаті реферала → реферер отримує % на бонусний баланс
 
 **Прогресивна ставка:**
+
 ```
 $0–200 зароблено   → 10%
 $200–500           → 12%
@@ -297,6 +303,7 @@ VIP     $5,000+      →  15%
 ## НОТИФІКАЦІЇ
 
 ### Автоматичні (тригер → система → клієнт):
+
 - Зміна статусу замовлення
 - Нове повідомлення в чаті
 - Виставлена оцінка (потрібне підтвердження)
@@ -305,10 +312,12 @@ VIP     $5,000+      →  15%
 - Нотифікація виконавцю при призначенні задачі
 
 ### Ручні (від owner):
+
 - Вибір клієнта → шаблон або довільний текст → email / Telegram / обидва
 - Шаблони: нагадування про оплату, підтвердження, тощо
 
 ### Клієнт налаштовує:
+
 - Email ✓/✗, Telegram ✓/✗ (per тип події)
 - Phase 3: SMS ✓/✗
 
@@ -325,12 +334,14 @@ Future:   Push notifications (мобільний застосунок)
 ### OTP — гнучка система:
 
 OTP можуть надходити по різних каналах (окрема таблиця `otp_tokens`):
+
 ```
 purpose:  telegram_link | two_fa | phone_verify | email_verify
 channel:  email (MVP) → telegram → sms (Phase 3)
 ```
 
 Telegram bot:
+
 - Окремий сервіс для push-нотифікацій
 - Клієнт прив'язує акаунт через `/start {OTP код}` з порталу
 - Phase 3: інтерактивні команди (`/status`, `/tasks`)
@@ -339,29 +350,30 @@ Telegram bot:
 
 ## ТЕХНІЧНИЙ СТЕК (фінальний)
 
-| Компонент | Рішення |
-|---|---|
-| Landing | Next.js 15 (App Router, SSR/ISR) |
-| Portal | React 18 + Vite SPA |
-| API | Node.js + Fastify |
-| Bot | grammY |
-| DB | PostgreSQL (Docker) |
-| ORM | Prisma |
-| Email (нотифікації) | Nodemailer + Mailcow |
-| Корпоративна пошта | Mailcow на Hetzner |
-| Files | /uploads локально + nginx (MVP) → Hetzner Object Storage (Phase 2) |
-| Realtime чат | SSE + PostgreSQL LISTEN/NOTIFY |
-| Cron jobs | pg_cron (recurring charges, archiving) |
-| Hosting | Hetzner (власний сервер) |
-| Proxy | Traefik (вже є) |
-| CI/CD | GitHub Actions → SSH → docker compose |
-| Монорепо | Turborepo + pnpm |
-| Analytics | Plausible або Google Analytics 4 |
-| Error monitoring | Sentry (free tier) |
-| Курс валют | НБУ API |
-| OG images | Next.js ImageResponse (автогенерація) |
+| Компонент           | Рішення                                                            |
+| ------------------- | ------------------------------------------------------------------ |
+| Landing             | Next.js 15 (App Router, SSR/ISR)                                   |
+| Portal              | React 18 + Vite SPA                                                |
+| API                 | Node.js + Fastify                                                  |
+| Bot                 | grammY                                                             |
+| DB                  | PostgreSQL (Docker)                                                |
+| ORM                 | Prisma                                                             |
+| Email (нотифікації) | Nodemailer + Mailcow                                               |
+| Корпоративна пошта  | Mailcow на Hetzner                                                 |
+| Files               | /uploads локально + nginx (MVP) → Hetzner Object Storage (Phase 2) |
+| Realtime чат        | SSE + PostgreSQL LISTEN/NOTIFY                                     |
+| Cron jobs           | pg_cron (recurring charges, archiving)                             |
+| Hosting             | Hetzner (власний сервер)                                           |
+| Proxy               | Traefik (вже є)                                                    |
+| CI/CD               | GitHub Actions → SSH → docker compose                              |
+| Монорепо            | Turborepo + pnpm                                                   |
+| Analytics           | Plausible або Google Analytics 4                                   |
+| Error monitoring    | Sentry (free tier)                                                 |
+| Курс валют          | НБУ API                                                            |
+| OG images           | Next.js ImageResponse (автогенерація)                              |
 
 **Email адреси:**
+
 - `hello@workflo.space` — загальний контакт на лендінгу
 - `support@workflo.space` — підтримка клієнтів
 - `noreply@workflo.space` — автоматичні листи
@@ -613,19 +625,20 @@ workflo.space/                    ← Монорепо (Turborepo + pnpm)
 
 **Розподіл по доменах:**
 
-| App | Домен | Аудиторія |
-|---|---|---|
-| landing | workflo.space | Всі відвідувачі, SEO |
-| portal | portal.workflo.space | Клієнти (компанії) |
-| workspace | work.workflo.space | Команда (owner + executors) |
-| api | api.workflo.space | Backend для portal і workspace |
-| bot | — | Telegram нотифікації |
+| App       | Домен                | Аудиторія                      |
+| --------- | -------------------- | ------------------------------ |
+| landing   | workflo.space        | Всі відвідувачі, SEO           |
+| portal    | portal.workflo.space | Клієнти (компанії)             |
+| workspace | work.workflo.space   | Команда (owner + executors)    |
+| api       | api.workflo.space    | Backend для portal і workspace |
+| bot       | —                    | Telegram нотифікації           |
 
 **Ізоляція workspace:**
 `work.workflo.space` закритий на рівні Traefik — IP whitelist для команди.
 Клієнт фізично не може відкрити навіть якщо знає URL.
 
 **Спільний код через packages:**
+
 ```
 packages/ui            ← portal і workspace мають однаковий дизайн
 packages/db            ← один Prisma client для api
@@ -634,6 +647,7 @@ packages/notifications ← логіка email + Telegram
 ```
 
 **Docker Compose сервіси:**
+
 ```
 traefik     — reverse proxy + SSL (вже є на сервері)
 postgres    — PostgreSQL 16
@@ -646,6 +660,7 @@ mailcow     — Email server (mail.workflo.space)
 ```
 
 **Середовища:**
+
 - `main` → production
 - `dev` → staging (dev.workflo.space, dev-portal.workflo.space, dev-work.workflo.space)
 - Окрема PostgreSQL БД для staging
@@ -660,6 +675,7 @@ mailcow     — Email server (mail.workflo.space)
 Hero → Проблеми які вирішуємо → Як працюємо (3 кроки) → Кейси → Команда → Моделі роботи → Telegram канал → FAQ → CTA
 
 **Окремі сторінки:**
+
 - `/cases` + `/cases/[slug]` — кейси з SEO
 - `/blog` + `/blog/[slug]` — статті
 - `/team` — команда (5 осіб)
@@ -675,6 +691,7 @@ Hero → Проблеми які вирішуємо → Як працюємо (3
 ## BLOG І КОНТЕНТ — ПАЙПЛАЙН
 
 ### Типи контенту:
+
 - `article` — стаття в блозі (поради, думки, автоматизація)
 - `case_study` — кейс виконаної роботи (проблема → рішення → результат)
 
@@ -699,12 +716,14 @@ POST /workspace/content/ai-generate → OpenAI API (system prompt з SEO пра�
 ```
 
 **Ключове рішення:** контент зберігається як **Markdown** (не TipTap JSON).
+
 - AI генерує Markdown → простий формат, легко читати і редагувати вручну
 - На лендінгу рендериться через `react-markdown` → HTML
 - Можна регенерувати будь-коли з тим самим або новим prompt
 - Не потрібен складний rich text editor — простий `<textarea>` з preview
 
 **AI System Prompt (SEO-орієнтований):**
+
 ```
 Ти SEO-копірайтер. Генеруй статті у форматі Markdown:
 - H1: заголовок з ключовим словом
@@ -717,6 +736,7 @@ POST /workspace/content/ai-generate → OpenAI API (system prompt з SEO пра�
 ```
 
 ### DB (blog_posts):
+
 ```
 id, slug (unique), type (article | case_study),
 title_uk, title_en,
@@ -729,12 +749,14 @@ created_at, updated_at, published_at
 ```
 
 ### ISR стратегія:
+
 - `/blog` і `/cases` — `revalidate: 3600` (фоново, якщо не тригерити вручну)
 - При публікації/оновленні → On-demand revalidation через `revalidatePath`
 - `/blog/[slug]` — генерується при першому відвідуванні, кешується
 
 ### SEO для кожної статті:
-- `<title>` і `<meta description>` з title_* і excerpt_*
+
+- `<title>` і `<meta description>` з title*\* і excerpt*\*
 - `hreflang` між UA і EN версіями
 - Schema markup: `Article` (blog) / `Article` + `HowTo` (case_study)
 - OG image — автогенерація через `@vercel/og` (заголовок + логотип)
@@ -765,6 +787,7 @@ created_at, updated_at, published_at
 Щільний, функціональний. Більше даних на екрані. Закритий для зовнішніх.
 
 **Власник:**
+
 ```
 /                   — overview: revenue, борги, активні задачі, команда
 /orders             — всі замовлення (kanban + таблиця + пошук)
@@ -782,6 +805,7 @@ created_at, updated_at, published_at
 ```
 
 **Виконавець (обмежений доступ):**
+
 ```
 /                   — моє завантаження, дедлайни, заробіток місяця
 /tasks              — мої задачі (kanban)
@@ -796,6 +820,7 @@ created_at, updated_at, published_at
 ### ✅ Входить в MVP:
 
 **Лендінг:**
+
 - Головна (всі секції, реальний контент)
 - Blog + кейси (AI пайплайн)
 - /cases, /blog, /team, /stack, /status, /terms, /privacy
@@ -803,6 +828,7 @@ created_at, updated_at, published_at
 - SEO + OG images + Analytics
 
 **portal.workflo.space — Portal (клієнти):**
+
 - Реєстрація (створює компанію) / логін / скидання пароля
 - Запрошення членів компанії + налаштування їх прав
 - Вітальний email після реєстрації
@@ -817,6 +843,7 @@ created_at, updated_at, published_at
 - Підтримка: кнопка "Написати в Telegram/email"
 
 **work.workflo.space — Workspace (виконавець):**
+
 - Логін через invite
 - Kanban своїх задач по internal_status
 - Деталь задачі + зміна статусу + internal коментарі
@@ -824,6 +851,7 @@ created_at, updated_at, published_at
 - Профіль + своя винагорода по проектах
 
 **work.workflo.space — Workspace (власник):**
+
 - Всі замовлення (kanban + таблиця + пошук + фільтри)
 - Повне управління замовленням + internal tasks
 - Картки клієнтів (задачі, білінг, loyalty, нотатки)
@@ -836,6 +864,7 @@ created_at, updated_at, published_at
 - Налаштування реферальної програми
 
 **Інфраструктура:**
+
 - Монорепо + Docker Compose + Traefik
 - CI/CD: GitHub Actions → Hetzner
 - Dev + prod середовища розділені
@@ -847,18 +876,18 @@ created_at, updated_at, published_at
 
 ### ❌ Не в MVP:
 
-| Функція | Фаза |
-|---|---|
-| Stripe / LiqPay | Phase 2 |
-| Invoice PDF | Phase 2 |
-| 2FA (всі акаунти) | Phase 2 |
-| Hetzner Object Storage | Phase 2 |
-| Кастомні internal статуси | Phase 2 |
-| Авто-шаблонні задачі (cron) | Phase 2 |
-| Telegram bot команди клієнта | Phase 3 |
-| Клієнтська аналітика / charts | Phase 3 |
+| Функція                              | Фаза    |
+| ------------------------------------ | ------- |
+| Stripe / LiqPay                      | Phase 2 |
+| Invoice PDF                          | Phase 2 |
+| 2FA (всі акаунти)                    | Phase 2 |
+| Hetzner Object Storage               | Phase 2 |
+| Кастомні internal статуси            | Phase 2 |
+| Авто-шаблонні задачі (cron)          | Phase 2 |
+| Telegram bot команди клієнта         | Phase 3 |
+| Клієнтська аналітика / charts        | Phase 3 |
 | VIP пріоритет і виділений виконавець | Phase 3 |
-| Мобільний застосунок | Future |
+| Мобільний застосунок                 | Future  |
 
 ---
 
@@ -866,13 +895,13 @@ created_at, updated_at, published_at
 
 ### Типи документів
 
-| Тип | Коли створюється | На основі чого |
-|---|---|---|
-| `contract` — Договір | При старті роботи | Шаблон + дані клієнта + опис задачі |
-| `advance_invoice` — Авансовий рахунок | До початку (передоплата) | Оціночна сума задачі |
-| `invoice` — Рахунок-фактура | Після завершення | Фінальна сума (`totalAmount`) |
-| `completion_act` — Акт виконаних робіт | Після прийняття клієнтом | Задача + результат |
-| `specification` — Специфікація | На вимогу | Вся інформація по задачі |
+| Тип                                    | Коли створюється         | На основі чого                      |
+| -------------------------------------- | ------------------------ | ----------------------------------- |
+| `contract` — Договір                   | При старті роботи        | Шаблон + дані клієнта + опис задачі |
+| `advance_invoice` — Авансовий рахунок  | До початку (передоплата) | Оціночна сума задачі                |
+| `invoice` — Рахунок-фактура            | Після завершення         | Фінальна сума (`totalAmount`)       |
+| `completion_act` — Акт виконаних робіт | Після прийняття клієнтом | Задача + результат                  |
+| `specification` — Специфікація         | На вимогу                | Вся інформація по задачі            |
 
 ### Workflow
 
@@ -894,6 +923,7 @@ ACT-2026-0001   ← completion_act
 SPEC-2026-0001  ← specification
 CTR-2026-0001   ← contract
 ```
+
 Лічильник по типу + рік (скидається 1 січня).
 
 ### Специфікація — особливий тип
@@ -960,17 +990,18 @@ document_counters:
 
 **Правило:** кожен текст в системі існує в двох мовах. Немає виключень.
 
-| App | Бібліотека | Стратегія |
-|---|---|---|
-| landing | `next-intl` | `/uk/...` і `/en/...`, дефолт `/uk/` |
-| portal | `react-i18next` | мова з `profile.language`, URL без префіксу |
-| workspace | `react-i18next` | те саме |
-| API помилки | custom | `Accept-Language` або `profile.language` |
-| Email листи | custom templates | `profile.language` |
-| Telegram bot | custom | `profile.language` |
-| PDF документи | custom | `profile.language` |
+| App           | Бібліотека       | Стратегія                                   |
+| ------------- | ---------------- | ------------------------------------------- |
+| landing       | `next-intl`      | `/uk/...` і `/en/...`, дефолт `/uk/`        |
+| portal        | `react-i18next`  | мова з `profile.language`, URL без префіксу |
+| workspace     | `react-i18next`  | те саме                                     |
+| API помилки   | custom           | `Accept-Language` або `profile.language`    |
+| Email листи   | custom templates | `profile.language`                          |
+| Telegram bot  | custom           | `profile.language`                          |
+| PDF документи | custom           | `profile.language`                          |
 
 **Переклади живуть у `packages/i18n`:**
+
 ```
 packages/i18n/locales/
   uk/common.json, orders.json, billing.json, errors.json, documents.json
@@ -992,20 +1023,27 @@ packages/i18n/locales/
 ```css
 /* packages/ui/src/tokens/themes.css */
 :root {
-  --bg-primary:    #ffffff;   --bg-secondary:  #f9fafb;
-  --text-primary:  #111827;   --text-secondary:#6b7280;
-  --border:        #e5e7eb;   --accent:        #2563eb;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
 }
 .dark {
-  --bg-primary:    #0f172a;   --bg-secondary:  #1e293b;
-  --text-primary:  #f1f5f9;   --text-secondary:#94a3b8;
-  --border:        #334155;   --accent:        #3b82f6;
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border: #334155;
+  --accent: #3b82f6;
 }
 ```
 
 3 варіанти для користувача: **Light | Dark | System** (слідує за ОС).
 
 **Зберігання:**
+
 - `localStorage` — миттєво, без flash при завантаженні
 - `profile.theme` (light | dark | system) — sync між пристроями
 
@@ -1025,21 +1063,23 @@ Phase 2:  HetznerStorageAdapter → Hetzner Object Storage (S3-compatible)
 ```
 
 **Структура на диску / в Storage:**
+
 ```
 orders/{order_id}/{uuid}_{original_name}.ext   ← файли задач
 documents/{document_id}.pdf                    ← згенеровані PDF
 ```
 
 **Міграція Local → Hetzner:**
+
 1. `rclone sync /srv/uploads hetzner:workflo-uploads`
 2. `STORAGE_ADAPTER=hetzner` в ENV → restart API
 3. Через тиждень видаляємо локальні файли
 
 ### Бекапи
 
-| Фаза | Де зберігаються | Retention |
-|---|---|---|
-| MVP | `/srv/workflo/production/backups/` (сервер) | 14 днів |
+| Фаза    | Де зберігаються                              | Retention                  |
+| ------- | -------------------------------------------- | -------------------------- |
+| MVP     | `/srv/workflo/production/backups/` (сервер)  | 14 днів                    |
 | Phase 2 | Hetzner Object Storage `workflo-backups/db/` | 90 днів (lifecycle policy) |
 
 Phase 2: `rclone copy backup.sql.gz hetzner:workflo-backups/db/` в backup.sh.
@@ -1051,6 +1091,7 @@ Phase 2: `rclone copy backup.sql.gz hetzner:workflo-backups/db/` в backup.sh.
 **Система проста, інформативна, інтуїтивна.** Конкретні правила:
 
 ### Feedback на кожну дію
+
 - Кнопка при кліку → disabled + spinner (не можна натиснути двічі)
 - Успіх → toast/notification "Збережено" (2-3 сек, зникає автоматично)
 - **Помилка → ЗАВЖДИ видима в UI**: toast з причиною + кнопка знову активна
@@ -1059,34 +1100,39 @@ Phase 2: `rclone copy backup.sql.gz hetzner:workflo-backups/db/` в backup.sh.
 - **Критична помилка** (500, timeout) → modal з текстом і кнопкою "Повторити"
 
 ### Деструктивні дії
+
 - Завжди confirmation dialog: "Видалити замовлення 'Назва'? Це незворотньо."
 - Червона кнопка "Видалити" тільки в confirmation, не в звичайному UI
 
 ### Loading states
+
 - **Skeleton** замість spinner для списків і карток (менше "стрибків" layout)
 - **Optimistic updates** для зміни статусу — показуємо результат одразу, відкочуємо при помилці
 
 ### Empty states
+
 - Порожній список задач → ілюстрація/іконка + "Ще немає задач. Створити першу?" + CTA кнопка
 - Не просто порожня таблиця
 
 ### Адаптивність (Responsive)
 
-| App | Пристрій | Пріоритет |
-|---|---|---|
-| Landing | Mobile + Tablet + Desktop | Обов'язково, mobile-first (SEO) |
-| Portal | Mobile + Tablet + Desktop | Обов'язково (клієнти заходять з телефону) |
-| Workspace | Tablet + Desktop | Desktop-first, мінімум для планшета |
+| App       | Пристрій                  | Пріоритет                                 |
+| --------- | ------------------------- | ----------------------------------------- |
+| Landing   | Mobile + Tablet + Desktop | Обов'язково, mobile-first (SEO)           |
+| Portal    | Mobile + Tablet + Desktop | Обов'язково (клієнти заходять з телефону) |
+| Workspace | Tablet + Desktop          | Desktop-first, мінімум для планшета       |
 
 Брейкпоінти (Tailwind): `sm` 640px / `md` 768px / `lg` 1024px / `xl` 1280px
 
 ### Мова помилок
+
 - API помилки — зрозумілою мовою, не технічні коди
 - "Email вже використовується" а не "Unique constraint violation"
 - Мовою `profile.language` або `Accept-Language` header
 - **Всі серверні помилки** відображаються в UI (toast/popup/inline) — жодна помилка не "проковтується"
 
 ### Accessibility (мінімум)
+
 - `aria-label` на іконочних кнопках
 - Keyboard navigation для модальних вікон (Escape → закрити, Tab → фокус)
 - Достатній контраст тексту (WCAG AA мінімум)
@@ -1129,19 +1175,20 @@ Telegram канал між задачами → Залишається в кон
 
 `packages/types/src/enums.ts` + `constants.ts.INTERNAL_TO_CLIENT_STATUS`:
 
-| Internal (9) | Client (4) |
-|---|---|
-| new | in_progress |
-| clarification | in_progress |
-| estimating | in_progress |
-| in_progress | in_progress |
-| on_hold | in_progress |
-| review | pending_approval |
-| revision | in_progress |
-| done | completed |
-| cancelled | cancelled |
+| Internal (9)  | Client (4)       |
+| ------------- | ---------------- |
+| new           | in_progress      |
+| clarification | in_progress      |
+| estimating    | in_progress      |
+| in_progress   | in_progress      |
+| on_hold       | in_progress      |
+| review        | pending_approval |
+| revision      | in_progress      |
+| done          | completed        |
+| cancelled     | cancelled        |
 
 **Зміни vs CONCEPT v2 baseline:**
+
 - `estimated` → `estimating` (verb form, S1-03 migration).
 - Видалено `approved` зі шкали (злито в transition estimating→in_progress).
 - OrderClientStatus: `PENDING/IN_WORK/DONE` → `IN_PROGRESS/PENDING_APPROVAL/COMPLETED`.
@@ -1161,6 +1208,7 @@ Telegram канал між задачами → Залишається в кон
 - **19-reports**: time/revenue/debtors звіти для owner.
 - **20-admin-settings**: templates editor, multi-SMTP, branding, nomenclature, departments, cron monitoring.
 - **21-system-monitoring**: Sentry + dashboard + audit log.
+- **22-finance-expenses**: облік витрат (recurring/one_time/ЗП) + P&L звіт (Дохід − Витрати = Прибуток). Фаза 1 — загальний P&L; Фаза 2 — маржа по клієнтах (cost allocation).
 
 ### Нові foundation docs
 

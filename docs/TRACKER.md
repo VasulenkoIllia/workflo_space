@@ -185,6 +185,10 @@
 | S5-16  | Workspace — /services                                                                      | [05-billing]  | —   | ⬜     | —    | —      |
 | S5-17  | Workspace — /team                                                                          | [12-team]     | —   | ⬜     | —    | —      |
 | S5-18  | Workspace — /settings (payment settings, referral)                                         | [13-settings] | —   | ⬜     | —    | —      |
+| S5-20a | Finance — Expense model + migration (recurring/one_time/category)                          | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20b | Finance — Expense CRUD API (owner-only) + audit                                            | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20c | Finance — P&L report (revenue − expenses, salary from ExecutorRate)                        | [22-finance]  | —   | ⬜     | ⬜   | —      |
+| S5-20d | Finance — Workspace /finance UI (P&L + expenses table + CSV)                               | [22-finance]  | —   | ⬜     | —    | —      |
 | S5-19  | Deploy Sprint 5 → staging                                                                  | Infra         | —   | ⬜     | —    | 🚀     |
 
 ---
@@ -264,7 +268,7 @@
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
-| S5 Billing    | 22      | 0       | 0         | 0           |
+| S5 Billing    | 26      | 0       | 0         | 0           |
 | S6 Docs+Bot   | 15      | 0       | 0         | 0           |
 | S7 Landing    | 16      | 0       | 0         | 0           |
 | S8 QA+Launch  | 14      | 0       | 0         | 0           |

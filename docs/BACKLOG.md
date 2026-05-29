@@ -12,6 +12,7 @@
 4. **Розчарувалися в ідеї** → видаляємо без переходу у TRACKER (раз на місяць).
 
 Формат запису:
+
 ```
 - [контекст] Короткий опис ідеї. Пояснення user value. (created: YYYY-MM-DD)
 ```
@@ -26,6 +27,7 @@
 - [bot] Inline buttons для швидких відповідей у Telegram (approve/reject/comment) — зараз тільки text. (created: 2026-04-18)
 - [reports] Експорт reports у PDF (поточно лише CSV + on-screen). (created: 2026-04-22)
 - [credentials] Двофакторне підтвердження для credentials.read (TOTP або email-link), а не лише owner role. (created: 2026-04-23)
+- [finance] Фаза 2 модуля фінансів — маржа по кожному клієнту (cost allocation: equal/weighted/by_revenue розподіл спільних витрат на клієнтів). Робимо після наповнення реєстру витрат реальними даними. Див. modules/22-finance-expenses.md. (created: 2026-05-29)
 
 ## 🛠 Технічний борг
 

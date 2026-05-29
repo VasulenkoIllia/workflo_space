@@ -1,0 +1,292 @@
+# FINANCE / EXPENSES MODULE
+
+> App: Workspace (owner-only)
+> Статус: Проєктування (заплановано після S1 Auth) — реалізація поетапна
+> Залежить від: `packages/db`, `05-billing`, `12-team-executors`, `19-reports`
+> Оновлено: 29 травня 2026
+
+---
+
+## Огляд
+
+Модуль обліку **витрат** і розрахунку **прибутковості** (P&L — Profit & Loss).
+
+**Проблема, яку вирішує:** зараз система бачить тільки доходи (payments) і частково ЗП через `ExecutorRate × години`. Немає де записати реальні витрати — сервери, підписки (Claude, ін.), фіксовані зарплати, оренда, разові закупівлі. Тому owner не бачить **справжній прибуток**.
+
+**Сценарій-приклад (від власника):** «Купую 1 сервер за $30/міс, але продаю його на 10 клієнтів по $10. Хочу вводити щомісячні/разові витрати і бачити дохід та прибуток. ЗП працівникам — теж моя витрата. Має працювати в розрізі і клієнтів, і працівників.»
+
+**Рішення (узгоджено):** реалізуємо **поетапно**:
+
+- **Фаза 1** — загальний P&L: реєстр витрат + звіт `Дохід − Витрати = Прибуток` з розбивкою по категоріях + тегами клієнт/працівник.
+- **Фаза 2** — маржа по кожному клієнту: розподіл спільних витрат (1 сервер → N клієнтів) → прибуток окремо по клієнту.
+
+---
+
+## ФАЗА 1 — Загальний P&L
+
+### Модель даних
+
+```prisma
+enum ExpenseType {
+  recurring   // повторюється (щомісяця / квартал / рік)
+  one_time    // разова
+}
+
+enum ExpenseCategory {
+  infrastructure   // сервери, хостинг, домени
+  software         // підписки (Claude, Figma, ...)
+  salary           // зарплати
+  contractor       // підрядники (не штат)
+  rent             // оренда
+  tax              // податки/збори
+  marketing        // реклама
+  other
+}
+
+enum ExpenseFrequency {
+  monthly
+  quarterly
+  annual
+}
+
+model Expense {
+  id            String           @id @default(uuid())
+  type          ExpenseType
+  category      ExpenseCategory
+  name          String           // "Hetzner CX21", "Claude Pro", "ЗП Олена"
+  vendor        String?          // постачальник
+  amount        Decimal          @db.Decimal(12, 2)
+  currency      String           @default("USD")
+  amountUsd     Decimal          @db.Decimal(12, 2) // нормалізовано на дату через exchange_rates
+
+  // для recurring:
+  frequency     ExpenseFrequency?
+  startDate     DateTime         @db.Timestamptz(3)
+  endDate       DateTime?        @db.Timestamptz(3) // null = активна досі
+
+  // для one_time: дата = startDate, frequency = null
+
+  // теги (опційно) — для розбивки у звіті:
+  linkedExecutorId String?       // якщо це ЗП конкретного працівника
+  linkedExecutor   Profile?      @relation("ExpenseExecutor", fields: [linkedExecutorId], references: [id])
+  linkedCompanyId  String?       // якщо витрата прямо стосується 1 клієнта
+  linkedCompany    Company?      @relation(fields: [linkedCompanyId], references: [id])
+
+  // службове джерело (щоб не дублювати ЗП):
+  source        String           @default("manual") // 'manual' | 'executor_rate'
+  sourceRef     String?          // executorRateId якщо source='executor_rate'
+
+  notes         String?
+  isActive      Boolean          @default(true)
+  createdById   String
+  createdBy     Profile          @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([type, category])
+  @@index([startDate])
+  @@index([linkedCompanyId])
+  @@index([linkedExecutorId])
+  @@map("expenses")
+}
+```
+
+### Зарплати — без подвійного вводу
+
+`ExecutorRate` (модуль 12) лишається **джерелом істини** для оплати штату. Модуль фінансів **автоматично** включає активні ЗП у P&L як рядки `category=salary, source='executor_rate'`:
+
+- При розрахунку P&L за період беремо суму `ExecutorRate.monthlySalaryUsd` для активних ставок (`effectiveFrom ≤ період ≤ effectiveUntil`).
+- Owner **не вводить ЗП штату вручну** — лише підрядників / разові виплати (`source='manual', category=contractor`).
+- Це уникає дубля: погодинна оплата вже враховується в `Revenue Report` cost, фіксована — тут.
+
+### Нормалізація суми періоду
+
+P&L рахується за календарний місяць. Витрати приводяться до місяця:
+
+- `monthly` → `amountUsd`
+- `quarterly` → `amountUsd / 3`
+- `annual` → `amountUsd / 12`
+- `one_time` → повна сума у місяці `startDate` (не розмазується)
+
+`amountUsd` фіксується на дату вводу через `exchange_rates` (стабільність історії, як у payments).
+
+### P&L звіт (Фаза 1)
+
+`GET /reports/pnl?from=2026-05-01&to=2026-05-31&groupBy=month|category`
+
+```sql
+-- Доходи (вже є з модуля 19)
+WITH revenue AS (
+  SELECT date_trunc('month', confirmed_at) AS period, SUM(amount_usd) AS revenue_usd
+  FROM payments WHERE status='confirmed' AND confirmed_at BETWEEN $from AND $to
+  GROUP BY period
+),
+-- Витрати: recurring нормалізовані + one_time + ЗП штату
+expenses AS (
+  SELECT period, category, SUM(monthly_usd) AS expense_usd FROM (...) GROUP BY period, category
+)
+SELECT r.period,
+       r.revenue_usd,
+       COALESCE(SUM(e.expense_usd), 0) AS total_expenses_usd,
+       r.revenue_usd - COALESCE(SUM(e.expense_usd), 0) AS net_profit_usd
+FROM revenue r LEFT JOIN expenses e ON e.period = r.period
+GROUP BY r.period, r.revenue_usd;
+```
+
+**Response:**
+
+```json
+{
+  "period": "2026-05",
+  "revenueUsd": 100.0,
+  "expenses": {
+    "infrastructure": 30.0,
+    "software": 20.0,
+    "salary": 40.0,
+    "total": 90.0
+  },
+  "netProfitUsd": 10.0,
+  "marginPct": 10.0
+}
+```
+
+### Endpoints (Фаза 1)
+
+| Method   | Path                    | Auth  | Опис                                                              |
+| -------- | ----------------------- | ----- | ----------------------------------------------------------------- |
+| `GET`    | `/expenses`             | owner | Список (фільтр type/category/active/linkedCompany/linkedExecutor) |
+| `POST`   | `/expenses`             | owner | Створити (recurring / one_time)                                   |
+| `PUT`    | `/expenses/:id`         | owner | Редагувати                                                        |
+| `POST`   | `/expenses/:id/archive` | owner | Деактивувати (isActive=false; історія зберігається)               |
+| `DELETE` | `/expenses/:id`         | owner | Видалити (тільки якщо не входить у вже згенерований звіт)         |
+| `GET`    | `/reports/pnl`          | owner | P&L звіт за період                                                |
+| `GET`    | `/reports/pnl.csv`      | owner | Експорт                                                           |
+
+`can(user, 'admin.access')` або owner головної компанії.
+
+### UI (Фаза 1) — `/workspace/finance`
+
+```
+┌─ Фінанси ──────────────────────────────────┐
+│ [Травень 2026 ▾]              [+ Витрата]   │
+│                                             │
+│  Дохід              $100.00                 │
+│  ─────────────────────────────────────     │
+│  Infrastructure     −$30.00  (1 поз.)       │
+│  Software           −$20.00  (1 поз.)       │
+│  Salary             −$40.00  (1 поз.)       │
+│  ─────────────────────────────────────     │
+│  Витрати разом      −$90.00                 │
+│  ═════════════════════════════════════     │
+│  Чистий прибуток     $10.00  (10%)          │
+│                                             │
+│  [Витрати] [Графік P&L] [Експорт CSV]       │
+└─────────────────────────────────────────────┘
+```
+
+Вкладка «Витрати» — таблиця всіх expense з inline-фільтрами; «Графік P&L» — лінія дохід/витрати/прибуток по місяцях.
+
+### Cron
+
+- `C20:expense_recurring_marker` (опційно) — не створює рядки, P&L рахується «на льоту» з recurring + дат. Тобто recurring expense — це **одна** строка з frequency, а не N згенерованих. Просто.
+
+---
+
+## ФАЗА 2 — Маржа по клієнтах (cost allocation)
+
+> Реалізуємо пізніше, коли реєстр витрат заповнений реальними даними.
+
+### Ідея
+
+Спільні витрати (1 сервер $30 на 10 клієнтів) розподіляються між клієнтами, щоб бачити **прибуток окремо по кожному клієнту**.
+
+### Модель розподілу
+
+```prisma
+enum AllocationMethod {
+  equal           // порівну між обраними клієнтами
+  weighted        // за вагами (% або частки)
+  by_revenue      // пропорційно доходу клієнта за період
+  direct          // 100% на 1 клієнта (= linkedCompanyId)
+}
+
+model ExpenseAllocation {
+  id          String           @id @default(uuid())
+  expenseId   String
+  expense     Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  method      AllocationMethod
+  // для equal/weighted: явний список компаній + ваг
+  targets     Json             // [{ companyId, weight }] або null для by_revenue (всі активні)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@map("expense_allocations")
+}
+```
+
+### Per-client P&L
+
+`GET /reports/pnl/by-client?from=&to=`
+
+Для кожного клієнта:
+
+```
+client_revenue − (direct_costs + allocated_share_of_shared_costs) = client_margin
+```
+
+де `allocated_share` рахується за method:
+
+- `equal`: `expense_usd / N_targets`
+- `weighted`: `expense_usd × weight_i / Σweights`
+- `by_revenue`: `expense_usd × client_revenue / total_revenue`
+
+**Response:**
+
+```json
+{
+  "period": "2026-05",
+  "clients": [
+    {
+      "companyId": "...",
+      "name": "Клієнт A",
+      "revenueUsd": 10.0,
+      "directCostsUsd": 0,
+      "allocatedSharedUsd": 3.0, // частка сервера $30/10
+      "marginUsd": 7.0,
+      "marginPct": 70.0
+    }
+  ],
+  "unallocatedExpensesUsd": 0
+}
+```
+
+### UI (Фаза 2)
+
+Додаткова вкладка «Маржа по клієнтах» у `/workspace/finance` — таблиця: клієнт / дохід / прямі / розподілені / маржа / маржа %. Сортування за маржею. Підсвічування збиткових клієнтів (margin < 0) червоним.
+
+---
+
+## Зв'язок з іншими модулями
+
+- **19-reports**: P&L — це нова сторінка звіту поруч із time/revenue/debtors. Revenue беремо з тієї самої агрегації payments.
+- **12-team-executors**: ЗП штату підтягуються з `ExecutorRate` (без дубля). Підрядники — manual expense.
+- **05-billing**: доходи (payments) — джерело revenue для P&L.
+- **20-admin-settings**: категорії витрат можна зробити CRUD-таблицею пізніше (зараз enum достатньо).
+- **21-system-monitoring**: зміни витрат → audit_logs (`finance.expense_created/updated/deleted`).
+
+---
+
+## Валюта
+
+Усе нормалізується в USD (як у звітах). `amount` + `currency` — як ввів owner; `amountUsd` — конвертовано на дату через `exchange_rates`. Звіти завжди в USD.
+
+---
+
+## Acceptance criteria (Фаза 1)
+
+- [ ] Owner може створити recurring expense (сервер $30/міс) і one_time (домен $12).
+- [ ] ЗП штату автоматично у P&L (без ручного вводу).
+- [ ] P&L звіт за місяць: дохід − витрати = прибуток + розбивка по категоріях.
+- [ ] Фільтр витрат по клієнту/працівнику.
+- [ ] CSV експорт.
+- [ ] Усі зміни в audit_logs.
+- [ ] Витрати в розрізі клієнтів (тег) і працівників (тег/ЗП) — видимі у фільтрах.
