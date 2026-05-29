@@ -116,6 +116,13 @@ export enum PaymentType {
   PARTIAL = 'partial',
 }
 
+export enum PaymentStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  FAILED = 'failed',
+  REFUNDED = 'refunded',
+}
+
 // ─── Documents ──────────────────────────────────────────────────────────────
 export enum DocumentType {
   CONTRACT = 'contract',

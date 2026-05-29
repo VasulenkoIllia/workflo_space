@@ -76,6 +76,7 @@ model Invite {
   createdAt   DateTime   @default(now()) @db.Timestamptz(3)
 
   @@index([email])
+  @@index([invitedById])
   @@map("invites")
 }
 
@@ -87,6 +88,7 @@ model PasswordResetToken {
   usedAt    DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
 
+  @@index([email])
   @@map("password_reset_tokens")
 }
 
@@ -140,7 +142,7 @@ model Order {
   type           OrderType           @default(client_order)
   priority       OrderPriority       @default(medium)
   companyId      String?
-  company        Company?            @relation(fields: [companyId], references: [id])
+  company        Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
   assigneeId     String?
   assignee       Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
   createdById    String
@@ -206,6 +208,7 @@ model OrderComment {
 
   @@index([orderId, createdAt])
   @@index([orderId, isInternal])
+  @@index([authorId])
   @@map("order_comments")
 }
 
@@ -296,7 +299,7 @@ model ServiceCharge {
   companyServiceId String
   companyService   CompanyService @relation(fields: [companyServiceId], references: [id])
   amount           Decimal        @db.Decimal(10, 2)
-  uahRate          Decimal?       @db.Decimal(8, 4)
+  uahRate          Decimal?       @db.Decimal(10, 4)
   month            DateTime       @db.Date
   status           ChargeStatus   @default(pending)
   dueDate          DateTime?      @db.Timestamptz(3)
@@ -310,27 +313,30 @@ model ServiceCharge {
 }
 
 model Payment {
-  id                String      @id @default(uuid())
+  id                String        @id @default(uuid())
   companyId         String
-  company           Company     @relation(fields: [companyId], references: [id])
+  company           Company       @relation(fields: [companyId], references: [id])
   orderId           String?
-  order             Order?      @relation(fields: [orderId], references: [id])
-  amount            Decimal     @db.Decimal(10, 2)
-  currency          String      @default("USD")
-  type              PaymentType @default(final)
-  provider          String      @default("manual")
+  order             Order?        @relation(fields: [orderId], references: [id])
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("USD")
+  type              PaymentType   @default(final)
+  status            PaymentStatus @default(confirmed)
+  provider          String        @default("manual")
   providerPaymentId String?
   paymentLink       String?
   paymentMethod     String?
   paymentReference  String?
   note              String?
   confirmedBy       String
-  confirmer         Profile     @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
-  confirmedAt       DateTime    @default(now()) @db.Timestamptz(3)
+  confirmer         Profile       @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
+  confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([companyId])
   @@index([orderId])
+  @@index([confirmedBy])
   @@index([confirmedAt])
+  @@index([status])
   @@map("payments")
 }
 
@@ -348,13 +354,18 @@ model PaymentSettings {
 }
 
 model ExecutorRate {
-  id                String   @id @default(uuid())
-  executorId        String   @unique
-  executor          Profile  @relation(fields: [executorId], references: [id], onDelete: Cascade)
-  monthlySalary     Decimal? @db.Decimal(10, 2)
-  commissionPercent Decimal  @default(0) @db.Decimal(5, 2)
-  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  id                String    @id @default(uuid())
+  executorId        String    @unique
+  executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
+  monthlySalary     Decimal?  @db.Decimal(10, 2)
+  currency          String    @default("USD") // currency of monthlySalary — needed for P&L (module 22)
+  commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
+  effectiveFrom     DateTime  @default(now()) @db.Timestamptz(3) // rate validity window for historical P&L
+  effectiveUntil    DateTime? @db.Timestamptz(3)
+  hireDate          DateTime? @db.Timestamptz(3) // for leave accrual (module 23)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
 
+  @@index([executorId, effectiveFrom])
   @@map("executor_rates")
 }
 
@@ -371,6 +382,7 @@ model Referral {
 
   @@unique([referrerId, referredId])
   @@index([referrerId])
+  @@index([referredId])
   @@map("referrals")
 }
 
@@ -389,14 +401,14 @@ model ReferralBonus {
 }
 
 model NotificationSettings {
-  id             String   @id @default(uuid())
-  profileId      String   @unique
-  profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  language       Language @default(uk)
-  telegramChatId String?  @unique
+  id               String    @id @default(uuid())
+  profileId        String    @unique
+  profile          Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language         Language  @default(uk)
+  telegramChatId   String?   @unique
   telegramLinkedAt DateTime? @db.Timestamptz(3)
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
 
   preferences NotificationPreference[]
   logs        NotificationLog[]
@@ -407,11 +419,11 @@ model NotificationSettings {
 /// Matrix: settingsId × category × channel → enabled.
 /// CRITICAL_EVENTS (auth/billing email) bypass this table via resolver logic.
 model NotificationPreference {
-  id         String              @id @default(uuid())
+  id         String               @id @default(uuid())
   settingsId String
   settings   NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
-  category   String               // matches NotificationCategory in @workflo/types
-  channel    String               // matches NotificationChannel in @workflo/types
+  category   String // matches NotificationCategory in @workflo/types
+  channel    String // matches NotificationChannel in @workflo/types
   enabled    Boolean              @default(true)
   updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -426,11 +438,11 @@ model NotificationLog {
   id             String               @id @default(uuid())
   settingsId     String
   settings       NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
-  event          String               // matches NotificationEvent string literal
-  channel        String               // NotificationChannel
-  status         String               // 'sent' | 'failed' | 'skipped' | 'rolled_up'
-  errorCode      String?              // adapter-specific: 'blocked', 'invalid_chat', 'rate_limited', ...
-  rollupTargetId String?              // when status='rolled_up', points to the consolidated message log row
+  event          String // matches NotificationEvent string literal
+  channel        String // NotificationChannel
+  status         String // 'sent' | 'failed' | 'skipped' | 'rolled_up'
+  errorCode      String? // adapter-specific: 'blocked', 'invalid_chat', 'rate_limited', ...
+  rollupTargetId String? // when status='rolled_up', points to the consolidated message log row
   metadata       Json?
   createdAt      DateTime             @default(now()) @db.Timestamptz(3)
 
@@ -444,11 +456,11 @@ model NotificationLog {
 model AuditLog {
   id           String   @id @default(uuid())
   actorId      String?
-  actor        Profile? @relation(fields: [actorId], references: [id])
-  action       String   // e.g. 'order.create', 'company.transfer_ownership'
-  resourceType String?  // 'company' | 'order' | 'credentials' | ...
+  actor        Profile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action       String // e.g. 'order.create', 'company.transfer_ownership'
+  resourceType String? // 'company' | 'order' | 'credentials' | ...
   resourceId   String?
-  result       String   // 'allowed' | 'denied' | 'error'
+  result       String // 'allowed' | 'denied' | 'error'
   metadata     Json?
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
 
@@ -509,6 +521,8 @@ model Document {
   @@index([companyId])
   @@index([orderId])
   @@index([type])
+  @@index([createdById])
+  @@index([executorId])
   @@map("documents")
 }
 
@@ -542,6 +556,7 @@ model BlogPost {
 
   @@index([type, published])
   @@index([publishedAt])
+  @@index([authorId])
   @@map("blog_posts")
 }
 
@@ -560,8 +575,8 @@ model ContactForm {
 
 model ExchangeRate {
   id        String   @id @default("singleton")
-  usdToUah  Decimal  @db.Decimal(8, 4)
-  eurToUah  Decimal? @db.Decimal(8, 4)
+  usdToUah  Decimal  @db.Decimal(10, 4)
+  eurToUah  Decimal? @db.Decimal(10, 4)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   updatedBy String?
 
@@ -580,7 +595,6 @@ model OtpToken {
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
 
   @@unique([profileId, purpose])
-  @@index([code, purpose])
   @@map("otp_tokens")
 }
 
@@ -711,6 +725,13 @@ enum PaymentType {
   advance
   final
   partial
+}
+
+enum PaymentStatus {
+  pending
+  confirmed
+  failed
+  refunded
 }
 
 enum OtpPurpose {
