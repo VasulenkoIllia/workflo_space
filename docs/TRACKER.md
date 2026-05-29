@@ -50,31 +50,31 @@
 
 > Ціль: реєстрація, логін, JWT, invite flow
 
-| ID    | Задача                                                                  | Модуль             | Хто | Статус | Тест | Deploy |
-| ----- | ----------------------------------------------------------------------- | ------------------ | --- | ------ | ---- | ------ |
-| S1-00 | DB migration multi-company (drop Company.ownerId, partial unique owner) | [01-auth]          | —   | ✅     | —    | —      |
-| S1-01 | packages/notifications — email functions                                | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-02 | packages/notifications — telegram adapter                               | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-03 | packages/notifications — notify() unified + matrix migration            | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-04 | POST /auth/register (profile + company)                                 | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-05 | POST /auth/login                                                        | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-06 | POST /auth/logout                                                       | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-07 | POST /auth/refresh (token rotation)                                     | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-08 | POST /auth/forgot-password                                              | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-09 | POST /auth/reset-password                                               | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-10 | GET /auth/me                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-11 | JWT middleware + role guard (can() shim)                                | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-12 | Rate limiting /auth/\* (10 req/15min)                                   | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-13 | PATCH /profile, /profile/password                                       | [13-settings]      | —   | ⬜     | ⬜   | —      |
-| S1-14 | PATCH /profile/notifications                                            | [13-settings]      | —   | ⬜     | —    | —      |
-| S1-15 | POST /workspace/team/invite (executor)                                  | [12-team]          | —   | ⬜     | ⬜   | —      |
-| S1-16 | GET /invite/:token + прийняти запрошення                                | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-17 | POST /company/members/invite                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-18 | Welcome email при реєстрації (wired у S1-04 register)                   | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-19 | Invite email (executor + company member) — шаблони є, чекає S1-15/16/17 | [08-email]         | —   | ⬜     | ⬜   | —      |
-| S1-20 | Reset password email (wired у S1-08 forgot-password)                    | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-21 | packages/i18n — uk/en локалі базові                                     | [13-settings]      | —   | ⬜     | —    | —      |
-| S1-22 | Deploy Sprint 1 → staging                                               | Infra              | —   | ⬜     | —    | 🚀     |
+| ID    | Задача                                                                                              | Модуль             | Хто | Статус | Тест | Deploy |
+| ----- | --------------------------------------------------------------------------------------------------- | ------------------ | --- | ------ | ---- | ------ |
+| S1-00 | DB migration multi-company (drop Company.ownerId, partial unique owner)                             | [01-auth]          | —   | ✅     | —    | —      |
+| S1-01 | packages/notifications — email functions                                                            | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-02 | packages/notifications — telegram adapter                                                           | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-03 | packages/notifications — notify() unified + matrix migration                                        | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-04 | POST /auth/register (profile + company)                                                             | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-05 | POST /auth/login                                                                                    | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-06 | POST /auth/logout                                                                                   | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-07 | POST /auth/refresh (token rotation)                                                                 | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-08 | POST /auth/forgot-password                                                                          | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-09 | POST /auth/reset-password                                                                           | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-10 | GET /auth/me                                                                                        | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-11 | JWT middleware + role guard (can() shim)                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-12 | Rate limiting /auth/\* (per-route: register/login 10/15m, forgot 3/15m, reset 5/1h, refresh 60/15m) | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-13 | PATCH /profile, /profile/password                                                                   | [13-settings]      | —   | ⬜     | ⬜   | —      |
+| S1-14 | PATCH /profile/notifications                                                                        | [13-settings]      | —   | ⬜     | —    | —      |
+| S1-15 | POST /workspace/team/invite (executor)                                                              | [12-team]          | —   | ⬜     | ⬜   | —      |
+| S1-16 | GET /invite/:token + прийняти запрошення                                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-17 | POST /company/members/invite                                                                        | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-18 | Welcome email при реєстрації (wired у S1-04 register)                                               | [08-email]         | —   | ✅     | ✅   | —      |
+| S1-19 | Invite email (executor + company member) — шаблони є, чекає S1-15/16/17                             | [08-email]         | —   | ⬜     | ⬜   | —      |
+| S1-20 | Reset password email (wired у S1-08 forgot-password)                                                | [08-email]         | —   | ✅     | ✅   | —      |
+| S1-21 | packages/i18n — uk/en локалі базові                                                                 | [13-settings]      | —   | ⬜     | —    | —      |
+| S1-22 | Deploy Sprint 1 → staging                                                                           | Infra              | —   | ⬜     | —    | 🚀     |
 
 ---
 
@@ -264,7 +264,7 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 23      | 14      | 13        | 0           |
+| S1 Auth       | 23      | 15      | 14        | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
