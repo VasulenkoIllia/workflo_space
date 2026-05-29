@@ -1,0 +1,75 @@
+import { prisma } from '@workflo/db'
+import { ApiErrorCode, AppError, inviteExecutorSchema } from '@workflo/types'
+import type { FastifyPluginAsync } from 'fastify'
+import { can } from '../../auth/can.js'
+import { writeAuditAsync } from '../../services/audit.js'
+import { sendExecutorInviteEmail } from '../../services/inviteEmail.js'
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+/** POST /workspace/team/invite — invite an executor (internal team). */
+const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
+  fastify.post(
+    '/workspace/team/invite',
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      if (!can(request.user, 'executor.invite')) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав', 403)
+      }
+
+      const input = inviteExecutorSchema.parse(request.body)
+      const email = input.email.toLowerCase().trim()
+      const inviterId = request.user.sub
+
+      // Supersede prior pending executor invites for this email (LIFECYCLE.md).
+      await prisma.invite.updateMany({
+        where: { email, type: 'executor', usedAt: null },
+        data: { usedAt: new Date() },
+      })
+
+      const invite = await prisma.invite.create({
+        data: {
+          email,
+          type: 'executor',
+          invitedById: inviterId,
+          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        },
+        select: { id: true, token: true, expiresAt: true },
+      })
+
+      const inviter = await prisma.profile.findUnique({
+        where: { id: inviterId },
+        select: { name: true },
+      })
+
+      const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
+      sendExecutorInviteEmail(request.log, {
+        to: email,
+        inviterName: inviter?.name ?? 'Workflo',
+        acceptUrl: `${workspaceUrl}/invite/${invite.token}`,
+        expiresAt: invite.expiresAt.toISOString().slice(0, 16).replace('T', ' '),
+      })
+
+      writeAuditAsync(request.log, {
+        actorId: inviterId,
+        action: 'executor.invited',
+        resourceType: 'invite',
+        resourceId: invite.id,
+        result: 'allowed',
+        metadata: { email },
+      })
+
+      return reply.status(201).send({
+        success: true,
+        data: { inviteId: invite.id, email, expiresAt: invite.expiresAt },
+      })
+    }
+  )
+
+  return Promise.resolve()
+}
+
+export default createExecutorInviteRoute

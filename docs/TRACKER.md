@@ -67,11 +67,11 @@
 | S1-12 | Rate limiting /auth/\* (per-route: register/login 10/15m, forgot 3/15m, reset 5/1h, refresh 60/15m) | [01-auth]          | —   | ✅     | ✅   | —      |
 | S1-13 | PATCH /profile, /profile/password                                                                   | [13-settings]      | —   | ✅     | ✅   | —      |
 | S1-14 | PATCH /profile/notifications (matrix + ADR-003 email lock)                                          | [13-settings]      | —   | ✅     | ✅   | —      |
-| S1-15 | POST /workspace/team/invite (executor)                                                              | [12-team]          | —   | ⬜     | ⬜   | —      |
-| S1-16 | GET /invite/:token + прийняти запрошення                                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-17 | POST /company/members/invite                                                                        | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-15 | POST /workspace/team/invite (executor)                                                              | [12-team]          | —   | ✅     | ✅   | —      |
+| S1-16 | GET /invite/:token + прийняти запрошення                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-17 | POST /company/members/invite                                                                        | [01-auth]          | —   | ✅     | ✅   | —      |
 | S1-18 | Welcome email при реєстрації (wired у S1-04 register)                                               | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-19 | Invite email (executor + company member) — шаблони є, чекає S1-15/16/17                             | [08-email]         | —   | ⬜     | ⬜   | —      |
+| S1-19 | Invite email (executor + company member) — wired у S1-15/17                                         | [08-email]         | —   | ✅     | ✅   | —      |
 | S1-20 | Reset password email (wired у S1-08 forgot-password)                                                | [08-email]         | —   | ✅     | ✅   | —      |
 | S1-21 | packages/i18n — uk/en локалі базові                                                                 | [13-settings]      | —   | ⬜     | —    | —      |
 | S1-22 | Deploy Sprint 1 → staging                                                                           | Infra              | —   | ⬜     | —    | 🚀     |
@@ -264,7 +264,7 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 23      | 17      | 16        | 0           |
+| S1 Auth       | 23      | 21      | 20        | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
