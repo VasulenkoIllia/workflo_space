@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
-import type { FastifyInstance } from 'fastify'
+import { ApiErrorCode, AppError } from '@workflo/types'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fp from 'fastify-plugin'
 import type { AccessClaims } from '../auth/tokens.js'
 
@@ -29,6 +30,19 @@ async function jwtPlugin(fastify: FastifyInstance): Promise<void> {
       expiresIn: ACCESS_TTL,
     },
   })
+
+  /**
+   * preHandler guard: verifies the Bearer access token and populates
+   * request.user with AccessClaims. Use as `{ preHandler: [fastify.authenticate] }`
+   * on protected routes. Throws 401 (formatted by the global error handler).
+   */
+  fastify.decorate('authenticate', async (request: FastifyRequest, _reply: FastifyReply) => {
+    try {
+      await request.jwtVerify()
+    } catch {
+      throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Потрібна автентифікація', 401)
+    }
+  })
 }
 
 export default fp(jwtPlugin, { name: 'jwt-plugin', fastify: '5.x' })
@@ -38,5 +52,12 @@ declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: AccessClaims
     user: AccessClaims
+  }
+}
+
+// Augment FastifyInstance with the authenticate decorator.
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
 }

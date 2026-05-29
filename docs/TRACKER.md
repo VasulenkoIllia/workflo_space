@@ -62,8 +62,8 @@
 | S1-07 | POST /auth/refresh (token rotation)                                     | [01-auth]          | —   | ✅     | ✅   | —      |
 | S1-08 | POST /auth/forgot-password                                              | [01-auth]          | —   | ⬜     | ⬜   | —      |
 | S1-09 | POST /auth/reset-password                                               | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-10 | GET /auth/me                                                            | [01-auth]          | —   | ⬜     | ⬜   | —      |
-| S1-11 | JWT middleware + role guard                                             | [01-auth]          | —   | ⬜     | ⬜   | —      |
+| S1-10 | GET /auth/me                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-11 | JWT middleware + role guard (can() shim)                                | [01-auth]          | —   | ✅     | ✅   | —      |
 | S1-12 | Rate limiting /auth/\* (10 req/15min)                                   | [01-auth]          | —   | ⬜     | ⬜   | —      |
 | S1-13 | PATCH /profile, /profile/password                                       | [13-settings]      | —   | ⬜     | ⬜   | —      |
 | S1-14 | PATCH /profile/notifications                                            | [13-settings]      | —   | ⬜     | —    | —      |
@@ -264,7 +264,7 @@
 | Sprint        | Всього  | ✅ Done | 🧪 Tested | 🚀 Deployed |
 | ------------- | ------- | ------- | --------- | ----------- |
 | S0 Foundation | 30      | 30      | 2         | 1           |
-| S1 Auth       | 23      | 8       | 7         | 0           |
+| S1 Auth       | 23      | 10      | 9         | 0           |
 | S2 Orders API | 19      | 0       | 0         | 0           |
 | S3 Portal     | 22      | 0       | 0         | 0           |
 | S4 Workspace  | 14      | 0       | 0         | 0           |
