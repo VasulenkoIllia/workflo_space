@@ -16,3 +16,12 @@ export const registerSchema = z.object({
   displayName: z.string().min(2),
   companyName: z.string().min(2),
 })
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+})
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: passwordSchema,
+})

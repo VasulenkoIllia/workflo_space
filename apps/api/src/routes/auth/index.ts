@@ -1,9 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
+import forgotPasswordRoute from './forgotPassword.js'
 import loginRoute from './login.js'
 import logoutRoute from './logout.js'
 import meRoute from './me.js'
 import refreshRoute from './refresh.js'
 import registerRoute from './register.js'
+import resetPasswordRoute from './resetPassword.js'
 
 /**
  * Auth route group. Endpoints are registered at root (`/auth/*`) since each
@@ -15,6 +17,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(logoutRoute)
   await fastify.register(refreshRoute)
   await fastify.register(meRoute)
+  await fastify.register(forgotPasswordRoute)
+  await fastify.register(resetPasswordRoute)
 }
 
 export default authRoutes
