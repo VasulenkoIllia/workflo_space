@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Must be set before app import (jwt plugin reads JWT_SECRET at register time).
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
-process.env.APP_PORTAL_URL = 'https://portal.test'
+process.env.PORTAL_URL = 'https://portal.test'
 
 // ─── Mock @workflo/db ────────────────────────────────────────────────────────
 class FakePrismaKnownError extends Error {

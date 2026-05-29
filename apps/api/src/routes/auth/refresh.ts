@@ -11,14 +11,27 @@ import {
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
- * CSRF guard (ADR-001): /auth/refresh accepts only same-origin POSTs. The
- * refresh cookie is SameSite=Lax + Path=/auth/refresh, so this Origin check is
- * defense-in-depth. In dev (no Origin or localhost) we allow it for DX.
+ * CSRF guard (ADR-001): /auth/refresh validates the Origin header against the
+ * same allowlist the CORS plugin uses (CORS_ALLOWED_ORIGINS, comma-separated —
+ * already injected into the API container by docker-compose). The refresh
+ * cookie is SameSite=Lax + Path=/auth/refresh, so this is defense-in-depth.
+ *
+ * Policy: a request with NO Origin header is allowed (non-browser/native
+ * clients can't forge cross-site requests anyway); a request WITH an Origin
+ * must be in the allowlist. In dev, localhost origins are always allowed.
  */
+function allowedOrigins(): string[] {
+  return (process.env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+}
+
 function isAllowedOrigin(request: FastifyRequest): boolean {
   const origin = request.headers.origin
+  if (!origin) return true // no Origin → not a forgeable cross-site browser request
+
   if (process.env.NODE_ENV !== 'production') {
-    if (!origin) return true
     try {
       const host = new URL(origin).hostname
       if (['localhost', '127.0.0.1', '::1'].includes(host)) return true
@@ -26,12 +39,11 @@ function isAllowedOrigin(request: FastifyRequest): boolean {
       return false
     }
   }
-  const allowed = [
-    process.env.APP_LANDING_URL,
-    process.env.APP_PORTAL_URL,
-    process.env.APP_WORKSPACE_URL,
-  ].filter(Boolean)
-  return !!origin && allowed.includes(origin)
+
+  const allowed = allowedOrigins()
+  // If no allowlist is configured, fall back to allowing (SameSite=Lax still guards).
+  if (allowed.length === 0) return true
+  return allowed.includes(origin)
 }
 
 const refreshRoute: FastifyPluginAsync = (fastify) => {

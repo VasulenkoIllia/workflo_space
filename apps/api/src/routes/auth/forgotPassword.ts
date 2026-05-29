@@ -36,7 +36,7 @@ const forgotPasswordRoute: FastifyPluginAsync = (fastify) => {
           })
         ).token
 
-        const portalUrl = process.env.APP_PORTAL_URL ?? 'https://portal.workflo.space'
+        const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
         const resetUrl = `${portalUrl}/reset-password?token=${encodeURIComponent(token)}`
 
         dispatchNotification(request.log, {

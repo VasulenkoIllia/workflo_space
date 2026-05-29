@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
-process.env.APP_PORTAL_URL = 'https://portal.test'
+process.env.PORTAL_URL = 'https://portal.test'
 
 const profileFindUnique = vi.fn()
 const profileUpdate = vi.fn()

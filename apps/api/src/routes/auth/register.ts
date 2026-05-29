@@ -143,7 +143,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
       dispatchNotification(request.log, {
         profileId: result.profileId,
         event: 'auth.welcome',
-        vars: { portalUrl: process.env.APP_PORTAL_URL ?? 'https://portal.workflo.space' },
+        vars: { portalUrl: process.env.PORTAL_URL ?? 'https://portal.workflo.space' },
       })
 
       return reply.status(201).send({
