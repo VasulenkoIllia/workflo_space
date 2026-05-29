@@ -1,4 +1,4 @@
-import type { AccessClaims } from './tokens.js'
+import type { AccessClaims, CompanyPermissions } from './tokens.js'
 
 /**
  * RBAC shim (ADR-002). Centralizes all authz decisions behind a single
@@ -16,6 +16,8 @@ export type Action =
   | 'invoice.send'
   | 'invoice.cancel'
   | 'payment.confirm'
+  | 'order.approve_estimate'
+  | 'billing.view'
   | 'company.update_settings'
   | 'company.transfer_ownership'
   | 'company.invite_member'
@@ -27,6 +29,17 @@ export type Action =
   | 'finance.read'
   | 'finance.write'
   | 'admin.access'
+
+/**
+ * Member-permission-gated actions → the CompanyPermissions flag that grants
+ * them to a non-owner member. Owners always pass; members pass only if the
+ * flag is true in their CompanyMember.permissions. (Audit D1.)
+ */
+const PERMISSION_GATED: Partial<Record<Action, keyof CompanyPermissions>> = {
+  'billing.view': 'can_view_billing',
+  'company.invite_member': 'can_invite_members',
+  'order.approve_estimate': 'can_approve_estimates',
+}
 
 export interface ResourceContext {
   companyId?: string
@@ -43,6 +56,22 @@ function membershipRole(
   if (!companyId) return null
   const m = user.memberships.find((x) => x.companyId === companyId)
   return m?.role ?? null
+}
+
+/**
+ * Owner of the company → always true. Non-owner member → true only if the
+ * given permission flag is set. Non-member → false.
+ */
+function hasCompanyPermission(
+  user: AccessClaims,
+  companyId: string | undefined,
+  flag: keyof CompanyPermissions
+): boolean {
+  if (!companyId) return false
+  const m = user.memberships.find((x) => x.companyId === companyId)
+  if (!m) return false
+  if (m.role === 'owner') return true
+  return m.permissions?.[flag] === true
 }
 
 /**
@@ -65,12 +94,17 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
     return membershipRole(user, resource.companyId) === 'owner'
   }
 
+  // ── Member-permission-gated actions (owner always; member if flag set) ──
+  const gateFlag = PERMISSION_GATED[action]
+  if (gateFlag) {
+    // Internal executors act on any company's orders/estimates, but billing.view
+    // is company-scoped only — executors still need a membership for it.
+    if (user.role === 'executor' && action !== 'billing.view') return true
+    return hasCompanyPermission(user, resource.companyId, gateFlag)
+  }
+
   // ── Company management: owner-only ──
-  if (
-    action === 'company.update_settings' ||
-    action === 'company.invite_member' ||
-    action === 'company.remove_member'
-  ) {
+  if (action === 'company.update_settings' || action === 'company.remove_member') {
     return membershipRole(user, resource.companyId) === 'owner'
   }
 

@@ -81,6 +81,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
         select: {
           companyId: true,
           role: true,
+          permissions: true,
           company: { select: { name: true, slug: true } },
         },
         orderBy: { joinedAt: 'asc' },
@@ -89,6 +90,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
       const memberships: Membership[] = memberRows.map((m) => ({
         companyId: m.companyId,
         role: m.role,
+        permissions: (m.permissions as Membership['permissions']) ?? undefined,
       }))
       const activeCompanyId = memberships[0]?.companyId ?? null
 

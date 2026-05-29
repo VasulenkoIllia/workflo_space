@@ -1,10 +1,10 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { defaultActiveCompanyId, loadMemberships } from '../../auth/memberships.js'
 import {
   buildAccessClaims,
   issueRefreshToken,
-  type Membership,
   REFRESH_COOKIE_NAME,
   setRefreshCookie,
 } from '../../auth/tokens.js'
@@ -86,16 +86,8 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Акаунт деактивовано', 403)
       }
 
-      const memberRows = await prisma.companyMember.findMany({
-        where: { profileId: stored.profileId },
-        select: { companyId: true, role: true },
-        orderBy: { joinedAt: 'asc' },
-      })
-      const memberships: Membership[] = memberRows.map((m) => ({
-        companyId: m.companyId,
-        role: m.role,
-      }))
-      const activeCompanyId = memberships[0]?.companyId ?? null
+      const memberships = await loadMemberships(prisma, stored.profileId)
+      const activeCompanyId = defaultActiveCompanyId(memberships)
 
       // Rotate atomically: the conditional updateMany (revokedAt IS NULL in the
       // WHERE) is the optimistic lock — a concurrent request that already rotated

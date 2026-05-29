@@ -77,4 +77,41 @@ describe('can() — RBAC shim', () => {
     expect(can(owner, 'order.create', {})).toBe(false)
     expect(can(owner, 'credentials.read', {})).toBe(false)
   })
+
+  // ── D1: member-permission-gated actions ──
+  const memberWithBilling: AccessClaims = {
+    sub: 'm1',
+    email: 'm@e.com',
+    role: 'client',
+    activeCompanyId: 'c1',
+    memberships: [{ companyId: 'c1', role: 'member', permissions: { can_view_billing: true } }],
+  }
+  const memberNoPerms: AccessClaims = {
+    sub: 'm2',
+    email: 'm2@e.com',
+    role: 'client',
+    activeCompanyId: 'c1',
+    memberships: [{ companyId: 'c1', role: 'member', permissions: {} }],
+  }
+
+  it('billing.view: owner always; member only with can_view_billing', () => {
+    expect(can(owner, 'billing.view', { companyId: 'c1' })).toBe(true) // owner of c1
+    expect(can(memberWithBilling, 'billing.view', { companyId: 'c1' })).toBe(true)
+    expect(can(memberNoPerms, 'billing.view', { companyId: 'c1' })).toBe(false)
+  })
+
+  it('company.invite_member honors can_invite_members for members', () => {
+    expect(can(owner, 'company.invite_member', { companyId: 'c1' })).toBe(true) // owner
+    expect(can(memberNoPerms, 'company.invite_member', { companyId: 'c1' })).toBe(false)
+    const inviter: AccessClaims = {
+      ...memberNoPerms,
+      memberships: [{ companyId: 'c1', role: 'member', permissions: { can_invite_members: true } }],
+    }
+    expect(can(inviter, 'company.invite_member', { companyId: 'c1' })).toBe(true)
+  })
+
+  it('executor passes order-level permission gates but NOT company-scoped billing.view', () => {
+    expect(can(executor, 'order.approve_estimate', { companyId: 'anything' })).toBe(true)
+    expect(can(executor, 'billing.view', { companyId: 'anything' })).toBe(false)
+  })
 })

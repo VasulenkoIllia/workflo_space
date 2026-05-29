@@ -6,9 +6,23 @@ export const REFRESH_COOKIE_NAME = 'refresh_token'
 export const REFRESH_COOKIE_PATH = '/auth/refresh'
 const REFRESH_TTL_DAYS = 30
 
+/**
+ * Per-member permission flags (stored in CompanyMember.permissions JSON).
+ * Defaults live in CONCEPT_v2; owner implicitly has all of them. Members get
+ * only what the owner grants. Read by can() — see ADR-002 / audit D1.
+ */
+export interface CompanyPermissions {
+  can_create_tasks?: boolean
+  can_view_all_tasks?: boolean
+  can_view_billing?: boolean
+  can_approve_estimates?: boolean
+  can_invite_members?: boolean
+}
+
 export interface Membership {
   companyId: string
   role: 'owner' | 'member'
+  permissions?: CompanyPermissions
 }
 
 /**
