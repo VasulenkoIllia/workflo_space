@@ -1,4 +1,5 @@
 # MODULE 05 — BILLING
+
 > App: api.workflo.space / workspace (work.workflo.space) / portal (portal.workflo.space)
 > Статус: MVP
 > Залежить від: [01-auth, 02-companies, 03-orders, 04-services]
@@ -9,6 +10,7 @@
 ## Огляд
 
 Модуль відповідає за повний фінансовий цикл платформи:
+
 - Розрахунок вартості замовлень (fixed і hourly)
 - Recurring послуги з щомісячними нарахуваннями
 - Аванси та фінальну оплату
@@ -18,6 +20,7 @@
 - Адаптер-паттерн для платіжних провайдерів (ManualProvider MVP, LiqPay/Stripe Phase 2)
 
 Борг компанії не зберігається окремим полем — завжди розраховується на льоту:
+
 ```
 debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
      - SUM(payments.amount WHERE companyId = X)
@@ -27,13 +30,13 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 
 ## Актори та доступ
 
-| Актор | Права |
-|---|---|
-| owner | Повний доступ: підтверджує оплати, редагує реквізити, бачить всі фінанси |
-| executor | Не має доступу до білінгу клієнтів |
-| Company Owner | Бачить борг, реквізити, recurring послуги, платежі своєї компанії |
-| Company Member з `can_view_billing=true` | Тільки читання: борг + реквізити |
-| Company Member без `can_view_billing` | Не бачить фінансів взагалі |
+| Актор                                    | Права                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| owner                                    | Повний доступ: підтверджує оплати, редагує реквізити, бачить всі фінанси |
+| executor                                 | Не має доступу до білінгу клієнтів                                       |
+| Company Owner                            | Бачить борг, реквізити, recurring послуги, платежі своєї компанії        |
+| Company Member з `can_view_billing=true` | Тільки читання: борг + реквізити                                         |
+| Company Member без `can_view_billing`    | Не бачить фінансів взагалі                                               |
 
 ---
 
@@ -42,6 +45,7 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ### 1. Типи білінгу замовлення
 
 #### Fixed Price
+
 - Owner встановлює `orders.totalAmount` після завершення роботи (або заздалегідь)
 - Клієнт бачить фіксовану суму в portal
 - Час не впливає на суму (але може логуватися для внутрішніх потреб)
@@ -54,6 +58,7 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ```
 
 #### Hourly
+
 - Ставка клієнта зберігається в `companies.defaultHourlyRateUsd` (можна перевизначити на рівні замовлення в `orders.hourlyRate`)
 - Виконавці логують час через time logs
 - `totalAmount` = `hourlyRate × SUM(time_logs.hours)` — перераховується автоматично при кожному новому time log
@@ -68,23 +73,29 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ```
 
 **Коли перераховувати `totalAmount` при hourly:**
+
 - При додаванні / редагуванні / видаленні time log
 - Не перераховувати якщо owner вручну зафіксував суму (`manualAmountOverride = true`)
 
 ### 2. Recurring Services
 
 #### Каталог послуг (таблиця `services`)
+
 Owner створює базові послуги із базовою ціною. Приклади:
+
 - "Обслуговування сервера" — $50/міс базова ціна
 - "Технічна підтримка 10 год/міс" — $200/міс базова ціна
 
 #### Призначення клієнту (таблиця `company_services`)
+
 При призначенні послуги конкретному клієнту встановлюється індивідуальна ціна:
+
 ```
 company_services.customPrice = 65.00  ← перевизначає services.defaultPriceUsd
 ```
 
 Один клієнт може мати кілька різних recurring послуг одночасно:
+
 ```
 Компанія "Acme Corp":
   → Обслуговування сервера   $65.00/міс   (customPrice)
@@ -92,6 +103,7 @@ company_services.customPrice = 65.00  ← перевизначає services.defa
 ```
 
 #### pg_cron — генерація service_charges
+
 Щомісяця 1-го числа о 00:01 UTC pg_cron запускає функцію генерації нарахувань:
 
 ```sql
@@ -124,6 +136,7 @@ SELECT cron.schedule(
 ### 3. Аванс і фінальна оплата
 
 #### Workflow авансу:
+
 1. Клієнт домовляється про передоплату
 2. Owner генерує `advance_invoice` PDF (Документи → генерувати)
 3. Клієнт платить (переказ/крипта)
@@ -131,24 +144,26 @@ SELECT cron.schedule(
 5. `balance_due` перераховується миттєво
 
 #### Розрахунок balance_due:
+
 ```typescript
 const advanceTotal = await prisma.payment.aggregate({
   where: { orderId, type: 'advance' },
   _sum: { amount: true },
-});
+})
 
-const balanceDue = order.totalAmount - (advanceTotal._sum.amount ?? 0);
+const balanceDue = order.totalAmount - (advanceTotal._sum.amount ?? 0)
 
 // Якщо balanceDue = 0 → order повністю оплачено
 if (balanceDue <= 0) {
   await prisma.order.update({
     where: { id: orderId },
     data: { paidAt: new Date(), paymentStatus: 'paid' },
-  });
+  })
 }
 ```
 
 #### Відображення в portal:
+
 ```
 Сума замовлення:   $1,000.00 / ₴41,500.00
 Сплачено авансом:  $300.00
@@ -156,6 +171,7 @@ if (balanceDue <= 0) {
 ```
 
 #### Типи платежів (`payments.type`):
+
 - `advance` — передоплата до початку або під час роботи, прив'язана до `orderId`
 - `final` — фінальна оплата по завершенні
 - `partial` — часткова оплата без статусу аванс (наприклад, погашення боргу по рахунку)
@@ -163,9 +179,11 @@ if (balanceDue <= 0) {
 ### 4. Валюта та курс обміну
 
 #### Зберігання
+
 Всі суми в БД зберігаються в **USD** (базова валюта). UAH — тільки для відображення.
 
 #### ExchangeRate (singleton)
+
 НБУ API оновлюється автоматично щодня о 09:10 за Києвом:
 
 ```
@@ -175,22 +193,24 @@ URL: https://bank.gov.ua/NBU_Exchange/exchange_site?valcode=USD&json
 
 ```typescript
 // Приклад відповіді НБУ API:
-[{ "r030": 840, "txt": "Долар США", "rate": 41.5, "cc": "USD", "exchangedate": "12.04.2026" }]
+;[{ r030: 840, txt: 'Долар США', rate: 41.5, cc: 'USD', exchangedate: '12.04.2026' }]
 
 // Оновлення в БД:
 await prisma.exchangeRate.upsert({
   where: { id: 'singleton' },
   create: { id: 'singleton', usdToUah: 41.5, updatedAt: new Date() },
   update: { usdToUah: 41.5, updatedAt: new Date() },
-});
+})
 ```
 
 **Fallback:** якщо НБУ API недоступне — використовується попереднє значення з БД. Логується попередження в Sentry.
 
 #### Відображення в UI:
+
 ```
 $500 / ₴20,750
 ```
+
 ```
 // helpers/currency.ts
 export function formatDualCurrency(usdAmount: number, usdToUah: number): string {
@@ -200,6 +220,7 @@ export function formatDualCurrency(usdAmount: number, usdToUah: number): string 
 ```
 
 #### PDF рахунки:
+
 ```
 500 USD за курсом 41.50 = 20,750.00 UAH
 ```
@@ -211,6 +232,7 @@ export function formatDualCurrency(usdAmount: number, usdToUah: number): string 
 Singleton-запис в таблиці `payment_settings`. Редагується тільки owner в `/settings/billing`.
 
 **Поля:**
+
 ```
 bankName        — назва банку (напр. "ПриватБанк")
 iban            — IBAN рахунок (напр. "UA213996220000026001052678856")
@@ -264,11 +286,11 @@ async function getCompanyDebt(companyId: string): Promise<number> {
       where: { companyId },
       _sum: { amount: true },
     }),
-  ]);
+  ])
 
-  const totalCharged = Number(ordersAgg._sum.totalAmount ?? 0);
-  const totalPaid = Number(paymentsAgg._sum.amount ?? 0);
-  return Math.max(0, totalCharged - totalPaid);
+  const totalCharged = Number(ordersAgg._sum.totalAmount ?? 0)
+  const totalPaid = Number(paymentsAgg._sum.amount ?? 0)
+  return Math.max(0, totalCharged - totalPaid)
 }
 ```
 
@@ -287,26 +309,26 @@ async function updateLoyaltyTier(companyId: string, paidAmount: number): Promise
   const company = await prisma.company.update({
     where: { id: companyId },
     data: { totalSpent: { increment: paidAmount } },
-  });
+  })
 
-  const newTier = calculateTier(Number(company.totalSpent));
-  const oldTier = company.loyaltyTier;
+  const newTier = calculateTier(Number(company.totalSpent))
+  const oldTier = company.loyaltyTier
 
   if (newTier !== oldTier) {
     await prisma.company.update({
       where: { id: companyId },
       data: { loyaltyTier: newTier },
-    });
+    })
     // Відправити нотифікацію loyalty_tier_changed
-    await notify(company.ownerId, 'loyalty_tier_changed', { oldTier, newTier });
+    await notify(company.ownerId, 'loyalty_tier_changed', { oldTier, newTier })
   }
 }
 
 function calculateTier(totalSpent: number): LoyaltyTier {
-  if (totalSpent >= 5000) return 'vip';
-  if (totalSpent >= 2000) return 'partner';
-  if (totalSpent >= 500)  return 'regular';
-  return 'new';
+  if (totalSpent >= 5000) return 'vip'
+  if (totalSpent >= 2000) return 'partner'
+  if (totalSpent >= 500) return 'regular'
+  return 'new'
 }
 ```
 
@@ -322,14 +344,14 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
   const referral = await prisma.referral.findFirst({
     where: { referredCompanyId: companyId, status: 'qualified' },
     include: { referrerCompany: true },
-  });
+  })
 
-  if (!referral) return;
+  if (!referral) return
 
   // Прогресивна ставка по зароблених бонусах реферера
-  const totalEarned = Number(referral.referrerCompany.bonusBalance);
-  const rate = totalEarned >= 500 ? 0.15 : totalEarned >= 200 ? 0.12 : 0.10;
-  const bonusAmount = paidAmount * rate;
+  const totalEarned = Number(referral.referrerCompany.bonusBalance)
+  const rate = totalEarned >= 500 ? 0.15 : totalEarned >= 200 ? 0.12 : 0.1
+  const bonusAmount = paidAmount * rate
 
   await prisma.$transaction([
     prisma.company.update({
@@ -345,17 +367,18 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
         rewardedAt: new Date(),
       },
     }),
-  ]);
+  ])
 
   // Відправити нотифікацію реферерові
   await notify(referral.referrerCompany.ownerId, 'referral_bonus', {
     bonusAmount,
     fromCompanyName: '...',
-  });
+  })
 }
 ```
 
 **Прогресивна ставка:**
+
 ```
 Зароблено $0 – $200    → 10%
 Зароблено $200 – $500  → 12%
@@ -369,42 +392,42 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
 ```typescript
 // packages/types/src/billing.ts
 export interface PaymentProvider {
-  name: string;
-  createPaymentLink(params: CreatePaymentParams): Promise<PaymentLinkResult>;
-  handleWebhook(payload: unknown): Promise<WebhookResult>;
-  verifySignature(payload: string, signature: string): boolean;
+  name: string
+  createPaymentLink(params: CreatePaymentParams): Promise<PaymentLinkResult>
+  handleWebhook(payload: unknown): Promise<WebhookResult>
+  verifySignature(payload: string, signature: string): boolean
 }
 
 export interface CreatePaymentParams {
-  orderId: string;
-  amount: number;
-  currency: string;
-  description: string;
-  returnUrl: string;
+  orderId: string
+  amount: number
+  currency: string
+  description: string
+  returnUrl: string
 }
 
 export interface PaymentLinkResult {
-  paymentLink: string;
-  providerPaymentId: string;
+  paymentLink: string
+  providerPaymentId: string
 }
 ```
 
 ```typescript
 // apps/api/src/providers/manual.provider.ts — MVP
 export class ManualProvider implements PaymentProvider {
-  name = 'manual';
+  name = 'manual'
 
   async createPaymentLink(): Promise<PaymentLinkResult> {
     // Manual flow — немає посилання для оплати
-    return { paymentLink: '', providerPaymentId: '' };
+    return { paymentLink: '', providerPaymentId: '' }
   }
 
   async handleWebhook(): Promise<WebhookResult> {
-    throw new Error('ManualProvider does not support webhooks');
+    throw new Error('ManualProvider does not support webhooks')
   }
 
   verifySignature(): boolean {
-    return true; // Manual — підтверджується власником вручну
+    return true // Manual — підтверджується власником вручну
   }
 }
 
@@ -519,20 +542,19 @@ enum ChargeStatus {
 ```
 GET  /billing/summary
 ```
+
 Повертає: борг, recurring services, payments total, loyalty tier, bonus balance.
 
 ```json
 {
   "data": {
-    "debt": 700.00,
-    "debtUah": 29050.00,
-    "services": [
-      { "name": "Обслуговування сервера", "priceUsd": 65.00, "priceUah": 2697.50 }
-    ],
-    "totalPaid": 1300.00,
+    "debt": 700.0,
+    "debtUah": 29050.0,
+    "services": [{ "name": "Обслуговування сервера", "priceUsd": 65.0, "priceUah": 2697.5 }],
+    "totalPaid": 1300.0,
     "loyaltyTier": "regular",
     "discountPercent": 5,
-    "bonusBalance": 45.00,
+    "bonusBalance": 45.0,
     "paymentSettings": {
       "bankName": "ПриватБанк",
       "iban": "UA213996220000026001052678856",
@@ -556,18 +578,21 @@ GET  /billing/payment-settings  — реквізити (публічно, без
 ```
 GET  /workspace/billing/overview
 ```
+
 Повертає: загальний борг всіх клієнтів, суму за поточний місяць, топ боржників.
 
 ```
 POST /workspace/billing/payments
 ```
+
 Body:
+
 ```json
 {
   "companyId": "uuid",
-  "orderId": "uuid",          // optional
-  "amount": 700.00,
-  "type": "final",            // advance | final | partial
+  "orderId": "uuid", // optional
+  "amount": 700.0,
+  "type": "final", // advance | final | partial
   "paymentMethod": "bank_transfer",
   "paymentReference": "UA20240412001",
   "note": "Оплата по рахунку INV-2026-0042"
@@ -575,16 +600,17 @@ Body:
 ```
 
 Відповідь 201:
+
 ```json
 {
   "data": {
     "id": "uuid",
     "companyId": "uuid",
-    "amount": 700.00,
+    "amount": 700.0,
     "type": "final",
     "confirmedAt": "2026-04-12T10:30:00Z",
     "newDebt": 0,
-    "orderPaidAt": "2026-04-12T10:30:00Z"  // якщо balance_due = 0
+    "orderPaidAt": "2026-04-12T10:30:00Z" // якщо balance_due = 0
   }
 }
 ```
@@ -690,43 +716,49 @@ Modal:
 
 ## Notifications
 
-| Подія | Отримувач | Канал |
-|---|---|---|
-| Оплата підтверджена | Company Owner | email + telegram |
-| Нарахована recurring послуга | Company Owner | email |
-| Підвищення loyalty tier | Company Owner | email + telegram |
-| Referral бонус нарахований | Referrer Company Owner | email + telegram |
-| Борг прострочений (Phase 2) | Company Owner | email |
+| Подія                        | Отримувач              | Канал            |
+| ---------------------------- | ---------------------- | ---------------- |
+| Оплата підтверджена          | Company Owner          | email + telegram |
+| Нарахована recurring послуга | Company Owner          | email            |
+| Підвищення loyalty tier      | Company Owner          | email + telegram |
+| Referral бонус нарахований   | Referrer Company Owner | email + telegram |
+| Борг прострочений (Phase 2)  | Company Owner          | email            |
 
 ---
 
 ## Edge Cases
 
 **1. Аванс більше totalAmount**
+
 - Якщо `SUM(advance) > totalAmount` — `balance_due` = 0 (клієнт переплатив)
 - Переплата зараховується як бонус або повертається вручну (вирішується owner окремо)
 - UI попереджує owner при підтвердженні аванс > totalAmount
 
 **2. totalAmount змінюється після часткової оплати**
+
 - `balance_due` перераховується автоматично при кожному запиті
 - Якщо після зміни `totalAmount` balance_due < 0 → показати warning owner'у
 
 **3. pg_cron не запустився (збій)**
+
 - `service_charges` з `UNIQUE(companyServiceId, month)` захищають від дублів
 - Ручний запуск через workspace: `POST /workspace/billing/charges/generate { month: "2026-04-01" }`
 - Логується в Sentry
 
 **4. НБУ API недоступне**
+
 - Використовується попередній курс з `exchange_rates`
 - Якщо `updatedAt` > 3 дні — показувати warning в workspace settings
 - Sentry alert при HTTP помилці від НБУ
 
 **5. Company Owner підтверджує оцінку з loyalty знижкою**
+
 - При `billingType=fixed` і наявному тирі — UI показує: `$1000 → -5% → $950`
 - `discountAppliedPercent` зберігається на order
 - Знижка застосовується тільки якщо manually не override
 
 **6. Компанія призупинена (`is_active = false`)**
+
 - pg_cron пропускає `company_services` де `company.isActive = false`
 - Нові `service_charges` не генеруються
 
@@ -750,21 +782,25 @@ Modal:
 **Проблема:** клієнт натискає "Confirm payment" двічі → дві Payment rows для одного charge → balance подвоюється.
 
 **Рішення:**
+
 1. **UNIQUE(sourceType, sourceId)** на `payments` — два payments не можуть посилатися на той самий external source (bank transaction id, Stripe charge id, manual confirmation token).
 2. **SELECT FOR UPDATE** на `service_charges` всередині Serializable transaction.
 3. Idempotency key required для всіх POST payment endpoints (`Idempotency-Key` header, valid 24h per key+endpoint).
 
 ```typescript
-await prisma.$transaction(async (tx) => {
-  await tx.$executeRaw`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`
-  const charge = await tx.$queryRaw`
+await prisma.$transaction(
+  async (tx) => {
+    await tx.$executeRaw`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`
+    const charge = await tx.$queryRaw`
     SELECT * FROM service_charges WHERE id = ${chargeId} FOR UPDATE
   `
-  if (charge.status === 'paid') {
-    throw new ConflictError('charge_already_paid')
-  }
-  // ... insert payment + update charge.status='paid'
-}, { isolationLevel: 'Serializable' })
+    if (charge.status === 'paid') {
+      throw new ConflictError('charge_already_paid')
+    }
+    // ... insert payment + update charge.status='paid'
+  },
+  { isolationLevel: 'Serializable' }
+)
 ```
 
 Duplicate payment INSERT → unique constraint error → 409 to caller з reference до існуючого payment.
@@ -772,11 +808,13 @@ Duplicate payment INSERT → unique constraint error → 409 to caller з refere
 ### Auto-invoicing flow
 
 Owner налаштовує **recurring billing** для company:
+
 - Frequency: monthly / quarterly / annual.
 - Items: fixed nomenclature codes + quantities.
 - Day of month: 1st / 15th / last (configurable).
 
 Cron `C02:recurring_billing` (щодня 00:30):
+
 - Знаходить всі `company_billing_subscriptions` де `next_invoice_at <= now()`.
 - Для кожної: create `Document(type='invoice')` + `ServiceCharge` + send via `notify(event='billing.invoice_sent')`.
 - Update `next_invoice_at` = next period.
@@ -794,6 +832,7 @@ Auto-notification: cron `C07:invoice_overdue_marker` ставить `service_cha
 Новий document type `reconciliation_act` (добавлено в S1-03 migration).
 
 Owner генерує сверку:
+
 1. `POST /companies/:id/reconciliation-acts { from, to }`
 2. Backend агрегує всі invoices + payments + adjustments за період.
 3. Generates PDF з branding (модуль 20).
@@ -806,3 +845,42 @@ Owner генерує сверку:
 - `payments.amount_usd` — конвертовано через `exchange_rates` на дату payment (захоплюємо моментальний rate, не latest, щоб history стабільна).
 - `service_charges` similarly зберігає `base_amount_native + base_amount_usd + currency_native`.
 - Reports завжди в USD (single source of truth для KPI).
+
+---
+
+## Payment Type Classification (аудит-уточнення, 29 травня 2026)
+
+Узгодження двох видів оплат, щоб не плодити конкуруючі моделі (архітектурний ризик R3).
+
+### Два канонічні види
+
+| Вид                       | Що це                                      | Модель даних                                                  | Тригер         |
+| ------------------------- | ------------------------------------------ | ------------------------------------------------------------- | -------------- |
+| **One-time**              | разова оплата за замовлення (fixed/hourly) | `Order` → `Payment{type: advance\|final\|partial}`            | manual confirm |
+| **Recurring (абонплата)** | щомісячна/квартальна/річна послуга         | `Service` → `CompanyService` → `ServiceCharge{month, status}` | cron C02       |
+
+### КАНОНІЧНА модель recurring — `Service / CompanyService / ServiceCharge`
+
+**Рішення (R3):** `Service`/`CompanyService`/`ServiceCharge` — **єдине джерело істини** для recurring-доходу. Чернетку `company_billing_subscription` зі старої S1-alignment-секції **відкидаємо** (вона дублювала те саме). Debtors-звіт + P&L + portal billing читають `service_charges` — одне джерело, без розбіжностей.
+
+### Підтримка не-місячної частоти
+
+Якщо потрібна квартальна/річна абонплата, додаємо у `CompanyService` (НЕ нову таблицю):
+
+```prisma
+model CompanyService {
+  // ...наявні поля
+  frequency    BillingFrequency @default(monthly)  // monthly|quarterly|annual
+  nextChargeAt DateTime         @db.Timestamptz(3) // коли генерувати наступний ServiceCharge
+}
+```
+
+Cron C02 обробляє `WHERE nextChargeAt <= now()` замість фіксованого «1-го числа», і зсуває `nextChargeAt` на наступний період. Дешево додати зараз (компанії ще не на планах) — болісно ретрофітити пізніше. Див. BACKLOG «do-now D4».
+
+### Зв'язок Company ↔ BillingPlan (передумова для підписок платформи)
+
+`BillingPlan` зараз — каталог без зв'язку з компанією. Для підписки на саму платформу (не на послуги агенції) потрібна `CompanySubscription{companyId, planId, status, currentPeriodStart/End, canceledAt}`. Додаємо коли реалізуємо платформні підписки (S5+). Зараз — лише зафіксувати в схемі-плані (BACKLOG «S1.5 schema prep»).
+
+### Автосписання (Фаза 2)
+
+`PaymentProvider`-адаптер (Manual MVP → Stripe/LiqPay) робить авто-charge recurring підписок drop-in замінною, без переписування. Manual confirm достатньо для MVP.

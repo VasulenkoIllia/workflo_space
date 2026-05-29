@@ -1209,6 +1209,8 @@ Telegram канал між задачами → Залишається в кон
 - **20-admin-settings**: templates editor, multi-SMTP, branding, nomenclature, departments, cron monitoring.
 - **21-system-monitoring**: Sentry + dashboard + audit log.
 - **22-finance-expenses**: облік витрат (recurring/one_time/ЗП) + P&L звіт (Дохід − Витрати = Прибуток). Фаза 1 — загальний P&L; Фаза 2 — маржа по клієнтах (cost allocation).
+- **23-leave-tracking**: відпустки/лікарняні працівників (запит → approve owner → видно в календарі). Complexity S.
+- **24-calendar**: календар зустрічей (команда↔команда, команда↔клієнт) з нотифікаціями запрошеним + агрегований view (зустрічі + дедлайни + відпустки). Complexity L (потребує D2 polymorphic recipient + per-event timezone).
 
 ### Нові foundation docs
 
