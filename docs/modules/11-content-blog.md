@@ -1,4 +1,5 @@
 # CONTENT & BLOG MODULE
+
 > App: Workspace (work.workflo.space) / Landing (workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`
@@ -62,7 +63,7 @@ const completion = await openai.chat.completions.create({
   model: 'gpt-4-turbo',
   messages: [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: `Напиши статтю про: ${topic}` }
+    { role: 'user', content: `Напиши статтю про: ${topic}` },
   ],
   max_tokens: 2000,
   temperature: 0.7,
@@ -81,11 +82,11 @@ published → draft (зняти з публікації)
 draft → archived
 ```
 
-| Статус | Видно на лендингу |
-|---|---|
-| `draft` | ❌ |
-| `published` | ✅ |
-| `archived` | ❌ |
+| Статус      | Видно на лендингу |
+| ----------- | ----------------- |
+| `draft`     | ❌                |
+| `published` | ✅                |
+| `archived`  | ❌                |
 
 ---
 
@@ -147,7 +148,7 @@ enum PostStatus {
 // При збереженні поста
 const slug = slugify(title, {
   lower: true,
-  locale: 'uk',         // транслітерація з кирилиці
+  locale: 'uk', // транслітерація з кирилиці
   strict: true,
   trim: true,
 })
@@ -166,7 +167,7 @@ const NEXT_REVALIDATION_SECRET = process.env.NEXT_REVALIDATION_SECRET
 await fetch(`${process.env.LANDING_URL}/api/revalidate`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${NEXT_REVALIDATION_SECRET}`,
+    Authorization: `Bearer ${NEXT_REVALIDATION_SECRET}`,
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({ paths: ['/blog', `/blog/${post.slug}`] }),
@@ -197,27 +198,27 @@ export async function POST(request: Request) {
 ```typescript
 // apps/landing/src/app/blog/[slug]/page.tsx
 export async function generateStaticParams() {
-  const posts = await fetch(`${API_URL}/blog?status=published&limit=100`).then(r => r.json())
+  const posts = await fetch(`${API_URL}/blog?status=published&limit=100`).then((r) => r.json())
   return posts.items.map((p: any) => ({ slug: p.slug }))
 }
 
-export const revalidate = 3600  // fallback: перегенерація кожну годину
+export const revalidate = 3600 // fallback: перегенерація кожну годину
 ```
 
 ---
 
 ## API Endpoints
 
-| Метод | URL | Хто | Опис |
-|---|---|---|---|
-| `GET` | `/blog` | Public + Workspace | Список постів |
-| `GET` | `/blog/:slug` | Public + Workspace | Пост за slug |
-| `POST` | `/blog` | Workspace | Створити пост |
-| `PATCH` | `/blog/:id` | Workspace | Редагувати пост |
-| `PATCH` | `/blog/:id/status` | Workspace | Змінити статус (publish/unpublish) |
-| `DELETE` | `/blog/:id` | Workspace | Видалити пост |
-| `POST` | `/blog/generate` | Workspace | AI генерація контенту |
-| `POST` | `/api/revalidate` | Internal (API→Landing) | On-demand ISR |
+| Метод    | URL                | Хто                    | Опис                               |
+| -------- | ------------------ | ---------------------- | ---------------------------------- |
+| `GET`    | `/blog`            | Public + Workspace     | Список постів                      |
+| `GET`    | `/blog/:slug`      | Public + Workspace     | Пост за slug                       |
+| `POST`   | `/blog`            | Workspace              | Створити пост                      |
+| `PATCH`  | `/blog/:id`        | Workspace              | Редагувати пост                    |
+| `PATCH`  | `/blog/:id/status` | Workspace              | Змінити статус (publish/unpublish) |
+| `DELETE` | `/blog/:id`        | Workspace              | Видалити пост                      |
+| `POST`   | `/blog/generate`   | Workspace              | AI генерація контенту              |
+| `POST`   | `/api/revalidate`  | Internal (API→Landing) | On-demand ISR                      |
 
 ### Query для `GET /blog` (public)
 
@@ -306,11 +307,13 @@ export function BlogContent({ content }: { content: string }) {
         code({ node, inline, className, children }) {
           const match = /language-(\w+)/.exec(className || '')
           return !inline && match ? (
-            <SyntaxHighlighter language={match[1]} PreTag="div">{String(children)}</SyntaxHighlighter>
+            <SyntaxHighlighter language={match[1]} PreTag="div">
+              {String(children)}
+            </SyntaxHighlighter>
           ) : (
             <code className={className}>{children}</code>
           )
-        }
+        },
       }}
     >
       {content}
@@ -353,8 +356,34 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Files** | Обкладинка поста — завантажується через Files module |
-| **Auth** | `authorId` — хто опублікував |
-| **Search** | Пошук по блогу (tsvector на title + content) |
+| Модуль     | Зв'язок                                              |
+| ---------- | ---------------------------------------------------- |
+| **Files**  | Обкладинка поста — завантажується через Files module |
+| **Auth**   | `authorId` — хто опублікував                         |
+| **Search** | Пошук по блогу (tsvector на title + content)         |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — REWRITE + нові фічі
+
+> ⚠️ Стара частина **фікція** (Markdown content, PostStatus enum, BlogTag tables, SEO-поля) → ВИДАЛИТИ. Реальна `BlogPost`: `titleUk/En`, `excerptUk/En`, `contentUk/En` JSON (blocks), `tags String[]`, `published`+`featured` Boolean, `type BlogPostType{article,case_study}`. Білінгва per-row (uk+en в одному пості).
+
+### A. Обов'язкові reconcile
+
+Переписати схему/DTO/endpoints під реальну модель; slug-collision retry у транзакції; unpublish → ISR revalidate (прибрати сторінку); `generateStaticParams` для обох локалей; `rehype-sanitize` на `react-markdown`/JSON-render (stored-XSS!); `agencyId`; audit на publish/unpublish; `can('content.manage')`.
+
+### B. AI-генерація статей ✅
+
+- `POST /blog/generate { topic, keywords, type }` (GPT) → draft. Gate: `can()` + **per-agency quota** (`AgencyAiUsage`) + cost-guard. Sanitize topic/keywords (prompt-injection). Зберігати `model` + `promptVersion`. Owner редагує перед публікацією.
+
+### C. SEO-інструменти ✅
+
+- **Додати реальні SEO-поля** (зараз відсутні → landing `generateMetadata` читає undefined): `metaTitleUk/En`, `metaDescriptionUk/En`, `ogImageUrl`, `canonicalUrl`, `coverImageUrl`.
+- Sitemap пагінація (не truncate на 100); JSON-LD structured data (Article); per-locale alternates.
+
+```
+BlogPost: + metaTitleUk/En, metaDescriptionUk/En, ogImageUrl, canonicalUrl, coverImageUrl, aiModel, aiPromptVersion, agencyId
+New: AgencyAiUsage
+```
+
+> **→ BACKLOG (не обрано):** scheduled publishing (`publishedAt` future + cron).

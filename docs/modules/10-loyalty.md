@@ -19,12 +19,12 @@
 
 З `@workflo/types`:
 
-| Tier | Threshold (USD lifetime) | Discount % |
-|---|---:|---:|
-| `NEW` | 0 | 0% |
-| `REGULAR` | 1 000 | 3% |
-| `PARTNER` | 5 000 | 7% |
-| `VIP` | 15 000 | 12% |
+| Tier      | Threshold (USD lifetime) | Discount % |
+| --------- | -----------------------: | ---------: |
+| `NEW`     |                        0 |         0% |
+| `REGULAR` |                    1 000 |         3% |
+| `PARTNER` |                    5 000 |         7% |
+| `VIP`     |                   15 000 |        12% |
 
 Константи: `LOYALTY_TIER_THRESHOLDS_USD` + `LOYALTY_DISCOUNT_PCT` у `packages/types/src/constants.ts`.
 
@@ -45,6 +45,7 @@ GROUP BY c.id;
 ```
 
 Cron `C16:loyalty_recalc`:
+
 - Виконується щодня о 02:30.
 - Для кожної компанії перераховує lifetime + порівнює з threshold.
 - Якщо tier upgraded → надсилає `loyalty.tier_upgraded` event (з матриці preferences).
@@ -57,9 +58,9 @@ Cron `C16:loyalty_recalc`:
 При створенні інвойсу:
 
 ```typescript
-const company = await prisma.company.findUnique({ where: { id }, select: { loyaltyTier: true }})
+const company = await prisma.company.findUnique({ where: { id }, select: { loyaltyTier: true } })
 const baseAmount = computeBaseAmount(items)
-const discountPct = LOYALTY_DISCOUNT_PCT[company.loyaltyTier]  // 0 / 3 / 7 / 12
+const discountPct = LOYALTY_DISCOUNT_PCT[company.loyaltyTier] // 0 / 3 / 7 / 12
 const discount = baseAmount * (discountPct / 100)
 const finalAmount = baseAmount - discount
 
@@ -71,7 +72,7 @@ await prisma.serviceCharge.create({
     discountAmount: discount,
     totalAmount: finalAmount,
     // ...
-  }
+  },
 })
 ```
 
@@ -81,22 +82,23 @@ Owner може **відмінити знижку** для конкретного
 
 ## Endpoint API
 
-| Method | Path | Auth | Опис |
-|---|---|---|---|
-| `GET` | `/companies/:id/loyalty` | owner | Поточний tier + progress до next tier + history upgrade-ів |
-| `GET` | `/loyalty/tiers` | client+ | Публічний опис всіх tier-ів (для UI) |
-| `POST` | `/companies/:id/loyalty/override-discount` | admin | Manual tier set (rare; audit-logged) |
+| Method | Path                                       | Auth    | Опис                                                       |
+| ------ | ------------------------------------------ | ------- | ---------------------------------------------------------- |
+| `GET`  | `/companies/:id/loyalty`                   | owner   | Поточний tier + progress до next tier + history upgrade-ів |
+| `GET`  | `/loyalty/tiers`                           | client+ | Публічний опис всіх tier-ів (для UI)                       |
+| `POST` | `/companies/:id/loyalty/override-discount` | admin   | Manual tier set (rare; audit-logged)                       |
 
 Response `GET /companies/:id/loyalty`:
+
 ```json
 {
   "tier": "PARTNER",
   "discountPct": 7,
-  "lifetimePaidUsd": 7250.00,
+  "lifetimePaidUsd": 7250.0,
   "nextTier": {
     "name": "VIP",
     "thresholdUsd": 15000,
-    "remainingUsd": 7750.00,
+    "remainingUsd": 7750.0,
     "discountPct": 12
   },
   "upgradeHistory": [
@@ -111,6 +113,7 @@ Response `GET /companies/:id/loyalty`:
 ## UI у Portal
 
 Сторінка `/portal/loyalty`:
+
 - Картка з поточним tier (icon + name + discount%).
 - Progress bar до next tier.
 - "До VIP залишилось $7,750".
@@ -122,6 +125,7 @@ Response `GET /companies/:id/loyalty`:
 ## Notification: `loyalty.tier_upgraded`
 
 Templates у `@workflo/notifications`:
+
 - **Email**: повноцінне HTML з картинкою tier badge + опис нових переваг.
 - **Telegram**: коротко "🎉 Вашу компанію {name} переведено на тір {tier}! Знижка {pct}% автоматично застосована до нових рахунків."
 - **in_app**: badge + toast notification.
@@ -151,3 +155,23 @@ model Company {
 ```
 
 `totalSpent` — кеш суми paid; оновлюється кроном C16 синхронно з tier. Зберігаємо щоб не обчислювати в hot path.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile (нові фічі не обрано)
+
+> Genuine-фіч не додаємо; лише виправлення.
+
+- **Узгодити тіри (КРИТИЧНО)**: 05-billing каже $500/$2k/$5k @ 0/5/10/15%, 10-loyalty каже $1k/$5k/$15k @ 0/3/7/12% — **дві різні машини на одній колонці**. Джерело істини = **constants у `@workflo/types`** (LOYALTY_TIER_THRESHOLDS_USD + LOYALTY_DISCOUNT_PCT, які вже існують: 0/1k/5k/15k @ 0/3/7/12). Привести 05-billing до цього.
+- `ServiceCharge.{baseAmount,discountPct,discountAmount,totalAmount}` — щоб зберігати breakdown знижки.
+- `Company.tierOverride` колонка (manual override; cron C16 не клобберить активний override).
+- `LoyaltyTierHistory { companyId, fromTier, toTier, at }` — для `upgradeHistory` у `GET /loyalty`.
+- Один writer для `totalSpent` (cron, не +increment у payment-шляху). Refund → виключати з lifetime.
+- **Precedence** (записати): порядок discount → tax → bonus-debit на одному інвойсі.
+- Per-agency loyalty constants (multi-agency, пізніше).
+
+```
+ServiceCharge: + baseAmount, discountPct, discountAmount, totalAmount
+Company: + tierOverride
+New: LoyaltyTierHistory
+```

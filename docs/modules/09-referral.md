@@ -487,3 +487,21 @@ async function generateUniqueReferralCode(): Promise<string> {
 ### Списання бонусів — S5 (не Phase 2-невизначено)
 
 Списання балансу на оплату замовлень реалізуємо **разом з білінгом (S5)** через `walletDebit()` у invoice-flow. До S5 — баланс накопичується і видно історію, але не списується (бо нема invoice-flow). Деталі — модуль 25 секція «Списання на оплату».
+
+---
+
+## Аудит-фіналізація-2 (30 травня 2026) — reconcile + gamification
+
+### A. Обов'язкові reconcile (з MODULE_AUDIT)
+
+- `ReferralBonus` + `referrerId`/`referredId` колонки (код агрегує по `referrerId`!) + idempotency `UNIQUE(sourceType,sourceId)`.
+- `Referral` constraint `@@unique([referrerId, referredId])` (узгодити з «1 реферер на компанію»).
+- `referralCode` генерується у форматі `workflo-XXXXXX` (НЕ raw uuid default).
+- Прибрати legacy `increment bonusBalance` — єдиний шлях через `walletCredit()` (модуль 25).
+- `ReferralSettings` (per-agency, editable %). `agencyId` scope. Bonus currency з `amount_usd`. Tier-boundary race → FOR UPDATE.
+
+### B. Referral-дашборд + гейміфікація ✅
+
+- `ReferralAchievement { id, agencyId, code, name, threshold, reward }` + видані `CompanyAchievement`. Лідерборд (top referrers per-agency), progress-бари до next-tier/achievement, бейджі. Event `referral.milestone_reached`.
+
+> **→ BACKLOG (не обрано):** multi-level depth 2+; cash-out бонусів.

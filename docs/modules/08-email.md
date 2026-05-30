@@ -1,4 +1,5 @@
 # EMAIL TEMPLATES MODULE
+
 > App: API (api.workflo.space) / Mailcow
 > Статус: MVP
 > Залежить від: `packages/notifications`, `packages/i18n`
@@ -25,11 +26,11 @@ API (Nodemailer)
 ```typescript
 // packages/notifications/src/email/mailer.ts
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,      // mail.workflo.space
-  port: Number(process.env.SMTP_PORT),  // 587
-  secure: false,                    // STARTTLS
+  host: process.env.SMTP_HOST, // mail.workflo.space
+  port: Number(process.env.SMTP_PORT), // 587
+  secure: false, // STARTTLS
   auth: {
-    user: process.env.SMTP_USER,    // noreply@workflo.space
+    user: process.env.SMTP_USER, // noreply@workflo.space
     pass: process.env.SMTP_PASS,
   },
 })
@@ -108,6 +109,7 @@ export function renderEmailTemplate(
 ## Список листів та їх змінні
 
 ### `welcome`
+
 ```
 {{name}}           — ім'я клієнта
 {{loginUrl}}       — посилання на вхід
@@ -115,6 +117,7 @@ export function renderEmailTemplate(
 ```
 
 ### `password-reset`
+
 ```
 {{name}}
 {{resetUrl}}       — https://portal.workflo.space/reset-password?token=...
@@ -122,6 +125,7 @@ export function renderEmailTemplate(
 ```
 
 ### `invite` (для executors і company members)
+
 ```
 {{name}}
 {{inviterName}}    — хто запросив
@@ -131,6 +135,7 @@ export function renderEmailTemplate(
 ```
 
 ### `order-status`
+
 ```
 {{orderTitle}}
 {{orderNumber}}    — #UUID-short або порядковий номер
@@ -141,6 +146,7 @@ export function renderEmailTemplate(
 ```
 
 ### `invoice`
+
 ```
 {{orderTitle}}
 {{invoiceNumber}}  — INV-2026-0042
@@ -151,6 +157,7 @@ export function renderEmailTemplate(
 ```
 
 ### `document-sent`
+
 ```
 {{documentType}}   — "Акт виконаних робіт"
 {{documentNumber}}
@@ -160,6 +167,7 @@ export function renderEmailTemplate(
 ```
 
 ### `payment-received`
+
 ```
 {{amount}}
 {{amountUah}}
@@ -169,6 +177,7 @@ export function renderEmailTemplate(
 ```
 
 ### `subscription-expiring`
+
 ```
 {{planName}}
 {{expiresAt}}
@@ -177,6 +186,7 @@ export function renderEmailTemplate(
 ```
 
 ### `referral-bonus`
+
 ```
 {{referredCompanyName}}
 {{bonusAmount}}
@@ -191,36 +201,65 @@ export function renderEmailTemplate(
 <!-- packages/notifications/src/email/templates/base.html -->
 <!DOCTYPE html>
 <html lang="{{lang}}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{subject}}</title>
-  <style>
-    /* Inline styles для максимальної сумісності */
-    body { font-family: -apple-system, Arial, sans-serif; background: #f5f5f5; margin: 0; }
-    .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; }
-    .header { background: #1a1a2e; padding: 24px; text-align: center; }
-    .logo { color: #fff; font-size: 24px; font-weight: 700; }
-    .content { padding: 32px 24px; }
-    .btn { display: inline-block; padding: 12px 24px; background: #4f46e5; color: #fff;
-           text-decoration: none; border-radius: 6px; font-weight: 600; }
-    .footer { padding: 16px 24px; text-align: center; color: #999; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">Workflo.Space</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{subject}}</title>
+    <style>
+      /* Inline styles для максимальної сумісності */
+      body {
+        font-family: -apple-system, Arial, sans-serif;
+        background: #f5f5f5;
+        margin: 0;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 8px;
+      }
+      .header {
+        background: #1a1a2e;
+        padding: 24px;
+        text-align: center;
+      }
+      .logo {
+        color: #fff;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .content {
+        padding: 32px 24px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 12px 24px;
+        background: #4f46e5;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+      .footer {
+        padding: 16px 24px;
+        text-align: center;
+        color: #999;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="logo">Workflo.Space</div>
+      </div>
+      <div class="content">{{content}}</div>
+      <div class="footer">
+        <p>© 2026 Workflo.Space | <a href="{{unsubscribeUrl}}">Відписатися</a></p>
+        <p>hello@workflo.space</p>
+      </div>
     </div>
-    <div class="content">
-      {{content}}
-    </div>
-    <div class="footer">
-      <p>© 2026 Workflo.Space | <a href="{{unsubscribeUrl}}">Відписатися</a></p>
-      <p>hello@workflo.space</p>
-    </div>
-  </div>
-</body>
+  </body>
 </html>
 ```
 
@@ -265,11 +304,39 @@ model EmailLog {
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Що надсилає |
-|---|---|
-| **Auth** | welcome, password-reset, invite |
-| **Orders** | order-status |
-| **Billing** | invoice, payment-received, subscription-expiring |
-| **Documents** | document-sent |
-| **Referral** | referral-bonus |
-| **Notifications** | `EmailAdapter` — конкретна реалізація відправки |
+| Модуль            | Що надсилає                                      |
+| ----------------- | ------------------------------------------------ |
+| **Auth**          | welcome, password-reset, invite                  |
+| **Orders**        | order-status                                     |
+| **Billing**       | invoice, payment-received, subscription-expiring |
+| **Documents**     | document-sent                                    |
+| **Referral**      | referral-bonus                                   |
+| **Notifications** | `EmailAdapter` — конкретна реалізація відправки  |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — REWRITE + нові фічі
+
+> ⚠️ Стара частина доку **матеріально неправильна** (EmailLog-модель, file-HTML-шаблони, 9 шаблонів) → ВИДАЛИТИ в doc-sync. Реальність: 4 TS-шаблони (`renderWelcome/PasswordReset/Invite*`), логування через `NotificationLog`, escape через `escapeText/Attr`.
+
+### A. Обов'язкові reconcile
+
+Прибрати `EmailLog` + file-templates + `replaceAll`-без-escape приклад. Per-agency sender (multi-SMTP), `messageId` персистити в NotificationLog для трасування.
+
+### B. Inbound email → задача/коментар ✅ (= арх. тема #14)
+
+- Mailcow inbound → `POST /webhooks/email/inbound` (parse MIME). Routing: `Reply-To`/`+token@` адреса несе `{orderId, profileId}` → створює `OrderComment`; `support@agency` → новий order/тикет (триаж).
+- Дедуп по Message-ID; вкладення → OrderFile; spam-фільтр (SPF/SpamAssassin score). `agencyId` з домену отримувача.
+
+### C. Bounce / suppression ✅
+
+- Mailcow bounce-webhook → `SuppressedEmail { agencyId, email, reason(hard_bounce|complaint|unsubscribe), createdAt }`. `sendEmail` пропускає suppressed.
+- Unsubscribe-токен + `List-Unsubscribe` + `List-Unsubscribe-Post` (one-click, вимога Gmail/Yahoo). `GET /unsubscribe/:token`.
+
+### D. Per-agency домен відправки ✅ (white-label)
+
+- `AgencyEmailDomain { agencyId, domain, dkimSelector, verifiedAt }`. DNS-верифікація (SPF/DKIM/DMARC records видаються агенції). `from`/`reply-to`/DKIM per-agency. Дефолт — платформний домен поки агенція не верифікувала свій.
+
+```
+New: SuppressedEmail, AgencyEmailDomain; NotificationLog + messageId
+```
