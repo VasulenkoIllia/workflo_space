@@ -60,6 +60,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
         companyId: string
         companyName: string
         companySlug: string
+        agencyId: string
         refreshToken: string
       }
 
@@ -117,6 +118,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             companyId: company.id,
             companyName: company.name,
             companySlug: company.slug,
+            agencyId,
             refreshToken: refresh.token,
           }
         })
@@ -137,7 +139,9 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
         profileId: result.profileId,
         email,
         role: 'client',
+        activeAgencyId: result.agencyId,
         activeCompanyId: result.companyId,
+        agencyMemberships: [],
         memberships,
       })
       const accessToken = await reply.jwtSign(claims)

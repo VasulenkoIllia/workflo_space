@@ -114,4 +114,38 @@ describe('can() — RBAC shim', () => {
     expect(can(executor, 'order.approve_estimate', { companyId: 'anything' })).toBe(true)
     expect(can(executor, 'billing.view', { companyId: 'anything' })).toBe(false)
   })
+
+  // ── S16-04: tenant-guard (ADR-004) ──
+  const teamA: AccessClaims = {
+    sub: 'ta',
+    email: 'a@e.com',
+    role: 'executor',
+    activeAgencyId: 'agency-A',
+    activeCompanyId: null,
+    agencyMemberships: [{ agencyId: 'agency-A', role: 'executor' }],
+    memberships: [],
+  }
+  const clientA: AccessClaims = {
+    sub: 'ca',
+    email: 'c@e.com',
+    role: 'client',
+    activeAgencyId: 'agency-A',
+    activeCompanyId: 'c1',
+    agencyMemberships: [],
+    memberships: [{ companyId: 'c1', role: 'owner' }],
+  }
+
+  it('tenant-guard: cross-tenant resource is denied before any feature rule', () => {
+    // same tenant → falls through to the normal rule (executor may update orders)
+    expect(can(teamA, 'order.update', { agencyId: 'agency-A', companyId: 'x' })).toBe(true)
+    // cross-tenant → denied regardless of role/action
+    expect(can(teamA, 'order.update', { agencyId: 'agency-B', companyId: 'x' })).toBe(false)
+    // resource not agency-scoped (no agencyId) → guard imposes no constraint
+    expect(can(teamA, 'order.update', { companyId: 'x' })).toBe(true)
+  })
+
+  it('tenant-guard: client tenant resolved via activeAgencyId', () => {
+    expect(can(clientA, 'order.create', { agencyId: 'agency-A', companyId: 'c1' })).toBe(true)
+    expect(can(clientA, 'order.create', { agencyId: 'agency-B', companyId: 'c1' })).toBe(false)
+  })
 })

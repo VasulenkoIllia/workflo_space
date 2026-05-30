@@ -1,6 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, loginSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { loadAgencyMemberships } from '../../auth/memberships.js'
 import { verifyPassword } from '../../auth/password.js'
 import {
   buildAccessClaims,
@@ -82,7 +83,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
           companyId: true,
           role: true,
           permissions: true,
-          company: { select: { name: true, slug: true } },
+          company: { select: { name: true, slug: true, agencyId: true } },
         },
         orderBy: { joinedAt: 'asc' },
       })
@@ -94,11 +95,21 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
       }))
       const activeCompanyId = memberships[0]?.companyId ?? null
 
+      // Tenant context (ADR-004): team members operate in their agency; a client's
+      // tenant is the agency of their active company.
+      const agencyMemberships = await loadAgencyMemberships(prisma, profile.id)
+      const activeAgencyId =
+        agencyMemberships[0]?.agencyId ??
+        memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId ??
+        null
+
       const claims = buildAccessClaims({
         profileId: profile.id,
         email: profile.email,
         role: profile.role,
+        activeAgencyId,
         activeCompanyId,
+        agencyMemberships,
         memberships,
       })
       const accessToken = await reply.jwtSign(claims)

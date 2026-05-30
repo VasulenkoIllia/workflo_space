@@ -26,6 +26,16 @@ export interface Membership {
 }
 
 /**
+ * Agency (tenant) membership for internal team — owner/executor of an agency
+ * (ADR-004). Clients are NOT agency members; their tenant is derived from their
+ * active company's agencyId. Drives the can() tenant-guard.
+ */
+export interface AgencyMembership {
+  agencyId: string
+  role: 'owner' | 'executor'
+}
+
+/**
  * Access-token claims. Kept small (15m TTL) — `activeCompanyId` is the company
  * the user is currently operating in; `memberships` lets the client render the
  * company switcher without an extra round-trip. See modules/01-auth.md.
@@ -34,7 +44,9 @@ export interface AccessClaims {
   sub: string
   email: string
   role: 'owner' | 'executor' | 'client'
+  activeAgencyId: string | null
   activeCompanyId: string | null
+  agencyMemberships: AgencyMembership[]
   memberships: Membership[]
 }
 
@@ -42,14 +54,18 @@ export function buildAccessClaims(params: {
   profileId: string
   email: string
   role: 'owner' | 'executor' | 'client'
+  activeAgencyId: string | null
   activeCompanyId: string | null
+  agencyMemberships: AgencyMembership[]
   memberships: Membership[]
 }): AccessClaims {
   return {
     sub: params.profileId,
     email: params.email,
     role: params.role,
+    activeAgencyId: params.activeAgencyId,
     activeCompanyId: params.activeCompanyId,
+    agencyMemberships: params.agencyMemberships,
     memberships: params.memberships,
   }
 }

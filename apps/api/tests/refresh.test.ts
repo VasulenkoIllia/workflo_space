@@ -7,6 +7,8 @@ const refreshTokenUpdate = vi.fn()
 const refreshTokenUpdateMany = vi.fn()
 const refreshTokenCreate = vi.fn()
 const companyMemberFindMany = vi.fn()
+const agencyMemberFindMany = vi.fn()
+const companyFindUnique = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
 
@@ -19,6 +21,8 @@ vi.mock('@workflo/db', () => ({
       create: refreshTokenCreate,
     },
     companyMember: { findMany: companyMemberFindMany },
+    agencyMember: { findMany: agencyMemberFindMany },
+    company: { findUnique: companyFindUnique },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
@@ -40,6 +44,8 @@ function wireValidToken() {
     profile: { id: 'profile-1', email: 'u@e.com', role: 'client', isActive: true },
   })
   companyMemberFindMany.mockResolvedValue([{ companyId: 'company-1', role: 'owner' }])
+  agencyMemberFindMany.mockResolvedValue([]) // client → tenant via active company
+  companyFindUnique.mockResolvedValue({ agencyId: 'agency-1' })
   // Execute the real callback with a complete tx so issueRefreshToken() runs
   // (it calls tx.refreshToken.create and returns its own random token).
   transaction.mockImplementation(async (cb: (tx: Record<string, unknown>) => unknown) =>

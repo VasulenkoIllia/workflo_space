@@ -5,6 +5,7 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 // ─── Mock @workflo/db ────────────────────────────────────────────────────────
 const profileFindUnique = vi.fn()
 const companyMemberFindMany = vi.fn()
+const agencyMemberFindMany = vi.fn()
 const refreshTokenCreate = vi.fn()
 const auditLogCreate = vi.fn()
 
@@ -12,6 +13,7 @@ vi.mock('@workflo/db', () => ({
   prisma: {
     profile: { findUnique: profileFindUnique },
     companyMember: { findMany: companyMemberFindMany },
+    agencyMember: { findMany: agencyMemberFindMany },
     refreshToken: { create: refreshTokenCreate },
     auditLog: { create: auditLogCreate },
   },
@@ -37,9 +39,18 @@ function wireProfile(overrides: Record<string, unknown> = {}) {
     ...overrides,
   })
   companyMemberFindMany.mockResolvedValue([
-    { companyId: 'company-1', role: 'owner', company: { name: 'Acme', slug: 'acme' } },
-    { companyId: 'company-2', role: 'member', company: { name: 'Beta', slug: 'beta' } },
+    {
+      companyId: 'company-1',
+      role: 'owner',
+      company: { name: 'Acme', slug: 'acme', agencyId: 'agency-1' },
+    },
+    {
+      companyId: 'company-2',
+      role: 'member',
+      company: { name: 'Beta', slug: 'beta', agencyId: 'agency-1' },
+    },
   ])
+  agencyMemberFindMany.mockResolvedValue([]) // client → tenant via active company's agencyId
   refreshTokenCreate.mockResolvedValue({})
   auditLogCreate.mockResolvedValue({})
 }

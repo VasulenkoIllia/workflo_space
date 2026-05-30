@@ -1,7 +1,12 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
-import { defaultActiveCompanyId, loadMemberships } from '../../auth/memberships.js'
+import {
+  defaultActiveCompanyId,
+  loadAgencyMemberships,
+  loadMemberships,
+  resolveActiveAgencyId,
+} from '../../auth/memberships.js'
 import {
   buildAccessClaims,
   issueRefreshToken,
@@ -88,6 +93,11 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
 
       const memberships = await loadMemberships(prisma, stored.profileId)
       const activeCompanyId = defaultActiveCompanyId(memberships)
+      const agencyMemberships = await loadAgencyMemberships(prisma, stored.profileId)
+      const activeAgencyId = await resolveActiveAgencyId(prisma, {
+        agencyMemberships,
+        activeCompanyId,
+      })
 
       // Rotate atomically: the conditional updateMany (revokedAt IS NULL in the
       // WHERE) is the optimistic lock — a concurrent request that already rotated
@@ -108,7 +118,9 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         profileId: stored.profile.id,
         email: stored.profile.email,
         role: stored.profile.role,
+        activeAgencyId,
         activeCompanyId,
+        agencyMemberships,
         memberships,
       })
       const accessToken = await reply.jwtSign(claims)

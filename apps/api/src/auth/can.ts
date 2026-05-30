@@ -42,6 +42,7 @@ const PERMISSION_GATED: Partial<Record<Action, keyof CompanyPermissions>> = {
 }
 
 export interface ResourceContext {
+  agencyId?: string
   companyId?: string
   ownerId?: string
   executorId?: string
@@ -75,10 +76,26 @@ function hasCompanyPermission(
 }
 
 /**
+ * Tenant-guard (ADR-004): a resource carrying `agencyId` may only be acted on by
+ * a user whose session tenant (activeAgencyId) or agency membership matches it.
+ * Resources without agencyId are not tenant-scoped, so this imposes no constraint.
+ */
+function sameTenant(user: AccessClaims, resourceAgencyId: string): boolean {
+  if (user.activeAgencyId === resourceAgencyId) return true
+  return user.agencyMemberships.some((m) => m.agencyId === resourceAgencyId)
+}
+
+/**
  * Decide whether `user` may perform `action` on `resource`.
  * Default-deny: anything not explicitly allowed returns false.
  */
 export function can(user: AccessClaims, action: Action, resource: ResourceContext = {}): boolean {
+  // ── Tenant isolation (ADR-004): cross-tenant access is denied before any
+  //    feature-level rule. Closes agency-to-agency IDOR by default. ──
+  if (resource.agencyId && !sameTenant(user, resource.agencyId)) {
+    return false
+  }
+
   // ── Platform admin (hardcoded for MVP; becomes a real role with task #24) ──
   if (action === 'admin.access' || action.startsWith('finance.')) {
     return user.role === 'executor' && !!ADMIN_EMAIL && user.email === ADMIN_EMAIL
