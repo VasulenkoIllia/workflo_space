@@ -23,9 +23,11 @@ Admin-секція workspace, де superuser (`role=executor + email = ADMIN_EMA
 ## 1. Templates editor
 
 ### Сценарій
+
 Owner хоче змінити текст welcome-email на ласкавіший. Без deploy.
 
 ### Storage
+
 Таблиця `notification_templates`:
 
 ```prisma
@@ -46,10 +48,13 @@ model NotificationTemplate {
 ```
 
 ### Resolution priority
+
 `renderEmailForEvent(event)` спершу шукає user-override у `notification_templates`. Якщо нема — fallback на hardcoded template з `packages/notifications/src/email/templates/`.
 
 ### UI
+
 `/workspace/admin/templates`:
+
 - List of 27 events × 3 channels × 2 locales = 162 slots (більшість default).
 - Per slot: "Edit" → modal з:
   - Subject input (email only).
@@ -60,6 +65,7 @@ model NotificationTemplate {
   - "Reset to default" — видалити override.
 
 ### Validation
+
 - Server validates всі required placeholders присутні (e.g. `welcome` має містити `{name}` AND `{portalUrl}`).
 - Reject submission якщо HTML невалідний (DOM parse).
 
@@ -68,9 +74,11 @@ model NotificationTemplate {
 ## 2. Multi-sender SMTP
 
 ### Сценарій
+
 Owner хоче розділити транзакційні vs invoice vs support emails (різні reply-to).
 
 ### Storage
+
 `smtp_senders`:
 
 ```prisma
@@ -94,7 +102,9 @@ model SmtpSender {
 ```
 
 ### Routing
+
 Кожен event має `senderSlug` mapping (configurable у admin):
+
 - `billing.*` → `billing@`
 - `auth.*` → `noreply@`
 - `system.*` → `support@`
@@ -102,7 +112,9 @@ model SmtpSender {
 `sendEmail()` приймає optional `from` override → admin layer передає на основі mapping.
 
 ### UI
+
 `/workspace/admin/smtp`:
+
 - Cards для кожного sender з status (connected ✓ / failed ✗ / last_check_at).
 - "Test connection" button → `verifyMailer(senderId)`.
 - "Edit" — все крім password у формі; password окремо з "Update password" дією (з 2FA).
@@ -131,7 +143,9 @@ model PdfBranding {
 Singleton row (id="singleton") — global для всіх документів.
 
 ### UI
+
 `/workspace/admin/branding`:
+
 - Logo upload (PNG/JPG, max 2MB).
 - Color picker для primary.
 - Font dropdown (Inter, Roboto, OpenSans — bundled fonts).
@@ -144,9 +158,11 @@ Singleton row (id="singleton") — global для всіх документів.
 ## 4. Nomenclature
 
 ### Сценарій
+
 Owner хоче мати каталог фіксованих позицій ("Audit SEO — $200", "Logo design — $300") з кодами, які з'являються в invoices.
 
 ### Storage
+
 `service_nomenclature`:
 
 ```prisma
@@ -169,12 +185,15 @@ model ServiceNomenclature {
 ### Per-order override
 
 При додаванні позиції до invoice:
+
 1. Owner обирає nomenclature код → автозаповнення name + basePriceUsd.
 2. Може переписати price у конкретному рахунку (override).
 3. ServiceCharge зберігає `nomenclatureId + finalPrice` (override flag implicit).
 
 ### UI
+
 `/workspace/admin/nomenclature`:
+
 - CRUD table.
 - "Bulk import" — CSV upload.
 - "Activate/Deactivate" — soft hide без видалення (preserved у history charges).
@@ -184,6 +203,7 @@ model ServiceNomenclature {
 ## 5. Departments CRUD
 
 ### Storage
+
 `departments`:
 
 ```prisma
@@ -202,10 +222,13 @@ model Department {
 ```
 
 ### Seed
+
 З `DEFAULT_DEPARTMENT_SLUGS` у `@workflo/types/constants`: design / dev / marketing / management / qa / devops / content.
 
 ### UI
+
 `/workspace/admin/departments`:
+
 - Simple CRUD table.
 - "Deactivate" замість delete — executors зберігають department reference у history.
 
@@ -214,6 +237,7 @@ model Department {
 ## 6. Cron monitoring
 
 `/workspace/admin/crons`:
+
 - Table з усіма cron jobs (з `CRON_JOBS.md`): name / schedule / last_run / status (success/failed/skipped) / duration.
 - "Run now" button per cron — manual trigger (admin-only, audit-logged).
 - "Pause" toggle — disabled cron не run by scheduler.
@@ -255,9 +279,42 @@ Future: dedicated `role = 'admin'` enum value (`task #24` — повний RBAC)
 ## Audit log
 
 Кожна дія в admin section → `audit_logs` з `action = 'admin.<sub-area>'`:
+
 - `admin.template_updated` (event/channel/locale)
 - `admin.smtp_sender_updated` (senderId, field)
 - `admin.branding_updated`
 - `admin.nomenclature_changed` (code, action)
 - `admin.department_updated`
 - `admin.cron_manual_triggered` (cronName)
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+- **`isAdmin = email===ADMIN_EMAIL` → `can(user,'admin.access')`** (ADR-002) + tenant-guard (ADR-004). Admin стає per-agency роллю, не глобальним email-збігом.
+- **Per-agency scoping всіх таблиць:** `NotificationTemplate`, `SmtpSender`, `ServiceNomenclature`, `Department`, `PdfBranding` → `+ agencyId`; унікальність scoped (`@@unique([agencyId, slug])` / `([agencyId, code])` / `([agencyId, event, channel, locale])`). `PdfBranding` перестає бути `id="singleton"` → один рядок на агенцію.
+- `SmtpSender` пароль — через той самий envelope-KEK, що credentials vault (не власна крипта).
+- `CronRun.agencyId` nullable (платформні крони — null; per-agency — set).
+
+### B. Feature-флаги (per-agency) ✅
+
+- `AgencyFeatureFlag { agencyId, key, enabled }` + кеш. Гейтить модулі/фічі per-agency → поетапний rollout і майбутні SaaS-тарифи (basic/pro). `isFeatureEnabled(agencyId,key)` helper.
+
+### C. Outbound webhooks ✅
+
+- `WebhookEndpoint { id, agencyId, url, events[], secret, isActive }` + `WebhookDelivery` (статус/спроби). Доставка **через outbox** (retry/DLQ, topic #2-3), HMAC-підпис `X-Workflo-Signature`. Події: order.created, payment.confirmed тощо. Agency інтегрує Zapier/Make/власний бекенд.
+
+### D. API-ключі агенції ✅
+
+- `ApiKey { id, agencyId, name, hashedKey, scopes[], expiresAt, lastUsedAt, revokedAt }`. Bearer-auth-шлях (поряд з JWT), scoped permissions через `can()`. Прев'ю public-API (topic #10). Показуємо plaintext лише раз при створенні.
+
+### E. Export/import конфіга ✅
+
+- JSON-снапшот налаштувань агенції (templates/nomenclature/departments/branding) → бекап/клон/онбординг нової агенції. Import — валідація + dry-run preview.
+
+```
+Reconcile: NotificationTemplate/SmtpSender/ServiceNomenclature/Department/PdfBranding + agencyId; CronRun.agencyId
+New: AgencyFeatureFlag, WebhookEndpoint, WebhookDelivery, ApiKey
+```

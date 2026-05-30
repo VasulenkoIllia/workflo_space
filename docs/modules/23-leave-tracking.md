@@ -110,3 +110,24 @@ Near-zero cost — матриця підхопить автоматично пі
 - [ ] Notification обом сторонам.
 - [ ] Approved leave видно у календарі (коли 24 готовий).
 - [ ] Усі дії в audit_logs.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нова фіча
+
+### A. Обов'язкові reconcile
+
+- **`LeaveRequest.agencyId`** + tenant-guard. `can()` self-vs-others (executor над власним; owner над будь-чиїм) — перше таке правило, додати в ADR-002 shim.
+- `ExecutorRate.hireDate` (S1.5 schema-prep) — потрібен для accrual; додати заздалегідь.
+- Notify events `team.leave_requested`/`team.leave_status_changed` → через матрицю (07) + outbox.
+
+### B. Баланс/квота відпусток ✅
+
+- `LeaveBalance { executorId, agencyId, type, year, accruedDays, usedDays }` + accrual-cron (напр. 1.75 дн/міс від `hireDate`). Залишок по типах; guard «не більше за баланс» на approve. Підтверджує Phase 2 з тіла модуля як обрану.
+
+> **→ BACKLOG (не обрано):** Календар держсвят (UA) — авто-виключення з робочих днів/accrual. Винесено окремо.
+
+```
+LeaveRequest: + agencyId
+New: LeaveBalance
+```

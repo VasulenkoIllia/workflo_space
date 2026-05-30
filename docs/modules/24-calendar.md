@@ -144,3 +144,28 @@ model CalendarAttendee {
 - [ ] Агрегований view (зустрічі + дедлайни + відпустки).
 - [ ] Скасування → notify усім.
 - [ ] Per-event timezone коректно рендериться.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+- **`CalendarEvent.agencyId`** + tenant-guard; `can('calendar.event.*')`.
+- Зовнішні гості — через `notifyRecipient()` (D2, profile-less) + outbox; прибрати дубль у `inviteEmail.ts`.
+- Per-event `timezone` (IANA) — рендер у TZ глядача (ризик R5). Aggregated view — read-only проєкція (без дублю стану).
+
+### B. Booking-лінки (Calendly-style) ✅
+
+- `BookingLink { id, agencyId, slug, durationMin, availability Json, isActive }`. Публічна сторінка → клієнт обирає вільний слот → авто-`CalendarEvent(client_meeting)` + notify. Anti-abuse: rate-limit + Turnstile на публічному роуті.
+
+### C. Авто відео-дзвінок ✅
+
+- `MeetingProvider`-адаптер (Zoom/Google Meet, як payments-провайдери) → авто-`meetingUrl` при створенні. Інтерфейс закладаємо зараз, імплементація фазована (OAuth-інтеграція).
+
+> **→ BACKLOG (не обрано):** Календар держсвят (UA). Recurrence/ICS-експорт/зовнішні гості лишаються Phase 2 з тіла модуля.
+
+```
+CalendarEvent: + agencyId
+New: BookingLink; MeetingProvider interface (packages)
+```

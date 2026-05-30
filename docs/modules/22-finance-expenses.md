@@ -290,3 +290,34 @@ client_revenue − (direct_costs + allocated_share_of_shared_costs) = client_mar
 - [ ] CSV експорт.
 - [ ] Усі зміни в audit_logs.
 - [ ] Витрати в розрізі клієнтів (тег) і працівників (тег/ЗП) — видимі у фільтрах.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+- **`Expense.agencyId`** + `ExpenseAllocation` scoped; `can('finance.read'/'finance.write')` + tenant-guard на всіх `/expenses` та `/reports/pnl*`.
+- Усі зміни → `audit_logs` (`finance.expense_created/updated/deleted/archived`).
+- `amountUsd` через спільні `exchange_rates` (як payments) — джерело курсу одне.
+
+### B. Прикріплення чеків/інвойсів ✅
+
+- `ExpenseReceipt { id, expenseId, fileId, sha256 }` (через `packages/storage`, OrderFile-патерн, tenant-prefixed). PDF/фото чека до кожної витрати — критично для бухгалтерії.
+
+### C. Бюджети + алерти перевитрат ✅
+
+- `Budget { agencyId, category, monthlyLimitUsd }`. Cron порівнює факт P&L vs ліміт → `notify('finance.budget_exceeded')`. Проактивний контроль.
+
+### D. Воркфлоу узгодження витрат ✅
+
+- `Expense.status { draft, pending, approved, rejected }` + reviewer (як leave). Лише `approved` потрапляє в P&L. Owner-only затвердження; команда подає.
+
+### E. ПДВ / податковий облік ✅
+
+- `Expense.{ vatRate, deductible }` → податковий звіт (deductible-сума за період). Для агенції-платника податків в Україні.
+
+```
+Expense: + agencyId, status, vatRate, deductible
+New: ExpenseReceipt, Budget
+```

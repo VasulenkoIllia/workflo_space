@@ -268,3 +268,18 @@ WalletTransaction — **forever** (фінансова історія, як payme
 - [ ] Admin: список гаманців + історія + ручна корекція (audit).
 - [ ] Portal: клієнт бачить баланс + свою історію.
 - [ ] Spending API спроєктований, помічений S5.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile (нові фічі не обрано)
+
+> Модуль уже вичерпно спроєктований (29.05) — лише tenant-reconcile.
+
+- **`agencyId`** на `WalletTransaction`, `PaymentAllocation`; `ReferralSettings` → per-agency (drop `id="singleton"`, `@@unique([agencyId])`, дефолт-сид на агенцію).
+- `can('finance.read'/'finance.write')` + tenant-guard на всіх `/admin/wallet/*` та `/admin/referral/*` (cross-agency IDOR).
+- Інваріант балансу (`bonusBalance == Σcredit − Σdebit`, `FOR UPDATE` lock) + `Company.moneyBalance` кеш — як описано в тілі; підтверджено.
+- Spending (`walletDebit`) лишається S5 (немає invoice-flow раніше).
+
+```
+WalletTransaction/PaymentAllocation/ReferralSettings: + agencyId
+```
