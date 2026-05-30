@@ -378,3 +378,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 Profile: + timezone, phone, density
 New: DataExportRequest
 ```
+
+## Беклог-промоут (30.05) → у план
+
+- **Темна тема в Portal** (S9): зараз dark лише у workspace, портал «always light». `ThemeProvider` (packages/ui) вже існує — потрібно лише підключити токени + перемикач у `/settings`. Low-effort полиш. Промоут із беклогу.

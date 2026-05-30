@@ -158,14 +158,16 @@
 
 ## SPRINT 8 — QA + Launch (MVP v0.1.0)
 
-| ID    | Задача                                                | Модуль | Статус |
-| ----- | ----------------------------------------------------- | ------ | ------ |
-| S8-01 | Integration tests — auth/orders/billing/referral      | All    | ⬜     |
-| S8-02 | Security review — OWASP checklist + tenant-isolation  | Infra  | ⬜     |
-| S8-03 | Sentry (5 apps) + UptimeRobot + Netdata + backup-cron | Infra  | ⬜     |
-| S8-04 | pg_cron перевірка (recurring/НБУ/loyalty/heartbeat)   | Infra  | ⬜     |
-| S8-05 | Перший реальний клієнт — ручне тестування + багфікс   | All    | ⬜     |
-| S8-06 | git tag v0.1.0 + 🚀 Production deploy                 | Infra  | ⬜     |
+| ID    | Задача                                                              | Модуль | Статус |
+| ----- | ------------------------------------------------------------------- | ------ | ------ |
+| S8-01 | Integration tests — auth/orders/billing/referral                    | All    | ⬜     |
+| S8-02 | Security review — OWASP checklist + tenant-isolation                | Infra  | ⬜     |
+| S8-03 | Sentry (5 apps) + UptimeRobot + Netdata + backup-cron               | Infra  | ⬜     |
+| S8-04 | pg_cron перевірка (recurring/НБУ/loyalty/heartbeat)                 | Infra  | ⬜     |
+| S8-05 | Перший реальний клієнт — ручне тестування + багфікс                 | All    | ⬜     |
+| S8-06 | Migration smoke-test (накат усіх міграцій на чистий PG + seed) у CI | Infra  | ⬜     |
+| S8-07 | On-call runbook (що робити коли SMTP/Telegram/DB лягло)             | Infra  | ⬜     |
+| S8-08 | git tag v0.1.0 + 🚀 Production deploy                               | Infra  | ⬜     |
 
 ---
 
@@ -183,6 +185,7 @@
 | S9-04 | Credentials vault — envelope crypto + reveal/revoke/delete + rate-limit | [17-credentials] | ⬜     |
 | S9-05 | Credentials — 2FA-на-reveal + CredentialShare (scoped) + rotation-cron  | [17-credentials] | ⬜     |
 | S9-06 | GDPR data-export + Profile.timezone/phone                               | [13-settings]    | ⬜     |
+| S9-07 | Темна тема в Portal (підключити ThemeProvider + перемикач) ⬅backlog     | [13-settings]    | ⬜     |
 
 ## SPRINT 10 — Orders & Chat (повний)
 
@@ -194,27 +197,31 @@
 | S10-04 | Chat — edit/delete (15-min) + CommentReaction + replyToId + read-receipts | [03-chat]   | ⬜     |
 | S10-05 | Chat-hub — mute/archive (ConversationState) + filters + @-mention picker  | [18/03]     | ⬜     |
 | S10-06 | Files — sharp thumbnails (?variant) + S3StorageAdapter (R2)               | [04-files]  | ⬜     |
+| S10-07 | Orders — soft-delete restore UI (admin, 30д вікно) + /restore ⬅backlog    | [02-orders] | ⬜     |
 
 ## SPRINT 11 — Search + Reports + Admin (повний)
 
-| ID     | Задача                                                                       | Модуль       | Статус |
-| ------ | ---------------------------------------------------------------------------- | ------------ | ------ |
-| S11-01 | Search — Postgres FTS (agency-scoped GIN) + SearchAdapter                    | [16-search]  | ⬜     |
-| S11-02 | Search — Cmd+K command palette (+ Meilisearch adapter stub)                  | [16-search]  | ⬜     |
-| S11-03 | Reports — scheduled email (ReportSchedule+cron) + PDF/XLSX                   | [19-reports] | ⬜     |
-| S11-04 | Reports — custom ReportDefinition builder + revenue_monthly_mv               | [19-reports] | ⬜     |
-| S11-05 | Admin — templates/SMTP/branding/nomenclature/departments editor (per-agency) | [20-admin]   | ⬜     |
-| S11-06 | Admin — AgencyFeatureFlag + outbound webhooks + ApiKey + config export       | [20-admin]   | ⬜     |
+| ID     | Задача                                                                                    | Модуль       | Статус |
+| ------ | ----------------------------------------------------------------------------------------- | ------------ | ------ |
+| S11-01 | Search — Postgres FTS (agency-scoped GIN) + SearchAdapter                                 | [16-search]  | ⬜     |
+| S11-02 | Search — Cmd+K command palette (+ Meilisearch adapter stub)                               | [16-search]  | ⬜     |
+| S11-03 | Reports — scheduled email (ReportSchedule+cron) + PDF/XLSX                                | [19-reports] | ⬜     |
+| S11-04 | Reports — custom ReportDefinition builder + revenue_monthly_mv                            | [19-reports] | ⬜     |
+| S11-05 | Admin — templates/SMTP/branding/nomenclature/departments editor (per-agency)              | [20-admin]   | ⬜     |
+| S11-06 | Admin — AgencyFeatureFlag + outbound webhooks + ApiKey + config export                    | [20-admin]   | ⬜     |
+| S11-07 | Retention-аналітика дашборд (NEW→REGULAR/time-to-2nd/churn) + Public API Swagger ⬅backlog | [19/20]      | ⬜     |
 
 ## SPRINT 12 — Documents & Notifications (повний)
 
-| ID     | Задача                                                              | Модуль   | Статус |
-| ------ | ------------------------------------------------------------------- | -------- | ------ |
-| S12-01 | e-signature (click→accept; SignatureProvider for Diia/КЕП)          | [06-doc] | ⬜     |
-| S12-02 | DocumentTemplate + bulk-generate (outbox) + draft→preview→approve   | [06]     | ⬜     |
-| S12-03 | Web Push (PushSubscription+VAPID+PushAdapter)                       | [07]     | ⬜     |
-| S12-04 | SMS adapter (SmsAdapter TurboSMS/Twilio, per-agency)                | [07]     | ⬜     |
-| S12-05 | Email inbound→task + bounce/suppression + unsubscribe + DKIM domain | [08]     | ⬜     |
+| ID     | Задача                                                                                | Модуль   | Статус |
+| ------ | ------------------------------------------------------------------------------------- | -------- | ------ |
+| S12-01 | e-signature (click→accept; SignatureProvider for Diia/КЕП)                            | [06-doc] | ⬜     |
+| S12-02 | DocumentTemplate + bulk-generate (outbox) + draft→preview→approve                     | [06]     | ⬜     |
+| S12-03 | Web Push (PushSubscription+VAPID+PushAdapter)                                         | [07]     | ⬜     |
+| S12-04 | SMS adapter (SmsAdapter TurboSMS/Twilio, per-agency)                                  | [07]     | ⬜     |
+| S12-05 | Email inbound→task + bounce/suppression + unsubscribe + DKIM domain                   | [08]     | ⬜     |
+| S12-06 | Quiet-hours / digest (NotificationPreference.{quietFrom,quietTo,digestMode}) ⬅backlog | [07]     | ⬜     |
+| S12-07 | Bulk-розсилки (BulkBroadcast + outbox worker, сегментація) ⬅backlog                   | [07]     | ⬜     |
 
 ## SPRINT 13 — Calendar + Leave + Finance Phase 2
 

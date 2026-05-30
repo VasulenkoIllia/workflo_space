@@ -301,3 +301,8 @@ New: PushSubscription, AgencySmsSettings; channels push+sms enabled у CHANNELS 
 ```
 
 > **→ BACKLOG (не обрано):** quiet-hours + digest mode.
+
+## Беклог-промоут (30.05) → у план
+
+- **Quiet-hours / digest** (S12): per-profile тихі години (не слати некритичні вночі) + агрегація у дайджест-розсилку. `NotificationPreference.{quietFrom, quietTo, digestMode}`. CRITICAL_EVENTS (ADR-003) ігнорують quiet-hours. Знижує notification-fatigue.
+- **Bulk-розсилки** (S12): масові розсилки (newsletter/maintenance) батчем через **outbox**, не per-profile `notify()`. `BulkBroadcast {agencyId, segment, channel, templateId, status}` + worker. Сегментація по тіру/статусу.

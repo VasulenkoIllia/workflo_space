@@ -190,3 +190,7 @@ Action buttons per row:
 ```
 New: ReportSchedule, ReportDefinition; revenue_monthly_mv (migration)
 ```
+
+## Беклог-промоут (30.05) → у план
+
+- **Retention-аналітика** (S11): дашборд утримання клієнтів — NEW→REGULAR conversion rate, P50 time-to-second-order, churn-сигнали. Будується на payments+loyalty-history (agency-scoped). Окрема картка поряд з time/revenue/debtors. Промоут із беклогу.

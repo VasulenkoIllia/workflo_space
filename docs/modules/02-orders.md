@@ -442,3 +442,7 @@ Order: + onHoldReason, cancelledReason, firstResponseDueAt, resolutionDueAt,
 New: OrderTag, OrderTagAssignment, SlaPolicy, OrderDependency, OrderTemplate
 TimeLog: повна таймерна модель (T2)
 ```
+
+## Беклог-промоут (30.05) → у план
+
+- **Soft-delete restore UI** (S10): відновлення видалених замовлень — admin-only, 30-денне вікно. Сховище вже soft-delete (`deletedAt`); потрібен лише UI + `POST /workspace/orders/:id/restore` (audit `order.restored`). Промоут із беклогу.

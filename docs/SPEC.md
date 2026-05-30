@@ -69,7 +69,7 @@
 
 **06-documents** — інвойси/акти/специфікації, per-agency нумерація (race-safe counter), tax/line-items, immutability+supersede, credit-note, PDF access-check, PaymentAllocation.chargeType. _Фічі:_ **e-signature** (click→Diia/КЕП фазовано, SignatureProvider), DocumentTemplate, bulk(outbox), draft→preview→approve→send. _Статус:_ S6.
 
-**07-notifications** — матриця (7 категорій × 6 каналів × 27 подій), NotificationPreference, CRITICAL*EVENTS email-lock (ADR-003), notify()+notifyRecipient(). reconcile: **outbox** retry/DLQ, per-agency templates, idempotency-key, agencyId на logs. *Фічі:_ **in-app center** API, **Web Push** (PushSubscription+VAPID), **SMS** (SmsAdapter TurboSMS/Twilio). \_BACKLOG:_ quiet-hours/digest. _Статус:_ matrix — ✅ S1; in-app/push/sms — S6+.
+**07-notifications** — матриця (7 категорій × 6 каналів × 27 подій), NotificationPreference, CRITICAL*EVENTS email-lock (ADR-003), notify()+notifyRecipient(). reconcile: **outbox** retry/DLQ, per-agency templates, idempotency-key, agencyId на logs. *Фічі:_ **in-app center** API, **Web Push** (PushSubscription+VAPID), **SMS** (SmsAdapter TurboSMS/Twilio). \_S12:_ quiet-hours/digest + bulk-розсилки (промоут із беклогу). _Статус:_ matrix — ✅ S1; in-app/push/sms — S6+.
 
 **08-email** — REWRITE (стара EmailLog/file-templates — фікція). Транзакційний email через notify-матрицю. _Фічі:_ inbound email→task, bounce/suppression+unsubscribe, per-agency sending-domain (DKIM). _Статус:_ baseline S1 / inbound+bounce — post-MVP.
 
