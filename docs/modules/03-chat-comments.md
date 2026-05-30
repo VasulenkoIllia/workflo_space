@@ -349,3 +349,42 @@ Authz: будь-який учасник чату (member company або executor
 ### DB
 
 `OrderComment.mentionedUserIds String[]` — зберігаємо явний список тегнутих (для підсвітки в UI + повторних нотифікацій). Додається у схему разом з реалізацією чату (S2).
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Стара `Comment`-модель вище → видалити в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- `Comment`→`OrderComment` (`content` не `text`; `isInternal Boolean` не `type enum`).
+- **SSE re-auth**: при закінченні access-токена в стрімі — close + клієнт reconnect з новим токеном; на reconnect віддаємо missed (Last-Event-ID).
+- **Internal-leak guard**: NOTIFY несе лише IDs; follow-up fetch для portal-юзера повторно перевіряє `isInternal=false`. Stream для клієнта НЕ пушить internal.
+- **Participant IDOR**: `GET /orders/:id/comments` + POST — лише учасник order (company-member або executor на order) + tenant-guard.
+- **`agencyId`** денормалізація на `order_comments`.
+
+### B. Редагування + видалення ✅
+
+- `OrderComment` додає `editedAt DateTime?`, `deletedAt DateTime?`, `updatedAt DateTime @updatedAt`.
+- `PATCH /orders/:id/comments/:commentId` — лише автор, вікно 15хв (owner — будь-коли); set `editedAt`. `DELETE` — soft (`deletedAt`), UI «повідомлення видалено». Видалення/редагування пушиться у SSE + оновлює inbox-preview (модуль 18).
+
+### C. Реакції ✅
+
+- `CommentReaction { id, commentId, profileId, emoji, createdAt, @@unique([commentId, profileId, emoji]) }`.
+- `POST/DELETE /orders/:id/comments/:commentId/reactions { emoji }`. Агрегат `{emoji, count, reactedByMe}` у відповіді коментаря. Tenant/participant guard.
+
+### D. Відповіді (reply-to) ✅
+
+- `OrderComment.replyToId String?` (self-relation). UI цитує батьківський. При reply на чужий коментар — notify автору батьківського (event `chat.reply`).
+
+### E. Read receipts ✅
+
+- Базується на `order_chat_reads { orderId, profileId, lastReadAt }` (модуль 18). Коментар `seenBy` = учасники з `lastReadAt >= comment.createdAt`. UI: «прочитано» + аватари. `POST /orders/:id/read` оновлює.
+
+### Schema-зміни (foundation-міграція)
+
+```
+OrderComment: + editedAt, deletedAt, updatedAt, replyToId, mentionedUserIds[], agencyId
+New: CommentReaction, OrderChatRead (спільно з 18)
+```
