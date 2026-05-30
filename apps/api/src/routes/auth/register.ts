@@ -1,6 +1,7 @@
 import { Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, registerSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { resolvePlatformAgencyId } from '../../auth/agency.js'
 import { hashPassword } from '../../auth/password.js'
 import { generateUniqueCompanySlug } from '../../auth/slug.js'
 import {
@@ -78,8 +79,12 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
           })
 
           const slug = await generateUniqueCompanySlug(tx, input.companyName)
+          // Multi-tenancy (ADR-004): attach the new client company to the
+          // platform agency (Phase 0 = single tenant).
+          const agencyId = await resolvePlatformAgencyId(tx)
           const company = await tx.company.create({
             data: {
+              agencyId,
               name: input.companyName.trim(),
               slug,
               language: 'uk',

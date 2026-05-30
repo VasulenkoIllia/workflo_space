@@ -21,6 +21,7 @@ const txCompanyMemberCreate = vi.fn()
 const txNotificationSettingsCreate = vi.fn()
 const txNotificationPreferenceCreateMany = vi.fn()
 const txRefreshTokenCreate = vi.fn()
+const txAgencyFindFirst = vi.fn()
 const transaction = vi.fn()
 
 vi.mock('@workflo/db', () => ({
@@ -46,6 +47,7 @@ function makeTxClient() {
     notificationSettings: { create: txNotificationSettingsCreate },
     notificationPreference: { createMany: txNotificationPreferenceCreateMany },
     refreshToken: { create: txRefreshTokenCreate },
+    agency: { findFirst: txAgencyFindFirst },
   }
 }
 
@@ -54,6 +56,7 @@ function wireHappyPath() {
   txProfileCreate.mockResolvedValue({ id: 'profile-1' })
   txCompanyFindUnique.mockResolvedValue(null) // slug free
   txCompanyCreate.mockResolvedValue({ id: 'company-1', name: 'Acme', slug: 'acme' })
+  txAgencyFindFirst.mockResolvedValue({ id: 'agency-1' }) // platform tenant (ADR-004)
   txCompanyMemberCreate.mockResolvedValue({})
   txNotificationSettingsCreate.mockResolvedValue({ id: 'settings-1' })
   txNotificationPreferenceCreateMany.mockResolvedValue({ count: 21 })

@@ -10,6 +10,10 @@ const DEFAULT_EXECUTOR_PASSWORD = 'Exec123!'
 const DEFAULT_CLIENT_EMAIL = 'client@example.com'
 const DEFAULT_CLIENT_PASSWORD = 'Client123!'
 
+// Multi-tenancy (ADR-004) Phase 0 — single platform tenant. Matches the fixed
+// id inserted by the S1.6 migration so the seed upserts the same agency row.
+const PLATFORM_AGENCY_ID = '00000000-0000-4000-8000-000000000001'
+
 const NOTIFICATION_CATEGORIES = ['auth', 'orders', 'chat', 'billing', 'documents', 'loyalty', 'system'] as const
 const NOTIFICATION_DEFAULT_CHANNELS = ['email', 'telegram', 'in_app'] as const
 
@@ -128,6 +132,25 @@ async function main() {
     },
   })
 
+  // Multi-tenancy (ADR-004): platform agency (tenant root) + team membership.
+  const agency = await prisma.agency.upsert({
+    where: { slug: 'workflo' },
+    update: { name: 'Workflo', ownerId: owner.id, isActive: true },
+    create: { id: PLATFORM_AGENCY_ID, name: 'Workflo', slug: 'workflo', ownerId: owner.id },
+  })
+
+  for (const [profileId, role] of [
+    [owner.id, 'owner'],
+    [executor.id, 'executor'],
+  ] as const) {
+    await prisma.agencyMember.upsert({
+      where: { agencyId_profileId: { agencyId: agency.id, profileId } },
+      update: { role },
+      create: { agencyId: agency.id, profileId, role },
+    })
+  }
+  console.log(`✅ Agency seeded: Workflo (owner=${ownerEmail}, +1 executor)`)
+
   const company = await prisma.company.upsert({
     where: { slug: 'test-company' },
     update: {
@@ -138,6 +161,7 @@ async function main() {
       notes: 'Seed company',
     },
     create: {
+      agencyId: agency.id,
       name: 'ТОВ Тестова Компанія',
       slug: 'test-company',
       language: 'uk',
@@ -306,6 +330,7 @@ async function main() {
           description: item.description,
           type: 'client_order',
           priority: item.priority,
+          agencyId: agency.id,
           companyId: company.id,
           assigneeId: executor.id,
           createdById: owner.id,

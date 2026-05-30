@@ -51,17 +51,17 @@
 
 > Ціль: tenant-ready фундамент + надійна доставка + schema-delta + db-hardening. Розблоковує весь agencyId-reconcile.
 
-| ID     | Задача                                                                                  | Модуль    | Статус |
-| ------ | --------------------------------------------------------------------------------------- | --------- | ------ |
-| S16-01 | `Agency` + `AgencyMember` моделі + міграція                                             | [adr/004] | ⬜     |
-| S16-02 | `agencyId` на існуючих таблицях (company/orders/notifications/payments) + backfill seed | [db]      | ⬜     |
-| S16-03 | JWT claims `activeAgencyId` + `agencyMemberships` + `/auth/switch-agency`               | [01-auth] | ⬜     |
-| S16-04 | `can()` tenant-guard (default-deny крос-тенант) + тести                                 | [adr/002] | ⬜     |
-| S16-05 | `OutboxEvent` таблиця + worker skeleton (retry/DLQ) — для notify/webhooks/index-sync    | [07]      | ⬜     |
-| S16-06 | Schema-delta batch-1: нові колонки/таблиці для ядрових модулів (orders/chat/files)      | [db]      | ⬜     |
-| S16-07 | db-hardening: FK-індекси, Order.company onDelete, Decimal(10,4), drop OtpToken-index    | [db]      | ⬜     |
-| S16-08 | telegramChatId dedup (NotificationSettings authoritative)                               | [15-bot]  | ⬜     |
-| S1.5-D | ✅ `prisma migrate deploy` на деплої (окремий `migrate`-сервіс, stg+prod)               | Infra     | ✅     |
+| ID     | Задача                                                                                                                                 | Модуль    | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| S16-01 | ✅ `Agency` + `AgencyMember` + `AgencyMemberRole` + міграція (FK/indexes Prisma-naming)                                                | [adr/004] | ✅     |
+| S16-02 | ✅ `agencyId` scoping (company req + orders/payments/docs/charges/comments/timelogs/services/rates/audit) + backfill + seed + register | [db]      | ✅     |
+| S16-03 | JWT claims `activeAgencyId` + `agencyMemberships` + `/auth/switch-agency`                                                              | [01-auth] | ⬜     |
+| S16-04 | `can()` tenant-guard (default-deny крос-тенант) + тести                                                                                | [adr/002] | ⬜     |
+| S16-05 | `OutboxEvent` таблиця + worker skeleton (retry/DLQ) — для notify/webhooks/index-sync                                                   | [07]      | ⬜     |
+| S16-06 | Schema-delta batch-1: нові колонки/таблиці для ядрових модулів (orders/chat/files)                                                     | [db]      | ⬜     |
+| S16-07 | db-hardening: FK-індекси, Order.company onDelete, Decimal(10,4), drop OtpToken-index                                                   | [db]      | ⬜     |
+| S16-08 | telegramChatId dedup (NotificationSettings authoritative)                                                                              | [15-bot]  | ⬜     |
+| S1.5-D | ✅ `prisma migrate deploy` на деплої (окремий `migrate`-сервіс, stg+prod)                                                              | Infra     | ✅     |
 
 ---
 
