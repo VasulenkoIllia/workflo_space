@@ -1,4 +1,5 @@
 # SETTINGS MODULE
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
@@ -53,7 +54,7 @@ multipart/form-data, file max 5MB, JPEG/PNG/WebP
 ```typescript
 {
   currentPassword: string
-  newPassword: string    // min 8 символів
+  newPassword: string // min 8 символів
   confirmPassword: string
 }
 ```
@@ -101,9 +102,9 @@ Company Owner може редагувати налаштування своєї 
   website: string | null
   phone: string | null
   address: string | null
-  taxId: string | null        // ЄДРПОУ/ІПН для документів
+  taxId: string | null // ЄДРПОУ/ІПН для документів
   preferredLanguage: 'uk' | 'en'
-  referralCode: string        // workflo-XXXXXX (readonly)
+  referralCode: string // workflo-XXXXXX (readonly)
   createdAt: string
 }
 ```
@@ -144,7 +145,8 @@ multipart/form-data, max 5MB → StorageAdapter → company.logoUrl
     isActive: boolean
     joinedAt: string
     permissions: CompanyMemberPermissions
-  }[]
+  }
+  ;[]
 }
 ```
 
@@ -175,11 +177,11 @@ multipart/form-data, max 5MB → StorageAdapter → company.logoUrl
 
 ```typescript
 interface CompanyMemberPermissions {
-  canCreateOrders: boolean      // default: true
-  canViewBilling: boolean       // default: false
-  canViewDocuments: boolean     // default: true
-  canViewAllOrders: boolean     // default: false (тільки свої)
-  canInviteMembers: boolean     // default: false
+  canCreateOrders: boolean // default: true
+  canViewBilling: boolean // default: false
+  canViewDocuments: boolean // default: true
+  canViewAllOrders: boolean // default: false (тільки свої)
+  canInviteMembers: boolean // default: false
 }
 ```
 
@@ -279,6 +281,7 @@ interface CompanyMemberPermissions {
 ### Portal Settings
 
 Секції (tabs або sidebar):
+
 - "Профіль" — ім'я, аватар, мова, тема
 - "Компанія" — дані компанії, лого
 - "Команда" — члени компанії, запрошення
@@ -288,6 +291,7 @@ interface CompanyMemberPermissions {
 ### Workspace Settings
 
 Секції:
+
 - "Профіль" — ім'я, аватар, мова, тема
 - "Команда" — список executors, запрошення (→ модуль 12)
 - "Нотифікації" — toggles
@@ -321,31 +325,56 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 ## API Endpoints Summary
 
-| Метод | URL | Хто |
-|---|---|---|
-| `GET/PATCH` | `/settings/profile` | Всі |
-| `POST` | `/settings/profile/avatar` | Всі |
-| `POST` | `/settings/change-password` | Всі |
-| `GET/PATCH` | `/settings/notifications` | Всі |
-| `POST` | `/settings/telegram/link` | Всі |
-| `DELETE` | `/settings/telegram/unlink` | Всі |
-| `GET/PATCH` | `/settings/company` | Company Owner |
-| `POST` | `/settings/company/logo` | Company Owner |
-| `GET` | `/settings/company/members` | Company Owner |
-| `POST` | `/settings/company/members/invite` | Company Owner |
-| `PATCH/DELETE` | `/settings/company/members/:id` | Company Owner |
-| `GET/PATCH` | `/settings/system` | Owner (Workspace) |
-| `POST` | `/settings/system/refresh-rate` | Owner (Workspace) |
-| `GET` | `/settings/activity-log` | Owner (Workspace) |
+| Метод          | URL                                | Хто               |
+| -------------- | ---------------------------------- | ----------------- |
+| `GET/PATCH`    | `/settings/profile`                | Всі               |
+| `POST`         | `/settings/profile/avatar`         | Всі               |
+| `POST`         | `/settings/change-password`        | Всі               |
+| `GET/PATCH`    | `/settings/notifications`          | Всі               |
+| `POST`         | `/settings/telegram/link`          | Всі               |
+| `DELETE`       | `/settings/telegram/unlink`        | Всі               |
+| `GET/PATCH`    | `/settings/company`                | Company Owner     |
+| `POST`         | `/settings/company/logo`           | Company Owner     |
+| `GET`          | `/settings/company/members`        | Company Owner     |
+| `POST`         | `/settings/company/members/invite` | Company Owner     |
+| `PATCH/DELETE` | `/settings/company/members/:id`    | Company Owner     |
+| `GET/PATCH`    | `/settings/system`                 | Owner (Workspace) |
+| `POST`         | `/settings/system/refresh-rate`    | Owner (Workspace) |
+| `GET`          | `/settings/activity-log`           | Owner (Workspace) |
 
 ---
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Auth** | Зміна паролю, Telegram link через OTP |
-| **Files** | Upload аватару та логотипу |
-| **Notifications** | Налаштування каналів нотифікацій |
-| **Team** | Управління командою через Settings |
-| **Billing** | Системні налаштування білінгу (курс, ціни) |
+| Модуль            | Зв'язок                                    |
+| ----------------- | ------------------------------------------ |
+| **Auth**          | Зміна паролю, Telegram link через OTP      |
+| **Files**         | Upload аватару та логотипу                 |
+| **Notifications** | Налаштування каналів нотифікацій           |
+| **Team**          | Управління командою через Settings         |
+| **Billing**       | Системні налаштування білінгу (курс, ціни) |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+Прибрати `telegramUsername` (немає); notifications PATCH → матриця 7×6 (`NotificationPreference`); `/settings/activity-log` читає `AuditLog` (не order-only ActivityLog); **канонічний members-endpoint** = `/companies/:id/members*` (видалити дубль у 13); per-agency system-settings (exchange/billing defaults — не глобальний singleton); password-change → revoke other sessions + `tokenVersion++` + audit + rate-limit; avatar SVG-guard.
+
+### B. Timezone + phone ✅
+
+- `Profile.timezone String @default("Europe/Kyiv")` (для календаря/quiet-hours/рендеру) + `Profile.phone String?` (+ phone-verify через SMS OTP для SMS-каналу).
+
+### C. Data export (GDPR self-service) ✅
+
+- `POST /profile/data-export` → async ZIP/JSON (через outbox) → email-лінк. `POST /profile/data-deletion-request` (password + email confirm; flow з RETENTION.md → anonymize, фін.документи зберігаються).
+
+### D. Appearance ✅
+
+- `theme(light|dark|system)` (є) + `density(compact|comfortable)` + `language(uk|en)` — персистимо на Profile, застосовуємо в усіх 3 apps.
+
+```
+Profile: + timezone, phone, density
+New: DataExportRequest
+```

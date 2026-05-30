@@ -1,4 +1,5 @@
 # TEAM & EXECUTORS MODULE
+
 > App: Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
@@ -14,10 +15,10 @@
 
 ## Ролі в команді
 
-| Роль | Доступ |
-|---|---|
-| `owner` | Повний доступ до всього в workspace. Єдиний хто може запрошувати/видаляти executors, бачити всі фінанси |
-| `executor` | Бачить тільки свої призначені замовлення, може логувати час, коментувати |
+| Роль       | Доступ                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| `owner`    | Повний доступ до всього в workspace. Єдиний хто може запрошувати/видаляти executors, бачити всі фінанси |
+| `executor` | Бачить тільки свої призначені замовлення, може логувати час, коментувати                                |
 
 > Workspace захищений IP whitelist на рівні Traefik — клієнти фізично не можуть відкрити.
 
@@ -103,6 +104,7 @@ model TimeLog {
 ## Навантаження (Workload)
 
 Workspace dashboard показує:
+
 - Скільки активних замовлень у кожного виконавця
 - Загальний час за поточний тиждень/місяць
 - Найближчі дедлайни по виконавцях
@@ -117,8 +119,14 @@ Workspace dashboard показує:
     activeOrders: number
     hoursThisWeek: number
     hoursThisMonth: number
-    upcomingDeadlines: { orderId: string; title: string; dueDate: string }[]
-  }[]
+    upcomingDeadlines: {
+      orderId: string
+      title: string
+      dueDate: string
+    }
+    ;[]
+  }
+  ;[]
 }
 ```
 
@@ -126,20 +134,20 @@ Workspace dashboard показує:
 
 ## API Endpoints
 
-| Метод | URL | Хто | Опис |
-|---|---|---|---|
-| `GET` | `/team` | Workspace | Список членів команди |
-| `POST` | `/team/invite` | Owner | Запросити виконавця |
-| `GET` | `/team/invites` | Owner | Список запрошень |
-| `DELETE` | `/team/invites/:id` | Owner | Скасувати запрошення |
-| `PATCH` | `/team/:profileId` | Owner | Оновити дані (активний/неактивний) |
-| `DELETE` | `/team/:profileId` | Owner | Деактивувати виконавця |
-| `GET` | `/team/workload` | Owner | Навантаження на команду |
-| `GET` | `/time-logs` | Workspace | Список тайм-логів з фільтрами |
-| `POST` | `/orders/:id/time-logs` | Executor | Додати тайм-лог |
-| `PATCH` | `/time-logs/:id` | Executor (автор) | Редагувати тайм-лог |
-| `DELETE` | `/time-logs/:id` | Executor (автор) / Owner | Видалити |
-| `GET` | `/orders/:id/time-logs` | Workspace | Тайм-логи замовлення |
+| Метод    | URL                     | Хто                      | Опис                               |
+| -------- | ----------------------- | ------------------------ | ---------------------------------- |
+| `GET`    | `/team`                 | Workspace                | Список членів команди              |
+| `POST`   | `/team/invite`          | Owner                    | Запросити виконавця                |
+| `GET`    | `/team/invites`         | Owner                    | Список запрошень                   |
+| `DELETE` | `/team/invites/:id`     | Owner                    | Скасувати запрошення               |
+| `PATCH`  | `/team/:profileId`      | Owner                    | Оновити дані (активний/неактивний) |
+| `DELETE` | `/team/:profileId`      | Owner                    | Деактивувати виконавця             |
+| `GET`    | `/team/workload`        | Owner                    | Навантаження на команду            |
+| `GET`    | `/time-logs`            | Workspace                | Список тайм-логів з фільтрами      |
+| `POST`   | `/orders/:id/time-logs` | Executor                 | Додати тайм-лог                    |
+| `PATCH`  | `/time-logs/:id`        | Executor (автор)         | Редагувати тайм-лог                |
+| `DELETE` | `/time-logs/:id`        | Executor (автор) / Owner | Видалити                           |
+| `GET`    | `/orders/:id/time-logs` | Workspace                | Тайм-логи замовлення               |
 
 ---
 
@@ -150,7 +158,7 @@ Workspace dashboard показує:
 ```typescript
 {
   email: string
-  role: 'executor'   // тільки executor через workspace
+  role: 'executor' // тільки executor через workspace
 }
 ```
 
@@ -169,7 +177,8 @@ Workspace dashboard показує:
     joinedAt: string
     lastSeenAt: string | null
     activeOrdersCount: number
-  }[]
+  }
+  ;[]
 }
 ```
 
@@ -194,7 +203,10 @@ Workspace dashboard показує:
   hours: number
   description: string | null
   billable: boolean
-  executor: { id: string; displayName: string }
+  executor: {
+    id: string
+    displayName: string
+  }
   createdAt: string
 }
 ```
@@ -216,6 +228,7 @@ limit=50
 ## Деактивація виконавця
 
 При `DELETE /team/:profileId`:
+
 1. `profiles.isActive = false` → виконавець не може логінитися
 2. Refresh tokens анулюються (`revokedAt = now()`)
 3. Замовлення залишаються з `order_executors` записом (для аудиту)
@@ -226,6 +239,7 @@ limit=50
 ## Профіль виконавця
 
 Виконавець може редагувати свій профіль в workspace:
+
 - `displayName` — відображуване ім'я
 - `avatarUrl` — завантаження через Files module
 - Пароль (через `POST /auth/change-password`)
@@ -237,13 +251,13 @@ limit=50
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Auth** | Invite flow, деактивація |
-| **Orders** | `order_executors` — призначення на замовлення |
-| **Notifications** | Нотифікації виконавцям |
-| **Billing** | Тайм-логи → розрахунок вартості (Phase 2) |
-| **Bot** | Telegram прив'язка виконавця |
+| Модуль            | Зв'язок                                       |
+| ----------------- | --------------------------------------------- |
+| **Auth**          | Invite flow, деактивація                      |
+| **Orders**        | `order_executors` — призначення на замовлення |
+| **Notifications** | Нотифікації виконавцям                        |
+| **Billing**       | Тайм-логи → розрахунок вартості (Phase 2)     |
+| **Bot**           | Telegram прив'язка виконавця                  |
 
 ---
 
@@ -254,6 +268,7 @@ limit=50
 Departments — звичайна editable таблиця (модуль 20-admin-settings → секція 5).
 
 Schema:
+
 ```prisma
 model Department {
   id          String   @id @default(uuid())
@@ -274,11 +289,11 @@ Default seed (`@workflo/types/constants.DEFAULT_DEPARTMENT_SLUGS`):
 
 Внутрішні задачі (`InternalTask` model) можуть бути billable per `billingMode` (`@workflo/types.BillingMode`):
 
-| Mode | Behavior |
-|---|---|
-| `client_paid` | Час включається в client invoice (через order's company) |
+| Mode            | Behavior                                                    |
+| --------------- | ----------------------------------------------------------- |
+| `client_paid`   | Час включається в client invoice (через order's company)    |
 | `internal_paid` | Час оплачується компанією executor (не invoiced до клієнта) |
-| `unpaid` | Час tracked але не invoiced (research, training) |
+| `unpaid`        | Час tracked але не invoiced (research, training)            |
 
 UI у workspace: задача має toggle "Billable" → owner вибирає mode.
 
@@ -287,6 +302,7 @@ UI у workspace: задача має toggle "Billable" → owner вибирає 
 Див. **02-orders.md → секція "Time tracking (specification)"**.
 
 Ключове для team module:
+
 - `GET /executors/:id/time-logs?period=YYYY-MM` — список часу за період.
 - `GET /executors/:id/report?period=YYYY-MM` — агрегований звіт:
   - Total hours.
@@ -317,3 +333,31 @@ model ExecutorRate {
 ```
 
 Для розрахунку cost в reports використовуємо rate active на дату payment / time_log.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+TimeLog → таймерна модель (T2); `ExecutorRate` додає `hourlyRateUsd` + `departmentId`; **`Department` таблиця** (зараз немає); `Invite` drift (`type`/`usedAt`, не `status`/`role`); ролі через **`AgencyMember`** (не глобальний Profile.role); deactivation → auto-stop таймера (`autoStopReason='user_deactivated'`) + переназначення open-orders; **lock time-logs** після інвойсингу (не редагувати історичні білабельні години); tenant-guard на `/team/*`.
+
+### B. Авто-розрахунок виплат ✅
+
+- `ExecutorPayout { id, agencyId, executorId, period(month), baseSalary, commissionAmount, billableHours, hourlyEarned, total, status(draft|approved|paid), approvedBy, createdAt }`.
+- Обчислюється з `ExecutorRate` (оклад + % комісії від оплачених замовлень) + `time_logs` (білабельні години × ставка). Payout-відомість + `/team/payouts`.
+
+### C. Timesheet approval ✅
+
+- Тижневий grid time-logs виконавця → owner review → `approve` → **lock** (status='approved', edit заборонено). Незатверджені години не йдуть у білінг/payout.
+
+### D. KPI / продуктивність ✅
+
+- Метрики: avg time/task, utilization %, on-time delivery %, active orders, billable ratio. Owner-дашборд `/team/:id/kpi`. Дані з orders + time_logs.
+
+```
+ExecutorRate: + hourlyRateUsd, departmentId, agencyId
+New: Department, ExecutorPayout; AgencyMember (tenancy)
+```
+
+> **→ BACKLOG:** навички/спеціалізації виконавців.

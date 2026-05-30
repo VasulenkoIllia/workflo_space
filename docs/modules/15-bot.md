@@ -1,4 +1,5 @@
 # TELEGRAM BOT MODULE
+
 > App: Bot (grammY) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
@@ -32,7 +33,7 @@ if (process.env.BOT_MODE === 'webhook') {
   const { webhookCallback } = await import('grammy')
   // webhook mode
 } else {
-  await bot.start()  // long polling
+  await bot.start() // long polling
 }
 ```
 
@@ -46,13 +47,17 @@ await bot.api.setWebhook(`${process.env.BOT_WEBHOOK_URL}/bot/webhook`, {
 
 // Fastify endpoint для webhook
 // apps/api/src/routes/bot-webhook.ts
-fastify.post('/bot/webhook', {
-  config: { rawBody: true },
-  preHandler: verifyWebhookSecret,
-}, async (req, reply) => {
-  await webhookHandler(req.body)
-  return reply.send({ ok: true })
-})
+fastify.post(
+  '/bot/webhook',
+  {
+    config: { rawBody: true },
+    preHandler: verifyWebhookSecret,
+  },
+  async (req, reply) => {
+    await webhookHandler(req.body)
+    return reply.send({ ok: true })
+  }
+)
 ```
 
 > Webhook отримує повідомлення через API (Fastify), а не окремий порт бота — спрощує Traefik конфіг.
@@ -79,7 +84,7 @@ fastify.post('/bot/webhook', {
 
 ```typescript
 bot.command('start', async (ctx) => {
-  const startPayload = ctx.match  // OTP code після /start
+  const startPayload = ctx.match // OTP code після /start
 
   if (startPayload) {
     const otp = await db.otpToken.findFirst({
@@ -87,8 +92,8 @@ bot.command('start', async (ctx) => {
         token: startPayload,
         purpose: 'telegram_link',
         usedAt: null,
-        expiresAt: { gt: new Date() }
-      }
+        expiresAt: { gt: new Date() },
+      },
     })
 
     if (!otp) {
@@ -102,15 +107,17 @@ bot.command('start', async (ctx) => {
         data: {
           telegramChatId: String(ctx.chat.id),
           telegramUsername: ctx.from?.username ?? null,
-        }
+        },
       }),
       db.otpToken.update({
         where: { id: otp.id },
-        data: { usedAt: new Date() }
+        data: { usedAt: new Date() },
       }),
     ])
 
-    await ctx.reply('✅ Telegram успішно прив\'язано до вашого акаунту Workflo.Space!\n\nТепер ви будете отримувати сповіщення тут.')
+    await ctx.reply(
+      "✅ Telegram успішно прив'язано до вашого акаунту Workflo.Space!\n\nТепер ви будете отримувати сповіщення тут."
+    )
   } else {
     await ctx.reply('👋 Привіт! Я бот Workflo.Space...')
   }
@@ -216,7 +223,7 @@ class TelegramAdapter implements NotificationAdapter {
       if (error.error_code === 403) {
         await db.profile.updateMany({
           where: { telegramChatId: chatId },
-          data: { telegramChatId: null }
+          data: { telegramChatId: null },
         })
       }
       logger.error('Telegram send failed', { chatId, error })
@@ -268,13 +275,13 @@ CMD ["node", "dist/index.js"]
 
 ## ENV Variables
 
-| Variable | Значення |
-|---|---|
-| `BOT_TOKEN` | Telegram Bot token від @BotFather |
-| `BOT_MODE` | `polling` (dev) / `webhook` (prod) |
-| `BOT_WEBHOOK_URL` | `https://api.workflo.space` (prod) |
-| `BOT_WEBHOOK_SECRET` | Секрет для верифікації webhook |
-| `DATABASE_URL` | PostgreSQL connection string |
+| Variable             | Значення                           |
+| -------------------- | ---------------------------------- |
+| `BOT_TOKEN`          | Telegram Bot token від @BotFather  |
+| `BOT_MODE`           | `polling` (dev) / `webhook` (prod) |
+| `BOT_WEBHOOK_URL`    | `https://api.workflo.space` (prod) |
+| `BOT_WEBHOOK_SECRET` | Секрет для верифікації webhook     |
+| `DATABASE_URL`       | PostgreSQL connection string       |
 
 ---
 
@@ -310,13 +317,13 @@ workflo.space — платформа для управління замовле�
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Auth** | `/start OTP` — прив'язка Telegram до профілю |
+| Модуль            | Зв'язок                                        |
+| ----------------- | ---------------------------------------------- |
+| **Auth**          | `/start OTP` — прив'язка Telegram до профілю   |
 | **Notifications** | `TelegramAdapter` — відправка всіх нотифікацій |
-| **Orders** | Посилання на замовлення в повідомленнях |
-| **Billing** | Повідомлення про рахунки та платежі |
-| **Documents** | Повідомлення про нові документи |
+| **Orders**        | Посилання на замовлення в повідомленнях        |
+| **Billing**       | Повідомлення про рахунки та платежі            |
+| **Documents**     | Повідомлення про нові документи                |
 
 ---
 
@@ -325,6 +332,7 @@ workflo.space — платформа для управління замовле�
 ### OTP rate limit
 
 `/start <code>` flow для Telegram linking:
+
 - 5 attempts / 15 min per (chat_id OR ip).
 - 6-digit code, 10 min TTL у `otp_tokens`.
 - Wrong code → `otp_tokens.attempts++`, при `attempts >= 5` → invalidate token.
@@ -372,16 +380,17 @@ fastify.post('/bot/webhook', async (req, reply) => {
 
 ### Bot commands
 
-| Command | Опис |
-|---|---|
-| `/start [<code>]` | Welcome / link account if code provided |
-| `/help` | Показує доступні команди |
-| `/orders` | Список активних orders (для linked client) |
-| `/timer` | Поточний таймер (для linked executor) |
-| `/balance` | Баланс company (для linked client) |
-| `/unsubscribe` | Розриває link (chatId removed з NotificationSettings) |
+| Command           | Опис                                                  |
+| ----------------- | ----------------------------------------------------- |
+| `/start [<code>]` | Welcome / link account if code provided               |
+| `/help`           | Показує доступні команди                              |
+| `/orders`         | Список активних orders (для linked client)            |
+| `/timer`          | Поточний таймер (для linked executor)                 |
+| `/balance`        | Баланс company (для linked client)                    |
+| `/unsubscribe`    | Розриває link (chatId removed з NotificationSettings) |
 
 `/unsubscribe` flow:
+
 1. Bot отримує команду.
 2. Знаходить `NotificationSettings` за `telegramChatId`.
 3. Set `telegramChatId = null`, `telegramLinkedAt = null`.
@@ -392,3 +401,28 @@ fastify.post('/bot/webhook', async (req, reply) => {
 ### Sentry для bot
 
 Окремий DSN (`SENTRY_DSN_BOT`). Tag `tag.module=bot`. Captures unhandled errors з grammY handlers.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+`OtpToken`: поле `code` (не `token`) + додати `attempts Int` + `ipAddress` (rate-limit query зараз не працює); дозволити переви́дачу telegram-link токена (unique `(profileId,purpose)` → або allow-reissue). **Telegram split-brain**: `NotificationSettings.telegramChatId` = авторитетне для dispatch; bot пише туди; прибрати inline-adapter дубль (використовувати shipped `TelegramAdapter`). Webhook: dedup по update-id (Telegram-retry). Інтерактивні команди = **Phase** (не «готово»).
+
+### B. Інтерактивні команди ✅
+
+- grammY-хендлери: `/orders` (активні), `/timer` (поточний таймер, start/stop), `/balance` (баланс компанії), `/help`. Rate-limit per-user. Linked-only.
+
+### C. Inline-кнопки (швидкі дії) ✅
+
+- Callback-кнопки під повідомленнями: approve/reject оцінку, «відповісти» (force-reply → коментар), «позначити виконано». Безпека: callback несе підписаний payload + перевірка прав через `can()`.
+
+### D. Сповіщення для виконавців ✅
+
+- Окремий executor-потік (нове призначення/дедлайн/згадка) через матрицю telegram-каналу. Виконавець лінкує Telegram так само (OTP).
+
+```
+OtpToken: + attempts, ipAddress (поле code канонічне)
+NotificationSettings.telegramChatId = single source of truth
+```

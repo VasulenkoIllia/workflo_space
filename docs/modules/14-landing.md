@@ -1,4 +1,5 @@
 # LANDING PAGE MODULE
+
 > App: Landing (workflo.space)
 > Статус: MVP
 > Залежить від: `packages/ui`, `packages/i18n`
@@ -14,14 +15,14 @@
 
 ## Технічний стек
 
-| Компонент | Рішення |
-|---|---|
-| Framework | Next.js 15 (App Router) |
+| Компонент | Рішення                                                |
+| --------- | ------------------------------------------------------ |
+| Framework | Next.js 15 (App Router)                                |
 | Rendering | SSG/ISR (blog) + SSR (landing sections з dynamic data) |
-| Styles | Tailwind CSS 4, darkMode: class |
-| i18n | next-intl (URL-based: /uk/, /en/) |
-| SEO | next/metadata API |
-| Analytics | (Phase 2) |
+| Styles    | Tailwind CSS 4, darkMode: class                        |
+| i18n      | next-intl (URL-based: /uk/, /en/)                      |
+| SEO       | next/metadata API                                      |
+| Analytics | (Phase 2)                                              |
 
 ---
 
@@ -69,7 +70,7 @@ import createMiddleware from 'next-intl/middleware'
 export default createMiddleware({
   locales: ['uk', 'en'],
   defaultLocale: 'uk',
-  localePrefix: 'always',  // /uk/... та /en/...
+  localePrefix: 'always', // /uk/... та /en/...
 })
 
 export const config = {
@@ -82,12 +83,14 @@ export const config = {
 ## Секції головної сторінки
 
 ### 1. Hero Section
+
 - Заголовок: "Автоматизуй свій бізнес. Делегуй задачі. Ростіть разом."
 - Підзаголовок: короткий опис що робить Workflo.Space
 - CTA кнопки: "Спробувати безкоштовно" → `portal.workflo.space/register` + "Дізнатися більше" → anchor scroll
 - Фоновий animated gradient або ілюстрація
 
 ### 2. Features Section
+
 - 6 ключових переваг (іконки + текст):
   - Замовлення під контролем
   - Прозора комунікація
@@ -97,10 +100,12 @@ export const config = {
   - Реферальна програма
 
 ### 3. How It Works
+
 - 3 кроки: Реєстрація → Перше замовлення → Отримай результат
 - Анімовані ілюстрації (Lottie або CSS)
 
 ### 4. Pricing Section
+
 - 3 тарифи (з billing module):
   - Starter, Professional, Business
   - Перемикач USD/UAH (курс з API)
@@ -108,17 +113,21 @@ export const config = {
 - Dynamic data з API (ISR або SSR)
 
 ### 5. Testimonials (Phase 2)
+
 - Відгуки клієнтів
 
 ### 6. Blog Preview
+
 - Останні 3 статті з блогу (ISR)
 - "Читати всі статті" → /uk/blog
 
 ### 7. CTA Section
+
 - Повторний заклик до реєстрації
 - Референс на реферальну програму
 
 ### 8. Footer
+
 - Лого, короткий опис
 - Навігація: Blog, Pricing, About
 - Соцмережі
@@ -160,7 +169,7 @@ export async function generateMetadata({ params: { locale } }: Props): Promise<M
 ```typescript
 // apps/landing/src/app/sitemap.ts
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const posts = await fetch(`${API_URL}/blog?status=published&limit=100`).then(r => r.json())
+  const posts = await fetch(`${API_URL}/blog?status=published&limit=100`).then((r) => r.json())
 
   const staticPages = [
     { url: 'https://workflo.space/uk/', priority: 1.0 },
@@ -213,9 +222,13 @@ export function LanguageSwitcher() {
 
   return (
     <div className="flex gap-2">
-      <button onClick={() => switchLocale('uk')} className={locale === 'uk' ? 'font-bold' : ''}>UA</button>
+      <button onClick={() => switchLocale('uk')} className={locale === 'uk' ? 'font-bold' : ''}>
+        UA
+      </button>
       <span>|</span>
-      <button onClick={() => switchLocale('en')} className={locale === 'en' ? 'font-bold' : ''}>EN</button>
+      <button onClick={() => switchLocale('en')} className={locale === 'en' ? 'font-bold' : ''}>
+        EN
+      </button>
     </div>
   )
 }
@@ -284,7 +297,7 @@ export const revalidate = 600
 
 async function getPlans() {
   const res = await fetch(`${process.env.API_URL}/billing/plans`, {
-    next: { revalidate: 600 }
+    next: { revalidate: 600 },
   })
   return res.json()
 }
@@ -300,14 +313,15 @@ export default async function PricingPage({ params: { locale } }: Props) {
 
 ## Performance
 
-| Метрика | Ціль |
-|---|---|
-| LCP | < 2.5s |
-| CLS | < 0.1 |
-| FID/INP | < 200ms |
+| Метрика    | Ціль                |
+| ---------- | ------------------- |
+| LCP        | < 2.5s              |
+| CLS        | < 0.1               |
+| FID/INP    | < 200ms             |
 | Lighthouse | > 90 all categories |
 
 **Оптимізації:**
+
 - `next/image` для всіх зображень (автоматичний WebP, lazy loading)
 - Мінімум client-side JS (більшість компонентів — Server Components)
 - Font: `next/font/google` (Inter або Geist) — self-hosted, no layout shift
@@ -340,9 +354,34 @@ server {
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Blog** | ISR blog posts, on-demand revalidation |
-| **Billing** | Pricing section тягне плани з API |
-| **Auth** | CTA кнопки ведуть на Portal register |
+| Модуль       | Зв'язок                                      |
+| ------------ | -------------------------------------------- |
+| **Blog**     | ISR blog posts, on-demand revalidation       |
+| **Billing**  | Pricing section тягне плани з API            |
+| **Auth**     | CTA кнопки ведуть на Portal register         |
 | **Referral** | Реєстрація з referral code передається в URL |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+**Документувати contact-form** (зараз не описана!) + спам-захист: Cloudflare Turnstile + honeypot + `ContactForm.{ipAddress, status, captchaScore}` + disposable-domain block + body-cap. API-down → graceful ISR fallback (try/catch + stale cache). Locale-switcher — anchor на провідний сегмент (не `replace` перший збіг). `POST /api/contact` → notify owner (event `system.contact_received`). Sitemap — реальний blog API (`published` bool, пагінація).
+
+### B. Cookie consent / GDPR ✅
+
+- Consent-банер (EU/UA) + consent-gated аналітика (GA/Plausible вантажиться лише після згоди). `ConsentLog` (опц.). Cookie-policy сторінка.
+
+### C. Редагований контент (CMS) ✅
+
+- `LandingContent { id, agencyId, block(hero|services|cases|pricing|faq|cta), contentJson, locale, updatedBy }`. Owner редагує блоки лендінгу без деплою (Workspace `/admin/landing`). Per-agency (white-label лендінг при multi-agency).
+
+### D. Live-chat / віджет ✅
+
+- Віджет онлайн-запиту/чату → створює lead (`ContactForm`) або support-тикет (модуль 14↔support). Real-time через наявний SSE/WebSocket. Notify owner.
+
+```
+ContactForm: + ipAddress, status, captchaScore, agencyId
+New: LandingContent, ConsentLog
+```
