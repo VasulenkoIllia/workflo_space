@@ -42,6 +42,9 @@ jobs:
       - name: Lint
         run: pnpm turbo lint
 
+      - name: Test
+        run: pnpm turbo test
+
   build:
     name: Build ${{ matrix.app }}
     needs: check
@@ -169,6 +172,9 @@ jobs:
             }
 
             ensure_pg_cron_enabled
+
+            echo "Applying database migrations (prisma migrate deploy)..."
+            compose run --rm --no-deps migrate
 
             compose up -d --no-deps api
             compose up -d --no-deps bot

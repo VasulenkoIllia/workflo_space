@@ -35,15 +35,15 @@
 **S0 Foundation — закрито** (monorepo/CI/Hetzner/Traefik/DNS/schema/health — інфра+код зелені).
 **S1 Auth — код закрито** (усі ендпойнти + 69 api-тестів зелені, staging deploy 🚀).
 
-**Відкриті хвости закриття (closure tasks):**
+**Закрито (30.05):**
 
-| ID  | Проблема                                                                                          | Дія                                        | Статус |
-| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------ |
-| C1  | `pnpm test` червоний: bot/landing/portal/workspace/ui мають `vitest run` без тест-файлів → exit 1 | `--passWithNoTests` у 5 апах               | ⬜     |
-| C2  | Тести НЕ в CI (ci.yml/staging/production ганяють лише type-check+lint)                            | додати `turbo test` крок у CI              | ⬜     |
-| C3  | **S1.5-D**: у деплої немає `prisma migrate deploy` (міграції руками)                              | one-shot migrate-крок у staging+production | ⬜     |
+| ID  | Проблема                                                                                          | Дія                                            | Статус |
+| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------ |
+| C1  | `pnpm test` червоний: bot/landing/portal/workspace/ui мають `vitest run` без тест-файлів → exit 1 | `--passWithNoTests` у 5 апах                   | ✅     |
+| C2  | Тести НЕ в CI (ci.yml/staging/production ганяють лише type-check+lint)                            | `turbo test` крок додано в усі 3 воркфлоу      | ✅     |
+| C3  | **S1.5-D**: у деплої немає `prisma migrate deploy` (міграції руками)                              | окремий `migrate`-сервіс + run-крок (stg+prod) | ✅     |
 
-> Після закриття C1-C3 → S0+S1 повністю закриті (док+код). Далі S1.6.
+> ✅ **S0+S1 повністю закриті (док+код):** `pnpm test` 15/15 green · тести в CI-гейті · міграції накочуються авто на деплої. Перевірка C3 на живому staging — поточний пуш. Далі S1.6.
 
 ---
 
@@ -61,7 +61,7 @@
 | S16-06 | Schema-delta batch-1: нові колонки/таблиці для ядрових модулів (orders/chat/files)      | [db]      | ⬜     |
 | S16-07 | db-hardening: FK-індекси, Order.company onDelete, Decimal(10,4), drop OtpToken-index    | [db]      | ⬜     |
 | S16-08 | telegramChatId dedup (NotificationSettings authoritative)                               | [15-bot]  | ⬜     |
-| S1.5-D | `prisma migrate deploy` у CI pipeline (auto-міграції на деплої)                         | Infra     | ⬜     |
+| S1.5-D | ✅ `prisma migrate deploy` на деплої (окремий `migrate`-сервіс, stg+prod)               | Infra     | ✅     |
 
 ---
 
