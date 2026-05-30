@@ -24,9 +24,11 @@
 **Питання owner'а:** "Куди реально йдуть години моєї команди за період X?"
 
 ### Endpoint
+
 `GET /reports/time?from=2026-04-01&to=2026-04-30&groupBy=executor|company|order&executorId=&companyId=`
 
 ### Логіка
+
 ```sql
 SELECT
   COALESCE(executor_id, company_id, order_id) AS bucket,
@@ -43,9 +45,10 @@ ORDER BY total_hours DESC;
 ```
 
 ### UI table
+
 | Executor / Company / Order | Total hours | Billable | Non-billable | Sessions |
-|---|---:|---:|---:|---:|
-| Olena Petrenko | 42.5 | 38.0 | 4.5 | 18 |
+| -------------------------- | ----------: | -------: | -----------: | -------: |
+| Olena Petrenko             |        42.5 |     38.0 |          4.5 |       18 |
 
 CSV export: ті ж колонки + extra `period_start` / `period_end` headers.
 
@@ -56,9 +59,11 @@ CSV export: ті ж колонки + extra `period_start` / `period_end` headers
 **Питання:** "Скільки реально заробляємо за період? Trend over time?"
 
 ### Endpoint
+
 `GET /reports/revenue?from=&to=&granularity=day|week|month&currency=USD`
 
 ### Логіка
+
 ```sql
 SELECT
   date_trunc('month', p.confirmed_at) AS period,
@@ -74,11 +79,13 @@ ORDER BY period;
 ```
 
 Окремо рахуємо:
-- Cost = сума ExecutorRate * годин по orders за період.
+
+- Cost = сума ExecutorRate \* годин по orders за період.
 - Profit = revenue − cost.
 - Margin = profit / revenue.
 
 ### UI
+
 - Line chart: revenue за period.
 - Side stats: total revenue / total profit / margin% / paying clients.
 - Table breakdown by month.
@@ -90,9 +97,11 @@ ORDER BY period;
 **Питання:** "Хто винен? Скільки? Скільки днів прострочено?"
 
 ### Endpoint
+
 `GET /reports/debtors?asOf=2026-05-01`
 
 ### Логіка
+
 ```sql
 SELECT
   c.id AS company_id,
@@ -111,16 +120,19 @@ ORDER BY days_overdue DESC;
 ```
 
 ### UI table
-| Company | Total owed | Oldest due | Days overdue | Invoices |
-|---|---:|---|---:|---:|
-| Acme LLC | $4,200.00 | 2026-03-15 | 47 | 3 |
+
+| Company  | Total owed | Oldest due | Days overdue | Invoices |
+| -------- | ---------: | ---------- | -----------: | -------: |
+| Acme LLC |  $4,200.00 | 2026-03-15 |           47 |        3 |
 
 Action buttons per row:
+
 - "Send reminder" → `notify(event='billing.invoice_overdue', ...)`.
 - "Mark write-off" (admin only) — закриває debt as bad debt.
 - "View company" → drill-in.
 
 ### Aggregate KPIs (top of page)
+
 - Total debt
 - # debtors
 - Avg days overdue
@@ -148,8 +160,33 @@ Action buttons per row:
 ## UI Navigation
 
 `/workspace/reports` — головна з 3 картками:
+
 - "Time" → `/workspace/reports/time`
 - "Revenue" → `/workspace/reports/revenue`
 - "Debtors" → `/workspace/reports/debtors`
 
 Кожна сторінка: filter bar зверху, results table/chart посередині, export button праворуч.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+**`agencyId`-фільтр у КОЖНОМУ запиті** (зараз cross-tenant витік аgrеgатів!); cache-key включає `agencyId`; **CSV formula-injection escape** (`=`/`+`/`-`/`@` leading); write-off/refund як cache-bust тригери; `revenue_monthly_mv` оголосити в міграції; `can()`-only (не raw `role==='owner'`) + tenant-guard; timezone-boundaries для from/to (agency-local); revenue-definition = wallet moneyBalance (один канон).
+
+### B. Плановані звіти (email) ✅
+
+- `ReportSchedule { id, agencyId, reportType, frequency, recipients[], format, nextRunAt }`. Cron генерує → надсилає через outbox (email з attachment). Напр. боржники щопонеділка.
+
+### C. PDF/XLSX експорт ✅
+
+- Окрім CSV: PDF (React-PDF, presentable) + XLSX (`exceljs`, для бухгалтера). Великі — async через outbox + лінк.
+
+### D. Конструктор звітів ✅
+
+- `ReportDefinition { id, agencyId, name, metrics[], groupBy, filters, createdBy }` — owner будує власні звіти понад 3 готові. Виконавчий движок over дозволених метрик (whitelist, не raw SQL). Phase 2.
+
+```
+New: ReportSchedule, ReportDefinition; revenue_monthly_mv (migration)
+```

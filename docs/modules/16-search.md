@@ -1,4 +1,5 @@
 # SEARCH & FILTERS MODULE
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`
@@ -54,7 +55,7 @@ export function buildSearchQuery(query: string): string {
   // "автоматизація звіт" → "автоматизація & звіт"
   // Додаємо :* для prefix search ("авт" → знаходить "автоматизація")
   const words = query.trim().split(/\s+/)
-  return words.map(w => `${w}:*`).join(' & ')
+  return words.map((w) => `${w}:*`).join(' & ')
 }
 
 // Використання в Prisma raw query:
@@ -153,7 +154,7 @@ WHERE search_vector @@ to_tsquery('ukrainian', $query)
 // apps/api/src/utils/buildOrdersWhere.ts
 export function buildOrdersWhere(query: OrdersQuery, userRole: Role, userId: string) {
   const where: Prisma.OrderWhereInput = {
-    deletedAt: null,  // завжди
+    deletedAt: null, // завжди
   }
 
   // Роль-залежна фільтрація
@@ -184,7 +185,7 @@ export function buildOrdersWhere(query: OrdersQuery, userRole: Role, userId: str
   }
   if (query.search) {
     where.searchVector = {
-      search: buildSearchQuery(query.search)
+      search: buildSearchQuery(query.search),
     }
   }
 
@@ -363,10 +364,31 @@ const items = await db.comment.findMany({
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Пошук/Фільтр |
-|---|---|
-| **Orders** | Основний об'єкт пошуку, повний набір фільтрів |
-| **Companies** | Пошук по назві, фільтр по тайєру |
-| **Blog** | Full-text пошук по статтях |
-| **Team** | Пошук по виконавцях |
-| **Billing** | Фільтри по платежах і рахунках |
+| Модуль        | Пошук/Фільтр                                  |
+| ------------- | --------------------------------------------- |
+| **Orders**    | Основний об'єкт пошуку, повний набір фільтрів |
+| **Companies** | Пошук по назві, фільтр по тайєру              |
+| **Blog**      | Full-text пошук по статтях                    |
+| **Team**      | Пошук по виконавцях                           |
+| **Billing**   | Фільтри по платежах і рахунках                |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + engine
+
+### A. Обов'язкові reconcile
+
+**`agencyId` у FTS DDL** (composite/paired GIN — cross-tenant leak інакше!); `websearch_to_tsquery` (не raw `to_tsquery` — 500 на `&`/`:`); scoping по membership-set (не single `getUserCompanyId`); `ukrainian` text-config migration (інакше 500); post-filter через `can()`; rate-limit на `/search` + autocomplete; soft-delete фільтр для companies/blog.
+
+### B. Engine — фазовано ✅
+
+- **Фаза 1 (MVP): Postgres FTS** — `tsvector` generated columns + GIN, agency-scoped. Достатньо для старту, без зайвої інфри.
+- **Фаза 2: Meilisearch/Typesense** — `SearchAdapter` інтерфейс (FTS|meili), swap без зміни викликів; синхронізація індексу через **domain-events/outbox** (order.created/updated → reindex). Typo-tolerance + instant-search.
+
+### C. Command palette (Cmd+K) ✅
+
+- Глобальна палітра (frontend, workspace+portal): пошук замовлень/клієнтів/документів + швидкі дії (створити замовлення, перейти). Б'є по `/search` + actions-registry.
+
+```
+New: SearchAdapter (packages/search); tsvector+GIN columns (agency-scoped)
+```

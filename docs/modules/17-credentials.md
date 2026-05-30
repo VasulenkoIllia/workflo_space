@@ -63,7 +63,7 @@ import { randomBytes, createCipheriv } from 'node:crypto'
 
 function encryptCredential(plainPassword: string, kek: Buffer) {
   // 1. Generate fresh DEK + IVs
-  const dek = randomBytes(32)            // 256-bit
+  const dek = randomBytes(32) // 256-bit
   const dekIv = randomBytes(12)
   const ctIv = randomBytes(12)
 
@@ -96,7 +96,9 @@ function decryptCredential(row: CredentialVault, kek: Buffer): string {
   // 2. Decrypt ciphertext
   const ctDecipher = createDecipheriv('aes-256-gcm', dek, row.ciphertextIv)
   ctDecipher.setAuthTag(row.ciphertextAuthTag)
-  const plain = Buffer.concat([ctDecipher.update(row.ciphertext), ctDecipher.final()]).toString('utf8')
+  const plain = Buffer.concat([ctDecipher.update(row.ciphertext), ctDecipher.final()]).toString(
+    'utf8'
+  )
 
   dek.fill(0)
   return plain
@@ -107,15 +109,15 @@ function decryptCredential(row: CredentialVault, kek: Buffer): string {
 
 ## Endpoints
 
-| Method | Path | Auth | Опис |
-|---|---|---|---|
-| `GET` | `/companies/:id/credentials` | **owner of company** | List (без plaintext — лише label/service/url/username/notes) |
-| `POST` | `/companies/:id/credentials` | owner | Create new (приймає plain password у body, encrypts before store) |
-| `PUT` | `/companies/:id/credentials/:credId` | owner | Update (full re-encrypt if password changed; partial if just label) |
-| `POST` | `/companies/:id/credentials/:credId/reveal` | owner | Returns plaintext одноразово; audit-logged + rate-limited |
-| `POST` | `/companies/:id/credentials/:credId/revoke` | owner | revokedAt = now |
-| `DELETE` | `/companies/:id/credentials/:credId` | owner | Hard delete після 2FA confirmation |
-| `GET` | `/companies/:id/credentials/:credId/audit` | owner | History reveal-ів + updates |
+| Method   | Path                                        | Auth                 | Опис                                                                |
+| -------- | ------------------------------------------- | -------------------- | ------------------------------------------------------------------- |
+| `GET`    | `/companies/:id/credentials`                | **owner of company** | List (без plaintext — лише label/service/url/username/notes)        |
+| `POST`   | `/companies/:id/credentials`                | owner                | Create new (приймає plain password у body, encrypts before store)   |
+| `PUT`    | `/companies/:id/credentials/:credId`        | owner                | Update (full re-encrypt if password changed; partial if just label) |
+| `POST`   | `/companies/:id/credentials/:credId/reveal` | owner                | Returns plaintext одноразово; audit-logged + rate-limited           |
+| `POST`   | `/companies/:id/credentials/:credId/revoke` | owner                | revokedAt = now                                                     |
+| `DELETE` | `/companies/:id/credentials/:credId`        | owner                | Hard delete після 2FA confirmation                                  |
+| `GET`    | `/companies/:id/credentials/:credId/audit`  | owner                | History reveal-ів + updates                                         |
 
 `can(user, 'credentials.read', { companyId })` → потребує `memberships.find(...).role === 'owner'`. **Executor НЕ має доступу навіть для assigned orders.**
 
@@ -133,13 +135,13 @@ function decryptCredential(row: CredentialVault, kek: Buffer): string {
 
 Кожна дія з credentials → `audit_logs`:
 
-| Action | Включає |
-|---|---|
-| `credentials.created` | actor, credId, label |
-| `credentials.updated` | actor, credId, fields_changed (без значень!) |
-| `credentials.revealed` | actor, credId, IP, user_agent |
-| `credentials.revoked` | actor, credId, reason |
-| `credentials.deleted` | actor, credId |
+| Action                 | Включає                                      |
+| ---------------------- | -------------------------------------------- |
+| `credentials.created`  | actor, credId, label                         |
+| `credentials.updated`  | actor, credId, fields_changed (без значень!) |
+| `credentials.revealed` | actor, credId, IP, user_agent                |
+| `credentials.revoked`  | actor, credId, reason                        |
+| `credentials.deleted`  | actor, credId                                |
 
 Перегляд audit owner може у `/companies/:id/audit?type=credentials`.
 
@@ -164,6 +166,7 @@ Tooling: `tools/rotate-credentials-kek.ts` (admin-only script).
 ## UI у Workspace
 
 Сторінка `/workspace/companies/:id/credentials`:
+
 - Таблиця: label / service icon / url / username / actions.
 - "Reveal" button — modal з confirmation + 2FA prompt (якщо налаштовано).
 - Reveal результат показується **тимчасово** (10 секунд autohide + clipboard copy кнопка).
@@ -181,3 +184,28 @@ Tooling: `tools/rotate-credentials-kek.ts` (admin-only script).
 - **KEK loss** → catastrophic, ВСІ credentials втрачені. Backup of KEK кладемо у Vault/1Password (manual procedure).
 - **Executor вимагає доступ** → flow: executor → запит owner'у через chat → owner вирішує (можливо створити окремий "executor credentials" з обмеженим scope).
 - **Credentials у файлі (PDF з API specs)** → НЕ кладемо в vault; файли у `order_files` без шифрування (захищено лише ACL).
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+Actions `credentials.reveal`/`revoke`/`delete` (окремі gated+audited, не лише read/update); **`agencyId`** + tenant-guard (cross-agency IDOR); `reveal` → `Cache-Control: no-store` + не логувати body; reveal revoked → deny; cascade delete company → audit bulk; KEK per-agency-чи-platform — вирішити (зараз env single → платформний, документувати).
+
+### B. 2FA на reveal ✅
+
+- `reveal` вимагає свіжого 2FA/password re-entry (challenge, valid 5хв) понад owner-роль. Прив'язано до модуля 01 (TOTP). Audit `credentials.revealed` з 2fa-flag.
+
+### C. Шеринг з виконавцями (scoped) ✅
+
+- `CredentialShare { id, credentialId, executorId, grantedBy, expiresAt, revokedAt }`. Owner тимчасово відкриває конкретний credential виконавцю (з терміном). Executor reveal лише в межах share + audit. Авто-revoke по expiry (cron).
+
+### D. Нагадування про ротацію ✅
+
+- `CredentialVault.expiresAt`, `rotationReminderDays`. Cron нагадує owner оновити (event `credentials.rotation_due`).
+
+```
+CredentialVault: + agencyId, expiresAt, rotationReminderDays
+New: CredentialShare
+```

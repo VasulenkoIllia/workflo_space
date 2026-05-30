@@ -26,13 +26,13 @@
 
 ## API
 
-| Method | Path | Auth | Опис |
-|---|---|---|---|
-| `GET` | `/messages/conversations` | client+ | List conversations (orders з якими user взаємодіяв або в які invited) |
-| `GET` | `/messages/conversations/:orderId` | client+ (своя компанія/assigned) | Деталі: order metadata + messages (paginated) |
-| `POST` | `/orders/:id/comments` | client+ | Існуючий endpoint з модуля 03 — використовується для send |
-| `POST` | `/messages/conversations/:orderId/read` | client+ | Mark unread badge as seen |
-| `GET` | `/messages/unread-count` | client+ | Total counter для sidebar badge |
+| Method | Path                                    | Auth                             | Опис                                                                  |
+| ------ | --------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `GET`  | `/messages/conversations`               | client+                          | List conversations (orders з якими user взаємодіяв або в які invited) |
+| `GET`  | `/messages/conversations/:orderId`      | client+ (своя компанія/assigned) | Деталі: order metadata + messages (paginated)                         |
+| `POST` | `/orders/:id/comments`                  | client+                          | Існуючий endpoint з модуля 03 — використовується для send             |
+| `POST` | `/messages/conversations/:orderId/read` | client+                          | Mark unread badge as seen                                             |
+| `GET`  | `/messages/unread-count`                | client+                          | Total counter для sidebar badge                                       |
 
 ### Response shape `GET /messages/conversations`:
 
@@ -124,6 +124,7 @@ Mobile: 2-screen flow (list → detail → back).
 ## Sidebar badge
 
 У layout sidebar обох додатків:
+
 - "Messages" / "Inbox" з червоним bubble `unreadCount`.
 - Live update через SSE (отримуємо `chat.new_comment` → +1 локально).
 
@@ -142,3 +143,27 @@ Mobile: 2-screen flow (list → detail → back).
 - 1000+ conversations per user: pagination + cursor + composite index `(profileId, lastMessageAt DESC)`.
 - Detail view: останні 50 messages, prev page via cursor.
 - SSE limit: 1 stream per user-session; older streams disconnect after 5min idle.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+**`OrderChatRead` модель** (зараз немає в схемі) + unread-counter cache; **mention-access predicate** (точно: учасник order, не лише mentioned-in-text — IDOR); `agencyId` + tenant-guard на `/messages/*`; cursor-формат пагінації; edit/delete propagation у inbox-preview.
+
+### B. Mute / archive ✅
+
+- `ConversationState { profileId, orderId, muted Boolean, archivedAt }`. Заглушені — без unread-bump; архівні — окремий розділ.
+
+### C. Пошук по повідомленнях ✅
+
+- FTS по `order_comments` у межах доступних розмов (ties 16-search, agency+participant scope).
+
+### D. Фільтри ✅
+
+- inbox: unread / mentioned-me / assigned-me / by-client. Швидкі таби.
+
+```
+New: OrderChatRead, ConversationState
+```
