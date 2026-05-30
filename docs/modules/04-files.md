@@ -1,4 +1,5 @@
 # FILES & STORAGE MODULE
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/storage`
@@ -17,7 +18,7 @@
 ```typescript
 // packages/storage/src/StorageAdapter.ts
 interface StorageAdapter {
-  upload(file: Buffer, path: string, mimeType: string): Promise<string>  // returns public URL
+  upload(file: Buffer, path: string, mimeType: string): Promise<string> // returns public URL
   download(path: string): Promise<Buffer>
   delete(path: string): Promise<void>
   exists(path: string): Promise<boolean>
@@ -25,13 +26,13 @@ interface StorageAdapter {
 
 // packages/storage/src/LocalStorageAdapter.ts (MVP)
 class LocalStorageAdapter implements StorageAdapter {
-  constructor(private basePath: string) {}  // /data/uploads
+  constructor(private basePath: string) {} // /data/uploads
 
   async upload(file: Buffer, path: string): Promise<string> {
     const fullPath = join(this.basePath, path)
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, file)
-    return `/files/${path}`  // relative URL → API serves it
+    return `/files/${path}` // relative URL → API serves it
   }
   // ...
 }
@@ -93,6 +94,7 @@ fastify.decorate('storage', storage)
 ### Прив'язка файлу
 
 Файл може бути прив'язаний до:
+
 - `orderId` — пряме вкладення до замовлення
 - `commentId` — вкладення в коментар
 - `documentId` — джерельний файл документа
@@ -101,12 +103,12 @@ fastify.decorate('storage', storage)
 
 ### Ліміти
 
-| Контекст | Макс. розмір | Макс. кількість |
-|---|---|---|
-| Коментар | 50 МБ / файл | 10 файлів |
-| Замовлення (вкладення) | 100 МБ / файл | 20 файлів |
-| Аватар | 5 МБ | 1 файл |
-| Документ (PDF) | — | генерується сервером |
+| Контекст               | Макс. розмір  | Макс. кількість      |
+| ---------------------- | ------------- | -------------------- |
+| Коментар               | 50 МБ / файл  | 10 файлів            |
+| Замовлення (вкладення) | 100 МБ / файл | 20 файлів            |
+| Аватар                 | 5 МБ          | 1 файл               |
+| Документ (PDF)         | —             | генерується сервером |
 
 ### Дозволені MIME-типи
 
@@ -119,11 +121,17 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   // Зображення
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
   // Архіви
-  'application/zip', 'application/x-rar-compressed',
+  'application/zip',
+  'application/x-rar-compressed',
   // Текст
-  'text/plain', 'text/csv',
+  'text/plain',
+  'text/csv',
 ]
 ```
 
@@ -137,7 +145,7 @@ fastify.get('/files/*', async (req, reply) => {
   const filePath = req.params['*']
   // Перевіряємо права доступу: чи має юзер доступ до orderId цього файлу
   const attachment = await db.fileAttachment.findFirst({
-    where: { storagePath: filePath }
+    where: { storagePath: filePath },
   })
   if (!attachment) return reply.status(404).send()
   if (!canAccessFile(req.user, attachment)) return reply.status(403).send()
@@ -160,13 +168,13 @@ fastify.get('/files/*', async (req, reply) => {
 
 ## API Endpoints
 
-| Метод | URL | Опис |
-|---|---|---|
-| `POST` | `/files` | Завантажити файл |
-| `GET` | `/files/:id` | Метадані файлу |
-| `GET` | `/files/*` | Завантажити бінарний контент |
-| `DELETE` | `/files/:id` | Soft delete файлу |
-| `GET` | `/orders/:id/files` | Всі файли замовлення |
+| Метод    | URL                 | Опис                         |
+| -------- | ------------------- | ---------------------------- |
+| `POST`   | `/files`            | Завантажити файл             |
+| `GET`    | `/files/:id`        | Метадані файлу               |
+| `GET`    | `/files/*`          | Завантажити бінарний контент |
+| `DELETE` | `/files/:id`        | Soft delete файлу            |
+| `GET`    | `/orders/:id/files` | Всі файли замовлення         |
 
 ---
 
@@ -187,14 +195,14 @@ file: <binary>
 ```typescript
 {
   id: string
-  fileName: string          // оригінальна назва
-  fileSize: number          // bytes
+  fileName: string // оригінальна назва
+  fileSize: number // bytes
   mimeType: string
-  url: string               // /files/{path} або pre-signed URL (Phase 2)
+  url: string // /files/{path} або pre-signed URL (Phase 2)
   context: string
   orderId: string | null
   commentId: string | null
-  uploadedBy: string        // profileId
+  uploadedBy: string // profileId
   createdAt: string
 }
 ```
@@ -245,7 +253,7 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /srv/workflo/uploads  # шлях на хості
+      device: /srv/workflo/uploads # шлях на хості
       o: bind
 ```
 
@@ -273,12 +281,12 @@ volumes:
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Orders** | Вкладення до замовлення |
-| **Chat** | Вкладення до коментарів |
+| Модуль        | Зв'язок                              |
+| ------------- | ------------------------------------ |
+| **Orders**    | Вкладення до замовлення              |
+| **Chat**      | Вкладення до коментарів              |
 | **Documents** | PDF зберігається як `FileAttachment` |
-| **Auth** | Перевірка доступу при завантаженні |
+| **Auth**      | Перевірка доступу при завантаженні   |
 
 ---
 
@@ -307,6 +315,7 @@ function safeResolve(uploadsRoot: string, requested: string): string {
 Старий allowlist дозволяв `image/svg+xml`. **SVG видалено** через XSS risk (SVG може містити `<script>` теги, який рендериться браузером якщо відкритий як `Content-Type: image/svg+xml`).
 
 Поточний allowlist:
+
 - `image/png`, `image/jpeg`, `image/webp`, `image/gif`
 - `application/pdf`
 - `text/plain`, `text/csv`
@@ -342,6 +351,42 @@ Permissions: `0640` files, `0750` directories. Owner `workflo`, group `workflo`.
 ### Backup of uploads
 
 Окремий cron `C13:uploads_backup` (щодня о 04:00):
+
 - `rsync --delete /var/lib/workflo/uploads → /backup/uploads/`
 - Compress weekly to `/backup/uploads-weekly-<date>.tar.gz`.
 - Encrypt + upload to Hetzner Object Storage (GPG AES-256, див. `INFRASTRUCTURE.md` секція "Backups").
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Стара `FileAttachment`-модель + дубль storage-layout вище → видалити в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- **`OrderFile` → реальна модель**: поля `commentId String?`, `documentId String?`, `context('order'|'comment'|'document'|'avatar')`, `deletedAt`, `sha256`, `storedAs` (не `url`/`storagePath`). Comment-attachments тепер представлені (`commentId`).
+- **Один storage-layout** (видалити stale `/data/uploads/...comments/`): tenant-prefixed `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>`, аватари `agencies/<agencyId>/avatars/<profileId>.<ext>`.
+- **Disk-cleanup при cascade**: hard-delete order/comment → видалити blob з диску/сховища (cron + on-delete hook). C04 виправити під реальні поля.
+- **`agencyId`** + access-check `canAccessFile` (tenant + participant + internal-comment confidentiality).
+- Path-traversal guard + SVG-removal + `Content-Disposition: attachment` (вже є).
+
+### B. Image preview / тумбнейли ✅
+
+- На upload зображення/PDF → async генерація прев'ю (`sharp`): `thumbnail` (256px) + `preview` (1024px) варіанти; `OrderFile.thumbStoredAs String?`.
+- `GET /files/:id?variant=thumb|preview|original` (з access-check). UI: тумбнейли в чаті/галереї + lightbox.
+- PDF: перша сторінка як прев'ю (`pdf-thumbnail`/`pdftoppm`).
+
+### C. S3/R2 storage adapter ✅
+
+- `packages/storage` `StorageAdapter` (вже інтерфейс + `LocalStorageAdapter`) → додати `S3StorageAdapter` (Cloudflare R2 / Hetzner Object Storage, S3 API). Вибір через env `STORAGE_TYPE=local|s3`.
+- **Signed-URL serving**: замість стрімінгу через API — time-limited presigned URL (напр. 5хв) на download; API лише авторизує + редіректить. Tenant-prefixed keys.
+- Env: `STORAGE_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY/REGION`. Backups/CDN з коробки.
+
+### Schema-зміни (foundation-міграція)
+
+```
+OrderFile: + commentId, documentId, context, deletedAt, sha256, thumbStoredAs, agencyId
+           (storedAs канонічне; url/storagePath видалити)
+```
+
+> **→ BACKLOG (не обрано зараз):** virus-scan (ClamAV + `scanStatus` колонка — зарезервувати при бажанні), file versioning.
