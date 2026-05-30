@@ -1,4 +1,5 @@
 # ORDERS MODULE
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
@@ -20,26 +21,26 @@
 new → in_review → approved → in_progress → on_hold → in_review_final → revision → done → cancelled
 ```
 
-| Статус | Значення |
-|---|---|
-| `new` | Щойно надійшло, ніхто не взяв |
-| `in_review` | Менеджер розглядає |
-| `approved` | Підтверджено, починаємо роботу |
-| `in_progress` | Виконавець активно працює |
-| `on_hold` | Заморожено (чекаємо клієнта/оплату) |
+| Статус            | Значення                             |
+| ----------------- | ------------------------------------ |
+| `new`             | Щойно надійшло, ніхто не взяв        |
+| `in_review`       | Менеджер розглядає                   |
+| `approved`        | Підтверджено, починаємо роботу       |
+| `in_progress`     | Виконавець активно працює            |
+| `on_hold`         | Заморожено (чекаємо клієнта/оплату)  |
 | `in_review_final` | Здали клієнту, чекаємо підтвердження |
-| `revision` | Клієнт просить правки |
-| `done` | Закрито, акт підписано |
-| `cancelled` | Скасовано |
+| `revision`        | Клієнт просить правки                |
+| `done`            | Закрито, акт підписано               |
+| `cancelled`       | Скасовано                            |
 
 ### Клієнтські статуси (Portal)
 
-| Клієнтський статус | Внутрішні статуси |
-|---|---|
-| `pending` | `new`, `in_review` |
-| `in_progress` | `approved`, `in_progress`, `on_hold`, `revision` |
-| `review` | `in_review_final` |
-| `completed` | `done`, `cancelled` |
+| Клієнтський статус | Внутрішні статуси                                |
+| ------------------ | ------------------------------------------------ |
+| `pending`          | `new`, `in_review`                               |
+| `in_progress`      | `approved`, `in_progress`, `on_hold`, `revision` |
+| `review`           | `in_review_final`                                |
+| `completed`        | `done`, `cancelled`                              |
 
 > Маппінг відбувається автоматично у відповіді API через `mapToClientStatus(internalStatus)` функцію в `packages/types`.
 
@@ -65,12 +66,12 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Пріоритети
 
-| Пріоритет | Значення |
-|---|---|
-| `low` | Не горить |
-| `medium` | Стандарт (за замовчуванням) |
-| `high` | Важливо |
-| `urgent` | Критично, спливаюче сповіщення |
+| Пріоритет | Значення                       |
+| --------- | ------------------------------ |
+| `low`     | Не горить                      |
+| `medium`  | Стандарт (за замовчуванням)    |
+| `high`    | Важливо                        |
+| `urgent`  | Критично, спливаюче сповіщення |
 
 ### Фінансова логіка
 
@@ -103,24 +104,24 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Portal (клієнт)
 
-| Метод | URL | Опис |
-|---|---|---|
-| `GET` | `/orders` | Список замовлень своєї компанії |
-| `POST` | `/orders` | Створити нове замовлення |
-| `GET` | `/orders/:id` | Деталі замовлення (client view) |
+| Метод   | URL           | Опис                                          |
+| ------- | ------------- | --------------------------------------------- |
+| `GET`   | `/orders`     | Список замовлень своєї компанії               |
+| `POST`  | `/orders`     | Створити нове замовлення                      |
+| `GET`   | `/orders/:id` | Деталі замовлення (client view)               |
 | `PATCH` | `/orders/:id` | Редагувати (тільки `new`/`in_review` статуси) |
 
 ### Workspace (команда)
 
-| Метод | URL | Опис |
-|---|---|---|
-| `GET` | `/orders` | Список всіх замовлень з фільтрами |
-| `GET` | `/orders/:id` | Деталі замовлення (internal view) |
-| `PATCH` | `/orders/:id/status` | Змінити статус |
-| `PATCH` | `/orders/:id` | Редагувати будь-яке поле |
-| `DELETE` | `/orders/:id` | Soft delete |
-| `POST` | `/orders/:id/executors` | Призначити виконавця |
-| `DELETE` | `/orders/:id/executors/:userId` | Зняти виконавця |
+| Метод    | URL                             | Опис                              |
+| -------- | ------------------------------- | --------------------------------- |
+| `GET`    | `/orders`                       | Список всіх замовлень з фільтрами |
+| `GET`    | `/orders/:id`                   | Деталі замовлення (internal view) |
+| `PATCH`  | `/orders/:id/status`            | Змінити статус                    |
+| `PATCH`  | `/orders/:id`                   | Редагувати будь-яке поле          |
+| `DELETE` | `/orders/:id`                   | Soft delete                       |
+| `POST`   | `/orders/:id/executors`         | Призначити виконавця              |
+| `DELETE` | `/orders/:id/executors/:userId` | Зняти виконавця                   |
 
 ### Query параметри для `GET /orders` (workspace)
 
@@ -161,7 +162,7 @@ sortDir=asc|desc
   id: string
   title: string
   description: string | null
-  clientStatus: 'pending'|'in_progress'|'review'|'completed'
+  clientStatus: 'pending' | 'in_progress' | 'review' | 'completed'
   priority: string
   totalAmount: number | null
   balanceDue: number | null
@@ -242,15 +243,15 @@ model OrderExecutor {
 
 ## Нотифікації при зміні статусу
 
-| Подія | Кому | Канал |
-|---|---|---|
+| Подія                       | Кому                                  | Канал            |
+| --------------------------- | ------------------------------------- | ---------------- |
 | Нове замовлення від клієнта | Owner + всі executors (кому assigned) | Email + Telegram |
-| Статус → `approved` | Company Owner | Email + Telegram |
-| Статус → `in_review_final` | Company Owner | Email + Telegram |
-| Статус → `revision` | Executors | Telegram |
-| Статус → `done` | Company Owner | Email + Telegram |
-| Статус → `cancelled` | Company Owner + Executors | Email + Telegram |
-| `dueDate` = завтра | Executors | Telegram |
+| Статус → `approved`         | Company Owner                         | Email + Telegram |
+| Статус → `in_review_final`  | Company Owner                         | Email + Telegram |
+| Статус → `revision`         | Executors                             | Telegram         |
+| Статус → `done`             | Company Owner                         | Email + Telegram |
+| Статус → `cancelled`        | Company Owner + Executors             | Email + Telegram |
+| `dueDate` = завтра          | Executors                             | Telegram         |
 
 ---
 
@@ -272,14 +273,14 @@ model OrderExecutor {
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Chat** | Коментарі прив'язані до `orderId` |
-| **Files** | Файли прив'язані до `orderId` |
-| **Billing** | Платежі прив'язані до `orderId` |
-| **Documents** | Рахунки, акти, специфікації прив'язані до `orderId` |
-| **Search** | `tsvector` по `title` + `description` |
-| **Notifications** | Статусні зміни → нотифікації |
+| Модуль            | Зв'язок                                             |
+| ----------------- | --------------------------------------------------- |
+| **Chat**          | Коментарі прив'язані до `orderId`                   |
+| **Files**         | Файли прив'язані до `orderId`                       |
+| **Billing**       | Платежі прив'язані до `orderId`                     |
+| **Documents**     | Рахунки, акти, специфікації прив'язані до `orderId` |
+| **Search**        | `tsvector` по `title` + `description`               |
+| **Notifications** | Статусні зміни → нотифікації                        |
 
 ---
 
@@ -288,6 +289,7 @@ model OrderExecutor {
 ### Triage flow (variant B — owner-only)
 
 Коли клієнт створює нове замовлення через portal:
+
 - Order створюється з `internalStatus='new'`, `assigneeId=null`.
 - **Тільки owner агенції** бачить unassigned orders у `/workspace/triage`.
 - Executors бачать тільки order де `assigneeId = my profileId` (їх назначив owner).
@@ -297,23 +299,24 @@ model OrderExecutor {
 
 Канонічна таблиця у `packages/types/src/constants.ts` → `INTERNAL_TO_CLIENT_STATUS`:
 
-| Internal | Client | Owner control |
-|---|---|---|
-| `new` | `in_progress` | Triage queue |
-| `clarification` | `in_progress` | Awaiting client info |
-| `estimating` | `in_progress` | Executor оцінює (раніше `estimated`, перейменовано в S1-03) |
-| `in_progress` | `in_progress` | Active work |
-| `on_hold` | `in_progress` | Paused, з reason |
-| `review` | `pending_approval` | Owner перевіряє → схвалює done |
-| `revision` | `in_progress` | Owner повернув на доробку (тільки owner може зробити done→revision) |
-| `done` | `completed` | Final, тільки owner може transition |
-| `cancelled` | `cancelled` | Final |
+| Internal        | Client             | Owner control                                                       |
+| --------------- | ------------------ | ------------------------------------------------------------------- |
+| `new`           | `in_progress`      | Triage queue                                                        |
+| `clarification` | `in_progress`      | Awaiting client info                                                |
+| `estimating`    | `in_progress`      | Executor оцінює (раніше `estimated`, перейменовано в S1-03)         |
+| `in_progress`   | `in_progress`      | Active work                                                         |
+| `on_hold`       | `in_progress`      | Paused, з reason                                                    |
+| `review`        | `pending_approval` | Owner перевіряє → схвалює done                                      |
+| `revision`      | `in_progress`      | Owner повернув на доробку (тільки owner може зробити done→revision) |
+| `done`          | `completed`        | Final, тільки owner може transition                                 |
+| `cancelled`     | `cancelled`        | Final                                                               |
 
 ### Time tracking (specification)
 
 Окремий блок у замовленнях:
 
 #### Принципи
+
 - **1 active timer per executor** глобально (не per-order; перемикання auto-stops попередній).
 - Timer persistent у БД (`time_logs.started_at != null AND ended_at IS null`).
 - Auto-stop через **8 годин** (safety net for forgotten timers) — cron `C15:timer_auto_stop` кожні 5хв.
@@ -321,6 +324,7 @@ model OrderExecutor {
 - Time logs прив'язані до `orders` (або до `internal_tasks` через нову колонку).
 
 #### Schema (доповнення)
+
 ```prisma
 model TimeLog {
   id          String    @id @default(uuid())
@@ -347,6 +351,7 @@ model TimeLog {
 Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE ended_at IS NULL`.
 
 #### Endpoints
+
 - `POST /orders/:id/timer/start` (or `/internal-tasks/:id/timer/start`) — auto-stops previous active timer.
 - `POST /orders/:id/timer/stop` — sets ended_at, computes duration.
 - `POST /orders/:id/time-logs` — manual entry (started_at + ended_at + description).
@@ -355,6 +360,7 @@ Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE 
 ### Specification flow (auto-generated)
 
 Послідовність:
+
 1. Executor під час роботи додає коментарі через `time_logs.description` (за task).
 2. При transition order → `review`, система автоматично формує draft Specification:
    - Витягуємо всі `time_logs` для order, відсортовані за `startedAt`.
@@ -373,6 +379,7 @@ Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE 
 ### Triage / unassigned-only owner view
 
 `GET /orders?filter=unassigned`:
+
 - Owner only (`can(user, 'admin.access')` OR `memberships.role === 'owner'` of agency).
 - Returns orders WHERE `assigneeId IS NULL AND deletedAt IS NULL AND createdAt > now() - INTERVAL '30 days'`.
 - UI `/workspace/triage` показує count badge у sidebar.
@@ -380,6 +387,58 @@ Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE 
 ### Done → revision (owner-only)
 
 Старий механізм: будь-хто міг повернути order у revision. Нова політика:
+
 - Тільки **owner** компанії може transition done → revision (`can(user, 'order.transition_status', { companyId, from: 'done', to: 'revision' })`).
 - Audit log: `order.reopened` з reason.
 - Notification до executor `orders.status_changed` (revision = potentially negative для executor → email завжди + telegram).
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Pre-S1 9-статусні блоки вище — підлягають видаленню в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- **Один `ALLOWED_TRANSITIONS`** на реальні 9 internal-станів (new/clarification/estimating/in_progress/review/revision/done/cancelled/on_hold). Старі машини (`approved`, `in_review_final`…) видалити.
+- **`OrderStage`** задокументувати (чеклист-етапи на замовленні: title/status/position) + endpoints CRUD + reorder.
+- **`deadline`** (не `dueDate` — узгодити з cron C03/escalation), `companyId`/`assigneeId` nullable (internal_task без компанії).
+- **`agencyId`** денормалізація + composite-індекси `(agencyId, internalStatus)`, `(agencyId, assigneeId)`, `(agencyId, deletedAt)`.
+- **IDOR-guard**: `GET/PATCH /orders/:id` — executor лише свої (`assigneeId=me OR agency-owner`) + tenant-guard; client лише своєї компанії.
+- **`Order.onHoldReason String?`, `cancelledReason String?`** (transition DTO вимагає reason).
+- **TimeLog уніфікація** (крос-модуль T2): таймерна модель `{startedAt, endedAt, durationSec, autoStopped, autoStopReason, internalTaskId?, description}`.
+- Ніколи не hard-delete (cascade знищив би time_logs/білінг) — лише `deletedAt`.
+
+### B. Теги/мітки ✅
+
+- `OrderTag { id, agencyId, name, color, createdAt, @@unique([agencyId, name]) }` (per-agency CRUD у admin).
+- `OrderTagAssignment { orderId, tagId, @@id([orderId, tagId]) }`.
+- Фільтр `GET /orders?tags=bug,urgent`; UI — кольорові чіпи. Endpoints: `POST/DELETE /orders/:id/tags`.
+
+### C. SLA / терміни реакції ✅
+
+- `SlaPolicy { id, agencyId, priority, firstResponseMins, resolutionMins, @@unique([agencyId, priority]) }` (per-agency конфіг у admin).
+- `Order` додає `firstResponseDueAt`, `resolutionDueAt` (обчислюються при створенні з policy), `firstRespondedAt`, `slaBreachedAt`.
+- Cron `C-sla_check` (кожні 15хв): прострочення first-response/resolution → `slaBreachedAt` + escalation owner'у (event `orders.sla_breached`).
+- UI: badge «SLA: 1г 20хв» / червоний при breach. Звіти: % SLA-compliance.
+
+### D. Залежності між замовленнями ✅
+
+- `OrderDependency { id, orderId, dependsOnOrderId, type('blocks'), createdAt, @@unique([orderId, dependsOnOrderId]) }`.
+- Валідація циклів при створенні (DFS) → 409 `dependency_cycle`.
+- Guard: transition blocked-замовлення у `in_progress` заборонено поки всі `dependsOn` не `done` (UI показує «заблоковано задачею X»). Коли blocker→done → notify виконавцю розблокованого.
+- Tenant: залежності лише в межах однієї агенції.
+
+### E. Шаблони замовлень ✅
+
+- `OrderTemplate { id, agencyId, name, type, defaultTitle, defaultDescription, defaultBillingType, defaultPrice?, defaultStages Json, nomenclatureCode?, isActive, @@unique([agencyId, name]) }`.
+- `POST /orders/from-template/:templateId { companyId, overrides? }` → створює Order + OrderStage[] з шаблону. Admin CRUD шаблонів (модуль 20, пов'язано з н022 номенклатурою).
+
+### Schema-зміни (у foundation-міграцію)
+
+```
+Order: + onHoldReason, cancelledReason, firstResponseDueAt, resolutionDueAt,
+         firstRespondedAt, slaBreachedAt, agencyId
+New: OrderTag, OrderTagAssignment, SlaPolicy, OrderDependency, OrderTemplate
+TimeLog: повна таймерна модель (T2)
+```
