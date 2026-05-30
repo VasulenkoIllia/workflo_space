@@ -105,6 +105,23 @@ export interface NotifyOutcome {
   attempted: ReadonlyArray<NotificationChannel>
 }
 
+// Keys whose VALUES are secret/PII and must never be persisted (audit SC-1):
+// reset/verify/invite links carry live single-use tokens, etc.
+const SENSITIVE_VAR_KEY = /url|token|secret|password|otp|code|key|hash/i
+
+/**
+ * Redact sensitive values before persisting vars to notification_logs /
+ * the in-app notifications row. Keeps keys (for debugging shape) but replaces
+ * the value with '[redacted]'. Non-recursive: vars are flat per template.
+ */
+function scrubVars(vars: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(vars)) {
+    out[k] = SENSITIVE_VAR_KEY.test(k) ? '[redacted]' : v
+  }
+  return out
+}
+
 /**
  * Main notification entry point.
  *
@@ -187,7 +204,7 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
               type: input.event,
               title: input.inApp.title,
               body: input.inApp.body,
-              metadata: input.vars as object,
+              metadata: scrubVars(input.vars),
             },
           })
           result = {
@@ -223,7 +240,7 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
           channel,
           status: result.result.status,
           errorCode: 'reason' in result.result ? result.result.reason : null,
-          metadata: { vars: input.vars },
+          metadata: { vars: scrubVars(input.vars) },
         },
       })
     } catch (logErr) {

@@ -23,18 +23,14 @@ function makePrismaStub(opts: {
       findUnique: vi
         .fn()
         .mockResolvedValue(
-          hasSettings
-            ? { id: 'settings-1', profileId: 'p1', language: 'uk', telegramChatId }
-            : null
+          hasSettings ? { id: 'settings-1', profileId: 'p1', language: 'uk', telegramChatId } : null
         ),
     },
     profile: {
       findUnique: vi
         .fn()
         .mockResolvedValue(
-          hasProfile
-            ? { id: 'p1', email: 'a@b.com', name: 'Test User', language: 'uk' }
-            : null
+          hasProfile ? { id: 'p1', email: 'a@b.com', name: 'Test User', language: 'uk' } : null
         ),
     },
     notificationLog: {
@@ -112,6 +108,23 @@ describe('notify', () => {
       }
     )
     expect(prisma.notification.create).toHaveBeenCalledOnce()
+  })
+
+  it('redacts sensitive vars (resetUrl/token) before persisting to notification_logs (SC-1)', async () => {
+    const prisma = makePrismaStub({ prefs: [{ channel: 'email' }] })
+    await notify(
+      { prisma, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+      {
+        profileId: 'p1',
+        event: 'auth.password_reset',
+        vars: { resetUrl: 'https://portal/reset?token=SECRET123', name: 'Bob' },
+      }
+    )
+    const logCall = (prisma.notificationLog.create as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const persistedVars = logCall.data.metadata.vars
+    expect(persistedVars.resetUrl).toBe('[redacted]')
+    expect(persistedVars.name).toBe('Bob') // non-sensitive kept
+    expect(JSON.stringify(logCall)).not.toContain('SECRET123')
   })
 
   it('always logs to notification_logs even for skipped dispatches', async () => {
