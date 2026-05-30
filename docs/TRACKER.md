@@ -28,6 +28,25 @@
 
 ---
 
+## 🔍 Аудит закриття S0/S1 (30.05.2026)
+
+**Зелене (перевірено локально):** `type-check` 19/19 ✅ · `lint` 13/13 ✅ · тести: api **69** ✅, notifications **64** ✅, types **23** ✅, i18n **8** ✅ · 6 міграцій (вкл. S1.5-C) · 5 Dockerfiles · compose dev/staging/production · CI (ci.yml PR + staging + production).
+
+**S0 Foundation — закрито** (monorepo/CI/Hetzner/Traefik/DNS/schema/health — інфра+код зелені).
+**S1 Auth — код закрито** (усі ендпойнти + 69 api-тестів зелені, staging deploy 🚀).
+
+**Відкриті хвости закриття (closure tasks):**
+
+| ID  | Проблема                                                                                          | Дія                                        | Статус |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------ |
+| C1  | `pnpm test` червоний: bot/landing/portal/workspace/ui мають `vitest run` без тест-файлів → exit 1 | `--passWithNoTests` у 5 апах               | ⬜     |
+| C2  | Тести НЕ в CI (ci.yml/staging/production ганяють лише type-check+lint)                            | додати `turbo test` крок у CI              | ⬜     |
+| C3  | **S1.5-D**: у деплої немає `prisma migrate deploy` (міграції руками)                              | one-shot migrate-крок у staging+production | ⬜     |
+
+> Після закриття C1-C3 → S0+S1 повністю закриті (док+код). Далі S1.6.
+
+---
+
 ## 🔑 SPRINT 1.6 — Tenancy + Foundation (ДО S2)
 
 > Ціль: tenant-ready фундамент + надійна доставка + schema-delta + db-hardening. Розблоковує весь agencyId-reconcile.
