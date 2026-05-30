@@ -50,35 +50,36 @@
 
 > Ціль: реєстрація, логін, JWT, invite flow
 
-| ID     | Задача                                                                                              | Модуль             | Хто | Статус | Тест | Deploy |
-| ------ | --------------------------------------------------------------------------------------------------- | ------------------ | --- | ------ | ---- | ------ |
-| S1-00  | DB migration multi-company (drop Company.ownerId, partial unique owner)                             | [01-auth]          | —   | ✅     | —    | —      |
-| S1-01  | packages/notifications — email functions                                                            | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-02  | packages/notifications — telegram adapter                                                           | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-03  | packages/notifications — notify() unified + matrix migration                                        | [07-notifications] | —   | ✅     | ✅   | —      |
-| S1-04  | POST /auth/register (profile + company)                                                             | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-05  | POST /auth/login                                                                                    | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-06  | POST /auth/logout                                                                                   | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-07  | POST /auth/refresh (token rotation)                                                                 | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-08  | POST /auth/forgot-password                                                                          | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-09  | POST /auth/reset-password                                                                           | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-10  | GET /auth/me                                                                                        | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-11  | JWT middleware + role guard (can() shim)                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-12  | Rate limiting /auth/\* (per-route: register/login 10/15m, forgot 3/15m, reset 5/1h, refresh 60/15m) | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-13  | PATCH /profile, /profile/password                                                                   | [13-settings]      | —   | ✅     | ✅   | —      |
-| S1-14  | PATCH /profile/notifications (matrix + ADR-003 email lock)                                          | [13-settings]      | —   | ✅     | ✅   | —      |
-| S1-15  | POST /workspace/team/invite (executor)                                                              | [12-team]          | —   | ✅     | ✅   | —      |
-| S1-16  | GET /invite/:token + прийняти запрошення                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-17  | POST /company/members/invite                                                                        | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1-18  | Welcome email при реєстрації (wired у S1-04 register)                                               | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-19  | Invite email (executor + company member) — wired у S1-15/17                                         | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-20  | Reset password email (wired у S1-08 forgot-password)                                                | [08-email]         | —   | ✅     | ✅   | —      |
-| S1-21  | packages/i18n — uk/en локалі базові (translate + namespaces + tests)                                | [13-settings]      | —   | ✅     | ✅   | —      |
-| S1-22  | Deploy Sprint 1 → staging (green: build + deploy + health-check)                                    | Infra              | —   | ✅     | ✅   | 🚀     |
-| S1.5-A | Post-S1 audit fixes: security (logout/login/refresh/CSRF/invite) + migration safety                 | [01-auth]          | —   | ✅     | ✅   | —      |
-| S1.5-B | D1 can()-permissions + D2 notifyRecipient + D5 enum-drift test                                      | [01-auth]/[07]     | —   | ✅     | ✅   | —      |
-| S1.5-C | Schema hardening migration (Payment.status, ExecutorRate fields, FK indexes, onDelete, decimals)    | [db]               | —   | ✅     | ✅   | —      |
-| S1.5-D | Add `prisma migrate deploy` to CI (deferred → live-testing prep)                                    | Infra              | —   | ⬜     | —    | —      |
+| ID     | Задача                                                                                                       | Модуль             | Хто | Статус | Тест | Deploy |
+| ------ | ------------------------------------------------------------------------------------------------------------ | ------------------ | --- | ------ | ---- | ------ |
+| S1-00  | DB migration multi-company (drop Company.ownerId, partial unique owner)                                      | [01-auth]          | —   | ✅     | —    | —      |
+| S1-01  | packages/notifications — email functions                                                                     | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-02  | packages/notifications — telegram adapter                                                                    | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-03  | packages/notifications — notify() unified + matrix migration                                                 | [07-notifications] | —   | ✅     | ✅   | —      |
+| S1-04  | POST /auth/register (profile + company)                                                                      | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-05  | POST /auth/login                                                                                             | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-06  | POST /auth/logout                                                                                            | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-07  | POST /auth/refresh (token rotation)                                                                          | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-08  | POST /auth/forgot-password                                                                                   | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-09  | POST /auth/reset-password                                                                                    | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-10  | GET /auth/me                                                                                                 | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-11  | JWT middleware + role guard (can() shim)                                                                     | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-12  | Rate limiting /auth/\* (per-route: register/login 10/15m, forgot 3/15m, reset 5/1h, refresh 60/15m)          | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-13  | PATCH /profile, /profile/password                                                                            | [13-settings]      | —   | ✅     | ✅   | —      |
+| S1-14  | PATCH /profile/notifications (matrix + ADR-003 email lock)                                                   | [13-settings]      | —   | ✅     | ✅   | —      |
+| S1-15  | POST /workspace/team/invite (executor)                                                                       | [12-team]          | —   | ✅     | ✅   | —      |
+| S1-16  | GET /invite/:token + прийняти запрошення                                                                     | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-17  | POST /company/members/invite                                                                                 | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1-18  | Welcome email при реєстрації (wired у S1-04 register)                                                        | [08-email]         | —   | ✅     | ✅   | —      |
+| S1-19  | Invite email (executor + company member) — wired у S1-15/17                                                  | [08-email]         | —   | ✅     | ✅   | —      |
+| S1-20  | Reset password email (wired у S1-08 forgot-password)                                                         | [08-email]         | —   | ✅     | ✅   | —      |
+| S1-21  | packages/i18n — uk/en локалі базові (translate + namespaces + tests)                                         | [13-settings]      | —   | ✅     | ✅   | —      |
+| S1-22  | Deploy Sprint 1 → staging (green: build + deploy + health-check)                                             | Infra              | —   | ✅     | ✅   | 🚀     |
+| S1.5-A | Post-S1 audit fixes: security (logout/login/refresh/CSRF/invite) + migration safety                          | [01-auth]          | —   | ✅     | ✅   | —      |
+| S1.5-B | D1 can()-permissions + D2 notifyRecipient + D5 enum-drift test                                               | [01-auth]/[07]     | —   | ✅     | ✅   | —      |
+| S1.5-C | Schema hardening migration (Payment.status, ExecutorRate fields, FK indexes, onDelete, decimals)             | [db]               | —   | ✅     | ✅   | —      |
+| S1.5-D | Add `prisma migrate deploy` to CI (deferred → live-testing prep)                                             | Infra              | —   | ⬜     | —    | —      |
+| S1.6-T | 🔑 Tenancy foundation (ADR-004): Agency + AgencyMember + agencyId scoping + claims + can() guard — BEFORE S2 | [adr/004]          | —   | ⬜     | ⬜   | —      |
 
 ---
 
