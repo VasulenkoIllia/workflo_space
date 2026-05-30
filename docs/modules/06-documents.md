@@ -1,4 +1,5 @@
 # DOCUMENTS MODULE
+
 > App: Workspace (work.workflo.space) / Portal (portal.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/templates`, `packages/storage`
@@ -14,13 +15,13 @@
 
 ## Типи документів
 
-| Тип | Enum | Ким генерується | Кому видно |
-|---|---|---|---|
-| Рахунок | `invoice` | Система/Owner | Клієнт + Команда |
-| Акт виконаних робіт | `completion_act` | Owner | Клієнт + Команда |
-| Специфікація | `specification` | Owner | Клієнт + Команда |
-| Договір | `contract` | Owner | Клієнт + Команда |
-| Розрахунковий лист | `payslip` | Owner | Тільки команда |
+| Тип                 | Enum             | Ким генерується | Кому видно       |
+| ------------------- | ---------------- | --------------- | ---------------- |
+| Рахунок             | `invoice`        | Система/Owner   | Клієнт + Команда |
+| Акт виконаних робіт | `completion_act` | Owner           | Клієнт + Команда |
+| Специфікація        | `specification`  | Owner           | Клієнт + Команда |
+| Договір             | `contract`       | Owner           | Клієнт + Команда |
+| Розрахунковий лист  | `payslip`        | Owner           | Тільки команда   |
 
 ---
 
@@ -67,12 +68,12 @@ RETURNING counter;
 draft → sent → signed → cancelled
 ```
 
-| Статус | Значення |
-|---|---|
-| `draft` | Чернетка, ще не відправлена клієнту |
-| `sent` | Відправлена клієнту (видна в Portal) |
-| `signed` | Клієнт підписав (підтвердив) |
-| `cancelled` | Анульована |
+| Статус      | Значення                             |
+| ----------- | ------------------------------------ |
+| `draft`     | Чернетка, ще не відправлена клієнту  |
+| `sent`      | Відправлена клієнту (видна в Portal) |
+| `signed`    | Клієнт підписав (підтвердив)         |
+| `cancelled` | Анульована                           |
 
 ---
 
@@ -92,6 +93,7 @@ draft → sent → signed → cancelled
 ### Автогенерація при done
 
 При переході замовлення в `done`:
+
 - Якщо `balanceDue > 0` → автоматично генерується invoice на `balanceDue`
 - Завжди генерується `completion_act`
 - Обидва у статусі `draft` (Owner перевіряє перед відправкою)
@@ -108,11 +110,11 @@ draft → sent → signed → cancelled
 
 ```typescript
 interface SpecificationLine {
-  description: string   // назва роботи/послуги
-  quantity: number      // кількість
-  unit: string          // 'год' | 'шт' | 'міс' | ...
-  unitPrice: number     // ціна за одиницю USD
-  total: number         // quantity * unitPrice
+  description: string // назва роботи/послуги
+  quantity: number // кількість
+  unit: string // 'год' | 'шт' | 'міс' | ...
+  unitPrice: number // ціна за одиницю USD
+  total: number // quantity * unitPrice
 }
 ```
 
@@ -157,15 +159,15 @@ export async function generatePdf(
 
 ## API Endpoints
 
-| Метод | URL | Хто | Опис |
-|---|---|---|---|
-| `GET` | `/documents` | Workspace | Список всіх документів з фільтрами |
-| `GET` | `/orders/:id/documents` | Portal + Workspace | Документи замовлення |
-| `POST` | `/orders/:id/documents` | Workspace | Генерувати документ |
-| `GET` | `/documents/:id` | Portal + Workspace | Метадані + URL для PDF |
-| `PATCH` | `/documents/:id/status` | Workspace | Змінити статус (sent, cancelled) |
-| `POST` | `/documents/:id/sign` | Portal | Підтвердити/підписати документ |
-| `GET` | `/documents/:id/pdf` | Portal + Workspace | Завантажити PDF |
+| Метод   | URL                     | Хто                | Опис                               |
+| ------- | ----------------------- | ------------------ | ---------------------------------- |
+| `GET`   | `/documents`            | Workspace          | Список всіх документів з фільтрами |
+| `GET`   | `/orders/:id/documents` | Portal + Workspace | Документи замовлення               |
+| `POST`  | `/orders/:id/documents` | Workspace          | Генерувати документ                |
+| `GET`   | `/documents/:id`        | Portal + Workspace | Метадані + URL для PDF             |
+| `PATCH` | `/documents/:id/status` | Workspace          | Змінити статус (sent, cancelled)   |
+| `POST`  | `/documents/:id/sign`   | Portal             | Підтвердити/підписати документ     |
+| `GET`   | `/documents/:id/pdf`    | Portal + Workspace | Завантажити PDF                    |
 
 ---
 
@@ -194,15 +196,15 @@ export async function generatePdf(
   id: string
   type: DocumentType
   status: DocumentStatus
-  number: string            // INV-2026-0042
+  number: string // INV-2026-0042
   orderId: string
   companyId: string
   amount: number | null
-  amountUah: number | null  // amount * exchangeRate
-  exchangeRate: number      // курс на момент генерації
+  amountUah: number | null // amount * exchangeRate
+  exchangeRate: number // курс на момент генерації
   meta: Record<string, any> // lines для specification, etc.
-  fileId: string            // PDF file id
-  pdfUrl: string            // URL для завантаження
+  fileId: string // PDF file id
+  pdfUrl: string // URL для завантаження
   signedAt: string | null
   signedById: string | null
   createdAt: string
@@ -262,16 +264,17 @@ enum DocumentStatus {
 
 ## Нотифікації
 
-| Подія | Кому | Канал |
-|---|---|---|
+| Подія                        | Кому          | Канал            |
+| ---------------------------- | ------------- | ---------------- |
 | Документ відправлено клієнту | Company Owner | Email + Telegram |
-| Документ підписано клієнтом | Owner | Telegram |
+| Документ підписано клієнтом  | Owner         | Telegram         |
 
 ---
 
 ## Локалізація PDF
 
 PDF генерується мовою компанії клієнта (`company.preferredLanguage`):
+
 - `uk` — українська (за замовчуванням)
 - `en` — англійська
 
@@ -281,13 +284,13 @@ PDF генерується мовою компанії клієнта (`company.
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Orders** | Документи прив'язані до замовлення |
-| **Files** | PDF зберігається як FileAttachment |
-| **Billing** | Invoice → фінансовий запис |
-| **Notifications** | Відправка → нотифікація клієнту |
-| **Companies** | `preferredLanguage` для PDF мови |
+| Модуль            | Зв'язок                            |
+| ----------------- | ---------------------------------- |
+| **Orders**        | Документи прив'язані до замовлення |
+| **Files**         | PDF зберігається як FileAttachment |
+| **Billing**       | Invoice → фінансовий запис         |
+| **Notifications** | Відправка → нотифікація клієнту    |
+| **Companies**     | `preferredLanguage` для PDF мови   |
 
 ---
 
@@ -321,5 +324,49 @@ WHERE type = 'invoice' AND number ~ ('^INV-' || EXTRACT(year FROM NOW()))
 ### PDF branding
 
 Всі документи (invoice, completion_act, specification, reconciliation_act) використовують `pdf_branding` singleton (`20-admin-settings.md → секція 3`):
+
 - Logo, primary color, font family, footer.
 - Render via React-PDF (`packages/templates/src/pdf/`).
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Stale status/`amount`/numbering вище → видалити в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- **`agencyId` на `Document` + `DocumentCounter`** → нумерація **per-agency** (`@@id([agencyId, type, year])`), інакше дві агенції колізують на `INV-2026-0001`.
+- **Один race-safe алгоритм**: counter-таблиця `INSERT…ON CONFLICT DO UPDATE…RETURNING` (видалити конкуруючий `MAX(seq)+1` self-join). `DocumentCounter.count` (узгодити назву).
+- **Status enum** під реальність + (з підписом, нижче) `signed`/`cancelled`; `amountNative/amountUsd/currency/rateUsed` + tax-поля + line-items (не `meta` JSON).
+- **Immutability**: після `sent`/`signed` PDF+суми незмінні; зміна = `supersededById` (нова версія) + lock. Credit-note як окремий `DocumentType`.
+- **Access-check** на `GET /documents/:id/pdf` (tenant + company-owner; не публічний guessable шлях) — signed-URL.
+- `PaymentAllocation.chargeType` дискримінатор (ServiceCharge|Document).
+
+### B. E-signature ✅ (= арх. тема #7)
+
+- `Document` додає `signedAt`, `signedById`, `signatureType('click'|'diia'|'kep')`, `signatureAudit Json` (IP/UA/timestamp/hash).
+- **Фаза 1 — простий клік-підпис**: клієнт у portal «Підписати» → запис signedAt + audit + хеш PDF (tamper-evidence). Статус `sent→signed`.
+- **Фаза 2 — Дія.Підпис / КЕП** (юридично значущий): інтеграція з Дія.Підпис API; адаптер `SignatureProvider` (click | diia | kep), вибір per-agency/per-document-type.
+- Event `documents.signed` → notify owner. Підписаний PDF immutable.
+
+### C. Кастомні шаблони документів ✅
+
+- `DocumentTemplate { id, agencyId, type, name, layout Json, isDefault, @@unique([agencyId, type, name]) }` (admin, модуль 20). Поля/тексти/умови понад branding. Резолюція: agency-template → agency-default → платформний хардкод (3 рівні).
+
+### D. Групові операції ✅
+
+- `POST /documents/bulk-generate { type, companyIds[], period }`, `POST /documents/bulk-send { documentIds[] }`, `GET /documents/export.zip?ids=`. Через outbox (черга, тема #2) — щоб масова генерація PDF не блокувала. Корисно для місячного закриття (акти звірки всім).
+
+### E. Прев'ю перед надсиланням ✅
+
+- Флоу `draft → (preview PDF) → approve → sent`. `GET /documents/:id/preview` рендерить PDF без фіксації номера/відправки. Owner редагує draft, бачить фінал, тоді approve+send. Запобігає помилковим рахункам.
+
+### Schema-зміни (foundation-міграція)
+
+```
+Document: + agencyId, signedAt, signedById, signatureType, signatureAudit, supersededById,
+            amountNative, amountUsd, currency, rateUsed, taxRatePct, taxAmount
+DocumentCounter: + agencyId (composite PK)
+New: DocumentTemplate, DocumentLine(line-items), CreditNote(type)
+```
