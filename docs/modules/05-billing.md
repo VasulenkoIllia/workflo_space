@@ -884,3 +884,47 @@ Cron C02 обробляє `WHERE nextChargeAt <= now()` замість фікс�
 ### Автосписання (Фаза 2)
 
 `PaymentProvider`-адаптер (Manual MVP → Stripe/LiqPay) робить авто-charge recurring підписок drop-in замінною, без переписування. Manual confirm достатньо для MVP.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Деталі foundational-фіксів — у `docs/MODULE_AUDIT.md` (T3).
+
+### A. Обов'язкові reconcile (T3)
+
+VAT/ПДВ-колонки (`taxRatePct/taxAmount/netAmount` + tax-inclusive) + `agency.defaultTaxRatePct`; `Payment.amountUsd+amountNative+rateUsed`; idempotency `UNIQUE(sourceType,sourceId)` на payments/referral_bonuses/wallet_transactions; `ServiceCharge.{baseAmount,discountPct,discountAmount,totalAmount}` + first-class line-items; `CompanyService.frequency+nextChargeAt`; `ServiceCharge.status='written_off'`; **один канонічний debt** (= wallet moneyBalance, не три); refund/credit-note модель; `agencyId` + per-agency `PaymentSettings`/`ExchangeRate`; loyalty-тіри — один constants (05↔10).
+
+### B. Online payments — провайдери ✅ (Monobank, Stripe, WayForPay/Fondy)
+
+- Розширити `packages/payments` `PaymentProvider` до повного: `createPaymentLink(params)`, `handleWebhook(payload, sig)`, `verifySignature()`, `refund(paymentId, amount)`.
+- Адаптери: `ManualProvider` (є), `MonobankProvider`, `StripeProvider`, `WayForPayProvider`. Вибір per-agency (`PaymentSettings.providers`).
+- `PaymentIntent { id, agencyId, companyId, chargeId/invoiceId, provider, providerIntentId, amount, currency, status(created|pending|paid|failed|expired), paymentLink, createdAt }`.
+- Webhook: `POST /webhooks/payments/:provider` — verifySignature → idempotent upsert (provider event-id UNIQUE) → on paid: створити `Payment(status=confirmed)` + allocation. **Webhook-доставка через outbox** (тема #2).
+- **«Оплата з сервісу»**: клієнт у portal на рахунку → `POST /invoices/:id/pay` → createPaymentLink → редірект. Зараз default — manual/по рахунках; провайдери вмикаються per-agency пізніше.
+
+### C. Dunning (авто-нагадування) ✅
+
+- `DunningPolicy { id, agencyId, steps Json }` — `steps: [{offsetDays: -3|0|3|7|14, channel, tone}]` (per-agency у admin).
+- Cron `C-dunning` (щодня): для кожного pending/overdue charge надсилає крок, якщо настав його offset від `dueDate` (idempotent — `DunningLog{chargeId, step, sentAt}`). Event `billing.payment_reminder`. Ескалація owner'у на останньому кроці.
+
+### D. Розстрочка / графік оплат ✅
+
+- `PaymentSchedule { id, invoiceId/chargeId, agencyId } + PaymentScheduleItem { scheduleId, dueDate, amount, status(pending|paid|overdue) }`.
+- При створенні рахунку owner може розбити на N частин (напр. 50%/50%). Кожен item — окремий «під-charge» для dunning + AR-станів. Оплата зараховується через `PaymentAllocation` на item.
+
+### E. Мультивалютні інвойси ✅ (= арх. тема #11)
+
+- `Document/ServiceCharge.currency` (валюта виставлення: UAH/USD/EUR) + `amountNative`; `amountUsd` (нормалізація для звітів) + `rateUsed` (FX на дату). Клієнт бачить рахунок у своїй валюті; owner-звіти — USD. `exchange_rates` per-agency.
+
+### Schema-зміни (foundation-міграція)
+
+```
+Payment: + amountUsd, amountNative, rateUsed, sourceType, sourceId, taxRatePct, taxAmount, agencyId
+ServiceCharge: + baseAmount, discountPct, discountAmount, totalAmount, currency, status+written_off, agencyId
+CompanyService: + frequency, nextChargeAt
+New: PaymentIntent, ChargeLine(line-items), DunningPolicy, DunningLog, PaymentSchedule(+Item),
+     CreditNote/Refund; per-agency PaymentSettings/ExchangeRate
+```
+
+> **→ BACKLOG (не обрано):** купони/промокоди; LiqPay-адаптер.
