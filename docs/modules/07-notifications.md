@@ -19,15 +19,15 @@
 
 7 категорій з `@workflo/types`:
 
-| Category | Опис | Приклади events |
-|---|---|---|
-| `auth` | автентифікація, відновлення доступу | welcome, password_reset, email_verification, login_from_new_device |
-| `orders` | життєвий цикл замовлень | created, status_changed, assigned, file_uploaded, due_soon, overdue, specification_ready |
-| `chat` | коментарі та згадки | new_comment, mention |
-| `billing` | фінансові події | invoice_sent, invoice_paid, invoice_overdue, payment_failed, refund_issued, subscription_charged, subscription_expiring |
-| `documents` | згенеровані документи | completion_act_ready, reconciliation_act_ready |
-| `loyalty` | програма лояльності | tier_upgraded, discount_applied |
-| `system` | системні події | maintenance_planned, invite_sent, company_member_added |
+| Category    | Опис                                | Приклади events                                                                                                         |
+| ----------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `auth`      | автентифікація, відновлення доступу | welcome, password_reset, email_verification, login_from_new_device                                                      |
+| `orders`    | життєвий цикл замовлень             | created, status_changed, assigned, file_uploaded, due_soon, overdue, specification_ready                                |
+| `chat`      | коментарі та згадки                 | new_comment, mention                                                                                                    |
+| `billing`   | фінансові події                     | invoice_sent, invoice_paid, invoice_overdue, payment_failed, refund_issued, subscription_charged, subscription_expiring |
+| `documents` | згенеровані документи               | completion_act_ready, reconciliation_act_ready                                                                          |
+| `loyalty`   | програма лояльності                 | tier_upgraded, discount_applied                                                                                         |
+| `system`    | системні події                      | maintenance_planned, invite_sent, company_member_added                                                                  |
 
 Event → Category mapping — у `EVENT_TO_CATEGORY` (`packages/types/src/constants.ts`).
 
@@ -35,14 +35,14 @@ Event → Category mapping — у `EVENT_TO_CATEGORY` (`packages/types/src/const
 
 ## 2. Канали (NotificationChannel)
 
-| Channel | enabled | cost | requiresUserOptIn | Note |
-|---|---|---|---|---|
-| `email` | ✅ true | low | false | Базовий канал; mailcow прод, mailpit dev. |
-| `telegram` | ✅ true | low | true | grammY bot; opt-in через `/start <code>`. |
-| `in_app` | ✅ true | free | false | Запис у `notifications` table; SSE push. |
-| `sms` | ❌ false | high | true | S7+; Twilio або SMSC. |
-| `push` | ❌ false | free | true | S8+; PWA / native app. |
-| `webhook` | ❌ false | free | true | Enterprise; per-tenant webhook URL. |
+| Channel    | enabled  | cost | requiresUserOptIn | Note                                      |
+| ---------- | -------- | ---- | ----------------- | ----------------------------------------- |
+| `email`    | ✅ true  | low  | false             | Базовий канал; mailcow прод, mailpit dev. |
+| `telegram` | ✅ true  | low  | true              | grammY bot; opt-in через `/start <code>`. |
+| `in_app`   | ✅ true  | free | false             | Запис у `notifications` table; SSE push.  |
+| `sms`      | ❌ false | high | true              | S7+; Twilio або SMSC.                     |
+| `push`     | ❌ false | free | true              | S8+; PWA / native app.                    |
+| `webhook`  | ❌ false | free | true              | Enterprise; per-tenant webhook URL.       |
 
 `disabled` канали мовчки пропускаються resolver'ом (forward-compat).
 
@@ -61,6 +61,7 @@ settingsId × category × channel → enabled
 При `POST /auth/register` створюється `NotificationSettings` + дефолтні preferences (all categories × {email, telegram, in_app} = enabled by default).
 
 UI у `/profile/settings/notifications`:
+
 - Матриця 7×3 (категорія × email/telegram/in_app).
 - Чекбокси.
 - Кнопка "Підключити Telegram" якщо `telegramChatId` ще не linked.
@@ -156,6 +157,7 @@ Implementation note: rollup-detection query використовує index `noti
 ## 8. Escalation: order overdue
 
 Окремий від rollup механізм. Якщо order має `deadline < now()` і немає transition в done за останні **4 години**:
+
 - надсилаємо `orders.overdue` event owner'у замовлення (escalation),
 - логуємо у audit_logs.
 
@@ -178,6 +180,7 @@ Implementation note: rollup-detection query використовує index `noti
 ## 10. Telegram blocked handling
 
 Коли bot заблокований користувачем (Telegram повертає 403):
+
 - `TelegramAdapter` повертає `{ status: 'failed', reason: 'blocked' }`.
 - `notify()` викликає `deps.onTelegramBlocked(profileId)`.
 - API-callback виконує: `UPDATE notification_preferences SET enabled=false WHERE settings_id=$1 AND channel='telegram'` (всі категорії).
@@ -214,6 +217,7 @@ type TelegramSendResult =
 ```
 
 Distinguishes між:
+
 - 403 → `blocked` (user заблокував bot),
 - 400 + "chat not found" → `invalid_chat` (chatId недійсний),
 - 429 → `rate_limited` (з `retryAfter` секунд для backoff).
@@ -223,6 +227,7 @@ Distinguishes між:
 ## 12. Тести
 
 `packages/notifications/tests/`:
+
 - `config.test.ts` — Zod env validation, missing/short/coerce paths.
 - `i18n.test.ts` — locale lookup + fallback uk→en→key + var interpolation.
 - `render.test.ts` — escape helpers + layout structure.
@@ -238,6 +243,7 @@ Distinguishes між:
 ## 13. Метрики (production)
 
 Збирати в `audit_logs` через cron + експонувати:
+
 - `notify.dispatch.total{event, channel, status}` — лічильник.
 - `notify.dispatch.duration_ms{channel}` — histogram.
 - `notify.rollup.applied{event}` — скільки разів спрацював rollup.
@@ -250,6 +256,7 @@ Distinguishes між:
 ## 14. Migration path для нових каналів
 
 Щоб додати SMS:
+
 1. Поставити `enabled: true` для `sms` у `CHANNELS` registry (`@workflo/types/constants.ts`).
 2. Створити `packages/notifications/src/adapters/SmsAdapter.ts` з тим самим shape result-union.
 3. Додати dispatch branch у `notify.ts`.
@@ -258,3 +265,39 @@ Distinguishes між:
 6. `requiresUserOptIn: true` → потрібен phone verification flow (відрізняється від email — SMS може йти лише після SMS OTP).
 
 Решта `notify()` логіки **не змінюється** — resolver автоматично підхопить новий канал.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові канали
+
+> Авторитетна секція.
+
+### A. Обов'язкові reconcile
+
+- **Retry/DLQ через outbox** (тема #2): `notify()` стає producer'ом події → воркер дispatch'ить з ретраями (Telegram `retryAfter`, email backoff), `NotificationLog.status` re-driven; cron `C-notify_retry`. Idempotency-key на `NotificationLog` (один event двічі → один лист).
+- **Per-agency template resolution**: agency-override → agency-default → платформний хардкод. `NotificationLog` + settings отримують `agencyId`.
+- **vars-scrub** (✅ SC-1 виправлено). **Rollup** позначити NOT-YET-IMPLEMENTED (модель є, код ні).
+
+### B. In-app центр (дзвіночок) ✅
+
+- `GET /notifications?cursor=&unreadOnly=`, `GET /notifications/unread-count`, `POST /notifications/:id/read`, `POST /notifications/read-all`. `Notification` таблиця є (isRead + індекси). Дзвіночок з лічильником у layout (SSE live +1).
+
+### C. Web Push (PWA/браузер) ✅
+
+- Увімкнути канал `push` у registry. `PushSubscription { id, profileId, agencyId, endpoint, p256dh, auth, userAgent, createdAt }`.
+- Service worker + VAPID keys (env `VAPID_PUBLIC/PRIVATE_KEY`). `PushAdapter` (web-push lib). Opt-in: користувач дозволяє в браузері → save subscription. Resolver підхопить канал автоматично.
+
+### D. SMS-канал ✅
+
+- Увімкнути канал `sms`. `SmsAdapter` з провайдером per-agency: TurboSMS/SMSC (UA) або Twilio (intl). `AgencySmsSettings { agencyId, provider, apiKey, sender }`.
+- `requiresUserOptIn` + phone-verification flow (SMS OTP) перед увімкненням. Шаблони — короткі (160 chars, без HTML) у `src/sms/templates/`. Лише для критичних подій (cost-aware).
+
+### Schema-зміни (foundation-міграція)
+
+```
+NotificationSettings: + timezone, agencyId
+NotificationLog: + agencyId, idempotencyKey
+New: PushSubscription, AgencySmsSettings; channels push+sms enabled у CHANNELS registry
+```
+
+> **→ BACKLOG (не обрано):** quiet-hours + digest mode.
