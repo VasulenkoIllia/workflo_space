@@ -9,21 +9,17 @@ datasource db {
 }
 
 model Profile {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  passwordHash         String
-  name                 String
-  role                 Role      @default(client)
-  avatarUrl            String?
-  language             Language  @default(uk)
-  theme                Theme     @default(system)
-  isActive             Boolean   @default(true)
-  telegramChatId       String?   @unique
-  telegramConnected    Boolean   @default(false)
-  telegramOtp          String?
-  telegramOtpExpiresAt DateTime? @db.Timestamptz(3)
-  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(client)
+  avatarUrl    String?
+  language     Language @default(uk)
+  theme        Theme    @default(system)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
   companyMembership     CompanyMember[]
   ordersAssigned        Order[]               @relation("OrderAssignee")
@@ -141,31 +137,33 @@ model CompanyMember {
 }
 
 model Order {
-  id             String              @id @default(uuid())
-  agencyId       String?
-  title          String
-  description    String?
-  type           OrderType           @default(client_order)
-  priority       OrderPriority       @default(medium)
-  companyId      String?
-  company        Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  assigneeId     String?
-  assignee       Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
-  createdById    String
-  createdBy      Profile             @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  internalStatus OrderInternalStatus @default(new)
-  clientStatus   OrderClientStatus   @default(in_progress)
-  billingType    BillingType         @default(fixed)
-  fixedPrice     Decimal?            @db.Decimal(10, 2)
-  hourlyRate     Decimal?            @db.Decimal(10, 2)
-  estimatedHours Decimal?            @db.Decimal(8, 2)
-  totalAmount    Decimal?            @db.Decimal(10, 2)
-  currency       String              @default("USD")
-  deadline       DateTime?           @db.Timestamptz(3)
-  paidAt         DateTime?           @db.Timestamptz(3)
-  deletedAt      DateTime?           @db.Timestamptz(3)
-  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  id              String              @id @default(uuid())
+  agencyId        String?
+  title           String
+  description     String?
+  type            OrderType           @default(client_order)
+  priority        OrderPriority       @default(medium)
+  companyId       String?
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assigneeId      String?
+  assignee        Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
+  createdById     String
+  createdBy       Profile             @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  internalStatus  OrderInternalStatus @default(new)
+  clientStatus    OrderClientStatus   @default(in_progress)
+  billingType     BillingType         @default(fixed)
+  fixedPrice      Decimal?            @db.Decimal(10, 2)
+  hourlyRate      Decimal?            @db.Decimal(10, 2)
+  estimatedHours  Decimal?            @db.Decimal(8, 2)
+  totalAmount     Decimal?            @db.Decimal(10, 2)
+  currency        String              @default("USD")
+  deadline        DateTime?           @db.Timestamptz(3)
+  paidAt          DateTime?           @db.Timestamptz(3)
+  deletedAt       DateTime?           @db.Timestamptz(3)
+  onHoldReason    String?
+  cancelledReason String?
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
 
   stages        OrderStage[]
   comments      OrderComment[]
@@ -204,17 +202,30 @@ model OrderStage {
   @@map("order_stages")
 }
 
+/// Per-(order, profile) read marker for unread counts in chat-hub (modules 03/18).
+model OrderChatRead {
+  orderId    String
+  profileId  String
+  lastReadAt DateTime @db.Timestamptz(3)
+
+  @@id([orderId, profileId])
+  @@index([profileId])
+  @@map("order_chat_reads")
+}
+
 model OrderComment {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   agencyId   String?
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   authorId   String
-  author     Profile  @relation(fields: [authorId], references: [id])
+  author     Profile   @relation(fields: [authorId], references: [id])
   content    String
-  isInternal Boolean  @default(false)
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  agency     Agency?  @relation(fields: [agencyId], references: [id])
+  isInternal Boolean   @default(false)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  editedAt   DateTime? @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+  agency     Agency?   @relation(fields: [agencyId], references: [id])
 
   @@index([agencyId])
   @@index([orderId, createdAt])
