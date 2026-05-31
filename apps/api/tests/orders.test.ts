@@ -7,6 +7,7 @@ const orderCount = vi.fn()
 const orderFindMany = vi.fn()
 const orderFindUnique = vi.fn()
 const orderUpdate = vi.fn()
+const agencyMemberFindUnique = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
 
@@ -19,6 +20,7 @@ vi.mock('@workflo/db', () => ({
       findUnique: orderFindUnique,
       update: orderUpdate,
     },
+    agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
@@ -370,6 +372,180 @@ describe('PATCH /orders/:id/status', () => {
       payload: { status: 'revision' },
     })
     expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+})
+
+describe('PATCH /orders/:id (edit)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const newOrder = {
+    id: 'order-1',
+    agencyId: 'agency-1',
+    companyId: 'company-1',
+    internalStatus: 'new',
+    deletedAt: null,
+  }
+
+  it('executor edits title + billing field', async () => {
+    orderFindUnique.mockResolvedValue({ ...newOrder, internalStatus: 'in_progress' })
+    orderUpdate.mockResolvedValue({ id: 'order-1' })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: 'Renamed', fixedPrice: 500 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(orderUpdate.mock.calls[0][0].data.fixedPrice).toBe(500)
+    await app.close()
+  })
+
+  it('client edits title on a new order', async () => {
+    orderFindUnique.mockResolvedValue(newOrder)
+    orderUpdate.mockResolvedValue({ id: 'order-1' })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: 'Client rename' },
+    })
+    expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('client cannot edit once the order left `new` (403)', async () => {
+    orderFindUnique.mockResolvedValue({ ...newOrder, internalStatus: 'in_progress' })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: 'too late' },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('client cannot edit billing fields (403)', async () => {
+    orderFindUnique.mockResolvedValue(newOrder)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { fixedPrice: 1 },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('DELETE /orders/:id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const base = { id: 'order-1', agencyId: 'agency-1', deletedAt: null }
+
+  it('executor soft-deletes the order', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    orderUpdate.mockResolvedValue({ id: 'order-1' })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(orderUpdate.mock.calls[0][0].data.deletedAt).toBeInstanceOf(Date)
+    await app.close()
+  })
+
+  it('client cannot delete (403)', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('PATCH /orders/:id/assign', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const base = { id: 'order-1', agencyId: 'agency-1', deletedAt: null }
+
+  it('executor assigns a valid agency member', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    agencyMemberFindUnique.mockResolvedValue({ profileId: 'exec-2' })
+    orderUpdate.mockResolvedValue({ id: 'order-1', assigneeId: 'exec-2', updatedAt: new Date() })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { assigneeId: '11111111-1111-4111-8111-111111111111' },
+    })
+    expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('400 when the assignee is not an agency member', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    agencyMemberFindUnique.mockResolvedValue(null)
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { assigneeId: '11111111-1111-4111-8111-111111111111' },
+    })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('executor can unassign (assigneeId = null)', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    orderUpdate.mockResolvedValue({ id: 'order-1', assigneeId: null, updatedAt: new Date() })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { assigneeId: null },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(agencyMemberFindUnique).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('client cannot assign (403)', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/assign',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { assigneeId: null },
+    })
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 })

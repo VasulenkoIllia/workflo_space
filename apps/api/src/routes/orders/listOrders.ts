@@ -41,6 +41,12 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
       where.companyId = q.companyId
     }
 
+    // Triage filter (variant B): workspace can scope to a specific executor or to
+    // unassigned (`assigneeId=none`). Clients can't filter by executor.
+    if (isInternal && q.assigneeId) {
+      where.assigneeId = q.assigneeId === 'none' ? null : q.assigneeId
+    }
+
     const statuses = parseEnumList(q.status, Object.values(OrderInternalStatus))
     if (statuses) where.internalStatus = { in: statuses }
     const priorities = parseEnumList(q.priority, Object.values(OrderPriority))

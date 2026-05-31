@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OrderInternalStatus, OrderPriority, OrderType } from '../enums.js'
+import { BillingType, OrderInternalStatus, OrderPriority, OrderType } from '../enums.js'
 
 const dueDateSchema = z
   .string()
@@ -25,6 +25,7 @@ export const listOrdersQuerySchema = z.object({
   status: z.string().max(200).optional(),
   priority: z.string().max(100).optional(),
   companyId: z.string().uuid().optional(),
+  assigneeId: z.string().optional(), // uuid, or 'none' for unassigned (workspace)
   search: z.string().max(200).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -36,4 +37,29 @@ export const listOrdersQuerySchema = z.object({
 export const transitionOrderStatusSchema = z.object({
   status: z.nativeEnum(OrderInternalStatus),
   comment: z.string().max(2000).optional(),
+})
+
+/**
+ * PATCH /orders/:id — edit fields. Clients may set only title/description/
+ * priority/dueDate (and only while the order is `new`); the billing fields are
+ * internal-team only. Enforced in the handler.
+ */
+export const updateOrderSchema = z
+  .object({
+    title: z.string().min(3).max(255).optional(),
+    description: z.string().max(10_000).nullable().optional(),
+    priority: z.nativeEnum(OrderPriority).optional(),
+    dueDate: dueDateSchema.nullable().optional(),
+    billingType: z.nativeEnum(BillingType).optional(),
+    fixedPrice: z.number().nonnegative().nullable().optional(),
+    hourlyRate: z.number().nonnegative().nullable().optional(),
+    estimatedHours: z.number().nonnegative().nullable().optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Потрібно вказати хоча б одне поле для оновлення',
+  })
+
+/** PATCH /orders/:id/assign — assign an executor (null = unassign). */
+export const assignOrderSchema = z.object({
+  assigneeId: z.string().uuid().nullable(),
 })
