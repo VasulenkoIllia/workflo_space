@@ -77,9 +77,9 @@
 | S2-03 | ✅ `PATCH /orders/:id/assign` — triage: призначення/зняття executor (валідація agency-member) + variant-B list-фільтр `assigneeId=none`                              | [02-orders] | ✅ 🧪  |
 | S2-04 | ✅ `PATCH /orders/:id/status` (state-machine) + `PATCH /orders/:id` (edit, role/status-gated) + `DELETE` (soft-delete) — internal↔client                             | [02-orders] | ✅ 🧪  |
 | S2-05 | ✅ CRUD internal tasks (`/orders/:orderId/tasks`, workspace-only, tenant+IDOR-guarded, member-validated assignee); onHold/cancelled reason set on transition (S2-04) | [02-orders] | ✅ 🧪  |
-| S2-06 | GET/POST /orders/:id/comments + internal-leak guard                                                                                                                  | [03-chat]   | ⬜     |
+| S2-06 | ✅ GET/POST /orders/:id/comments — cursor-пагінація + internal-leak guard (клієнт не бачить/не пише `isInternal`) + `requireOrderParticipant` IDOR-helper            | [03-chat]   | ✅ 🧪  |
 | S2-07 | GET /orders/:id/comments/stream (SSE, multi-instance pg_notify)                                                                                                      | [03-chat]   | ⬜     |
-| S2-08 | order_chat_reads (unread) + participant IDOR predicate                                                                                                               | [03-chat]   | ⬜     |
+| S2-08 | ✅ `order_chat_reads` + POST /comments/read (upsert) + unread/lastReadAt у GET; participant IDOR predicate (shared `access.ts`)                                      | [03-chat]   | ✅ 🧪  |
 | S2-09 | packages/storage — LocalStorageAdapter (tenant-prefixed, sha256)                                                                                                     | [04-files]  | ⬜     |
 | S2-10 | POST/GET/DELETE /orders/:id/files + path-traversal guard                                                                                                             | [04-files]  | ⬜     |
 | S2-11 | GET /files/serve/:key (authenticated, access-check)                                                                                                                  | [04-files]  | ⬜     |

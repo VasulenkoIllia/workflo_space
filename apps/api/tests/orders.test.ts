@@ -15,6 +15,11 @@ const taskCreate = vi.fn()
 const taskFindUnique = vi.fn()
 const taskUpdate = vi.fn()
 const taskDelete = vi.fn()
+const commentFindMany = vi.fn()
+const commentCount = vi.fn()
+const commentCreate = vi.fn()
+const chatReadFindUnique = vi.fn()
+const chatReadUpsert = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
@@ -31,6 +36,15 @@ vi.mock('@workflo/db', () => ({
       findUnique: taskFindUnique,
       update: taskUpdate,
       delete: taskDelete,
+    },
+    orderComment: {
+      findMany: commentFindMany,
+      count: commentCount,
+      create: commentCreate,
+    },
+    orderChatRead: {
+      findUnique: chatReadFindUnique,
+      upsert: chatReadUpsert,
     },
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
@@ -787,6 +801,219 @@ describe('internal tasks (workspace-only)', () => {
         headers: { authorization: `Bearer ${token}` },
       })
       expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+  })
+})
+
+describe('order comments + reads (chat)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const order = { id: 'order-1', agencyId: 'agency-1', companyId: 'company-1', deletedAt: null }
+  const rows = [
+    {
+      id: 'c2',
+      content: 'second',
+      isInternal: false,
+      createdAt: new Date('2026-05-31T02:00:00Z'),
+      editedAt: null,
+      author: { id: 'p1', name: 'Ann' },
+    },
+    {
+      id: 'c1',
+      content: 'first',
+      isInternal: false,
+      createdAt: new Date('2026-05-31T01:00:00Z'),
+      editedAt: null,
+      author: { id: 'p1', name: 'Ann' },
+    },
+  ]
+
+  describe('GET /orders/:id/comments', () => {
+    it('executor sees all comments + unread meta (ascending order)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentFindMany.mockResolvedValue(rows)
+      chatReadFindUnique.mockResolvedValue({ lastReadAt: new Date('2026-05-31T01:30:00Z') })
+      commentCount.mockResolvedValue(1)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      const data = res.json().data
+      expect(data.comments.map((c: { id: string }) => c.id)).toEqual(['c1', 'c2']) // reversed → asc
+      expect(data.meta.unreadCount).toBe(1)
+      // executor where carries no isInternal restriction
+      expect(commentFindMany.mock.calls[0][0].where.isInternal).toBeUndefined()
+      await app.close()
+    })
+
+    it('client list is leak-guarded to public comments (where.isInternal=false)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentFindMany.mockResolvedValue(rows)
+      chatReadFindUnique.mockResolvedValue(null)
+      commentCount.mockResolvedValue(0)
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(commentFindMany.mock.calls[0][0].where.isInternal).toBe(false)
+      expect(commentCount.mock.calls[0][0].where.isInternal).toBe(false)
+      await app.close()
+    })
+
+    it('hasMore=true when more than `limit` rows exist', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      // limit=1 → take=2 → returning 2 rows means there is an older page
+      commentFindMany.mockResolvedValue(rows)
+      chatReadFindUnique.mockResolvedValue(null)
+      commentCount.mockResolvedValue(0)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments?limit=1',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      const data = res.json().data
+      expect(data.meta.hasMore).toBe(true)
+      expect(data.comments).toHaveLength(1)
+      await app.close()
+    })
+
+    it('404 when a client requests another company order', async () => {
+      orderFindUnique.mockResolvedValue({ ...order, companyId: 'company-OTHER' })
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+
+    it('403 cross-tenant', async () => {
+      orderFindUnique.mockResolvedValue({ ...order, agencyId: 'agency-OTHER' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+
+    it('404 for an unknown order', async () => {
+      orderFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/nope/comments',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+  })
+
+  describe('POST /orders/:id/comments', () => {
+    it('executor posts an internal note (201, isInternal persisted)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentCreate.mockResolvedValue({ id: 'c1', content: 'note', isInternal: true })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'note', isInternal: true },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(commentCreate.mock.calls[0][0].data.isInternal).toBe(true)
+      expect(commentCreate.mock.calls[0][0].data.agency).toEqual({ connect: { id: 'agency-1' } })
+      await app.close()
+    })
+
+    it('client cannot author an internal note — flag is forced false', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentCreate.mockResolvedValue({ id: 'c1', content: 'hi', isInternal: false })
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'hi', isInternal: true },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(commentCreate.mock.calls[0][0].data.isInternal).toBe(false)
+      await app.close()
+    })
+
+    it('400 on empty content', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: '' },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(commentCreate).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('404 when a client posts to another company order', async () => {
+      orderFindUnique.mockResolvedValue({ ...order, companyId: 'company-OTHER' })
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'leak?' },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+  })
+
+  describe('POST /orders/:id/comments/read', () => {
+    it('marks the thread read (upsert lastReadAt)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      chatReadUpsert.mockResolvedValue({})
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments/read',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      const arg = chatReadUpsert.mock.calls[0][0]
+      expect(arg.where.orderId_profileId).toEqual({ orderId: 'order-1', profileId: 'profile-1' })
+      expect(arg.create.lastReadAt).toBeInstanceOf(Date)
+      await app.close()
+    })
+
+    it('404 for an unknown order', async () => {
+      orderFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/nope/comments/read',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      expect(chatReadUpsert).not.toHaveBeenCalled()
       await app.close()
     })
   })

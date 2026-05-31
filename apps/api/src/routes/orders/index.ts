@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import assignOrderRoute from './assignOrder.js'
+import commentsRoute from './comments.js'
 import createOrderRoute from './createOrder.js'
 import deleteOrderRoute from './deleteOrder.js'
 import getOrderRoute from './getOrder.js'
@@ -18,6 +19,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(deleteOrderRoute)
   await fastify.register(assignOrderRoute)
   await fastify.register(internalTasksRoute)
+  await fastify.register(commentsRoute)
 }
 
 export default orderRoutes

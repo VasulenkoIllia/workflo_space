@@ -107,6 +107,9 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 | `PATCH`  | `/orders/:id/comments/:commentId` | Автор (15 хв)      | Редагувати текст                 |
 | `DELETE` | `/orders/:id/comments/:commentId` | Автор / Owner      | Soft delete                      |
 | `GET`    | `/orders/:id/comments/stream`     | Portal + Workspace | SSE stream                       |
+| `POST`   | `/orders/:id/comments/read`       | Portal + Workspace | Позначити тред прочитаним        |
+
+> **Стан реалізації (S2, 31.05.2026):** ✅ `GET`/`POST /comments` (cursor-пагінація `before`+`limit`, internal-leak guard, `requireOrderParticipant` IDOR), ✅ `POST /comments/read` + unread/`lastReadAt` у відповіді `GET` (S2-08). 🔜 `GET /comments/stream` (SSE+pg_notify) — S2-07. ⬜ `PATCH`/`DELETE` (edit/soft-delete), реакції, mentions, read-receipts (`seenBy`) — enhancement-беклог.
 
 ### Query для `GET /orders/:id/comments`
 
