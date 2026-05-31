@@ -12,7 +12,13 @@ export const updateProfileSchema = z
     displayName: z.string().min(2).max(120).optional(),
     language: z.nativeEnum(Language).optional(),
     theme: z.nativeEnum(Theme).optional(),
-    avatarUrl: z.string().url().max(2048).nullable().optional(),
+    avatarUrl: z
+      .string()
+      .url()
+      .max(2048)
+      .refine((v) => v.startsWith('https://'), { message: 'avatarUrl must be https://' })
+      .nullable()
+      .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Потрібно вказати хоча б одне поле для оновлення',

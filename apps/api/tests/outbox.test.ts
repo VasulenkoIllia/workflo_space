@@ -44,17 +44,19 @@ describe('outbox service', () => {
     ])
     const res = await processOutboxBatch(prisma, async () => {})
     expect(res).toEqual({ processed: 1, failed: 0, dead: 0 })
+    // attempts is bumped atomically by the claim UPDATE, not the post-handler update.
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'e1' },
-        data: expect.objectContaining({ status: 'done', attempts: 1 }),
+        data: expect.objectContaining({ status: 'done' }),
       })
     )
   })
 
   it('retries with backoff on failure below maxAttempts', async () => {
+    // attempts=2 = post-claim count (2 of 8 used) → still below max → retry.
     const { prisma, update } = mkPrisma([
-      { id: 'e2', type: 't', payload: {}, agencyId: null, attempts: 1, maxAttempts: 8 },
+      { id: 'e2', type: 't', payload: {}, agencyId: null, attempts: 2, maxAttempts: 8 },
     ])
     const res = await processOutboxBatch(prisma, async () => {
       throw new Error('boom')
@@ -62,21 +64,22 @@ describe('outbox service', () => {
     expect(res).toEqual({ processed: 0, failed: 1, dead: 0 })
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'failed', attempts: 2, lastError: 'boom' }),
+        data: expect.objectContaining({ status: 'failed', lastError: 'boom' }),
       })
     )
   })
 
   it('moves to the DLQ (dead) once attempts reach maxAttempts', async () => {
+    // attempts=8 = post-claim count == maxAttempts → dead-letter.
     const { prisma, update } = mkPrisma([
-      { id: 'e3', type: 't', payload: {}, agencyId: null, attempts: 7, maxAttempts: 8 },
+      { id: 'e3', type: 't', payload: {}, agencyId: null, attempts: 8, maxAttempts: 8 },
     ])
     const res = await processOutboxBatch(prisma, async () => {
       throw new Error('boom')
     })
     expect(res).toEqual({ processed: 0, failed: 0, dead: 1 })
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'dead', attempts: 8 }) })
+      expect.objectContaining({ data: expect.objectContaining({ status: 'dead' }) })
     )
   })
 })

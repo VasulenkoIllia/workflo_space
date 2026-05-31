@@ -1,5 +1,5 @@
 import { Prisma, prisma } from '@workflo/db'
-import { ApiErrorCode, AppError, registerSchema } from '@workflo/types'
+import { ApiErrorCode, AppError, buildDefaultPreferenceRows, registerSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { resolvePlatformAgencyId } from '../../auth/agency.js'
 import { hashPassword } from '../../auth/password.js'
@@ -11,28 +11,6 @@ import {
   setRefreshCookie,
 } from '../../auth/tokens.js'
 import { dispatchNotification } from '../../services/notifications.js'
-
-const NOTIFICATION_CATEGORIES = [
-  'auth',
-  'orders',
-  'chat',
-  'billing',
-  'documents',
-  'loyalty',
-  'system',
-] as const
-const NOTIFICATION_DEFAULT_CHANNELS = ['email', 'telegram', 'in_app'] as const
-
-function defaultPreferenceRows(settingsId: string) {
-  const rows: Array<{ settingsId: string; category: string; channel: string; enabled: boolean }> =
-    []
-  for (const category of NOTIFICATION_CATEGORIES) {
-    for (const channel of NOTIFICATION_DEFAULT_CHANNELS) {
-      rows.push({ settingsId, category, channel, enabled: true })
-    }
-  }
-  return rows
-}
 
 const registerRoute: FastifyPluginAsync = (fastify) => {
   fastify.post(
@@ -47,6 +25,8 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const input = registerSchema.parse(request.body)
       const email = input.email.toLowerCase().trim()
+      const displayName = input.displayName.trim()
+      const companyName = input.companyName.trim()
 
       const existing = await prisma.profile.findUnique({ where: { email }, select: { id: true } })
       if (existing) {
@@ -70,7 +50,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             data: {
               email,
               passwordHash,
-              name: input.displayName.trim(),
+              name: displayName,
               role: 'client',
               language: 'uk',
               theme: 'system',
@@ -79,14 +59,14 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             select: { id: true },
           })
 
-          const slug = await generateUniqueCompanySlug(tx, input.companyName)
+          const slug = await generateUniqueCompanySlug(tx, companyName)
           // Multi-tenancy (ADR-004): attach the new client company to the
           // platform agency (Phase 0 = single tenant).
           const agencyId = await resolvePlatformAgencyId(tx)
           const company = await tx.company.create({
             data: {
               agencyId,
-              name: input.companyName.trim(),
+              name: companyName,
               slug,
               language: 'uk',
               currency: 'USD',
@@ -108,7 +88,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             select: { id: true },
           })
           await tx.notificationPreference.createMany({
-            data: defaultPreferenceRows(settings.id),
+            data: buildDefaultPreferenceRows(settings.id),
           })
 
           const refresh = await issueRefreshToken(tx, profile.id)
@@ -162,7 +142,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
           profile: {
             id: result.profileId,
             email,
-            displayName: input.displayName.trim(),
+            displayName,
             role: 'client',
           },
           company: {

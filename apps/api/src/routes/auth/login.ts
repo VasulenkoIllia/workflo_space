@@ -5,6 +5,7 @@ import { loadAgencyMemberships } from '../../auth/memberships.js'
 import { verifyPassword } from '../../auth/password.js'
 import {
   buildAccessClaims,
+  coercePermissions,
   issueRefreshToken,
   type Membership,
   setRefreshCookie,
@@ -91,7 +92,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
       const memberships: Membership[] = memberRows.map((m) => ({
         companyId: m.companyId,
         role: m.role,
-        permissions: (m.permissions as Membership['permissions']) ?? undefined,
+        permissions: coercePermissions(m.permissions),
       }))
       const activeCompanyId = memberships[0]?.companyId ?? null
 

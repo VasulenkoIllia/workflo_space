@@ -52,8 +52,10 @@ export const LOYALTY_DISCOUNT_PCT: Record<LoyaltyTier, number> = {
 /** Compute tier from lifetime paid amount (USD). */
 export function calculateLoyaltyTier(lifetimePaidUsd: number): LoyaltyTier {
   if (lifetimePaidUsd >= LOYALTY_TIER_THRESHOLDS_USD[LoyaltyTier.VIP]) return LoyaltyTier.VIP
-  if (lifetimePaidUsd >= LOYALTY_TIER_THRESHOLDS_USD[LoyaltyTier.PARTNER]) return LoyaltyTier.PARTNER
-  if (lifetimePaidUsd >= LOYALTY_TIER_THRESHOLDS_USD[LoyaltyTier.REGULAR]) return LoyaltyTier.REGULAR
+  if (lifetimePaidUsd >= LOYALTY_TIER_THRESHOLDS_USD[LoyaltyTier.PARTNER])
+    return LoyaltyTier.PARTNER
+  if (lifetimePaidUsd >= LOYALTY_TIER_THRESHOLDS_USD[LoyaltyTier.REGULAR])
+    return LoyaltyTier.REGULAR
   return LoyaltyTier.NEW
 }
 
@@ -120,6 +122,43 @@ export const CRITICAL_EVENTS: ReadonlyArray<NotificationEvent> = [
   'billing.refund_issued',
 ]
 
+/** Channels enabled by default in a new user's notification matrix. */
+export const DEFAULT_NOTIFICATION_CHANNELS: ReadonlyArray<NotificationChannel> = [
+  NotificationChannel.EMAIL,
+  NotificationChannel.TELEGRAM,
+  NotificationChannel.IN_APP,
+]
+
+/**
+ * Single source of truth for the default notification-preference matrix
+ * (every category × default channel = enabled). Used by BOTH /auth/register and
+ * the DB seed so the two can never drift (audit 31.05).
+ */
+export function buildDefaultPreferenceRows(
+  settingsId: string
+): Array<{
+  settingsId: string
+  category: NotificationCategory
+  channel: NotificationChannel
+  enabled: boolean
+}> {
+  const rows: Array<{
+    settingsId: string
+    category: NotificationCategory
+    channel: NotificationChannel
+    enabled: boolean
+  }> = []
+  for (const category of Object.values(NotificationCategory)) {
+    for (const channel of DEFAULT_NOTIFICATION_CHANNELS) {
+      rows.push({ settingsId, category, channel, enabled: true })
+    }
+  }
+  return rows
+}
+
+/** Invite (executor + company member) validity window. */
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
 /**
  * Per-channel registry. `enabled: false` channels are skipped silently by the
  * resolver — registered for forward-compat when SMS/push/webhook ship.
@@ -131,12 +170,12 @@ export interface ChannelDescriptor {
 }
 
 export const CHANNELS: Record<NotificationChannel, ChannelDescriptor> = {
-  [NotificationChannel.EMAIL]:    { enabled: true,  cost: 'low',  requiresUserOptIn: false },
-  [NotificationChannel.TELEGRAM]: { enabled: true,  cost: 'low',  requiresUserOptIn: true  },
-  [NotificationChannel.IN_APP]:   { enabled: true,  cost: 'free', requiresUserOptIn: false },
-  [NotificationChannel.SMS]:      { enabled: false, cost: 'high', requiresUserOptIn: true  },
-  [NotificationChannel.PUSH]:     { enabled: false, cost: 'free', requiresUserOptIn: true  },
-  [NotificationChannel.WEBHOOK]:  { enabled: false, cost: 'free', requiresUserOptIn: true  },
+  [NotificationChannel.EMAIL]: { enabled: true, cost: 'low', requiresUserOptIn: false },
+  [NotificationChannel.TELEGRAM]: { enabled: true, cost: 'low', requiresUserOptIn: true },
+  [NotificationChannel.IN_APP]: { enabled: true, cost: 'free', requiresUserOptIn: false },
+  [NotificationChannel.SMS]: { enabled: false, cost: 'high', requiresUserOptIn: true },
+  [NotificationChannel.PUSH]: { enabled: false, cost: 'free', requiresUserOptIn: true },
+  [NotificationChannel.WEBHOOK]: { enabled: false, cost: 'free', requiresUserOptIn: true },
 }
 
 // ============================================================================

@@ -1,6 +1,7 @@
 import { prisma } from '@workflo/db'
 import { forgotPasswordSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { generateOpaqueToken } from '../../auth/tokens.js'
 import { dispatchNotification } from '../../services/notifications.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -29,12 +30,10 @@ const forgotPasswordRoute: FastifyPluginAsync = (fastify) => {
       })
 
       if (profile && profile.isActive) {
-        const token = (
-          await prisma.passwordResetToken.create({
-            data: { email, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
-            select: { token: true },
-          })
-        ).token
+        const token = generateOpaqueToken()
+        await prisma.passwordResetToken.create({
+          data: { email, token, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
+        })
 
         const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
         const resetUrl = `${portalUrl}/reset-password?token=${encodeURIComponent(token)}`

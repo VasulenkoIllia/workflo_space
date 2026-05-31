@@ -217,6 +217,13 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
             event: input.event,
             error: err instanceof Error ? err.message : String(err),
           })
+          // Surface the failure in notification_logs (errorCode) instead of the
+          // optimistic 'persisted_in_app_row' reason. in_app has no 'failed' state
+          // in DispatchResult, so we use skipped + a failure reason (audit 31.05).
+          result = {
+            channel: NotificationChannel.IN_APP,
+            result: { status: 'skipped', reason: 'in_app_persist_failed' },
+          }
         }
       }
     } else {

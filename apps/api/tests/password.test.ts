@@ -55,7 +55,7 @@ describe('POST /auth/forgot-password', () => {
       expect.objectContaining({
         event: 'auth.password_reset',
         vars: expect.objectContaining({
-          resetUrl: expect.stringContaining('reset-password?token=reset-tok-123'),
+          resetUrl: expect.stringContaining('reset-password?token='),
         }),
       })
     )

@@ -55,7 +55,9 @@ function buildLoggerConfig() {
 export function buildApp() {
   const app = Fastify({
     logger: buildLoggerConfig(),
-    trustProxy: true,
+    // Trust exactly ONE proxy hop (Traefik). `true` trusted ALL X-Forwarded-For
+    // hops → request.ip could be spoofed to bypass IP rate-limits (audit 31.05).
+    trustProxy: 1,
   })
 
   app.register(corsPlugin)

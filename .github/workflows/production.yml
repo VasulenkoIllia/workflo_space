@@ -187,6 +187,13 @@ jobs:
 
             ensure_pg_cron_enabled
 
+            echo "Backing up DB before migrations (safety net for destructive DDL)..."
+            mkdir -p backups
+            compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean --if-exists' \
+              | gzip > "backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz" \
+              || echo "WARN: pre-migrate backup failed (continuing)"
+            ls -1t backups/pre-migrate-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+
             echo "Applying database migrations (prisma migrate deploy)..."
             compose run --rm --no-deps migrate
 

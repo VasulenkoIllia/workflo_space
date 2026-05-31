@@ -1,6 +1,7 @@
 import { prisma } from '@workflo/db'
 import { type NotifyDeps, type NotifyInput, notify } from '@workflo/notifications'
 import type { FastifyBaseLogger } from 'fastify'
+import { writeAuditAsync } from './audit.js'
 
 /**
  * Build NotifyDeps wired to the app's Prisma client.
@@ -28,15 +29,13 @@ export function buildNotifyDeps(logger: FastifyBaseLogger): NotifyDeps {
         where: { settingsId: settings.id, channel: 'telegram' },
         data: { enabled: false },
       })
-      await prisma.auditLog.create({
-        data: {
-          actorId: profileId,
-          action: 'notifications.telegram_auto_disabled',
-          resourceType: 'profile',
-          resourceId: profileId,
-          result: 'allowed',
-          metadata: { reason: 'blocked_by_user' },
-        },
+      writeAuditAsync(logger, {
+        actorId: profileId,
+        action: 'notifications.telegram_auto_disabled',
+        resourceType: 'profile',
+        resourceId: profileId,
+        result: 'allowed',
+        metadata: { reason: 'blocked_by_user' },
       })
     },
   }

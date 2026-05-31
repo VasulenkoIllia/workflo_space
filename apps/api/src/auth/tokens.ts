@@ -2,6 +2,15 @@ import { randomBytes } from 'node:crypto'
 import type { PrismaClient } from '@workflo/db'
 import type { FastifyReply } from 'fastify'
 
+/**
+ * High-entropy opaque token (256 bits, base64url) for invites / password-reset.
+ * Stronger than Prisma's `@default(uuid())` (122-bit, structured) for single-use
+ * security tokens that grant account access or role promotion (audit 31.05).
+ */
+export function generateOpaqueToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+
 export const REFRESH_COOKIE_NAME = 'refresh_token'
 export const REFRESH_COOKIE_PATH = '/auth/refresh'
 const REFRESH_TTL_DAYS = 30
@@ -23,6 +32,17 @@ export interface Membership {
   companyId: string
   role: 'owner' | 'member'
   permissions?: CompanyPermissions
+}
+
+/**
+ * Narrow a Prisma `Json` value to CompanyPermissions. Only a plain object counts;
+ * a non-object JSON (string/number/array/null) → undefined, so permission flags
+ * read as `false` rather than a truthy coincidence (audit 31.05).
+ */
+export function coercePermissions(json: unknown): CompanyPermissions | undefined {
+  return json !== null && typeof json === 'object' && !Array.isArray(json)
+    ? (json as CompanyPermissions)
+    : undefined
 }
 
 /**

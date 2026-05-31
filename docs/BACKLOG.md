@@ -45,6 +45,23 @@
 
 ---
 
+## 🔍 Audit S0-S1 follow-ups (31.05.2026) — див. `AUDIT_S0_S1.md`
+
+> Знайдено критичним аудитом; баги/security вже виправлено. Нижче — покращення під масштаб + supply-chain (потребують власного verify-циклу).
+
+- [dep] **dep-CVE updates** — `fastify ≥5.8.5` (body-validation bypass), `@fastify/jwt` (fast-jwt empty-secret — вже code-mitigated), `next ≥15.5.16` (landing). Окремий цикл: update + type-check + test. (created: 2026-05-31)
+- [arch] **`forAgency()` / Prisma `$extends` tenant-enforcement** — зробити tenant-фільтр структурним (auto-inject agencyId + derive on write), щоб forgotten-where ≠ leak. Робити з першими S2-хендлерами. HIGH. (created: 2026-05-31)
+- [db] **Композитні tenant-індекси** `(agencyId, internalStatus)`, `(agencyId, createdAt DESC)`, `(agencyId, companyId)` на orders/payments/documents + `(agencyId, createdAt)` audit_logs — під S2-list-запити (CONCURRENTLY). (created: 2026-05-31)
+- [db] **agencyId NOT NULL + ON DELETE RESTRICT** на hot/resource-таблицях — до multi-agency (Phase 1); у Phase 0 всі backfilled. (created: 2026-05-31)
+- [db] **PaymentSettings.agencyId** (зараз глобальний singleton) — до S5/multi-agency. (created: 2026-05-31)
+- [db] **UUIDv7** для high-volume PK (notification_logs/audit_logs/time_logs/outbox_events) — фрагментація UUIDv4. (created: 2026-05-31)
+- [api] **`createSession(tx, profile, reply)`** DRY — register/login/refresh дублюють claims+memberships+agency+refresh+cookie. (created: 2026-05-31)
+- [api] **env → один typed Zod-схема** — COOKIE_DOMAIN/ADMIN_EMAIL/PORTAL_URL/CORS валідувати при старті (зараз розкидані `process.env.X ?? default`). (created: 2026-05-31)
+- [api] **Спільний allowed-origins** для cors.ts + refresh CSRF-guard (зараз розходяться при unset CORS_ALLOWED_ORIGINS). (created: 2026-05-31)
+- [ops] **rate-limit single-replica** — in-memory store; задокументувати constraint АБО Redis перед horizontal scale (auth brute-force ceiling від цього залежить). (created: 2026-05-31)
+
+---
+
 ## 🌱 Foundation seams (рішення задокументоване, код у плані)
 
 - [D3] Спільний date-range primitive leave+calendar (док 23/24; код S13). (created: 2026-05-29)

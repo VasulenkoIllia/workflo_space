@@ -1,11 +1,10 @@
 import { prisma } from '@workflo/db'
-import { ApiErrorCode, AppError, inviteCompanyMemberSchema } from '@workflo/types'
+import { ApiErrorCode, AppError, INVITE_TTL_MS, inviteCompanyMemberSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
+import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { sendCompanyMemberInviteEmail } from '../../services/inviteEmail.js'
-
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 /** POST /company/members/invite — company owner invites a member. */
 const createMemberInviteRoute: FastifyPluginAsync = (fastify) => {
@@ -32,10 +31,15 @@ const createMemberInviteRoute: FastifyPluginAsync = (fastify) => {
 
       const company = await prisma.company.findUnique({
         where: { id: companyId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, agencyId: true },
       })
       if (!company) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+      }
+      // Tenant-guard (ADR-004): the target company must belong to the caller's
+      // active agency — closes cross-tenant invite IDOR (security audit 31.05).
+      if (company.agencyId !== request.user.activeAgencyId) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ заборонено', 403)
       }
 
       // Don't re-invite an existing member.
@@ -62,6 +66,7 @@ const createMemberInviteRoute: FastifyPluginAsync = (fastify) => {
       const invite = await prisma.invite.create({
         data: {
           email,
+          token: generateOpaqueToken(),
           type: 'company_member',
           companyId,
           invitedById: inviterId,

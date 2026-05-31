@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@workflo/db'
-import type { AgencyMembership, CompanyPermissions, Membership } from './tokens.js'
+import { type AgencyMembership, coercePermissions, type Membership } from './tokens.js'
 
 /**
  * Load a profile's company memberships (with permission flags) in the stable
@@ -19,7 +19,7 @@ export async function loadMemberships(
   return rows.map((m) => ({
     companyId: m.companyId,
     role: m.role,
-    permissions: (m.permissions as CompanyPermissions | null) ?? undefined,
+    permissions: coercePermissions(m.permissions),
   }))
 }
 

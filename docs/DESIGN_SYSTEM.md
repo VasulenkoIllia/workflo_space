@@ -1,7 +1,7 @@
 # WORKFLO.SPACE — Design System & Coverage
 
 > **Це головний документ зв'язку «дизайн ↔ код».**
-> Версія: 1.1 · Створено: 2026-05-29 · Рішення зафіксовано: 2026-05-29 · Статус коду: snapshot на 2026-05-29 (перевіряй перед використанням)
+> Версія: 1.2 · Створено: 2026-05-29 · Рішення зафіксовано: 2026-05-29 · **Round 2 синхронізовано: 2026-05-29** — G1–G4 повернулись ✅ + бонусом: 15 email-шаблонів, 5-step onboarding, services-каталог, marketing/about/contact/cookies сторінки, notification center, toast system, avatars. · Статус коду: snapshot на 2026-05-29
 >
 > Джерело правди для візуалу — **готовий хендофф з Claude Design** у [`design/`](../design/).
 > Джерело правди для статусу коду — сам код (цей файл — карта, а не заміна `git`/читання коду).
@@ -169,39 +169,46 @@
 
 ### 5.1 Загальна картина
 
-| Поверхня                         | Дизайн          | Код | % коду | Вердикт                                       |
-| -------------------------------- | --------------- | --- | ------ | --------------------------------------------- |
-| Landing (`workflo.space`)        | ✅              | 🟡  | ~5%    | layout+health є, секцій немає                 |
-| Portal (`portal.workflo.space`)  | ✅              | ❌  | 0%     | scaffold `App.tsx`                            |
-| Workspace (`work.workflo.space`) | ✅              | ❌  | 0%     | scaffold `App.tsx`                            |
-| Documents / PDF                  | ✅              | 🟡  | 0%     | `generatePdf()` кидає «not implemented»       |
-| Email-шаблони                    | ❌ (немає арт.) | ✅  | ~90%   | 4 шаблони готові, **без візуального дизайну** |
-| Telegram-шаблони                 | n/a (текст)     | ✅  | ~85%   | 7 рендерерів готові                           |
-| Notification core                | n/a             | ✅  | ~85%   | notify/resolver/dispatch готові               |
-| Shared UI (`packages/ui`)        | ✅ (brandbook)  | 🟡  | ~10%   | Button + утиліти; ~35 компонентів треба       |
+| Поверхня                         | Дизайн                                                      | Код | % коду | Вердикт                                                                                                                            |
+| -------------------------------- | ----------------------------------------------------------- | --- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Landing (`workflo.space`)        | ✅ (r2: +blog/pricing/legal/cookies/about/contact/services) | 🟡  | ~5%    | layout+health є, секцій немає                                                                                                      |
+| Portal (`portal.workflo.space`)  | ✅                                                          | ❌  | 0%     | scaffold `App.tsx`                                                                                                                 |
+| Workspace (`work.workflo.space`) | ✅ (r2: +vault/blog/cases/services-admin/onboarding)        | ❌  | 0%     | scaffold `App.tsx`                                                                                                                 |
+| Documents / PDF                  | ✅                                                          | 🟡  | 0%     | `generatePdf()` кидає «not implemented»                                                                                            |
+| Email-шаблони                    | ✅ (r2: 15 шаблонів)                                        | ◑   | ~30%   | у коді 4 шаблони (welcome/invite×2/reset), новий дизайн = **15** — треба домалювати + переписати CSS                               |
+| Telegram-шаблони                 | n/a (текст)                                                 | ✅  | ~85%   | 7 рендерерів готові                                                                                                                |
+| Notification core                | n/a                                                         | ✅  | ~85%   | notify/resolver/dispatch готові                                                                                                    |
+| Shared UI (`packages/ui`)        | ✅ (r2: +notif-center, toasts, avatars)                     | 🟡  | ~10%   | Button + утиліти; ~35+ компонентів треба                                                                                           |
+| Onboarding flow (5-step)         | ✅ (r2 new)                                                 | ❌  | 0%     | first-run wizard для нового workspace                                                                                              |
+| **Module screens 17/20-25**      | ◑/❌                                                        | ❌  | 0%     | див. §5.9 — нові гапи від модулів 16-25 (credentials done, але templates/SMTP/cron/monitoring/calendar/wallet/expenses/leave — ❌) |
 
 ### 5.2 Landing — `workflo.space`
 
 Дизайн: [`design/project/app.jsx`](../design/project/app.jsx), [`design/project/terminal-variant.jsx`](../design/project/terminal-variant.jsx), [`design/project/terminal-pages.jsx`](../design/project/terminal-pages.jsx). Код: [`apps/landing/`](../apps/landing/) (Next.js 15).
 
-| Екран / секція                  | Дизайн | Стани в дизайні                                                  | Код | Нотатки                          |
-| ------------------------------- | ------ | ---------------------------------------------------------------- | --- | -------------------------------- |
-| One-pager: hero                 | ✅     | 3 варіанти H1, light/dark, 6 акцентів, CRT glow                  | ❌  | `page.tsx` — заглушка            |
-| One-pager: services             | ✅     | —                                                                | ❌  |                                  |
-| One-pager: work (кейси)         | ✅     | дані з `pages-data.js` (7 проєктів)                              | ❌  |                                  |
-| One-pager: process              | ✅     | —                                                                | ❌  |                                  |
-| One-pager: spotlight            | ✅     | —                                                                | ❌  |                                  |
-| One-pager: who (про)            | ✅     | —                                                                | ❌  |                                  |
-| One-pager: contact              | ✅     | форма                                                            | ❌  | контакт-форма                    |
-| One-pager: partners             | ✅     | —                                                                | ❌  |                                  |
-| One-pager: scale                | ✅     | —                                                                | ❌  |                                  |
-| Project page `/work/:slug`      | ✅     | problem/solution/approach/metrics/before-after/stack/testimonial | ❌  | case study, ~500–800 слів        |
-| Company page `/companies/:slug` | ✅     | bio/projects/testimonial/socials                                 | ❌  | 5 компаній у даних               |
-| 404 (ASCII-кіт)                 | ✅     | light/dark, акценти                                              | ❌  | `Terminal404`                    |
-| Адаптив                         | ✅     | phone 375 / tablet 768 (container-queries)                       | ❌  |                                  |
-| 10 колірних схем                | ✅     | theme+accent+glow                                                | ❌  | перемикач схем                   |
-| Blog `/blog`, `/blog/:slug`     | ❌     | артбордів немає                                                  | ❌  | дизайн-гап → `DESIGN_TODO.md` G2 |
-| Pricing / Terms / Privacy       | ❌     | артбордів немає                                                  | ❌  | дизайн-гап → `DESIGN_TODO.md` G3 |
+| Екран / секція                       | Дизайн      | Стани в дизайні                                                         | Код | Нотатки                                                          |
+| ------------------------------------ | ----------- | ----------------------------------------------------------------------- | --- | ---------------------------------------------------------------- |
+| One-pager: hero                      | ✅          | 3 варіанти H1, light/dark, 6 акцентів, CRT glow                         | ❌  | `page.tsx` — заглушка                                            |
+| One-pager: services                  | ✅          | —                                                                       | ❌  |                                                                  |
+| One-pager: work (кейси)              | ✅          | дані з `pages-data.js` (7 проєктів)                                     | ❌  |                                                                  |
+| One-pager: process                   | ✅          | —                                                                       | ❌  |                                                                  |
+| One-pager: spotlight                 | ✅          | —                                                                       | ❌  |                                                                  |
+| One-pager: who (про)                 | ✅          | —                                                                       | ❌  |                                                                  |
+| One-pager: contact                   | ✅          | форма                                                                   | ❌  | контакт-форма                                                    |
+| One-pager: partners                  | ✅          | —                                                                       | ❌  |                                                                  |
+| One-pager: scale                     | ✅          | —                                                                       | ❌  |                                                                  |
+| Project page `/work/:slug`           | ✅          | problem/solution/approach/metrics/before-after/stack/testimonial        | ❌  | case study, ~500–800 слів                                        |
+| Company page `/companies/:slug`      | ✅          | bio/projects/testimonial/socials                                        | ❌  | 5 компаній у даних                                               |
+| 404 (ASCII-кіт)                      | ✅          | light/dark, акценти                                                     | ❌  | `Terminal404`                                                    |
+| Адаптив                              | ✅          | phone 375 / tablet 768 (container-queries)                              | ❌  |                                                                  |
+| 10 колірних схем                     | ✅          | theme+accent+glow                                                       | ❌  | перемикач схем                                                   |
+| Blog `/blog` + `/blog/:slug`         | ✅ (r2)     | список + empty (тег без статей) + стаття (TOC, long-read) + phone (375) | ❌  | G2 закрито · `landing-blog.jsx`                                  |
+| Pricing `/pricing`                   | ✅ (r2)     | тарифи + порівняння + FAQ + phone-варіант                               | ❌  | G3 закрито · `landing-pricing.jsx`                               |
+| Legal: Terms + Privacy + **Cookies** | ✅ (r2)     | 3 legal-сторінки з TOC, нумерованими секціями, CTA-band                 | ❌  | G3 закрито (+bonus: cookies) · `landing-pricing.jsx` (LegalPage) |
+| Services index + detail              | ✅ (r2 new) | `/services` каталог + `/services/:slug` deliverables/проблема/стек      | ❌  | новий — bonus від дизайнера                                      |
+| Cases index + detail                 | ✅ (r2 new) | `/cases` grid + `/cases/:slug` метрики + long-read                      | ❌  | окремо від one-pager work                                        |
+| About + Contact                      | ✅ (r2 new) | `/about` команда+принципи, `/contact` форма+канали                      | ❌  | окремі сторінки                                                  |
+| `/500` server error                  | ✅ (r2 new) | landing-варіант 500                                                     | ❌  |                                                                  |
 
 ### 5.3 Portal — `portal.workflo.space`
 
@@ -291,28 +298,34 @@
 
 Дизайн: `workspace-*.jsx`. Код: [`apps/workspace/`](../apps/workspace/) — **лише scaffold**. Усі рядки в коді = ❌.
 
-| Екран                   | Дизайн | Стани / таби / модали                                                       | Файл                                                               |
-| ----------------------- | ------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `/` Dashboard           | ✅     | Kanban **board / list / timeline**; естетики A+B; empty/loading             | [`workspace-screens.jsx`](../design/project/workspace-screens.jsx) |
-| `/orders/intake`        | ✅     | черга нерозподілених; AI-suggest підрозділу + confidence%; **empty**        | [`workspace-tasks.jsx`](../design/project/workspace-tasks.jsx)     |
-| `/orders/:id` v2        | ✅     | таби: Огляд · Час (time entries+коментарі) · Специфікація; floating timer   | `workspace-tasks.jsx`                                              |
-| `/orders/:id` internal  | ✅     | 3 колонки; internal-notes (жовта стрічка 🔒)                                | `workspace-screens.jsx`                                            |
-| `/inbox`                | ✅     | крос-клієнтський; open: mention / payment / order                           | [`inbox-screens.jsx`](../design/project/inbox-screens.jsx)         |
-| `/companies`            | ✅     | список + activity heatmap (28 днів); **empty**                              | [`workspace-missing.jsx`](../design/project/workspace-missing.jsx) |
-| `/companies/:id`        | ✅     | картка клієнта (таби)                                                       | `workspace-screens.jsx`                                            |
-| `/billing`              | ✅     | overview + subtabs                                                          | `workspace-missing.jsx`                                            |
-| `/billing/debtors`      | ✅     | age-кольори (свіжий/нагадування/прострочено) + dialog нагадування           | `workspace-screens.jsx`                                            |
-| `/billing/payouts`      | ✅     | payroll-таблиця (rate×hours + bonuses), 6 виконавців                        | `workspace-missing.jsx`                                            |
-| `/reports` (×6)         | ✅     | Огляд · Виконавці · Клієнти · Підрозділи · Timesheet · Audit log; **empty** | [`workspace-reports.jsx`](../design/project/workspace-reports.jsx) |
-| `/settings/departments` | ✅     | CRUD підрозділів + create-card                                              | [`workspace-admin.jsx`](../design/project/workspace-admin.jsx)     |
-| `/settings/team`        | ✅     | members + pending invites                                                   | `workspace-admin.jsx`                                              |
-| `/settings/permissions` | ✅     | матриця role × permission (superadmin/lead/executor)                        | `workspace-admin.jsx`                                              |
-| Модал: Invite member    | ✅     | overlay                                                                     | `workspace-admin.jsx`                                              |
-| Модал: Edit member      | ✅     | role/rate/depts                                                             | `workspace-admin.jsx`                                              |
-| Модал: Stop timer       | ✅     | 47:12 + опційний коментар                                                   | `workspace-tasks.jsx`                                              |
-| Модал: Close task       | ✅     | спека-draft (internal tone) · **AI-polished версія**                        | `workspace-tasks.jsx`                                              |
+| Екран                              | Дизайн      | Стани / таби / модали                                                                                  | Файл                                                                                          |
+| ---------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `/` Dashboard                      | ✅          | Kanban **board / list / timeline**; естетики A+B; empty/loading                                        | [`workspace-screens.jsx`](../design/project/workspace-screens.jsx)                            |
+| `/orders/intake`                   | ✅          | черга нерозподілених; AI-suggest підрозділу + confidence%; **empty**                                   | [`workspace-tasks.jsx`](../design/project/workspace-tasks.jsx)                                |
+| `/orders/:id` v2                   | ✅          | таби: Огляд · Час (time entries+коментарі) · Специфікація; floating timer                              | `workspace-tasks.jsx`                                                                         |
+| `/orders/:id` internal             | ✅          | 3 колонки; internal-notes (жовта стрічка 🔒)                                                           | `workspace-screens.jsx`                                                                       |
+| `/inbox`                           | ✅          | крос-клієнтський; open: mention / payment / order                                                      | [`inbox-screens.jsx`](../design/project/inbox-screens.jsx)                                    |
+| `/companies`                       | ✅          | список + activity heatmap (28 днів); **empty**                                                         | [`workspace-missing.jsx`](../design/project/workspace-missing.jsx)                            |
+| `/companies/:id`                   | ✅          | картка клієнта (таби)                                                                                  | `workspace-screens.jsx`                                                                       |
+| `/billing`                         | ✅          | overview + subtabs                                                                                     | `workspace-missing.jsx`                                                                       |
+| `/billing/debtors`                 | ✅          | age-кольори (свіжий/нагадування/прострочено) + dialog нагадування                                      | `workspace-screens.jsx`                                                                       |
+| `/billing/payouts`                 | ✅          | payroll-таблиця (rate×hours + bonuses), 6 виконавців                                                   | `workspace-missing.jsx`                                                                       |
+| `/reports` (×6)                    | ✅          | Огляд · Виконавці · Клієнти · Підрозділи · Timesheet · Audit log; **empty**                            | [`workspace-reports.jsx`](../design/project/workspace-reports.jsx)                            |
+| `/settings/departments`            | ✅          | CRUD підрозділів + create-card                                                                         | [`workspace-admin.jsx`](../design/project/workspace-admin.jsx)                                |
+| `/settings/team`                   | ✅          | members + pending invites                                                                              | `workspace-admin.jsx`                                                                         |
+| `/settings/permissions`            | ✅          | матриця role × permission (superadmin/lead/executor)                                                   | `workspace-admin.jsx`                                                                         |
+| Модал: Invite member               | ✅          | overlay                                                                                                | `workspace-admin.jsx`                                                                         |
+| Модал: Edit member                 | ✅          | role/rate/depts                                                                                        | `workspace-admin.jsx`                                                                         |
+| Модал: Stop timer                  | ✅          | 47:12 + опційний коментар                                                                              | `workspace-tasks.jsx`                                                                         |
+| Модал: Close task                  | ✅          | спека-draft (internal tone) · **AI-polished версія**                                                   | `workspace-tasks.jsx`                                                                         |
+| **`/vault`** (G4 r2)               | ✅ (r2)     | сейф доступів — 38 секретів × 6 клієнтів; reveal/revoke/edit; журнал доступу; AES-256 · zero-knowledge | [`workspace-screens.jsx`](../design/project/workspace-screens.jsx) (WorkspaceVault)           |
+| **`/blog` list + editor** (G4 r2)  | ✅ (r2)     | таблиця статей зі статусами (опубл./чернетка/заплановано) + split-редактор markdown ↔ live-preview     | [`workspace-content.jsx`](../design/project/workspace-content.jsx) (WorkspaceBlogCMS)         |
+| **`/cases`** (G4 r2)               | ✅ (r2)     | картки кейсів з результатами; публікація на лендинг                                                    | `workspace-content.jsx` (WorkspaceCases)                                                      |
+| **`/services-admin`** (r2 new)     | ✅ (r2 new) | owner-каталог послуг для лендингу: порядок, статуси, ліди з форм                                       | [`workspace-services.jsx`](../design/project/workspace-services.jsx) (WorkspaceServicesAdmin) |
+| **`/billing/services`** (r2 new)   | ✅ (r2 new) | recurring-підписки на обслуговування: MRR, призначення виконавців, статуси active/paused               | `workspace-services.jsx` (WorkspaceBillingServices)                                           |
+| **Onboarding (5 кроків)** (r2 new) | ✅ (r2 new) | first-run wizard: workspace → галузь (аватарка) → команда → канали → готово                            | [`onboarding.jsx`](../design/project/onboarding.jsx) (OnboardingFlow)                         |
 
-> **Дизайн-гапи workspace (на допрацювання — `DESIGN_TODO.md` G4):** `/blog` та `/cases` (редактори контенту — у sidebar є, артбордів немає), сейф доступів `/companies/:id/credentials` (owner only). Особисті налаштування виконавця (profile/security/notifications) — ймовірно реюз патернів порталу (§5.3).
+> **G4 закрито.** Залишився минорний gap — особисті налаштування виконавця (profile/security/notifications) у workspace — ймовірно реюз патернів порталу (§5.3).
 
 ### 5.5 Documents / PDF
 
@@ -331,17 +344,40 @@
 
 ### 5.6 Email-шаблони
 
-Код: [`packages/notifications/src/email/templates/`](../packages/notifications/src/email/templates/). **Реалізовані (i18n uk/en):** `welcome`, `inviteExecutor`, `inviteCompanyMember`, `passwordReset` + рендер-хелпери (`render.ts`), mailer, i18n.
+**Дизайн (r2 — G1 закрито):** 15 HTML-шаблонів у [`design/project/email-templates.jsx`](../design/project/email-templates.jsx) + [`email-templates.css`](../design/project/email-templates.css). Mono + lime, з прев'ю всередині поштового клієнта.
+**Код:** [`packages/notifications/src/email/templates/`](../packages/notifications/src/email/templates/) — реалізовані 4 шаблони (welcome/inviteExecutor/inviteCompanyMember/passwordReset). Решту 11 треба додати + переписати inline-CSS під фірмовий стиль.
 
-| Шаблон                             | Код | Візуальний дизайн                      |
-| ---------------------------------- | --- | -------------------------------------- |
-| Welcome                            | ✅  | ❌ (немає артборду)                    |
-| Invite (executor / company member) | ✅  | ❌                                     |
-| Password reset                     | ✅  | ❌                                     |
-| Invoice email                      | ❌  | ❌ (бриф просив, немає ні там, ні там) |
+**Transactional (5):**
 
-> **Гап навпаки (на допрацювання — `DESIGN_TODO.md` G1):** тут код випереджає дизайн. У хендоффі **немає HTML-мокапів листів**. Треба: (1) намалювати email-шаблони у фірмовому стилі §3, (2) переписати наявний inline-CSS під токени §3 (могли робити під сині — див. §2).
-> Подій нотифікацій у системі набагато більше (~21, див. `packages/types`), частина потребуватиме email-представлення згодом.
+| Шаблон                             | Дизайн (r2)         | Код                      | Нотатки                          |
+| ---------------------------------- | ------------------- | ------------------------ | -------------------------------- |
+| Запрошення в портал (set password) | ✅ `email-invite`   | ✅ `inviteCompanyMember` | звірити inline-CSS з токенами §3 |
+| Замовлення прийнято в роботу       | ✅ `email-order`    | ❌                       | новий — додати в код             |
+| Виставлено рахунок (pay CTA)       | ✅ `email-invoice`  | ❌                       | новий — додати в код             |
+| Оплату отримано (receipt)          | ✅ `email-payment`  | ❌                       | новий — додати в код             |
+| Нагадування про оплату (warning)   | ✅ `email-deadline` | ❌                       | новий — додати в код             |
+
+**Auth + безпека (6):**
+
+| Шаблон                      | Дизайн (r2)            | Код                | Нотатки                |
+| --------------------------- | ---------------------- | ------------------ | ---------------------- |
+| Підтвердження пошти (код)   | ✅ `email-verify`      | ❌                 | новий — додати         |
+| Скидання паролю             | ✅ `email-reset`       | ✅ `passwordReset` | звірити CSS з токенами |
+| Пароль змінено (security)   | ✅ `email-pwd-changed` | ❌                 | новий                  |
+| Новий вхід виявлено (alert) | ✅ `email-new-login`   | ❌                 | новий                  |
+| Одноразовий код 2FA         | ✅ `email-otp`         | ❌                 | новий                  |
+| Підтвердження зміни email   | ✅ `email-change`      | ❌                 | новий                  |
+
+**Системні + інфо (4):**
+
+| Шаблон                          | Дизайн (r2)            | Код                 | Нотатки     |
+| ------------------------------- | ---------------------- | ------------------- | ----------- |
+| Запрошення в команду (executor) | ✅ `email-team-invite` | ✅ `inviteExecutor` | звірити CSS |
+| Згадка / нове повідомлення      | ✅ `email-mention`     | ❌                  | новий       |
+| Документ готовий на погодження  | ✅ `email-doc-ready`   | ❌                  | новий       |
+| Тижневий дайджест (stat-сітка)  | ✅ `email-digest`      | ❌                  | новий       |
+
+> **TODO коду (поза дизайн-циклом):** додати 11 нових шаблонів у `packages/notifications/src/email/templates/`, переписати inline-CSS існуючих 4 під токени §3 (`render.ts`).
 
 ### 5.7 Telegram-шаблони
 
@@ -351,22 +387,53 @@
 
 Дизайн-довідник: brandbook (`bb-foundations` + `bb-components`) — [`design/project/brandbook.jsx`](../design/project/brandbook.jsx), [`brandbook-product.jsx`](../design/project/brandbook-product.jsx). Код: [`packages/ui/src/`](../packages/ui/src/).
 
-| Компонент                                        | Дизайн   | Код                          |
-| ------------------------------------------------ | -------- | ---------------------------- |
-| Button (primary/ghost/danger, sizes, A/B)        | ✅       | ◑ (є базовий, без варіантів) |
-| `cn`, `useDebounce`                              | n/a      | ✅                           |
-| ThemeProvider / useTheme / useMediaQuery         | потрібні | 🟡 (заглушки)                |
-| Input, Textarea, Select, Checkbox, Radio, Toggle | ✅       | ❌                           |
-| Badge / Pill / Tag (статуси, tiers, doc-types)   | ✅       | ❌                           |
-| Avatar (+ stack), Card, Panel                    | ✅       | ❌                           |
-| Modal, Drawer, Popover, Tooltip, Toast, Alert    | ✅       | ❌                           |
-| Tabs, Table (sort/filter/paginate), Skeleton     | ✅       | ❌                           |
-| Empty states, Pagination                         | ✅       | ❌                           |
-| Status badge (internal→client mapping)           | ✅       | ❌                           |
-| Company switcher, Bell dropdown, ⌘K palette      | ✅       | ❌                           |
-| Timer widget, Chat bubble + composer             | ✅       | ❌                           |
-| Kanban card + column, File dropzone              | ✅       | ❌                           |
-| Notification matrix, Progress bar                | ✅       | ❌                           |
+| Компонент                                                       | Дизайн   | Код                          |
+| --------------------------------------------------------------- | -------- | ---------------------------- |
+| Button (primary/ghost/danger, sizes, A/B)                       | ✅       | ◑ (є базовий, без варіантів) |
+| `cn`, `useDebounce`                                             | n/a      | ✅                           |
+| ThemeProvider / useTheme / useMediaQuery                        | потрібні | 🟡 (заглушки)                |
+| Input, Textarea, Select, Checkbox, Radio, Toggle                | ✅       | ❌                           |
+| Badge / Pill / Tag (статуси, tiers, doc-types)                  | ✅       | ❌                           |
+| Avatar (+ stack), Card, Panel                                   | ✅       | ❌                           |
+| Modal, Drawer, Popover, Tooltip, Toast, Alert                   | ✅       | ❌                           |
+| Tabs, Table (sort/filter/paginate), Skeleton                    | ✅       | ❌                           |
+| Empty states, Pagination                                        | ✅       | ❌                           |
+| Status badge (internal→client mapping)                          | ✅       | ❌                           |
+| Company switcher, Bell dropdown, ⌘K palette                     | ✅       | ❌                           |
+| Timer widget, Chat bubble + composer                            | ✅       | ❌                           |
+| Kanban card + column, File dropzone                             | ✅       | ❌                           |
+| Notification matrix, Progress bar                               | ✅       | ❌                           |
+| **Notification center** (🔔 dropdown, tabs unread/all) (r2 new) | ✅       | ❌                           |
+| **Toast system** (5 варіантів + action, стек до 3) (r2 new)     | ✅       | ❌                           |
+| **Avatars** (тематичні гліф-аватарки: ролі + клієнти) (r2 new)  | ✅       | ❌                           |
+
+---
+
+## 5.9 Module-based gaps (модулі 16-25) — нові дизайн-задачі
+
+Документація виросла з 16 до 25 модулів. Перевірив покриття новими екранами проти design-router'а:
+
+| Модуль                       | UI потрібно?  | Дизайн (статус)                                                                        | Гап → handoff       |
+| ---------------------------- | ------------- | -------------------------------------------------------------------------------------- | ------------------- |
+| 16 · Search & Filters        | light-ui      | ⌘K палітра вже є (`p-cmdk`); blog search results — мінор                               | мінор               |
+| 17 · Credentials Vault       | heavy-ui      | ✅ `/vault` (r2 G4) — закрито                                                          | —                   |
+| 18 · Chat Hub                | heavy-ui      | `/inbox` (portal + workspace) є; SSE-анімація, mute/archive — мінор                    | мінор               |
+| 19 · Reports                 | heavy-ui      | 6 reports є; module 19 додає Time/Revenue/Debtors (debtors є, revenue chart — гап)     | минор               |
+| **20 · Admin Settings**      | backend+forms | ws-services-admin є; **Templates editor, SMTP cards, PDF branding, Cron monitor — ❌** | **G5**              |
+| **21 · System Monitoring**   | heavy-ui      | **система health-cards, audit feed, error log, DB metrics — ❌**                       | **G6**              |
+| **22 · Finance / Expenses**  | light-ui      | **P&L overview, expense ledger, expense chart — ❌**                                   | **G7**              |
+| **23 · Leave Tracking**      | light-ui      | **request form, approval table, calendar integration — ❌**                            | **G8**              |
+| **24 · Calendar / Meetings** | heavy-ui      | **month/week/day grid, event create modal, RSVP, attendee picker — ❌**                | **G9** (найбільший) |
+| **25 · Client Wallet**       | light-ui      | **Portal `/wallet`, admin wallet, statement, tier settings — ❌**                      | **G10**             |
+
+**Мінорні рефайменти (від нових фіч у модулях 01-15):**
+
+- 01-auth: OAuth-кнопки (Google/GitHub) на `/login` — не в дизайні
+- 02-orders: tags input/badges, dependencies, templates dropdown — не в дизайні
+- 03-chat: 15-min edit UI, reactions (emoji), reply-to, read-receipts — не в дизайні
+- 19-reports: `/reports/revenue` (line chart revenue/expenses/profit) — гап у дизайні
+
+→ Список G5–G10 і мінорів — у [`DESIGN_TODO.md`](DESIGN_TODO.md) (round 3).
 
 ---
 
@@ -387,9 +454,9 @@
 
 **S6 — Documents:** 13. Toolkit HTML→Puppeteer (§5.5) + 5 PDF-шаблонів + `/documents` UI.
 
-**S7 — Landing:** 14. One-pager (9 секцій) + Project/Company сторінки + 404 + адаптив + колірні схеми. 15. Blog, Pricing, Terms/Privacy — **заблоковано дизайном** (чекаємо `DESIGN_TODO.md` G2/G3), далі код.
+**S7 — Landing:** 14. One-pager (9 секцій) + Project/Company сторінки + 404 + адаптив + колірні схеми. 15. **Розблоковано (r2 ✅):** Blog (list/empty/article), Pricing, Legal (terms/privacy/cookies), Services, Cases, About, Contact, 500 — дизайн є.
 
-**Поперечно:** 16. Email-шаблони — **заблоковано дизайном** (`DESIGN_TODO.md` G1); після повернення реалізувати/оновити inline-CSS під токени §3.
+**Поперечно:** 16. **Розблоковано (r2 ✅):** Email-шаблони — дизайн 15 шаблонів готовий (§5.6). Додати 11 нових у `packages/notifications/src/email/templates/` + переписати CSS існуючих 4 під токени §3. 17. **Onboarding (r2 new):** 5-step wizard після `packages/ui` base. 18. **Workspace bonus (r2 new):** vault, content (blog/cases), services-admin, billing-services — додати в `WORKSPACE_NAV` та реалізувати разом з S4.
 
 ---
 
@@ -430,16 +497,17 @@
 
 ## 8. Рішення (зафіксовано 2026-05-29)
 
-| #   | Питання                                  | **Рішення**                                                                                                                                                                   |
-| --- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Візуальна мова (§2)                      | **Лайм + термінал** — офіційно. Токени свапабельні (6 пресетів). `DESIGN_BRIEF.md` оновити під §3.                                                                            |
-| 2   | Естетика продукту (§3.6)                 | **A · Terminal — скрізь** (portal + workspace). B — лише fallback.                                                                                                            |
-| 3   | Акцент за замовчуванням (§3.3)           | **lime** default; палітра свапабельна через `--wf-*` токени.                                                                                                                  |
-| 4   | PDF-движок (§5.5)                        | **HTML→Puppeteer**. `IMPLEMENTATION_PLAN.md` оновити.                                                                                                                         |
-| 5   | Email-дизайн (§5.6, `DESIGN_TODO.md` G1) | **Домалювати 5 листів + переписати inline-CSS** під токени §3. У пріоритет.                                                                                                   |
-| 6   | Дизайн-гапи                              | **Усі 4 (G1–G4) — у пріоритет**, винесені в окремий handoff [`DESIGN_TODO.md`](DESIGN_TODO.md) для дизайнера (emails, Blog, Pricing+Legal, Workspace Blog/Cases+Credentials). |
+| #   | Питання                                  | **Рішення**                                                                                                                                                                                                                              |
+| --- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Візуальна мова (§2)                      | **Лайм + термінал** — офіційно. Токени свапабельні (6 пресетів). `DESIGN_BRIEF.md` оновити під §3.                                                                                                                                       |
+| 2   | Естетика продукту (§3.6)                 | **A · Terminal — скрізь** (portal + workspace). B — лише fallback.                                                                                                                                                                       |
+| 3   | Акцент за замовчуванням (§3.3)           | **lime** default; палітра свапабельна через `--wf-*` токени.                                                                                                                                                                             |
+| 4   | PDF-движок (§5.5)                        | **HTML→Puppeteer**. `IMPLEMENTATION_PLAN.md` оновити.                                                                                                                                                                                    |
+| 5   | Email-дизайн (§5.6, `DESIGN_TODO.md` G1) | **Домалювати 5 листів + переписати inline-CSS** під токени §3. У пріоритет.                                                                                                                                                              |
+| 6   | Дизайн-гапи (round 1)                    | **Усі 4 (G1–G4) — у пріоритет**, винесені в [`DESIGN_TODO.md`](DESIGN_TODO.md) для дизайнера (emails, Blog, Pricing+Legal, Workspace Blog/Cases+Credentials).                                                                            |
+| 7   | **Round 2 повернувся (2026-05-29)**      | **G1–G4 ✅ закрито** + **бонус** (15 emails, onboarding, services, marketing/about/contact/cookies, notification center, toast system, avatars). Нові гапи з модулів 16-25 → §5.9 + handoff G5–G10 у [`DESIGN_TODO.md`](DESIGN_TODO.md). |
 
-Похідні TODO (не блокуючі, трекати окремо): оновити `DESIGN_BRIEF.md` (§2), оновити `IMPLEMENTATION_PLAN.md` під Puppeteer (§5.5).
+Похідні TODO (не блокуючі, трекати окремо): оновити `DESIGN_BRIEF.md` (§2), оновити `IMPLEMENTATION_PLAN.md` під Puppeteer (§5.5), синхронізувати `docs/modules/08-email.md` під 15 реальних шаблонів (зараз дрифт — див. `MODULE_AUDIT.md`).
 
 ---
 

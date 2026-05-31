@@ -1,11 +1,10 @@
 import { prisma } from '@workflo/db'
-import { ApiErrorCode, AppError, inviteExecutorSchema } from '@workflo/types'
+import { ApiErrorCode, AppError, INVITE_TTL_MS, inviteExecutorSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
+import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { sendExecutorInviteEmail } from '../../services/inviteEmail.js'
-
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 /** POST /workspace/team/invite — invite an executor (internal team). */
 const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
@@ -33,6 +32,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
       const invite = await prisma.invite.create({
         data: {
           email,
+          token: generateOpaqueToken(),
           type: 'executor',
           invitedById: inviterId,
           expiresAt: new Date(Date.now() + INVITE_TTL_MS),

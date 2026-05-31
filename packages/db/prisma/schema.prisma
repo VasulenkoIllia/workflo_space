@@ -68,6 +68,7 @@ model Invite {
   invitedById String
   invitedBy   Profile    @relation("InvitedBy", fields: [invitedById], references: [id])
   companyId   String?
+  company     Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   permissions Json?
   expiresAt   DateTime   @db.Timestamptz(3)
   usedAt      DateTime?  @db.Timestamptz(3)
@@ -75,6 +76,7 @@ model Invite {
 
   @@index([email])
   @@index([invitedById])
+  @@index([companyId])
   @@map("invites")
 }
 
@@ -114,6 +116,7 @@ model Company {
   referralsSent     Referral[]       @relation("ReferrerCompany")
   referralsReceived Referral[]       @relation("ReferredCompany")
   documents         Document[]
+  invites           Invite[]
   agency            Agency           @relation(fields: [agencyId], references: [id])
 
   @@index([agencyId])
@@ -133,6 +136,7 @@ model CompanyMember {
   @@unique([companyId, profileId])
   @@index([companyId])
   @@index([profileId])
+  @@index([profileId, role])
   @@map("company_members")
 }
 

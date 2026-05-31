@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { type Prisma, prisma } from '@workflo/db'
 import { updateProfileSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -9,7 +9,7 @@ const updateProfileRoute: FastifyPluginAsync = (fastify) => {
     const input = updateProfileSchema.parse(request.body)
     const profileId = request.user.sub
 
-    const data: Record<string, unknown> = {}
+    const data: Prisma.ProfileUpdateInput = {}
     if (input.displayName !== undefined) data.name = input.displayName.trim()
     if (input.language !== undefined) data.language = input.language
     if (input.theme !== undefined) data.theme = input.theme

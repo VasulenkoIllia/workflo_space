@@ -78,7 +78,7 @@ export function renderEmailForEvent(
   const locale: LocaleKey = recipient.locale ?? 'uk'
   // We intentionally use `as` casts here because the per-event types are
   // proven by the caller building EventPayloadMap[event].
-  switch (event as string) {
+  switch (event) {
     case 'auth.welcome':
       return renderWelcomeEmail({
         name: recipient.name ?? '',
@@ -125,7 +125,7 @@ export function renderTelegramForEvent(
   vars: Record<string, unknown>
 ): RenderedTelegram | null {
   const locale: LocaleKey = recipient.locale ?? 'uk'
-  switch (event as string) {
+  switch (event) {
     case 'auth.welcome':
       return renderWelcomeTelegram({
         name: recipient.name ?? '',

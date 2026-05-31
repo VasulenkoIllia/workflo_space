@@ -141,6 +141,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS_STAGING:-https://dev.workflo.space,https://dev-portal.workflo.space,https://dev-work.workflo.space}
       PORTAL_URL: ${PORTAL_URL_STAGING:-https://dev-portal.workflo.space}
       WORKSPACE_URL: ${WORKSPACE_URL_STAGING:-https://dev-work.workflo.space}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.workflo.space}
       SMTP_HOST: ${SMTP_HOST:-mail.workflo.space}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
