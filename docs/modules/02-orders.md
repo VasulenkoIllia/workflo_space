@@ -113,15 +113,18 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Workspace (команда)
 
-| Метод    | URL                             | Опис                              |
-| -------- | ------------------------------- | --------------------------------- |
-| `GET`    | `/orders`                       | Список всіх замовлень з фільтрами |
-| `GET`    | `/orders/:id`                   | Деталі замовлення (internal view) |
-| `PATCH`  | `/orders/:id/status`            | Змінити статус                    |
-| `PATCH`  | `/orders/:id`                   | Редагувати будь-яке поле          |
-| `DELETE` | `/orders/:id`                   | Soft delete                       |
-| `POST`   | `/orders/:id/executors`         | Призначити виконавця              |
-| `DELETE` | `/orders/:id/executors/:userId` | Зняти виконавця                   |
+| Метод    | URL                              | Опис                                               |
+| -------- | -------------------------------- | -------------------------------------------------- |
+| `GET`    | `/orders`                        | Список всіх замовлень з фільтрами                  |
+| `GET`    | `/orders/:id`                    | Деталі замовлення (internal view)                  |
+| `PATCH`  | `/orders/:id/status`             | Змінити статус                                     |
+| `PATCH`  | `/orders/:id`                    | Редагувати будь-яке поле                           |
+| `DELETE` | `/orders/:id`                    | Soft delete                                        |
+| `PATCH`  | `/orders/:id/assign`             | Призначити / зняти executor (triage)               |
+| `GET`    | `/orders/:orderId/tasks`         | Внутрішні підзадачі (workspace-only)               |
+| `POST`   | `/orders/:orderId/tasks`         | Створити підзадачу                                 |
+| `PATCH`  | `/orders/:orderId/tasks/:taskId` | Оновити підзадачу (status/assignee/position/title) |
+| `DELETE` | `/orders/:orderId/tasks/:taskId` | Видалити підзадачу                                 |
 
 ### Query параметри для `GET /orders` (workspace)
 

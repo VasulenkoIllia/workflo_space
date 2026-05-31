@@ -10,6 +10,11 @@ const orderUpdate = vi.fn()
 const agencyMemberFindUnique = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
+const taskFindMany = vi.fn()
+const taskCreate = vi.fn()
+const taskFindUnique = vi.fn()
+const taskUpdate = vi.fn()
+const taskDelete = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
@@ -19,6 +24,13 @@ vi.mock('@workflo/db', () => ({
       findMany: orderFindMany,
       findUnique: orderFindUnique,
       update: orderUpdate,
+    },
+    internalTask: {
+      findMany: taskFindMany,
+      create: taskCreate,
+      findUnique: taskFindUnique,
+      update: taskUpdate,
+      delete: taskDelete,
     },
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
@@ -547,5 +559,235 @@ describe('PATCH /orders/:id/assign', () => {
     })
     expect(res.statusCode).toBe(403)
     await app.close()
+  })
+})
+
+describe('internal tasks (workspace-only)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const order = { id: 'order-1', agencyId: 'agency-1', deletedAt: null }
+  const ASSIGNEE = '11111111-1111-4111-8111-111111111111'
+
+  describe('GET /orders/:orderId/tasks', () => {
+    it('executor lists tasks ordered by position', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindMany.mockResolvedValue([
+        { id: 't1', title: 'A', status: 'todo', assigneeId: null, position: 0 },
+      ])
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.tasks).toHaveLength(1)
+      expect(taskFindMany.mock.calls[0][0].where.orderId).toBe('order-1')
+      await app.close()
+    })
+
+    it('client is forbidden (403) — never sees internal tasks', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      expect(taskFindMany).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('404 for an unknown order', async () => {
+      orderFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/nope/tasks',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+
+    it('403 cross-tenant (order in another agency)', async () => {
+      orderFindUnique.mockResolvedValue({ ...order, agencyId: 'agency-OTHER' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+  })
+
+  describe('POST /orders/:orderId/tasks', () => {
+    it('executor creates a task with a valid assignee (201)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      agencyMemberFindUnique.mockResolvedValue({ profileId: ASSIGNEE })
+      taskCreate.mockResolvedValue({ id: 't1', title: 'Build', status: 'todo', position: 1 })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build', assigneeId: ASSIGNEE, position: 1 },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(taskCreate.mock.calls[0][0].data.assignee).toEqual({ connect: { id: ASSIGNEE } })
+      await app.close()
+    })
+
+    it('executor creates an unassigned task (201, position defaults to 0)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskCreate.mockResolvedValue({ id: 't1', title: 'Build', status: 'todo', position: 0 })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build' },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(agencyMemberFindUnique).not.toHaveBeenCalled()
+      expect(taskCreate.mock.calls[0][0].data.position).toBe(0)
+      await app.close()
+    })
+
+    it('400 when the assignee is not an agency member', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      agencyMemberFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build', assigneeId: ASSIGNEE },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(taskCreate).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('client cannot create (403)', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build' },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+
+    it('400 on an empty title (validation)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: '' },
+      })
+      expect(res.statusCode).toBe(400)
+      await app.close()
+    })
+  })
+
+  describe('PATCH /orders/:orderId/tasks/:taskId', () => {
+    it('executor updates status (200)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
+      taskUpdate.mockResolvedValue({ id: 't1', title: 'A', status: 'done', position: 0 })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: 'done' },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(taskUpdate.mock.calls[0][0].data.status).toBe('done')
+      await app.close()
+    })
+
+    it('unassign via assigneeId:null → disconnect', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
+      taskUpdate.mockResolvedValue({ id: 't1', title: 'A', status: 'todo', position: 0 })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { assigneeId: null },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(taskUpdate.mock.calls[0][0].data.assignee).toEqual({ disconnect: true })
+      expect(agencyMemberFindUnique).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('404 when the task belongs to a different order (IDOR guard)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-OTHER' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: 'done' },
+      })
+      expect(res.statusCode).toBe(404)
+      expect(taskUpdate).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('client cannot update (403)', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: 'done' },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+  })
+
+  describe('DELETE /orders/:orderId/tasks/:taskId', () => {
+    it('executor deletes a task (200)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
+      taskDelete.mockResolvedValue({ id: 't1' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(taskDelete).toHaveBeenCalledWith({ where: { id: 't1' } })
+      await app.close()
+    })
+
+    it('client cannot delete (403)', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
   })
 })

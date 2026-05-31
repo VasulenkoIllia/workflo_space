@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { BillingType, OrderInternalStatus, OrderPriority, OrderType } from '../enums.js'
+import {
+  BillingType,
+  InternalTaskStatus,
+  OrderInternalStatus,
+  OrderPriority,
+  OrderType,
+} from '../enums.js'
 
 const dueDateSchema = z
   .string()
@@ -63,3 +69,22 @@ export const updateOrderSchema = z
 export const assignOrderSchema = z.object({
   assigneeId: z.string().uuid().nullable(),
 })
+
+/** POST /orders/:orderId/tasks — workspace-only internal subtask. */
+export const createInternalTaskSchema = z.object({
+  title: z.string().min(1).max(255),
+  assigneeId: z.string().uuid().nullable().optional(),
+  position: z.number().int().min(0).optional(),
+})
+
+/** PATCH /orders/:orderId/tasks/:taskId — partial update. */
+export const updateInternalTaskSchema = z
+  .object({
+    title: z.string().min(1).max(255).optional(),
+    status: z.nativeEnum(InternalTaskStatus).optional(),
+    assigneeId: z.string().uuid().nullable().optional(),
+    position: z.number().int().min(0).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Потрібно вказати хоча б одне поле для оновлення',
+  })
