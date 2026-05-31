@@ -132,3 +132,18 @@ function sameTenant(user: AccessClaims, resourceAgencyId: string): boolean {
 ## Перегляд
 
 Переглянути, коли: з'явиться перший зовнішній tenant; знадобиться cross-tenant аналітика (платформний рівень); або per-tenant ізоляція даних (окремі схеми/БД).
+
+---
+
+## Amendment (аудит 31.05.2026) — структурне tenant-enforcement
+
+Tenant-ізоляція НЕ покладається на дисципліну в кожному хендлері. З S2 **обовʼязково** використовувати хелпери `apps/api/src/auth/tenant.ts`:
+
+- **`requireActiveAgency(user)`** — дістати tenant сесії (звідси, не з тіла запиту).
+- **`tenantWhere(agencyId, extra)`** — кожен agency-scoped `findMany/find/update/delete` фільтрує по `agencyId` (забутий `where` ≠ leak).
+- **`tenantData(agencyId, data)`** — кожен `create` штампує `agencyId` із сесії (денормалізація orders/payments/... консистентна за визначенням).
+- **`assertSameTenant(user, resource.agencyId)`** ПІСЛЯ кожного resource-fetch — 403 на крос-тенант (доповнює `can()` tenant-guard для flow «завантажив → перевірив»).
+
+`null` `resourceAgencyId` → deny (un-stamped рядок невидимий жодному тенанту — безпечніше відмовити). Покрито `tests/tenant.test.ts`.
+
+**Rate-limit (операційне обмеження):** `@fastify/rate-limit` зараз in-memory → коректний лише при **одній репліці API**. Auth brute-force-ліміти (`/auth/login` 10/15хв) залежать від цього. Перед horizontal scale — Redis-store АБО свідомо лишати 1 репліку (зафіксовано в BACKLOG).

@@ -180,6 +180,9 @@ model Order {
   agency        Agency?        @relation(fields: [agencyId], references: [id])
 
   @@index([agencyId])
+  @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
+  @@index([agencyId, createdAt]) // tenant-scoped paginated list (S2)
+  @@index([agencyId, companyId]) // client's company order list (S2)
   @@index([companyId])
   @@index([assigneeId])
   @@index([internalStatus])

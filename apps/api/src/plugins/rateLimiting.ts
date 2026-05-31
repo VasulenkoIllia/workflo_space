@@ -6,6 +6,12 @@ function getRateLimitKey(request: FastifyRequest): string {
   return request.ip
 }
 
+/**
+ * ⚠️ Operational constraint (audit 31.05): the default store is IN-MEMORY, so
+ * limits are per-replica. The API must run as a SINGLE replica until a shared
+ * store (Redis) is added — otherwise the auth brute-force ceilings (login 10/15m)
+ * multiply by replica count. See ADR-004 amendment + BACKLOG.
+ */
 const rateLimitingPlugin: FastifyPluginAsync = async (fastify) => {
   await fastify.register(rateLimit, {
     global: true,
