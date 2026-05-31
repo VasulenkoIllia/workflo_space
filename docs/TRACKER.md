@@ -55,11 +55,11 @@
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
 | S16-01 | ✅ `Agency` + `AgencyMember` + `AgencyMemberRole` + міграція (FK/indexes Prisma-naming)                                                | [adr/004] | ✅     |
 | S16-02 | ✅ `agencyId` scoping (company req + orders/payments/docs/charges/comments/timelogs/services/rates/audit) + backfill + seed + register | [db]      | ✅     |
-| S16-03 | JWT claims `activeAgencyId` + `agencyMemberships` ✅ (login/refresh/register wired); `/auth/switch-agency` ⬜                          | [01-auth] | 🔄     |
+| S16-03 | ✅ JWT claims `activeAgencyId` + `agencyMemberships` (login/refresh/register); `/auth/switch-agency` → Фаза 1 (multi-agency, ADR-004)  | [01-auth] | ✅     |
 | S16-04 | ✅ `can()` tenant-guard (default-deny крос-тенант) + 2 тести                                                                           | [adr/002] | ✅     |
-| S16-05 | `OutboxEvent` таблиця + worker skeleton (retry/DLQ) — для notify/webhooks/index-sync                                                   | [07]      | ⬜     |
+| S16-05 | ✅ `OutboxEvent` + міграція + drain-сервіс (claim SKIP LOCKED + backoff + DLQ) + 5 тестів — handlers/cron у S6                         | [07]      | ✅     |
 | S16-06 | Schema-delta batch-1: нові колонки/таблиці для ядрових модулів (orders/chat/files)                                                     | [db]      | ⬜     |
-| S16-07 | db-hardening: FK-індекси, Order.company onDelete, Decimal(10,4), drop OtpToken-index                                                   | [db]      | ⬜     |
+| S16-07 | ✅ db-hardening — вже виконано в S1.5-C (FK-індекси, Order.company onDelete:SetNull, Decimal(10,4); OtpToken-index чистий)             | [db]      | ✅     |
 | S16-08 | telegramChatId dedup (NotificationSettings authoritative)                                                                              | [15-bot]  | ⬜     |
 | S1.5-D | ✅ `prisma migrate deploy` на деплої (окремий `migrate`-сервіс, stg+prod)                                                              | Infra     | ✅     |
 

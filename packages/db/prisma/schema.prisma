@@ -499,6 +499,27 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Transactional outbox event (ADR topic #2-3). Worker claims due rows
+/// (FOR UPDATE SKIP LOCKED), runs the handler, and marks done/failed; on
+/// failure it backs off (nextAttemptAt) until maxAttempts, then → dead (DLQ).
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  agencyId      String?
+  type          String // domain event type, e.g. 'order.created', 'notification.dispatch'
+  payload       Json
+  status        OutboxStatus @default(pending)
+  attempts      Int          @default(0)
+  maxAttempts   Int          @default(8)
+  nextAttemptAt DateTime     @default(now()) @db.Timestamptz(3)
+  lastError     String?
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime?    @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@index([agencyId])
+  @@map("outbox_events")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   profileId String
@@ -688,6 +709,17 @@ model AgencyMember {
 enum AgencyMemberRole {
   owner
   executor
+}
+
+/// Transactional outbox (ADR topic #2-3): durable domain-event queue for
+/// reliable notify / webhook / search-index delivery with retry + DLQ.
+/// Producers INSERT in the same tx as the state change; a worker drains it.
+enum OutboxStatus {
+  pending
+  processing
+  done
+  failed
+  dead
 }
 
 enum Role {
