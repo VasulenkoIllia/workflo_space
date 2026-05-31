@@ -70,22 +70,22 @@
 > Ціль: повний CRUD замовлень, коментарі SSE, файли. reconcile (agencyId/IDOR/leak-guard) — у кожній задачі.
 > **Pre-S2 hardening (31.05) ✅:** критичний аудит S0-S1 виправлено + verified; dep-CVE оновлено (fastify/jwt/next); **tenant-enforcement `apps/api/src/auth/tenant.ts` — ОБОВʼЯЗКОВО** (`tenantWhere`/`tenantData`/`assertSameTenant`) у кожному agency-scoped хендлері; композитні order-індекси готові. Деталі — `AUDIT_S0_S1.md` + ADR-004 amendment.
 
-| ID    | Задача                                                                                                                                    | Модуль      | Статус |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
-| S2-01 | ✅ GET/POST /orders + 9-станова машина (`ALLOWED_ORDER_TRANSITIONS`/`canTransitionOrder`) + OrderStage (create) — tenant-scoped, 9 тестів | [02-orders] | ✅ 🧪  |
-| S2-02 | GET /orders/:id (+ IDOR guard, agencyId)                                                                                                  | [02-orders] | ⬜     |
-| S2-03 | POST /orders/:id/approve, /accept (triage variant B)                                                                                      | [02-orders] | ⬜     |
-| S2-04 | GET/POST/PATCH/DELETE /workspace/orders + status + internal↔client                                                                        | [02-orders] | ⬜     |
-| S2-05 | CRUD internal tasks + onHold/cancelled reason                                                                                             | [02-orders] | ⬜     |
-| S2-06 | GET/POST /orders/:id/comments + internal-leak guard                                                                                       | [03-chat]   | ⬜     |
-| S2-07 | GET /orders/:id/comments/stream (SSE, multi-instance pg_notify)                                                                           | [03-chat]   | ⬜     |
-| S2-08 | order_chat_reads (unread) + participant IDOR predicate                                                                                    | [03-chat]   | ⬜     |
-| S2-09 | packages/storage — LocalStorageAdapter (tenant-prefixed, sha256)                                                                          | [04-files]  | ⬜     |
-| S2-10 | POST/GET/DELETE /orders/:id/files + path-traversal guard                                                                                  | [04-files]  | ⬜     |
-| S2-11 | GET /files/serve/:key (authenticated, access-check)                                                                                       | [04-files]  | ⬜     |
-| S2-12 | CRUD time logs (unified TimeLog)                                                                                                          | [12-team]   | ⬜     |
-| S2-13 | Activity log + notify (status change → outbox)                                                                                            | [07]        | ⬜     |
-| S2-14 | Deploy Sprint 2 → staging                                                                                                                 | Infra       | 🚀     |
+| ID    | Задача                                                                                                                                            | Модуль      | Статус |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S2-01 | ✅ GET/POST /orders + 9-станова машина (`ALLOWED_ORDER_TRANSITIONS`/`canTransitionOrder`) + OrderStage (create) — tenant-scoped, 9 тестів         | [02-orders] | ✅ 🧪  |
+| S2-02 | ✅ GET /orders/:id — detail + `assertSameTenant` + client-IDOR(404) + client/internal view + stages                                               | [02-orders] | ✅ 🧪  |
+| S2-03 | POST /orders/:id/approve, /accept (triage variant B)                                                                                              | [02-orders] | ⬜     |
+| S2-04 | 🔄 `PATCH /orders/:id/status` ✅ (`canTransitionOrder` + clientStatus-sync + on-hold/cancel reason + owner-reopen); workspace edit/soft-delete ⬜ | [02-orders] | 🔄     |
+| S2-05 | CRUD internal tasks + onHold/cancelled reason                                                                                                     | [02-orders] | ⬜     |
+| S2-06 | GET/POST /orders/:id/comments + internal-leak guard                                                                                               | [03-chat]   | ⬜     |
+| S2-07 | GET /orders/:id/comments/stream (SSE, multi-instance pg_notify)                                                                                   | [03-chat]   | ⬜     |
+| S2-08 | order_chat_reads (unread) + participant IDOR predicate                                                                                            | [03-chat]   | ⬜     |
+| S2-09 | packages/storage — LocalStorageAdapter (tenant-prefixed, sha256)                                                                                  | [04-files]  | ⬜     |
+| S2-10 | POST/GET/DELETE /orders/:id/files + path-traversal guard                                                                                          | [04-files]  | ⬜     |
+| S2-11 | GET /files/serve/:key (authenticated, access-check)                                                                                               | [04-files]  | ⬜     |
+| S2-12 | CRUD time logs (unified TimeLog)                                                                                                                  | [12-team]   | ⬜     |
+| S2-13 | Activity log + notify (status change → outbox)                                                                                                    | [07]        | ⬜     |
+| S2-14 | Deploy Sprint 2 → staging                                                                                                                         | Infra       | 🚀     |
 
 ---
 

@@ -1,0 +1,105 @@
+import { prisma } from '@workflo/db'
+import { ApiErrorCode, AppError } from '@workflo/types'
+import type { FastifyPluginAsync } from 'fastify'
+import { assertSameTenant } from '../../auth/tenant.js'
+
+/**
+ * GET /orders/:id — order detail. Client view hides internal fields (status,
+ * assignee, pricing internals); internal team (executor) sees everything.
+ * Tenant-guarded (ADR-004) + client IDOR check (must belong to the order's
+ * company; otherwise 404 to avoid leaking existence within the tenant).
+ */
+const getOrderRoute: FastifyPluginAsync = (fastify) => {
+  fastify.get<{ Params: { id: string } }>(
+    '/orders/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const notFound = () => new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
+
+      const order = await prisma.order.findUnique({
+        where: { id: request.params.id },
+        select: {
+          id: true,
+          agencyId: true,
+          companyId: true,
+          title: true,
+          description: true,
+          type: true,
+          priority: true,
+          internalStatus: true,
+          clientStatus: true,
+          billingType: true,
+          fixedPrice: true,
+          hourlyRate: true,
+          estimatedHours: true,
+          totalAmount: true,
+          currency: true,
+          deadline: true,
+          paidAt: true,
+          deletedAt: true,
+          onHoldReason: true,
+          cancelledReason: true,
+          createdAt: true,
+          updatedAt: true,
+          company: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true } },
+          stages: {
+            select: { id: true, title: true, description: true, status: true, position: true },
+            orderBy: { position: 'asc' },
+          },
+        },
+      })
+
+      if (!order || order.deletedAt) throw notFound()
+      assertSameTenant(user, order.agencyId)
+
+      const isInternal = user.role === 'executor'
+      if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
+        throw notFound() // same tenant, different company → hide
+      }
+
+      const clientView = {
+        id: order.id,
+        title: order.title,
+        description: order.description,
+        clientStatus: order.clientStatus,
+        priority: order.priority,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        dueDate: order.deadline,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        stages: order.stages,
+      }
+
+      if (!isInternal) {
+        return reply.send({ success: true, data: { order: clientView } })
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          order: {
+            ...clientView,
+            internalStatus: order.internalStatus,
+            type: order.type,
+            billingType: order.billingType,
+            fixedPrice: order.fixedPrice,
+            hourlyRate: order.hourlyRate,
+            estimatedHours: order.estimatedHours,
+            paidAt: order.paidAt,
+            onHoldReason: order.onHoldReason,
+            cancelledReason: order.cancelledReason,
+            company: order.company,
+            assignee: order.assignee,
+          },
+        },
+      })
+    }
+  )
+
+  return Promise.resolve()
+}
+
+export default getOrderRoute

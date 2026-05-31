@@ -5,12 +5,20 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 const orderCreate = vi.fn()
 const orderCount = vi.fn()
 const orderFindMany = vi.fn()
+const orderFindUnique = vi.fn()
+const orderUpdate = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
-    order: { create: orderCreate, count: orderCount, findMany: orderFindMany },
+    order: {
+      create: orderCreate,
+      count: orderCount,
+      findMany: orderFindMany,
+      findUnique: orderFindUnique,
+      update: orderUpdate,
+    },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
@@ -175,6 +183,193 @@ describe('GET /orders', () => {
     expect(whereArg.agencyId).toBe('agency-1')
     expect(whereArg.companyId).toBeUndefined()
     expect(whereArg.internalStatus).toEqual({ in: ['in_progress'] })
+    await app.close()
+  })
+})
+
+describe('GET /orders/:id', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.clearAllMocks())
+
+  const fullOrder = {
+    id: 'order-1',
+    agencyId: 'agency-1',
+    companyId: 'company-1',
+    title: 'Land',
+    description: 'desc',
+    type: 'client_order',
+    priority: 'high',
+    internalStatus: 'in_progress',
+    clientStatus: 'in_progress',
+    billingType: 'fixed',
+    fixedPrice: null,
+    hourlyRate: null,
+    estimatedHours: null,
+    totalAmount: null,
+    currency: 'USD',
+    deadline: null,
+    paidAt: null,
+    deletedAt: null,
+    onHoldReason: null,
+    cancelledReason: null,
+    createdAt: new Date('2026-05-31T00:00:00Z'),
+    updatedAt: new Date('2026-05-31T00:00:00Z'),
+    company: { id: 'company-1', name: 'Acme' },
+    assignee: { id: 'exec-1', name: 'Olena' },
+    stages: [{ id: 's1', title: 'Brief', description: null, status: 'done', position: 1 }],
+  }
+
+  it('client sees own order without internal fields', async () => {
+    orderFindUnique.mockResolvedValue(fullOrder)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const o = res.json().data.order
+    expect(o.id).toBe('order-1')
+    expect(o.internalStatus).toBeUndefined()
+    expect(o.assignee).toBeUndefined()
+    expect(o.stages).toHaveLength(1)
+    await app.close()
+  })
+
+  it('executor sees the full internal view', async () => {
+    orderFindUnique.mockResolvedValue(fullOrder)
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const o = res.json().data.order
+    expect(o.internalStatus).toBe('in_progress')
+    expect(o.assignee).toEqual({ id: 'exec-1', name: 'Olena' })
+    await app.close()
+  })
+
+  it('404 for unknown / soft-deleted order', async () => {
+    orderFindUnique.mockResolvedValue(null)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/nope',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('403 on cross-tenant access (different agency)', async () => {
+    orderFindUnique.mockResolvedValue({ ...fullOrder, agencyId: 'agency-OTHER' })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('404 when a client requests another company order in the same tenant', async () => {
+    orderFindUnique.mockResolvedValue({ ...fullOrder, companyId: 'company-OTHER' })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('PATCH /orders/:id/status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const base = {
+    id: 'order-1',
+    agencyId: 'agency-1',
+    companyId: 'company-1',
+    internalStatus: 'in_progress',
+    deletedAt: null,
+  }
+
+  it('executor runs a valid transition + mirrors clientStatus', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    orderUpdate.mockResolvedValue({
+      id: 'order-1',
+      internalStatus: 'review',
+      clientStatus: 'pending_approval',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'review' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(orderUpdate.mock.calls[0][0].data.clientStatus).toBe('pending_approval')
+    await app.close()
+  })
+
+  it('409 on an invalid transition (in_progress → done)', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(orderUpdate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('403 for a client who is not reopening as owner', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'review' },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('allows a company owner to reopen done → revision', async () => {
+    orderFindUnique.mockResolvedValue({ ...base, internalStatus: 'done' })
+    orderUpdate.mockResolvedValue({
+      id: 'order-1',
+      internalStatus: 'revision',
+      clientStatus: 'in_progress',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'revision' },
+    })
+    expect(res.statusCode).toBe(200)
     await app.close()
   })
 })
