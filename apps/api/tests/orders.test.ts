@@ -1017,4 +1017,40 @@ describe('order comments + reads (chat)', () => {
       await app.close()
     })
   })
+
+  // SSE stream: only the access-guard paths are inject-testable (they return
+  // before the socket is hijacked). The live fan-out is covered by chatBus.test.ts.
+  describe('GET /orders/:id/comments/stream (guard)', () => {
+    it('401 without a token', async () => {
+      const app = buildApp()
+      await app.ready()
+      const res = await app.inject({ method: 'GET', url: '/orders/order-1/comments/stream' })
+      expect(res.statusCode).toBe(401)
+      await app.close()
+    })
+
+    it('404 for an unknown order (guard runs before hijack)', async () => {
+      orderFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/nope/comments/stream',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+
+    it('403 cross-tenant', async () => {
+      orderFindUnique.mockResolvedValue({ ...order, agencyId: 'agency-OTHER' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/comments/stream',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+  })
 })

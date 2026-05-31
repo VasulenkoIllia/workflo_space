@@ -109,7 +109,7 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 | `GET`    | `/orders/:id/comments/stream`     | Portal + Workspace | SSE stream                       |
 | `POST`   | `/orders/:id/comments/read`       | Portal + Workspace | Позначити тред прочитаним        |
 
-> **Стан реалізації (S2, 31.05.2026):** ✅ `GET`/`POST /comments` (cursor-пагінація `before`+`limit`, internal-leak guard, `requireOrderParticipant` IDOR), ✅ `POST /comments/read` + unread/`lastReadAt` у відповіді `GET` (S2-08). 🔜 `GET /comments/stream` (SSE+pg_notify) — S2-07. ⬜ `PATCH`/`DELETE` (edit/soft-delete), реакції, mentions, read-receipts (`seenBy`) — enhancement-беклог.
+> **Стан реалізації (S2, 31.05.2026):** ✅ `GET`/`POST /comments` (cursor-пагінація `before`+`limit`, internal-leak guard, `requireOrderParticipant` IDOR), ✅ `POST /comments/read` + unread/`lastReadAt` у відповіді `GET` (S2-08), ✅ `GET /comments/stream` (SSE, S2-07) — **DB-тригер** `pg_notify('chat_events', {ids})` (транзакційно звʼязаний з INSERT, неможливо обійти) → **один** shared `LISTEN`-конект на інстанс (`pg.Client`, reconnect-backoff 1→60s) → in-memory `chatBus` fan-out до локальних SSE-підписників; heartbeat 30s; на події re-fetch повного коментаря + повторний leak-guard з DB-істини. Обрано тригер (не app-level publish) заради стабільності на 1000+ конкурентних стрімах. ⬜ `PATCH`/`DELETE` (edit/soft-delete), реакції, mentions, read-receipts (`seenBy`), `Last-Event-ID` replay — enhancement-беклог (на reconnect клієнт re-fetch `GET /comments`).
 
 ### Query для `GET /orders/:id/comments`
 
