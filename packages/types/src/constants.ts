@@ -23,6 +23,61 @@ export const INTERNAL_TO_CLIENT_STATUS: Record<OrderInternalStatus, OrderClientS
   [OrderInternalStatus.CANCELLED]: OrderClientStatus.CANCELLED,
 }
 
+/**
+ * The SINGLE canonical order state machine — 9 internal states (module 02
+ * reconcile; the old approved/in_review_final drafts were removed). Enforced by
+ * `PATCH /orders/:id/status`. `done → revision` is the only reopen and is
+ * owner-gated at the handler level.
+ */
+export const ALLOWED_ORDER_TRANSITIONS: Record<OrderInternalStatus, OrderInternalStatus[]> = {
+  [OrderInternalStatus.NEW]: [
+    OrderInternalStatus.CLARIFICATION,
+    OrderInternalStatus.ESTIMATING,
+    OrderInternalStatus.IN_PROGRESS,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.CLARIFICATION]: [
+    OrderInternalStatus.ESTIMATING,
+    OrderInternalStatus.IN_PROGRESS,
+    OrderInternalStatus.ON_HOLD,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.ESTIMATING]: [
+    OrderInternalStatus.IN_PROGRESS,
+    OrderInternalStatus.CLARIFICATION,
+    OrderInternalStatus.ON_HOLD,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.IN_PROGRESS]: [
+    OrderInternalStatus.REVIEW,
+    OrderInternalStatus.ON_HOLD,
+    OrderInternalStatus.REVISION,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.REVIEW]: [
+    OrderInternalStatus.DONE,
+    OrderInternalStatus.REVISION,
+    OrderInternalStatus.IN_PROGRESS,
+  ],
+  [OrderInternalStatus.REVISION]: [
+    OrderInternalStatus.IN_PROGRESS,
+    OrderInternalStatus.REVIEW,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.ON_HOLD]: [
+    OrderInternalStatus.IN_PROGRESS,
+    OrderInternalStatus.CLARIFICATION,
+    OrderInternalStatus.CANCELLED,
+  ],
+  [OrderInternalStatus.DONE]: [OrderInternalStatus.REVISION],
+  [OrderInternalStatus.CANCELLED]: [],
+}
+
+/** Whether an order may move `from → to` (same-status returns false). */
+export function canTransitionOrder(from: OrderInternalStatus, to: OrderInternalStatus): boolean {
+  return ALLOWED_ORDER_TRANSITIONS[from]?.includes(to) ?? false
+}
+
 // ============================================================================
 // Loyalty (% discount tiers, see modules/10-loyalty.md)
 // ============================================================================
@@ -134,9 +189,7 @@ export const DEFAULT_NOTIFICATION_CHANNELS: ReadonlyArray<NotificationChannel> =
  * (every category × default channel = enabled). Used by BOTH /auth/register and
  * the DB seed so the two can never drift (audit 31.05).
  */
-export function buildDefaultPreferenceRows(
-  settingsId: string
-): Array<{
+export function buildDefaultPreferenceRows(settingsId: string): Array<{
   settingsId: string
   category: NotificationCategory
   channel: NotificationChannel
