@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { provisionAgency } from '../src/provisioning.js'
 
 const prisma = new PrismaClient()
 
@@ -132,24 +133,20 @@ async function main() {
     },
   })
 
-  // Multi-tenancy (ADR-004): platform agency (tenant root) + team membership.
-  const agency = await prisma.agency.upsert({
-    where: { slug: 'workflo' },
-    update: { name: 'Workflo', ownerId: owner.id, isActive: true },
-    create: { id: PLATFORM_AGENCY_ID, name: 'Workflo', slug: 'workflo', ownerId: owner.id },
+  // Multi-tenancy (ADR-004) + SaaS (SAAS.md F3): provision the platform tenant
+  // via the shared factory (the same fn a Phase-1 agency-signup will call).
+  const { agencyId } = await provisionAgency(prisma, {
+    agencyId: PLATFORM_AGENCY_ID,
+    name: 'Workflo',
+    slug: 'workflo',
+    ownerProfileId: owner.id,
+    subscriptionStatus: 'active',
+    teamMembers: [
+      { profileId: owner.id, role: 'owner' },
+      { profileId: executor.id, role: 'executor' },
+    ],
   })
-
-  for (const [profileId, role] of [
-    [owner.id, 'owner'],
-    [executor.id, 'executor'],
-  ] as const) {
-    await prisma.agencyMember.upsert({
-      where: { agencyId_profileId: { agencyId: agency.id, profileId } },
-      update: { role },
-      create: { agencyId: agency.id, profileId, role },
-    })
-  }
-  console.log(`✅ Agency seeded: Workflo (owner=${ownerEmail}, +1 executor)`)
+  console.log(`✅ Agency provisioned: Workflo (owner=${ownerEmail}, +1 executor)`)
 
   const company = await prisma.company.upsert({
     where: { slug: 'test-company' },
@@ -161,7 +158,7 @@ async function main() {
       notes: 'Seed company',
     },
     create: {
-      agencyId: agency.id,
+      agencyId,
       name: 'ТОВ Тестова Компанія',
       slug: 'test-company',
       language: 'uk',
@@ -330,7 +327,7 @@ async function main() {
           description: item.description,
           type: 'client_order',
           priority: item.priority,
-          agencyId: agency.id,
+          agencyId,
           companyId: company.id,
           assigneeId: executor.id,
           createdById: owner.id,

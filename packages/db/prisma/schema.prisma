@@ -686,7 +686,19 @@ model BillingPlan {
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
+  agencies Agency[]
+
   @@map("billing_plans")
+}
+
+/// Agency SaaS subscription lifecycle (per-agency plan on workflo). Phase 0:
+/// the platform agency sits in `active`; new external agencies start `trialing`.
+enum AgencySubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  suspended
 }
 
 model Agency {
@@ -698,6 +710,19 @@ model Agency {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // ── SaaS (ADR-004 Phase 1 / SAAS.md F1) — nullable forward-compat, unused
+  //    until SaaS enablement; laid now so the live tenant table needs no later
+  //    migration. `plan` references the existing BillingPlan catalog (not an enum).
+  subdomain          String?                  @unique
+  customDomain       String?                  @unique
+  planId             String?
+  plan               BillingPlan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscriptionStatus AgencySubscriptionStatus @default(active)
+  trialEndsAt        DateTime?                @db.Timestamptz(3)
+  billingCustomerId  String?
+  suspendedAt        DateTime?                @db.Timestamptz(3)
+  limits             Json?
 
   members        AgencyMember[]
   companies      Company[]
@@ -712,6 +737,7 @@ model Agency {
   executorRates  ExecutorRate[]
   auditLogs      AuditLog[]
 
+  @@index([planId])
   @@map("agencies")
 }
 
