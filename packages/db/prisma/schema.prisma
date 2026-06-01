@@ -242,17 +242,22 @@ model OrderComment {
 }
 
 model OrderFile {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
+  agencyId   String?
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   uploadedBy String
-  uploader   Profile  @relation(fields: [uploadedBy], references: [id])
+  uploader   Profile   @relation(fields: [uploadedBy], references: [id])
   filename   String
   storedAs   String
   mimeType   String
   sizeBytes  Int
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  sha256     String
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+  agency     Agency?   @relation(fields: [agencyId], references: [id])
 
+  @@index([agencyId])
   @@index([orderId])
   @@map("order_files")
 }
@@ -701,6 +706,7 @@ model Agency {
   documents      Document[]
   serviceCharges ServiceCharge[]
   orderComments  OrderComment[]
+  orderFiles     OrderFile[]
   timeLogs       TimeLog[]
   services       Service[]
   executorRates  ExecutorRate[]

@@ -168,13 +168,17 @@ fastify.get('/files/*', async (req, reply) => {
 
 ## API Endpoints
 
-| Метод    | URL                 | Опис                         |
-| -------- | ------------------- | ---------------------------- |
-| `POST`   | `/files`            | Завантажити файл             |
-| `GET`    | `/files/:id`        | Метадані файлу               |
-| `GET`    | `/files/*`          | Завантажити бінарний контент |
-| `DELETE` | `/files/:id`        | Soft delete файлу            |
-| `GET`    | `/orders/:id/files` | Всі файли замовлення         |
+| Метод    | URL                  | Опис                                 |
+| -------- | -------------------- | ------------------------------------ |
+| `POST`   | `/orders/:id/files`  | Завантажити файл (multipart, 1 файл) |
+| `GET`    | `/orders/:id/files`  | Всі файли замовлення                 |
+| `GET`    | `/files/:id`         | Метадані файлу                       |
+| `GET`    | `/files/:id/content` | Завантажити бінарний контент         |
+| `DELETE` | `/files/:id`         | Soft delete файлу                    |
+
+> **Стан реалізації (S2-09/10/11, 31.05.2026):** ✅ усі 5 ендпоінтів вище.
+> Реальні шляхи: upload/list — **order-scoped** (`/orders/:id/files`, природно tenant+participant-guarded через `requireOrderParticipant`); serve — `/files/:id/content` (id-based lookup → `storedAs` з БД, НЕ шлях з URL), `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`, traversal-guarded read. MIME-allowlist (`@workflo/types`, **SVG прибрано**) → 415; ліміт 100MB/файл → 413; 20 файлів/замовлення → 409; sha256 + tenant-prefixed key `agencies/<agencyId>/orders/<orderId>/<fileId><ext>`; `0640`.
+> **OrderFile reconcile — S2-підмножина:** додано `agencyId`/`deletedAt`/`sha256`. Поля `commentId`/`documentId`/`context` **відкладено** до їхніх фіч (comment-attachments / S5-документи), бо потребують Document-моделі + comment-attachment-флоу.
 
 ---
 

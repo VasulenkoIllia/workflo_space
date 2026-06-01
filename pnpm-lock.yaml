@@ -275,7 +275,11 @@ importers:
 
   packages/payments: {}
 
-  packages/storage: {}
+  packages/storage:
+    devDependencies:
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)
 
   packages/templates: {}
 

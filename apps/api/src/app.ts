@@ -1,3 +1,5 @@
+import multipart from '@fastify/multipart'
+import { MAX_ORDER_FILE_BYTES } from '@workflo/types'
 import Fastify from 'fastify'
 import corsPlugin from './plugins/cors.js'
 import { registerErrorHandlers } from './plugins/errorHandler.js'
@@ -5,6 +7,7 @@ import jwtPlugin from './plugins/jwt.js'
 import rateLimitingPlugin from './plugins/rateLimiting.js'
 import securityHeadersPlugin from './plugins/securityHeaders.js'
 import authRoutes from './routes/auth/index.js'
+import fileRoutes from './routes/files/index.js'
 import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
 import orderRoutes from './routes/orders/index.js'
@@ -65,12 +68,16 @@ export function buildApp() {
   app.register(securityHeadersPlugin)
   app.register(rateLimitingPlugin)
   app.register(jwtPlugin)
+  app.register(multipart, {
+    limits: { fileSize: MAX_ORDER_FILE_BYTES, files: 1 },
+  })
 
   app.register(healthRoute)
   app.register(authRoutes)
   app.register(profileRoutes)
   app.register(inviteRoutes)
   app.register(orderRoutes)
+  app.register(fileRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)
