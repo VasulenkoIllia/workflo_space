@@ -22,7 +22,8 @@
 ### Сервіси
 
 - API: `@sentry/node` + Fastify plugin.
-- Workspace / Portal / Landing: `@sentry/nextjs`.
+- Portal / Workspace: `@sentry/react` (Vite SPA).
+- Landing: `@sentry/nextjs` (Next.js).
 - Bot: `@sentry/node`.
 - Cron jobs: same as API (через shared init).
 

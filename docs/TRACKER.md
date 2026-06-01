@@ -89,6 +89,23 @@
 
 ---
 
+## SAAS FOUNDATION (F1–F6) — структурний backfill у межах S2
+
+> Повний план: [`SAAS.md`](SAAS.md). Принцип: структурне (схема/запити) закладаємо ЗАРАЗ (ретрофіт у живу мультитенантну БД дорогий); продуктове увімкнення (signup/біллінг/branding) — Phase 1 у кінці. «Перевести на SaaS наприкінці» безпечно лише якщо F1–F6 готові.
+
+| ID    | Задача                                                                                                                                  | Модуль    | Статус |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| FDN-1 | SaaS-поля `Agency` (nullable міграція): subdomain/customDomain/plan/subscriptionStatus/trialEndsAt/billingCustomerId/suspendedAt/limits | [db]      | ⬜     |
+| FDN-2 | quota/feature **seam** `assertWithinQuota()`/`featureEnabled()` (no-op) у orders.create + files.upload (+ S5 invite)                    | [adr/004] | ⬜     |
+| FDN-3 | `provisionAgency()` — фабрика тенанта (Agency+owner+дефолтні налаштування); seed перевикористовує                                       | [db]      | ⬜     |
+| FDN-4 | RLS-конвенція: Prisma-extension (`SET LOCAL app.current_agency_id`) + політики на tenant-таблиці S1.6/S2                                | [adr/004] | ⬜     |
+| FDN-5 | tenant-aware rate-limit key (+ auth лишається per-IP); `BASE_DOMAIN` env + Traefik wildcard `*.workflo.space`                           | Infra     | ⬜     |
+| FDN-6 | (діє) кожна нова tenant-таблиця несе `agencyId` + RLS-політику з дня 1                                                                  | [all]     | ✅     |
+
+> **SaaS Enablement (Phase 1, у самому кінці — окремий пізній спрінт):** agency signup+onboarding, підписка агенції на workflo (Stripe/Paddle), per-domain branding у рантаймі, quota-значення (PLAN_LIMITS+UsageCounter), super-admin платформи, lifecycle тенанта (suspend/export/delete), AgencyFeatureFlag/ApiKey/WebhookEndpoint. Без міграції даних — поверх готової схеми.
+
+---
+
 ## SPRINT 3 — Portal Frontend (ядро)
 
 > Ціль: клієнт реєструється, бачить задачі, спілкується, дивиться рахунки.

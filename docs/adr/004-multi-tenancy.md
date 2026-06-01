@@ -147,3 +147,14 @@ Tenant-ізоляція НЕ покладається на дисципліну 
 `null` `resourceAgencyId` → deny (un-stamped рядок невидимий жодному тенанту — безпечніше відмовити). Покрито `tests/tenant.test.ts`.
 
 **Rate-limit (операційне обмеження):** `@fastify/rate-limit` зараз in-memory → коректний лише при **одній репліці API**. Auth brute-force-ліміти (`/auth/login` 10/15хв) залежать від цього. Перед horizontal scale — Redis-store АБО свідомо лишати 1 репліку (зафіксовано в BACKLOG).
+
+---
+
+## Amendment (1.06.2026) — повний SaaS-план + RLS
+
+Власник підтвердив намір продавати платформу іншим агенціям. Деталізований план — у [`../SAAS.md`](../SAAS.md). Ключове:
+
+- **Поділ Foundation/Enablement.** Структурне (схема/запити) — закладаємо ЗАРАЗ (S0–S2), бо ретрофіт у живу мультитенантну БД дорогий. Продуктове (signup/біллінг агенції/branding-рантайм/super-admin) — окремий пізній спрінт (Phase 1), без міграції даних. Тобто «перевести на SaaS у кінці» = безпечно, якщо Foundation закладено.
+- **Foundation-доповнення (F1–F6 у SAAS.md):** SaaS-поля `Agency` (nullable: `subdomain`/`plan`/`subscriptionStatus`/`trialEndsAt`/`billingCustomerId`/`suspendedAt`/`limits`); `provisionAgency()`-фабрика тенанта (seed перевикористовує); quota/feature **seam** у create-ендпоінтах (no-op зараз); tenant-aware rate-limit key; `BASE_DOMAIN` + wildcard subdomain (інфра).
+- **RLS-рішення (доповнює, не замінює app-level scoping):** перед першим зовнішнім тенантом вмикаємо **Postgres Row-Level Security** як другий рубіж — навіть забутий `where agencyId` фізично не поверне чужі рядки. Конвенцію (`current_setting('app.current_agency_id')` + per-table policy + Prisma-extension, що ставить GUC у tx) закладаємо у фундамент, політики додаємо по таблиці. Структурні хелпери `tenant.ts` лишаються первинним guard'ом; RLS — belt-and-suspenders.
+- **Перегляд глибини ізоляції** (shared-DB+RLS → schema/DB-per-tenant) — без змін: на 100+ тенантів або вимозі фізичної ізоляції.
