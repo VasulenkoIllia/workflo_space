@@ -1295,17 +1295,17 @@ describe('GET /orders/:id/activity', () => {
 
   const order = { id: 'order-1', agencyId: 'agency-1', companyId: 'company-1', deletedAt: null }
 
-  it('participant reads the activity feed', async () => {
+  const internalRow = {
+    id: 'a1',
+    action: 'status_changed',
+    metadata: { from: 'on_hold', to: 'review', comment: 'internal-only note' },
+    createdAt: new Date('2026-05-31T00:00:00Z'),
+    actor: { id: 'exec-1', name: 'Olena' },
+  }
+
+  it('client gets translated metadata — no internal status names, no internal comment', async () => {
     orderFindUnique.mockResolvedValue(order)
-    activityFindMany.mockResolvedValue([
-      {
-        id: 'a1',
-        action: 'status_changed',
-        metadata: { from: 'new', to: 'in_progress' },
-        createdAt: new Date('2026-05-31T00:00:00Z'),
-        actor: { id: 'exec-1', name: 'Olena' },
-      },
-    ])
+    activityFindMany.mockResolvedValue([internalRow])
     const { app, token } = await authed(CLIENT)
     const res = await app.inject({
       method: 'GET',
@@ -1313,7 +1313,29 @@ describe('GET /orders/:id/activity', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.activity[0].action).toBe('status_changed')
+    const meta = res.json().data.activity[0].metadata
+    // internal status names mapped → client statuses; comment dropped
+    expect(meta.from).toBe('in_progress') // on_hold → in_progress
+    expect(meta.to).toBe('pending_approval') // review → pending_approval
+    expect(meta.comment).toBeUndefined()
+    expect(JSON.stringify(meta)).not.toContain('on_hold')
+    expect(JSON.stringify(meta)).not.toContain('internal-only note')
+    await app.close()
+  })
+
+  it('executor sees the raw internal metadata', async () => {
+    orderFindUnique.mockResolvedValue(order)
+    activityFindMany.mockResolvedValue([internalRow])
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const meta = res.json().data.activity[0].metadata
+    expect(meta.from).toBe('on_hold')
+    expect(meta.comment).toBe('internal-only note')
     await app.close()
   })
 

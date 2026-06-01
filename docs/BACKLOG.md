@@ -8,6 +8,51 @@
 
 ---
 
+## 🔧 Аудит S0-S2 (1.06.2026) — відкладені пункти
+
+> Повний аудит + 6 виправлених проблем — `AUDIT_S0_S2.md`. Нижче — те, що свідомо відкладено (severity · тригер).
+
+**До розростання роутів (FDN-follow-up, бажано до/на старті S3):**
+
+- [arch] **T-D1 outbox-drain воркер** (HIGH): `transitionOrderStatus` enqueue-ить у прод, drain нема → події копляться. Завести мінімальний drain+handler-registry у **S6** (або раніше, якщо S5-білінг стартує). (created: 2026-06-01)
+- [arch] **T-D2 `requireOrderForWrite` loader** (HIGH-maint): прибрати дубльований inline-IDOR з 5 прямих order-роутів (зараз безпечно через `assertSameTenant`, але дублювання). (created: 2026-06-01)
+- [arch] **T-D3 RLS + Prisma `$extends`-seam + tenant-context middleware** (HIGH, SAAS.md F4): закласти seam, поки роутів ~25; політики per-table — перед зовнішнім тенантом. (created: 2026-06-01)
+- [arch] **T-D4 F2 quota-seam + F5 tenant-rate-limit-key** (MEDIUM, SAAS.md): no-op `assertWithinQuota` у create-точках; F5 потребує per-route post-auth limits. (created: 2026-06-01)
+- [notify] **N-D1 уніфікувати 3 шляхи нотифікацій** (MEDIUM): auth=direct / orders=outbox / chat=нічого. ADR-правило + перевести на outbox коли запрацює drain. (created: 2026-06-01)
+
+**Schema hardening (перед Phase 1 / multi-agency):**
+
+- [db] **S-D1** `orders.agencyId` → NOT NULL + FK `RESTRICT` (зараз nullable + SET NULL). (HIGH) (created: 2026-06-01)
+- [db] **S-D2** singletons без `agencyId`: `PaymentSettings`/`DocumentCounter`(спільна нумерація!)/`ExchangeRate`. (HIGH) (created: 2026-06-01)
+- [db] **S-D3** `InternalTask`+`ActivityLog` без `agencyId` (виняток F6) + ADR «audit vs activity». (MEDIUM) (created: 2026-06-01)
+- [db] **S-D4** `order_chat_reads` без FK на orders/profiles → ghost-рядки. (MEDIUM) (created: 2026-06-01)
+- [db] **S-D5** `Service.agencyId`/`Referral` agencyId; money `CHECK (>=0)`. (LOW) (created: 2026-06-01)
+
+**Перформанс / масштаб (коли зʼявляться обсяги):**
+
+- [db] **I-D1** composite-індекси `order_comments(orderId,deletedAt,isInternal,createdAt)`, `order_files(orderId,deletedAt,createdAt)`; прибрати надлишкові одинарні на `orders`. (HIGH) (created: 2026-06-01)
+- [db] **I-D2** `listOrders` OFFSET → cursor; ILIKE → GIN tsvector. (HIGH) (created: 2026-06-01)
+- [db] **I-D3** `comments` 3-query → batch; `timeLogs`/`internalTasks` `take`; `totalHours` SQL-aggregate. (MEDIUM) (created: 2026-06-01)
+- [scale] **SC-D1** PrismaClient `connection_limit`/PgBouncer (горизонт. скейл). (HIGH перед multi-replica) (created: 2026-06-01)
+- [scale] **SC-D2** retention-крони (audit 365д/notif 90д/outbox 7д) — інфра-крон. (MEDIUM) (created: 2026-06-01)
+
+**Concurrency:**
+
+- [db] **C-D1** status-transition `FOR UPDATE`/version (concurrent double-PATCH). (MEDIUM) (created: 2026-06-01)
+- [db] **C-D2** `orderChatRead.upsert` → `ON CONFLICT DO UPDATE GREATEST`. (LOW) (created: 2026-06-01)
+
+**Якість/підтримка:**
+
+- [code] **M-D1** `deleteOrder`/`assignOrder` провести через `can()` (ADR-002). (MEDIUM) (created: 2026-06-01)
+- [code] **M-D2** `login.ts` уніфікувати з `loadMemberships`+`resolveActiveAgencyId`. (MEDIUM) (created: 2026-06-01)
+- [code] **M-D3** `assertAgencyMember` винести в `orders/access.ts`. · **M-D4** magic-рядки → enum. · **M-D5** тести per-`it` `buildApp` → `beforeAll`. · **M-D6** notify per-event zod. (LOW) (created: 2026-06-01)
+
+**Безпека (hardening, не активні):**
+
+- [sec] **SEC-D1** MIME magic-byte sniffing. · **SEC-D2** `avatarUrl` domain-allowlist. · **SEC-D3** `Invite.token` без `@default(uuid())`. · **SEC-D4** dev-CVE `pnpm update` (vite/esbuild/postcss/turbo). · **SEC-D5** `Profile.role='owner'` → `isInternalTeam()`. (LOW-MEDIUM) (created: 2026-06-01)
+
+---
+
 ## ✅ Закрито / промоутнуто в план (історія)
 
 > Прибрано з активного беклогу.

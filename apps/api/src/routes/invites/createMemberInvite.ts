@@ -57,22 +57,24 @@ const createMemberInviteRoute: FastifyPluginAsync = (fastify) => {
         }
       }
 
-      // Supersede prior pending invites for this email + company.
-      await prisma.invite.updateMany({
-        where: { email, type: 'company_member', companyId, usedAt: null },
-        data: { usedAt: new Date() },
-      })
-
-      const invite = await prisma.invite.create({
-        data: {
-          email,
-          token: generateOpaqueToken(),
-          type: 'company_member',
-          companyId,
-          invitedById: inviterId,
-          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-        },
-        select: { id: true, token: true, expiresAt: true },
+      // Supersede prior pending invites + issue the new one atomically, so a
+      // double-submit can't leave two live invites for the same email (audit S0-S2).
+      const invite = await prisma.$transaction(async (tx) => {
+        await tx.invite.updateMany({
+          where: { email, type: 'company_member', companyId, usedAt: null },
+          data: { usedAt: new Date() },
+        })
+        return tx.invite.create({
+          data: {
+            email,
+            token: generateOpaqueToken(),
+            type: 'company_member',
+            companyId,
+            invitedById: inviterId,
+            expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+          },
+          select: { id: true, token: true, expiresAt: true },
+        })
       })
 
       const inviter = await prisma.profile.findUnique({

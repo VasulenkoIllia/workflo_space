@@ -94,7 +94,7 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           ...(isInternal ? { internalStatus: o.internalStatus } : {}),
           priority: o.priority,
           dueDate: o.deadline,
-          totalAmount: o.totalAmount,
+          totalAmount: o.totalAmount == null ? null : Number(o.totalAmount),
           companyId: o.companyId,
           stageCount: o._count.stages,
           createdAt: o.createdAt,

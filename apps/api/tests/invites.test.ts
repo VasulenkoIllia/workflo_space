@@ -72,7 +72,12 @@ const MEMBER_CLAIMS = {
 }
 
 describe('POST /workspace/team/invite (executor)', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+      cb({ invite: { updateMany: inviteUpdateMany, create: inviteCreate } })
+    )
+  })
   afterEach(() => vi.clearAllMocks())
 
   it('executor can invite → 201, supersedes old, sends email', async () => {
@@ -114,7 +119,12 @@ describe('POST /workspace/team/invite (executor)', () => {
 })
 
 describe('POST /company/members/invite', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+      cb({ invite: { updateMany: inviteUpdateMany, create: inviteCreate } })
+    )
+  })
   afterEach(() => vi.clearAllMocks())
 
   it('company owner invites → 201', async () => {

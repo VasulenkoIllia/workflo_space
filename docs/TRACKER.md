@@ -68,7 +68,8 @@
 ## SPRINT 2 — Orders + Chat + Files API (ядро)
 
 > Ціль: повний CRUD замовлень, коментарі SSE, файли. reconcile (agencyId/IDOR/leak-guard) — у кожній задачі.
-> **Pre-S2 hardening (31.05) ✅:** критичний аудит S0-S1 виправлено + verified; dep-CVE оновлено (fastify/jwt/next); **tenant-enforcement `apps/api/src/auth/tenant.ts` — ОБОВʼЯЗКОВО** (`tenantWhere`/`tenantData`/`assertSameTenant`) у кожному agency-scoped хендлері; композитні order-індекси готові. Деталі — `AUDIT_S0_S1.md` + ADR-004 amendment.
+> **Pre-S2 hardening (31.05) ✅:** критичний аудит S0-S1 виправлено + verified; dep-CVE оновлено (fastify/jwt/next); **tenant-enforcement `apps/api/src/auth/tenant.ts`** (`assertSameTenant` + loader'и `requireOrderParticipant`/`requireTeamOrder`) у кожному agency-scoped хендлері; композитні order-індекси готові. Деталі — `AUDIT_S0_S1.md` + ADR-004 amendment.
+> **Аудит S0-S2 (1.06) ✅:** 5-агентний критичний рев'ю (security/types/db/quality/arch) — фундамент зрілий, критичних витоків нема; виправлено 6 (activity-leak, Decimal-серіалізація, platform-agency findUnique, invite-tx, orphan-blob, seed-гігієна); відкладене структуровано. Деталі — `AUDIT_S0_S2.md` + `BACKLOG.md`.
 
 | ID    | Задача                                                                                                                                                                                                                                                                              | Модуль      | Статус |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |

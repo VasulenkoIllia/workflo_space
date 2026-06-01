@@ -72,6 +72,8 @@ async function main() {
 
   const ownerEmail = process.env.SEED_OWNER_EMAIL ?? DEFAULT_OWNER_EMAIL
   const ownerPassword = process.env.SEED_OWNER_PASSWORD ?? DEFAULT_OWNER_PASSWORD
+  const executorPassword = process.env.SEED_EXECUTOR_PASSWORD ?? DEFAULT_EXECUTOR_PASSWORD
+  const clientPassword = process.env.SEED_CLIENT_PASSWORD ?? DEFAULT_CLIENT_PASSWORD
 
   const owner = await prisma.profile.upsert({
     where: { email: ownerEmail },
@@ -105,7 +107,7 @@ async function main() {
     },
     create: {
       email: DEFAULT_EXECUTOR_EMAIL,
-      passwordHash: await bcrypt.hash(DEFAULT_EXECUTOR_PASSWORD, 12),
+      passwordHash: await bcrypt.hash(executorPassword, 12),
       name: 'Петро Виконавець',
       role: 'executor',
       language: 'uk',
@@ -125,7 +127,7 @@ async function main() {
     },
     create: {
       email: DEFAULT_CLIENT_EMAIL,
-      passwordHash: await bcrypt.hash(DEFAULT_CLIENT_PASSWORD, 12),
+      passwordHash: await bcrypt.hash(clientPassword, 12),
       name: 'Іван Клієнт',
       role: 'client',
       language: 'uk',
@@ -372,13 +374,16 @@ async function main() {
   }
 
   console.log('🎉 Seed completed!')
-  console.log('─────────────────────────────────────────')
-  console.log('Credentials for testing:')
-  console.log(`  Owner:    ${ownerEmail} / ${ownerPassword}`)
-  console.log(`  Executor: ${DEFAULT_EXECUTOR_EMAIL} / ${DEFAULT_EXECUTOR_PASSWORD}`)
-  console.log(`  Client:   ${DEFAULT_CLIENT_EMAIL} / ${DEFAULT_CLIENT_PASSWORD}`)
-  console.log('  Portal:    http://localhost:3001')
-  console.log('  Workspace: http://localhost:3002')
+  // Never print credentials outside local/dev (avoid leaking into CI/staging logs).
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('─────────────────────────────────────────')
+    console.log('Credentials for testing:')
+    console.log(`  Owner:    ${ownerEmail} / ${ownerPassword}`)
+    console.log(`  Executor: ${DEFAULT_EXECUTOR_EMAIL} / ${executorPassword}`)
+    console.log(`  Client:   ${DEFAULT_CLIENT_EMAIL} / ${clientPassword}`)
+    console.log('  Portal:    http://localhost:3001')
+    console.log('  Workspace: http://localhost:3002')
+  }
 }
 
 main()

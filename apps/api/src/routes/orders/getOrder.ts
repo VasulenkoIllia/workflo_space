@@ -3,6 +3,9 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 
+/** Prisma Decimal → JSON number (Decimal.toJSON() emits a string otherwise). */
+const num = (d: unknown): number | null => (d == null ? null : Number(d))
+
 /**
  * GET /orders/:id — order detail. Client view hides internal fields (status,
  * assignee, pricing internals); internal team (executor) sees everything.
@@ -65,7 +68,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         description: order.description,
         clientStatus: order.clientStatus,
         priority: order.priority,
-        totalAmount: order.totalAmount,
+        totalAmount: num(order.totalAmount),
         currency: order.currency,
         dueDate: order.deadline,
         createdAt: order.createdAt,
@@ -85,9 +88,9 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             internalStatus: order.internalStatus,
             type: order.type,
             billingType: order.billingType,
-            fixedPrice: order.fixedPrice,
-            hourlyRate: order.hourlyRate,
-            estimatedHours: order.estimatedHours,
+            fixedPrice: num(order.fixedPrice),
+            hourlyRate: num(order.hourlyRate),
+            estimatedHours: num(order.estimatedHours),
             paidAt: order.paidAt,
             onHoldReason: order.onHoldReason,
             cancelledReason: order.cancelledReason,

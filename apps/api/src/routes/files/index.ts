@@ -54,20 +54,29 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
       const key = buildOrderFileKey(access.agencyId, access.orderId, fileId, safeExt(part.filename))
       await getStorage().upload({ key, buffer, contentType: part.mimetype })
 
-      const file = await prisma.orderFile.create({
-        data: {
-          id: fileId,
-          agency: { connect: { id: access.agencyId } },
-          order: { connect: { id: access.orderId } },
-          uploader: { connect: { id: request.user.sub } },
-          filename: part.filename,
-          storedAs: key,
-          mimeType: part.mimetype,
-          sizeBytes: buffer.length,
-          sha256: sha256Hex(buffer),
-        },
-        select: FILE_META_SELECT,
-      })
+      let file
+      try {
+        file = await prisma.orderFile.create({
+          data: {
+            id: fileId,
+            agency: { connect: { id: access.agencyId } },
+            order: { connect: { id: access.orderId } },
+            uploader: { connect: { id: request.user.sub } },
+            filename: part.filename,
+            storedAs: key,
+            mimeType: part.mimetype,
+            sizeBytes: buffer.length,
+            sha256: sha256Hex(buffer),
+          },
+          select: FILE_META_SELECT,
+        })
+      } catch (err) {
+        // DB insert failed after the blob landed → remove the orphan blob.
+        await getStorage()
+          .delete(key)
+          .catch(() => undefined)
+        throw err
+      }
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,

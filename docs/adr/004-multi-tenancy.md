@@ -137,14 +137,22 @@ function sameTenant(user: AccessClaims, resourceAgencyId: string): boolean {
 
 ## Amendment (аудит 31.05.2026) — структурне tenant-enforcement
 
-Tenant-ізоляція НЕ покладається на дисципліну в кожному хендлері. З S2 **обовʼязково** використовувати хелпери `apps/api/src/auth/tenant.ts`:
+Tenant-ізоляція НЕ покладається на дисципліну в кожному хендлері. Інструменти — `apps/api/src/auth/tenant.ts`:
 
 - **`requireActiveAgency(user)`** — дістати tenant сесії (звідси, не з тіла запиту).
-- **`tenantWhere(agencyId, extra)`** — кожен agency-scoped `findMany/find/update/delete` фільтрує по `agencyId` (забутий `where` ≠ leak).
-- **`tenantData(agencyId, data)`** — кожен `create` штампує `agencyId` із сесії (денормалізація orders/payments/... консистентна за визначенням).
 - **`assertSameTenant(user, resource.agencyId)`** ПІСЛЯ кожного resource-fetch — 403 на крос-тенант (доповнює `can()` tenant-guard для flow «завантажив → перевірив»).
+- **`tenantWhere(agencyId, extra)` / `tenantData(agencyId, data)`** — фільтр/штамп `agencyId`.
 
-`null` `resourceAgencyId` → deny (un-stamped рядок невидимий жодному тенанту — безпечніше відмовити). Покрито `tests/tenant.test.ts`.
+`null` `resourceAgencyId` → deny (un-stamped рядок невидимий жодному тенанту). Покрито `tests/tenant.test.ts`.
+
+### Уточнення за аудитом S0-S2 (1.06.2026)
+
+**Реальний guard у S2-коді** (а не як було спершу заявлено): первинний рубіж — **`assertSameTenant` + resource-loader'и** `requireOrderParticipant` / `requireTeamOrder` (`routes/orders/access.ts`), що присутні у **всіх** S2-роутах (orders + sub-resources). `requireActiveAgency` використовується для list/create. **`tenantWhere`/`tenantData` наразі НЕ застосовані в роутах** — зарезервовані під RLS-seam (SAAS.md F4). create-роути штампують `agencyId` із сесії через `agency:{connect}`/денормалізацію, ніколи з body.
+
+Заплановано (AUDIT_S0_S2 → T-D2/T-D3, до розростання роутів на S3+):
+
+- винести `requireOrderForWrite` loader і прибрати дубльований inline-IDOR з 5 прямих order-роутів (зараз безпечно, але дублювання → ризик «забути `assertSameTenant`» при copy-paste);
+- закласти Prisma `$extends`-seam + tenant-context middleware (`SET LOCAL app.current_agency_id`) — щоб гарантія стала структурною на рівні БД (RLS), а не лише per-handler.
 
 **Rate-limit (операційне обмеження):** `@fastify/rate-limit` зараз in-memory → коректний лише при **одній репліці API**. Auth brute-force-ліміти (`/auth/login` 10/15хв) залежать від цього. Перед horizontal scale — Redis-store АБО свідомо лишати 1 репліку (зафіксовано в BACKLOG).
 
