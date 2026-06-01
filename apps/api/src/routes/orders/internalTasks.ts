@@ -5,9 +5,9 @@ import {
   createInternalTaskSchema,
   updateInternalTaskSchema,
 } from '@workflo/types'
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
-import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
+import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requireTeamOrder } from './access.js'
 
 const TASK_SELECT = {
   id: true,
@@ -18,27 +18,6 @@ const TASK_SELECT = {
   createdAt: true,
   updatedAt: true,
 } as const
-
-/**
- * Internal tasks are a WORKSPACE-only breakdown of an order (clients never see
- * them). Guard: the order must exist in the caller's tenant and the caller must
- * be internal team. Returns the tenant agencyId for downstream member checks.
- */
-async function guardTeamOrder(request: FastifyRequest, orderId: string): Promise<string> {
-  const user = request.user
-  if (user.role !== 'executor') {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Внутрішні задачі доступні лише команді', 403)
-  }
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, agencyId: true, deletedAt: true },
-  })
-  if (!order || order.deletedAt) {
-    throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
-  }
-  assertSameTenant(user, order.agencyId)
-  return requireActiveAgency(user)
-}
 
 async function assertAgencyMember(agencyId: string, profileId: string): Promise<void> {
   const m = await prisma.agencyMember.findUnique({
@@ -67,7 +46,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/tasks',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await guardTeamOrder(request, request.params.orderId)
+      await requireTeamOrder(request, request.params.orderId)
       const tasks = await prisma.internalTask.findMany({
         where: { orderId: request.params.orderId },
         orderBy: { position: 'asc' },
@@ -81,7 +60,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/tasks',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = await guardTeamOrder(request, request.params.orderId)
+      const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       const input = createInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
 
@@ -112,7 +91,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/tasks/:taskId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = await guardTeamOrder(request, request.params.orderId)
+      const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       const input = updateInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
@@ -140,7 +119,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/tasks/:taskId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await guardTeamOrder(request, request.params.orderId)
+      await requireTeamOrder(request, request.params.orderId)
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       await prisma.internalTask.delete({ where: { id: request.params.taskId } })
 

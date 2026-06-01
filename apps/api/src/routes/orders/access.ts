@@ -1,7 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
-import { assertSameTenant } from '../../auth/tenant.js'
+import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
 
 export interface OrderAccess {
   orderId: string
@@ -43,4 +43,28 @@ export async function requireOrderParticipant(
   }
 
   return { orderId: order.id, agencyId, companyId: order.companyId, isInternal }
+}
+
+/**
+ * Guard for WORKSPACE-only order sub-resources (internal tasks, time logs):
+ * the caller must be internal team (executor) and the order must live in their
+ * tenant. Returns the resolved tenant `agencyId` for downstream stamping.
+ */
+export async function requireTeamOrder(
+  request: FastifyRequest,
+  orderId: string
+): Promise<{ orderId: string; agencyId: string }> {
+  const user = request.user
+  if (user.role !== 'executor') {
+    throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
+  }
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, agencyId: true, deletedAt: true },
+  })
+  if (!order || order.deletedAt) {
+    throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
+  }
+  assertSameTenant(user, order.agencyId)
+  return { orderId: order.id, agencyId: requireActiveAgency(user) }
 }

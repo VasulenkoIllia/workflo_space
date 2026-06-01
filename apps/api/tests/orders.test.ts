@@ -20,6 +20,14 @@ const commentCount = vi.fn()
 const commentCreate = vi.fn()
 const chatReadFindUnique = vi.fn()
 const chatReadUpsert = vi.fn()
+const timeLogFindMany = vi.fn()
+const timeLogCreate = vi.fn()
+const timeLogFindUnique = vi.fn()
+const timeLogUpdate = vi.fn()
+const timeLogDelete = vi.fn()
+const activityCreate = vi.fn()
+const activityFindMany = vi.fn()
+const outboxCreate = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
@@ -46,12 +54,34 @@ vi.mock('@workflo/db', () => ({
       findUnique: chatReadFindUnique,
       upsert: chatReadUpsert,
     },
+    timeLog: {
+      findMany: timeLogFindMany,
+      create: timeLogCreate,
+      findUnique: timeLogFindUnique,
+      update: timeLogUpdate,
+      delete: timeLogDelete,
+    },
+    activityLog: { create: activityCreate, findMany: activityFindMany },
+    outboxEvent: { create: outboxCreate },
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
   Prisma: {},
 }))
+
+/** Interactive-tx ($transaction(cb)) → call cb with a tx routed to our mocks;
+ *  array form ($transaction([...])) → Promise.all. */
+function txImpl(arg: unknown) {
+  if (typeof arg === 'function') {
+    return (arg as (tx: unknown) => unknown)({
+      order: { update: orderUpdate },
+      activityLog: { create: activityCreate },
+      outboxEvent: { create: outboxCreate },
+    })
+  }
+  return Promise.all(arg as Promise<unknown>[])
+}
 
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 
@@ -157,7 +187,7 @@ describe('POST /orders', () => {
 describe('GET /orders', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    transaction.mockImplementation((promises: Promise<unknown>[]) => Promise.all(promises))
+    transaction.mockImplementation(txImpl)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -320,6 +350,9 @@ describe('PATCH /orders/:id/status', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     auditLogCreate.mockResolvedValue({})
+    activityCreate.mockResolvedValue({})
+    outboxCreate.mockResolvedValue({})
+    transaction.mockImplementation(txImpl)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -350,6 +383,24 @@ describe('PATCH /orders/:id/status', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(orderUpdate.mock.calls[0][0].data.clientStatus).toBe('pending_approval')
+    // S2-13: same tx writes an activity row + enqueues a notify outbox event
+    expect(activityCreate.mock.calls[0][0].data.action).toBe('status_changed')
+    expect(outboxCreate.mock.calls[0][0].data.type).toBe('order.status_changed')
+    await app.close()
+  })
+
+  it('does not write activity/outbox on an invalid transition', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(activityCreate).not.toHaveBeenCalled()
+    expect(outboxCreate).not.toHaveBeenCalled()
     await app.close()
   })
 
@@ -1052,5 +1103,229 @@ describe('order comments + reads (chat)', () => {
       expect(res.statusCode).toBe(403)
       await app.close()
     })
+  })
+})
+
+describe('time logs (workspace-only)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  const order = { id: 'order-1', agencyId: 'agency-1', deletedAt: null }
+  const row = {
+    id: 'tl1',
+    hours: 2.5,
+    date: new Date('2026-05-31T00:00:00Z'),
+    comment: 'work',
+    executorId: 'exec-1',
+    createdAt: new Date('2026-05-31T10:00:00Z'),
+  }
+
+  describe('POST /orders/:orderId/time-logs', () => {
+    it('executor logs time → 201 (tenant + self stamped, date serialized)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogCreate.mockResolvedValue(row)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 2.5, date: '2026-05-31', comment: 'work' },
+      })
+      expect(res.statusCode).toBe(201)
+      const data = timeLogCreate.mock.calls[0][0].data
+      expect(data.agency).toEqual({ connect: { id: 'agency-1' } })
+      expect(data.executor).toEqual({ connect: { id: 'exec-1' } })
+      expect(res.json().data.log.date).toBe('2026-05-31')
+      expect(res.json().data.log.hours).toBe(2.5)
+      await app.close()
+    })
+
+    it('client cannot log time (403)', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 1, date: '2026-05-31' },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+
+    it('400 on hours over the daily cap', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 25, date: '2026-05-31' },
+      })
+      expect(res.statusCode).toBe(400)
+      await app.close()
+    })
+
+    it('400 on a malformed date', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 1, date: '31-05-2026' },
+      })
+      expect(res.statusCode).toBe(400)
+      await app.close()
+    })
+
+    it('404 unknown order', async () => {
+      orderFindUnique.mockResolvedValue(null)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/nope/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 1, date: '2026-05-31' },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+  })
+
+  describe('GET /orders/:orderId/time-logs', () => {
+    it('executor lists logs + totalHours', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogFindMany.mockResolvedValue([row, { ...row, id: 'tl2', hours: 1.5 }])
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.totalHours).toBe(4)
+      expect(res.json().data.logs).toHaveLength(2)
+      await app.close()
+    })
+
+    it('client cannot list (403)', async () => {
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+  })
+
+  describe('PATCH/DELETE /orders/:orderId/time-logs/:logId', () => {
+    it('author edits own entry (200)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogFindUnique.mockResolvedValue({ id: 'tl1', orderId: 'order-1', executorId: 'exec-1' })
+      timeLogUpdate.mockResolvedValue({ ...row, hours: 3 })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/time-logs/tl1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 3 },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.log.hours).toBe(3)
+      await app.close()
+    })
+
+    it('non-author executor cannot edit (403)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogFindUnique.mockResolvedValue({ id: 'tl1', orderId: 'order-1', executorId: 'exec-2' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/time-logs/tl1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 3 },
+      })
+      expect(res.statusCode).toBe(403)
+      expect(timeLogUpdate).not.toHaveBeenCalled()
+      await app.close()
+    })
+
+    it('404 when the log belongs to a different order', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogFindUnique.mockResolvedValue({
+        id: 'tl1',
+        orderId: 'order-OTHER',
+        executorId: 'exec-1',
+      })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/orders/order-1/time-logs/tl1',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+
+    it('author deletes own entry (200)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      timeLogFindUnique.mockResolvedValue({ id: 'tl1', orderId: 'order-1', executorId: 'exec-1' })
+      timeLogDelete.mockResolvedValue({ id: 'tl1' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/orders/order-1/time-logs/tl1',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(timeLogDelete).toHaveBeenCalledWith({ where: { id: 'tl1' } })
+      await app.close()
+    })
+  })
+})
+
+describe('GET /orders/:id/activity', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.clearAllMocks())
+
+  const order = { id: 'order-1', agencyId: 'agency-1', companyId: 'company-1', deletedAt: null }
+
+  it('participant reads the activity feed', async () => {
+    orderFindUnique.mockResolvedValue(order)
+    activityFindMany.mockResolvedValue([
+      {
+        id: 'a1',
+        action: 'status_changed',
+        metadata: { from: 'new', to: 'in_progress' },
+        createdAt: new Date('2026-05-31T00:00:00Z'),
+        actor: { id: 'exec-1', name: 'Olena' },
+      },
+    ])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.activity[0].action).toBe('status_changed')
+    await app.close()
+  })
+
+  it('404 when a client requests another company order', async () => {
+    orderFindUnique.mockResolvedValue({ ...order, companyId: 'company-OTHER' })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
   })
 })

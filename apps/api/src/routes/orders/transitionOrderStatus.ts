@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
  * PATCH /orders/:id/status — internal status transition, validated against the
@@ -67,17 +68,42 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       if (to === OrderInternalStatus.ON_HOLD) data.onHoldReason = input.comment ?? null
       if (to === OrderInternalStatus.CANCELLED) data.cancelledReason = input.comment ?? null
 
-      const updated = await prisma.order.update({
-        where: { id: order.id },
-        data,
-        select: {
-          id: true,
-          internalStatus: true,
-          clientStatus: true,
-          onHoldReason: true,
-          cancelledReason: true,
-          updatedAt: true,
-        },
+      // Atomic: status update + activity-feed row + outbox notify all commit
+      // together, so a delivered notification always reflects a persisted change
+      // (and a rolled-back change never notifies).
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.order.update({
+          where: { id: order.id },
+          data,
+          select: {
+            id: true,
+            internalStatus: true,
+            clientStatus: true,
+            onHoldReason: true,
+            cancelledReason: true,
+            updatedAt: true,
+          },
+        })
+        await tx.activityLog.create({
+          data: {
+            orderId: order.id,
+            actorId: user.sub,
+            action: 'status_changed',
+            metadata: { from, to, comment: input.comment ?? null },
+          },
+        })
+        await enqueueOutbox(tx, {
+          type: 'order.status_changed',
+          payload: {
+            orderId: order.id,
+            from,
+            to,
+            actorId: user.sub,
+            comment: input.comment ?? null,
+          },
+          agencyId: order.agencyId,
+        })
+        return u
       })
 
       writeAuditAsync(request.log, {
@@ -89,7 +115,6 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         metadata: { from, to, comment: input.comment ?? null },
       })
 
-      // notify(orders.status_changed) is wired in S2-13 (via the outbox).
       return reply.send({ success: true, data: { order: updated } })
     }
   )
