@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { buildApp } from './app.js'
 import { validateRuntimeEnv } from './config/env.js'
 import { startChatListener, stopChatListener } from './services/chatListener.js'
+import { startOutboxWorker, stopOutboxWorker } from './services/outboxWorker.js'
 
 const port = Number(process.env.API_PORT ?? 4000)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -13,8 +14,9 @@ const app = buildApp()
 async function shutdown(signal: string) {
   app.log.info({ signal }, 'Received shutdown signal')
 
+  stopOutboxWorker()
   await stopChatListener()
-  app.log.info('Chat listener stopped')
+  app.log.info('Background workers stopped')
 
   await app.close()
   app.log.info('HTTP server closed')
@@ -30,6 +32,8 @@ const start = async () => {
     await app.listen({ port, host })
     // SSE shared bus: one LISTEN connection feeds all chat streams on this instance.
     startChatListener(app.log)
+    // Outbox drain: delivers durable domain events (status-change notifications, …).
+    startOutboxWorker(app.log)
     app.log.info({ port, host, env: process.env.NODE_ENV ?? 'development' }, 'API started')
   } catch (error) {
     app.log.error(error)
