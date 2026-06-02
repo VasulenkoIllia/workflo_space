@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Єдина продуктова специфікація (SPEC)
 
-> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (вікторина A-D) + очистки беклогу.
+> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-27 інтеграції / ліди 1.06) (вікторина A-D) + очистки беклогу.
 > **Призначення:** єдина точка входу й джерело істини. Концепція/візія — `CONCEPT_v2.md`; деталі модуля — `modules/NN-*.md`; рішення — `adr/*`; план — `TRACKER.md` (спрінти).
 > **Як читати:** цей файл = ЩО будуємо (інвентар + наскрізна архітектура + schema-delta). `TRACKER.md` = У ЯКОМУ ПОРЯДКУ (спрінти).
 
@@ -37,7 +37,7 @@
 
 ---
 
-## 4. 25 модулів — фіналізований інвентар
+## 4. 27 модулів — фіналізований інвентар (+26-leads, +27-integrations 1.06)
 
 > Кожен модуль пройшов: **A** (обов'язковий reconcile зі схемою) + **B/C/D** (обрані у вікторині фічі). Деталі — у `modules/NN-*.md` секція «Аудит-фіналізація».
 
@@ -103,6 +103,12 @@
 
 **24-calendar** — зустрічі команда↔клієнт (CalendarEvent+CalendarAttendee polymorphic), per-event timezone, aggregated view (events+deadlines+leave), reminder-cron. reconcile: agencyId, D2-guests. _Фічі:_ **booking-links** (Calendly-style), auto-video (MeetingProvider). _BACKLOG:_ держсвята, recurrence/ICS/external-guests (Phase 2). _Статус:_ S-calendar.
 
+### Growth / інтеграції (додано 1.06.2026)
+
+**26-leads** — CRM-inbound: воронка лідів (`Lead`+`LeadPipeline`/`LeadStage`/`LeadActivity`), **конфігурований канбан**, мульти-джерельна **атрибуція** (`source`: website*form/telegram/instagram/tiktok/facebook/whatsapp/email/phone/manual/referral), конверсія лід→Company. SSE-дошка, notify. *Статус:\_ P1 — manual+website+telegram; P2 — соц-канали.
+
+**27-integrations** — інтеграційний хаб (adapter-патерн). **Inbound:** Lead Intake API `POST /v1/leads` (ApiKey, форма клієнта) + соц-адаптери. **Outbound:** `WebhookEndpoint`/`WebhookDelivery` (зміни станів→зовні, HMAC, **через outbox**). **ApiKey** (per-agency Bearer). _Статус:_ **P1** — website-form-API + Telegram + outbound-webhooks; P2 — Meta/WhatsApp/TikTok/widget; P3 — marketplace/public-API. (Поглинає `WebhookEndpoint`/`ApiKey` з 20-admin.)
+
 ---
 
 ## 5. Наскрізна архітектура
@@ -136,7 +142,7 @@
 > Зведено з 25 «Аудит-фіналізація» секцій. Деталі — у відповідному модулі.
 
 **Foundation:** `Agency`, `AgencyMember`; `agencyId` на всіх agency-scoped таблицях; `OutboxEvent`.
-**Auth:** `OAuthAccount`; auth-поля (totpSecretEnc, backupCodesHash, emailVerifiedAt); refresh_tokens.{ip,userAgent,lastUsedAt}.
+**Auth:** `OAuthAccount`; auth-поля (totpSecretEnc, backupCodesHash, emailVerifiedAt); refresh*tokens.{ip,userAgent,lastUsedAt}.
 **Orders:** `OrderTag`, `OrderTagAssignment`, `SlaPolicy`, `OrderDependency`, `OrderTemplate`; OrderStage; onHold/cancelledReason.
 **Chat:** `CommentReaction`, `order_chat_reads`(OrderChatRead), `ConversationState`; comment.{editedAt,deletedAt,replyToId}.
 **Billing/Wallet/Finance:** `PaymentIntent`, `DunningPolicy`, `PaymentSchedule`; `WalletTransaction`, `PaymentAllocation`, `ReferralSettings`, Company.moneyBalance; `Expense`, `ExpenseReceipt`, `Budget`, `ExpenseAllocation`; ServiceCharge discount/VAT/line-item cols; Payment.{status✅,amountUsd}.
@@ -147,7 +153,8 @@
 **Settings:** Profile.{timezone,phone}.
 **Reports/Search:** `ReportSchedule`, `ReportDefinition`, `revenue_monthly_mv`; tsvector/GIN cols, `SearchAdapter`.
 **Credentials:** `CredentialShare`; CredentialVault.{agencyId,expiresAt,rotationReminderDays}.
-**Admin/Ops:** `AgencyFeatureFlag`, `WebhookEndpoint`, `WebhookDelivery`, `ApiKey`; `UsageCounter`, `StatusIncident`, `SloTarget`, `InfraCost`; CronRun ✅.
+**Admin/Ops:** `AgencyFeatureFlag`, `UsageCounter`, `StatusIncident`, `SloTarget`, `InfraCost`; CronRun ✅.
+**Growth/Integrations (26-27):** `Lead`, `LeadPipeline`, `LeadStage`, `LeadActivity`; `ApiKey`, `WebhookEndpoint`, `WebhookDelivery`, `IntegrationConnection`. *Статус:\_ P1 спец.
 **HR/Calendar:** `LeaveRequest`, `LeaveBalance`; `CalendarEvent`, `CalendarAttendee`, `BookingLink`.
 
 **db-hardening (BACKLOG):** telegramChatId dedup, відсутні FK-індекси, drop OtpToken[code,purpose], Order.company onDelete, Decimal(10,4) для курсів, UUIDv7 для high-volume.
