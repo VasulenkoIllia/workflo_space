@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, changePasswordSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { hashPassword, verifyPassword } from '../../auth/password.js'
@@ -45,13 +45,13 @@ const changePasswordRoute: FastifyPluginAsync = (fastify) => {
 
       const passwordHash = await hashPassword(input.newPassword)
 
-      await prisma.$transaction([
-        prisma.profile.update({ where: { id: profileId }, data: { passwordHash } }),
-        prisma.refreshToken.updateMany({
+      await tenantTransaction(prisma, async (tx) => {
+        await tx.profile.update({ where: { id: profileId }, data: { passwordHash } })
+        await tx.refreshToken.updateMany({
           where: { profileId, revokedAt: null },
           data: { revokedAt: new Date() },
-        }),
-      ])
+        })
+      })
 
       writeAuditAsync(request.log, {
         actorId: profileId,

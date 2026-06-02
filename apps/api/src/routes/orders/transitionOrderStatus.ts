@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, prisma, tenantTransaction } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -72,7 +72,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       // Atomic: status update + activity-feed row + outbox notify all commit
       // together, so a delivered notification always reflects a persisted change
       // (and a rolled-back change never notifies).
-      const updated = await prisma.$transaction(async (tx) => {
+      const updated = await tenantTransaction(prisma, async (tx) => {
         const u = await tx.order.update({
           where: { id: order.id },
           data,

@@ -1,43 +1,36 @@
 import { type Prisma, PrismaClient } from '@prisma/client'
 import { tenantStore } from './tenantContext.js'
 
-const base = new PrismaClient()
+export const prisma: PrismaClient = new PrismaClient()
 
 /**
- * RLS tenant-context extension (F4 / ADR-007). When a request has bound a tenant
- * context (runWithAgency / runWithSystemContext), wrap the operation in a tx that
- * first sets the Postgres GUC, so the migration's row-level policies scope it:
- *   [ set_config('app.current_agency_id' | 'app.rls_bypass'), <the query> ]
+ * RLS-correct interactive transaction (F4 / ADR-007). Sets the tenant GUC ONCE on
+ * the transaction's connection, so every statement inside is scoped by the
+ * migration's row-level policies, then runs `fn` with that `tx`. This is the
+ * ONLY mechanism we use for RLS — a per-op `$extends` that auto-injects the GUC was
+ * prototyped and REJECTED: Prisma's extension `query(args)` returns a plain Promise
+ * (not a deferred PrismaPromise), so the array-form `$transaction([set_config,
+ * query])` runs the query EAGERLY outside the GUC tx → zero isolation (verified on
+ * throwaway-pg). The interactive-tx form below IS proven to isolate.
  *
- * Activation is gated by `RLS_ENFORCED=true` AND the web layer connecting as the
- * non-superuser `workflo_app` role (superusers/owners bypass RLS). With the flag
- * off — the default — nothing binds a context, so this is never installed and the
- * client is the plain PrismaClient (zero behaviour change). See
- * docs/ENGINEERING_STANDARDS.md → "RLS rollout" for the activation checklist
- * (incl. setting the GUC at the top of interactive transactions).
+ * No tenant bound (RLS_ENFORCED off / pre-auth bootstrap) → behaves exactly like a
+ * plain `$transaction`. See docs/ENGINEERING_STANDARDS.md → "RLS rollout".
  */
-function withRls(client: PrismaClient): PrismaClient {
-  return client.$extends({
-    query: {
-      async $allOperations({ args, query }) {
-        const ctx = tenantStore.getStore()
-        if (!ctx) return (await query(args)) as unknown
-        const setter = ctx.bypass
-          ? client.$executeRaw`SELECT set_config('app.rls_bypass', 'on', true)`
-          : client.$executeRaw`SELECT set_config('app.current_agency_id', ${ctx.agencyId ?? ''}, true)`
-        // Array-form tx pins the SET + query to one connection so the GUC applies.
-        // `query` returns a plain Promise in the extension API — cast to PrismaPromise.
-        const [, result] = await client.$transaction([
-          setter,
-          query(args) as Prisma.PrismaPromise<unknown>,
-        ])
-        return result
-      },
-    },
-  }) as unknown as PrismaClient
+export async function tenantTransaction<T>(
+  client: PrismaClient,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  return client.$transaction(async (tx) => {
+    const ctx = tenantStore.getStore()
+    if (!ctx) return fn(tx)
+    if (ctx.bypass) {
+      await tx.$executeRaw`SELECT set_config('app.rls_bypass', 'on', true)`
+    } else {
+      await tx.$executeRaw`SELECT set_config('app.current_agency_id', ${ctx.agencyId ?? ''}, true)`
+    }
+    return fn(tx)
+  })
 }
-
-export const prisma: PrismaClient = process.env.RLS_ENFORCED === 'true' ? withRls(base) : base
 
 // Re-export Prisma runtime + types so consumers don't need a direct
 // @prisma/client dependency (keeps the generated client a db-package concern).

@@ -29,6 +29,8 @@ vi.mock('@workflo/db', () => ({
     profile: { findUnique: profileFindUnique },
     $transaction: transaction,
   },
+  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+    client.$transaction(fn),
   Prisma: { PrismaClientKnownRequestError: FakePrismaKnownError },
 }))
 

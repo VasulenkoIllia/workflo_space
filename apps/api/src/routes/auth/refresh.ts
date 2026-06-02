@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import {
@@ -103,7 +103,7 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
       // WHERE) is the optimistic lock — a concurrent request that already rotated
       // this token sees count=0 and is rejected, so a token can't be forked into
       // two valid successors.
-      const rotated = await prisma.$transaction(async (tx) => {
+      const rotated = await tenantTransaction(prisma, async (tx) => {
         const revoked = await tx.refreshToken.updateMany({
           where: { id: stored.id, revokedAt: null },
           data: { revokedAt: new Date() },

@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -51,9 +51,9 @@ const updateNotificationsRoute: FastifyPluginAsync = (fastify) => {
 
       // Upsert each (category, channel) row. Sequential keeps it simple and the
       // payload is bounded (≤42 rows by schema).
-      await prisma.$transaction(
-        input.preferences.map((p) =>
-          prisma.notificationPreference.upsert({
+      await tenantTransaction(prisma, async (tx) => {
+        for (const p of input.preferences) {
+          await tx.notificationPreference.upsert({
             where: {
               settingsId_category_channel: {
                 settingsId: settings.id,
@@ -69,8 +69,8 @@ const updateNotificationsRoute: FastifyPluginAsync = (fastify) => {
               enabled: p.enabled,
             },
           })
-        )
-      )
+        }
+      })
 
       writeAuditAsync(request.log, {
         actorId: profileId,

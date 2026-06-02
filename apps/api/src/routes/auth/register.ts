@@ -1,4 +1,4 @@
-import { Prisma, prisma } from '@workflo/db'
+import { Prisma, prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, buildDefaultPreferenceRows, registerSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { resolvePlatformAgencyId } from '../../auth/agency.js'
@@ -45,7 +45,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
       }
 
       try {
-        result = await prisma.$transaction(async (tx) => {
+        result = await tenantTransaction(prisma, async (tx) => {
           const profile = await tx.profile.create({
             data: {
               email,

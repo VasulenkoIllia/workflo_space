@@ -36,6 +36,8 @@ vi.mock('@workflo/db', () => ({
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
+  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+    client.$transaction(fn),
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
 

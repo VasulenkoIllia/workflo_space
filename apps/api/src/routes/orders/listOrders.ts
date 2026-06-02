@@ -62,28 +62,28 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
     const sortField = q.sortBy === 'dueDate' ? 'deadline' : q.sortBy
     const orderBy = { [sortField]: q.sortDir } as Prisma.OrderOrderByWithRelationInput
 
-    const [total, rows] = await prisma.$transaction([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
-        where,
-        orderBy,
-        skip: (q.page - 1) * q.limit,
-        take: q.limit,
-        select: {
-          id: true,
-          title: true,
-          internalStatus: true,
-          clientStatus: true,
-          priority: true,
-          deadline: true,
-          totalAmount: true,
-          companyId: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: { select: { stages: true } },
-        },
-      }),
-    ])
+    // Two standalone queries (the RLS extension scopes each on its own connection
+    // via the tenant GUC); count + rows needn't share one transaction for a list.
+    const total = await prisma.order.count({ where })
+    const rows = await prisma.order.findMany({
+      where,
+      orderBy,
+      skip: (q.page - 1) * q.limit,
+      take: q.limit,
+      select: {
+        id: true,
+        title: true,
+        internalStatus: true,
+        clientStatus: true,
+        priority: true,
+        deadline: true,
+        totalAmount: true,
+        companyId: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { stages: true } },
+      },
+    })
 
     return reply.send({
       success: true,

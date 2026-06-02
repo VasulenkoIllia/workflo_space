@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -63,7 +63,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
           throw gone()
         }
         const companyId = invite.companyId
-        await prisma.$transaction(async (tx) => {
+        await tenantTransaction(prisma, async (tx) => {
           // Atomic claim: only the first concurrent accept flips usedAt; a racing
           // second request sees count=0 and aborts before mutating membership.
           const claimed = await tx.invite.updateMany({
@@ -108,7 +108,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         // Should never happen post-migration (every invite carries agencyId).
         throw gone()
       }
-      await prisma.$transaction(async (tx) => {
+      await tenantTransaction(prisma, async (tx) => {
         const claimed = await tx.invite.updateMany({
           where: { id: invite.id, usedAt: null },
           data: { usedAt: new Date() },

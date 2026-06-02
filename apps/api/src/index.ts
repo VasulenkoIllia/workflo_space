@@ -30,6 +30,14 @@ async function shutdown(signal: string) {
 const start = async () => {
   try {
     await app.listen({ port, host })
+    if (process.env.RLS_ENFORCED === 'true') {
+      app.log.warn(
+        'RLS_ENFORCED=on — the web process MUST connect as the non-superuser workflo_app ' +
+          'role for policies to apply (superuser/owner bypass RLS). Interactive writes go ' +
+          'through tenantTransaction (GUC). Misconfiguration → empty results / permission ' +
+          'errors. See docs/ENGINEERING_STANDARDS.md → "RLS rollout".'
+      )
+    }
     // ADR-006: run workers inline unless a dedicated worker container owns them.
     if (shouldRunWorkersInline()) {
       startWorkers(app.log)

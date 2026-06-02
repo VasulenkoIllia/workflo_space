@@ -22,6 +22,8 @@ vi.mock('@workflo/db', () => ({
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
+  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+    client.$transaction(fn),
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
 
@@ -106,7 +108,14 @@ describe('PATCH /profile/password', () => {
       id: 'profile-1',
       passwordHash: bcrypt.hashSync('old-password', 12),
     })
-    transaction.mockResolvedValue([{}, { count: 3 }])
+    profileUpdate.mockResolvedValue({})
+    refreshTokenUpdateMany.mockResolvedValue({ count: 3 })
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        profile: { update: profileUpdate },
+        refreshToken: { updateMany: refreshTokenUpdateMany },
+      })
+    )
     auditLogCreate.mockResolvedValue({})
     const { app, token } = await authedApp()
     const res = await app.inject({
@@ -155,7 +164,10 @@ describe('PATCH /profile/notifications', () => {
 
   it('upserts preferences and returns the full matrix', async () => {
     nsFindUnique.mockResolvedValue({ id: 'settings-1' })
-    transaction.mockResolvedValue([{}, {}])
+    npUpsert.mockResolvedValue({})
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({ notificationPreference: { upsert: npUpsert } })
+    )
     npFindMany.mockResolvedValue([
       { category: 'orders', channel: 'email', enabled: false },
       { category: 'orders', channel: 'telegram', enabled: true },
@@ -193,7 +205,10 @@ describe('PATCH /profile/notifications', () => {
 
   it('allows disabling telegram for a critical category', async () => {
     nsFindUnique.mockResolvedValue({ id: 'settings-1' })
-    transaction.mockResolvedValue([{}])
+    npUpsert.mockResolvedValue({})
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({ notificationPreference: { upsert: npUpsert } })
+    )
     npFindMany.mockResolvedValue([{ category: 'auth', channel: 'telegram', enabled: false }])
     auditLogCreate.mockResolvedValue({})
     const { app, token } = await authedApp()

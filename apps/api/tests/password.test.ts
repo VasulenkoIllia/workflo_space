@@ -22,6 +22,8 @@ vi.mock('@workflo/db', () => ({
     notificationSettings: { findUnique: vi.fn() },
     $transaction: transaction,
   },
+  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+    client.$transaction(fn),
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
 
@@ -102,7 +104,16 @@ describe('POST /auth/reset-password', () => {
       expiresAt: new Date(Date.now() + 1000 * 60 * 30),
     })
     profileFindUnique.mockResolvedValue({ id: 'p1', isActive: true })
-    transaction.mockResolvedValue([{}, {}, { count: 2 }])
+    profileUpdate.mockResolvedValue({})
+    prtUpdate.mockResolvedValue({})
+    refreshTokenUpdateMany.mockResolvedValue({ count: 2 })
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        profile: { update: profileUpdate },
+        passwordResetToken: { update: prtUpdate },
+        refreshToken: { updateMany: refreshTokenUpdateMany },
+      })
+    )
     auditLogCreate.mockResolvedValue({})
   }
 
@@ -115,9 +126,11 @@ describe('POST /auth/reset-password', () => {
       payload: { token: 'reset-tok-123', password: 'new-strong-password' },
     })
     expect(res.statusCode).toBe(200)
-    // transaction was called with the 3 ops (update profile, use token, revoke refresh)
+    // transaction ran the 3 ops (update profile, use token, revoke refresh)
     expect(transaction).toHaveBeenCalledOnce()
-    expect(transaction.mock.calls[0][0]).toHaveLength(3)
+    expect(profileUpdate).toHaveBeenCalledOnce()
+    expect(prtUpdate).toHaveBeenCalledOnce()
+    expect(refreshTokenUpdateMany).toHaveBeenCalledOnce()
     await app.close()
   })
 

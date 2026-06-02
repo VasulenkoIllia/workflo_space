@@ -31,5 +31,13 @@ process.on('SIGINT', () => {
   void shutdown('SIGINT')
 })
 
+if (process.env.RLS_ENFORCED === 'true') {
+  logger.warn(
+    'RLS_ENFORCED=on — the worker should use the owner/admin DB connection (which ' +
+      'bypasses RLS) so it can drain all tenants; do NOT point it at workflo_app. ' +
+      'See docs/ENGINEERING_STANDARDS.md → "RLS rollout".'
+  )
+}
+
 startWorkers(logger)
 logger.info('workflo worker started (chat-listener + outbox drain)')

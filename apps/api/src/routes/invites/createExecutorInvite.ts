@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, INVITE_TTL_MS, inviteExecutorSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
@@ -28,7 +28,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
 
       // Supersede prior pending invites + issue the new one atomically, so a
       // double-submit can't leave two live invites for the same email (audit S0-S2).
-      const invite = await prisma.$transaction(async (tx) => {
+      const invite = await tenantTransaction(prisma, async (tx) => {
         await tx.invite.updateMany({
           where: { email, type: 'executor', usedAt: null },
           data: { usedAt: new Date() },

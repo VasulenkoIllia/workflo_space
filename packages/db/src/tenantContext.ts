@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 /**
- * Request-scoped tenant context for the RLS seam (F4 / ADR-007). The RLS client
- * extension reads this to set the Postgres GUC (`app.current_agency_id` /
- * `app.rls_bypass`) so the migration's row-level policies scope each query.
+ * Request-scoped tenant context for the RLS seam (F4 / ADR-007). `tenantTransaction`
+ * reads this to set the Postgres GUC (`app.current_agency_id` / `app.rls_bypass`)
+ * on the transaction connection so the migration's row-level policies scope it.
  *
  *  - web request  → runWithAgency(activeAgencyId, …)  → tenant-scoped
  *  - worker/seed  → runWithSystemContext(…)           → bypass (sees all tenants)
