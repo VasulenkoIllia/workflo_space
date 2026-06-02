@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -24,7 +25,7 @@ const deleteOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       assertSameTenant(user, order.agencyId)
 
-      if (user.role !== 'executor') {
+      if (!isInternalTeam(user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалення доступне лише команді', 403)
       }
 

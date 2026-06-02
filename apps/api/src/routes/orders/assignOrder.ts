@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, assignOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -27,7 +28,7 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       assertSameTenant(user, order.agencyId)
 
-      if (user.role !== 'executor') {
+      if (!isInternalTeam(user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Призначення доступне лише команді', 403)
       }
       const agencyId = requireActiveAgency(user)

@@ -105,6 +105,17 @@ const EXECUTOR = {
   agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' as const }],
   memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
 }
+// Agency OWNER: Profile.role='owner' but an agency member → internal team
+// (regression for audit C-2: owner must NOT be locked out of team features).
+const OWNER = {
+  sub: 'owner-1',
+  email: 'o@e.com',
+  role: 'owner' as const,
+  activeAgencyId: 'agency-1',
+  activeCompanyId: null,
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'owner' as const }],
+  memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
+}
 
 function authed(claims: unknown) {
   const app = buildApp()
@@ -652,6 +663,19 @@ describe('internal tasks (workspace-only)', () => {
       expect(res.statusCode).toBe(200)
       expect(res.json().data.tasks).toHaveLength(1)
       expect(taskFindMany.mock.calls[0][0].where.orderId).toBe('order-1')
+      await app.close()
+    })
+
+    it('agency OWNER is internal team — can list tasks (regression: audit C-2)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindMany.mockResolvedValue([])
+      const { app, token } = await authed(OWNER)
+      const res = await app.inject({
+        method: 'GET',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      expect(res.statusCode).toBe(200) // was 403 before isInternalTeam() fix
       await app.close()
     })
 

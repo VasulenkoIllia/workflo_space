@@ -1,4 +1,4 @@
-import type { AccessClaims, CompanyPermissions } from './tokens.js'
+import { type AccessClaims, type CompanyPermissions, isInternalTeam } from './tokens.js'
 
 /**
  * RBAC shim (ADR-002). Centralizes all authz decisions behind a single
@@ -98,7 +98,7 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
 
   // ── Platform admin (hardcoded for MVP; becomes a real role with task #24) ──
   if (action === 'admin.access' || action.startsWith('finance.')) {
-    return user.role === 'executor' && !!ADMIN_EMAIL && user.email === ADMIN_EMAIL
+    return isInternalTeam(user) && !!ADMIN_EMAIL && user.email === ADMIN_EMAIL
   }
 
   // ── Ownership transfer: only the company owner ──
@@ -116,7 +116,7 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
   if (gateFlag) {
     // Internal executors act on any company's orders/estimates, but billing.view
     // is company-scoped only — executors still need a membership for it.
-    if (user.role === 'executor' && action !== 'billing.view') return true
+    if (isInternalTeam(user) && action !== 'billing.view') return true
     return hasCompanyPermission(user, resource.companyId, gateFlag)
   }
 
@@ -127,7 +127,7 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
 
   // ── Executor management: platform side (executor role) ──
   if (action === 'executor.invite' || action === 'executor.deactivate') {
-    return user.role === 'executor'
+    return isInternalTeam(user)
   }
 
   // ── Orders / invoices / payments ──
@@ -137,7 +137,7 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
     action.startsWith('payment.')
   ) {
     // Internal team (executors) can operate on any order.
-    if (user.role === 'executor') return true
+    if (isInternalTeam(user)) return true
     // Clients/members: only within a company they belong to.
     return membershipRole(user, resource.companyId) !== null
   }

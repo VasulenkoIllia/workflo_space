@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
 import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 
 export interface OrderAccess {
   orderId: string
@@ -37,7 +38,7 @@ export async function requireOrderParticipant(
   const agencyId = order.agencyId // narrowed string; survives the calls below
   assertSameTenant(user, agencyId)
 
-  const isInternal = user.role === 'executor'
+  const isInternal = isInternalTeam(user)
   if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
     throw notFound() // same tenant, different company → hide
   }
@@ -55,7 +56,7 @@ export async function requireTeamOrder(
   orderId: string
 ): Promise<{ orderId: string; agencyId: string }> {
   const user = request.user
-  if (user.role !== 'executor') {
+  if (!isInternalTeam(user)) {
     throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
   }
   const order = await prisma.order.findUnique({

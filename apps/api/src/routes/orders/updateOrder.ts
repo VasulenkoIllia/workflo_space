@@ -2,6 +2,7 @@ import { type Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, OrderInternalStatus, updateOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -31,7 +32,7 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!order || order.deletedAt) throw notFound()
       assertSameTenant(user, order.agencyId)
 
-      const isInternal = user.role === 'executor'
+      const isInternal = isInternalTeam(user)
       if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
         throw notFound()
       }

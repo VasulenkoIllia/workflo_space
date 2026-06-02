@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 
 /** Prisma Decimal → JSON number (Decimal.toJSON() emits a string otherwise). */
 const num = (d: unknown): number | null => (d == null ? null : Number(d))
@@ -57,7 +58,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!order || order.deletedAt) throw notFound()
       assertSameTenant(user, order.agencyId)
 
-      const isInternal = user.role === 'executor'
+      const isInternal = isInternalTeam(user)
       if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
         throw notFound() // same tenant, different company → hide
       }

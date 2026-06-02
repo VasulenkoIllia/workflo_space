@@ -2,6 +2,7 @@ import { type Prisma, prisma } from '@workflo/db'
 import { listOrdersQuerySchema, OrderInternalStatus, OrderPriority } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 
 function parseEnumList<T extends string>(
   csv: string | undefined,
@@ -28,7 +29,7 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
     const agencyId = requireActiveAgency(user)
 
     const where: Prisma.OrderWhereInput = { agencyId, deletedAt: null }
-    const isInternal = user.role === 'executor'
+    const isInternal = isInternalTeam(user)
 
     if (!isInternal) {
       const memberCompanyIds = user.memberships.map((m) => m.companyId)

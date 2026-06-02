@@ -49,7 +49,7 @@
 
 **Безпека (hardening, не активні):**
 
-- [sec] **SEC-D1** MIME magic-byte sniffing. · **SEC-D2** `avatarUrl` domain-allowlist. · **SEC-D3** `Invite.token` без `@default(uuid())`. · **SEC-D4** dev-CVE `pnpm update` (vite/esbuild/postcss/turbo). · **SEC-D5** `Profile.role='owner'` → `isInternalTeam()`. (LOW-MEDIUM) (created: 2026-06-01)
+- [sec] **SEC-D1** MIME magic-byte sniffing. · **SEC-D2** `avatarUrl` domain-allowlist. · **SEC-D3** `Invite.token` без `@default(uuid())`. · **SEC-D4** dev-CVE `pnpm update` (vite/esbuild/postcss/turbo). · ~~**SEC-D5** `Profile.role='owner'` → `isInternalTeam()`~~ ✅ **виправлено 1.06** (`isInternalTeam()` на базі `agencyMemberships` у 8 order-роутах + `can()`; owner більше не заблокований; +regression-тест). (LOW-MEDIUM) (created: 2026-06-01)
 
 ---
 

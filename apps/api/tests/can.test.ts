@@ -20,7 +20,9 @@ const executor: AccessClaims = {
   sub: 'e1',
   email: 'exec@example.com',
   role: 'executor',
+  activeAgencyId: 'agency-A',
   activeCompanyId: null,
+  agencyMemberships: [{ agencyId: 'agency-A', role: 'executor' }],
   memberships: [],
 }
 
@@ -28,7 +30,9 @@ const admin: AccessClaims = {
   sub: 'a1',
   email: 'admin@workflo.space',
   role: 'executor',
+  activeAgencyId: 'agency-A',
   activeCompanyId: null,
+  agencyMemberships: [{ agencyId: 'agency-A', role: 'executor' }],
   memberships: [],
 }
 

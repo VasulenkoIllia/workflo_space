@@ -154,6 +154,8 @@ Tenant-ізоляція НЕ покладається на дисципліну 
 - винести `requireOrderForWrite` loader і прибрати дубльований inline-IDOR з 5 прямих order-роутів (зараз безпечно, але дублювання → ризик «забути `assertSameTenant`» при copy-paste);
 - закласти Prisma `$extends`-seam + tenant-context middleware (`SET LOCAL app.current_agency_id`) — щоб гарантія стала структурною на рівні БД (RLS), а не лише per-handler.
 
+**Модель ролей (виправлено 1.06):** «команда vs клієнт» визначається **`isInternalTeam(user)` = є `AgencyMember` (executor АБО owner)**, а НЕ глобальною `Profile.role === 'executor'` (яка хибно блокувала **власника агенції** від командних дій — internal-tasks/time-logs/тощо). `Profile.role` лишається лише UI-хінтом (редірект login → portal/workspace), джерело прав — `agencyMemberships` + `memberships`. Це коректно обробляє і людину, що водночас клієнт фірми і виконавець агенції. Multi-agency перемикання виконавця (`/auth/switch-agency`) — **Phase 1** (зараз `activeAgencyId` = перша agency-membership).
+
 **Rate-limit (операційне обмеження):** `@fastify/rate-limit` зараз in-memory → коректний лише при **одній репліці API**. Auth brute-force-ліміти (`/auth/login` 10/15хв) залежать від цього. Перед horizontal scale — Redis-store АБО свідомо лишати 1 репліку (зафіксовано в BACKLOG).
 
 ---

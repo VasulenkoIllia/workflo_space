@@ -70,6 +70,17 @@ export interface AccessClaims {
   memberships: Membership[]
 }
 
+/**
+ * Internal team = staff of any agency (executor OR owner). Source of truth for
+ * "staff vs client" — replaces the global `Profile.role === 'executor'` check,
+ * which wrongly locked agency OWNERS out of team features (audit C-2). Derived
+ * from agency memberships, so it also handles a person who is both a client (of
+ * a company) and staff (of an agency). `Profile.role` stays a UI hint only.
+ */
+export function isInternalTeam(user: Pick<AccessClaims, 'agencyMemberships'>): boolean {
+  return (user.agencyMemberships?.length ?? 0) > 0
+}
+
 export function buildAccessClaims(params: {
   profileId: string
   email: string

@@ -53,7 +53,9 @@ const EXECUTOR_CLAIMS = {
   sub: 'exec-1',
   email: 'exec@workflo.space',
   role: 'executor',
+  activeAgencyId: 'agency-1',
   activeCompanyId: null,
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' }],
   memberships: [],
 }
 const OWNER_CLAIMS = {

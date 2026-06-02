@@ -9,6 +9,7 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 
@@ -53,7 +54,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
-      const isInternal = user.role === 'executor'
+      const isInternal = isInternalTeam(user)
       const isReopen = from === OrderInternalStatus.DONE && to === OrderInternalStatus.REVISION
       const isCompanyOwner =
         user.memberships.find((m) => m.companyId === order.companyId)?.role === 'owner'
