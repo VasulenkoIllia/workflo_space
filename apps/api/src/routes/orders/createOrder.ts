@@ -3,6 +3,7 @@ import { ApiErrorCode, AppError, createOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
+import { assertWithinQuota } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -31,6 +32,8 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!can(user, 'order.create', { companyId, agencyId })) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для створення замовлення', 403)
       }
+      // SaaS quota seam (no-op Phase 0; per-plan limit Phase 1) — SAAS.md F2 / ADR-007.
+      await assertWithinQuota(agencyId, 'orders')
 
       const order = await prisma.order.create({
         data: {

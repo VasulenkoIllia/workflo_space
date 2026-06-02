@@ -17,12 +17,12 @@
 - [arch] **T-D1 outbox-drain воркер** (HIGH): `transitionOrderStatus` enqueue-ить у прод, drain нема → події копляться. Завести мінімальний drain+handler-registry у **S6** (або раніше, якщо S5-білінг стартує). (created: 2026-06-01)
 - [arch] **T-D2 `requireOrderForWrite` loader** (HIGH-maint): прибрати дубльований inline-IDOR з 5 прямих order-роутів (зараз безпечно через `assertSameTenant`, але дублювання). (created: 2026-06-01)
 - [arch] **T-D3 RLS + Prisma `$extends`-seam + tenant-context middleware** (HIGH, SAAS.md F4): закласти seam, поки роутів ~25; політики per-table — перед зовнішнім тенантом. (created: 2026-06-01)
-- [arch] **T-D4 F2 quota-seam + F5 tenant-rate-limit-key** (MEDIUM, SAAS.md): no-op `assertWithinQuota` у create-точках; F5 потребує per-route post-auth limits. (created: 2026-06-01)
+- [arch] **T-D4** — ✅ **F2 quota-seam зроблено 1.06** (`apps/api/src/saas/limits.ts` no-op + виклик у `orders.create`); лишилось: виклики у files.upload/members.invite (з фічами) + **F5 tenant-rate-limit-key** (per-route post-auth). (MEDIUM, SAAS.md) (created: 2026-06-01)
 - [notify] **N-D1 уніфікувати 3 шляхи нотифікацій** (MEDIUM): auth=direct / orders=outbox / chat=нічого. ADR-правило + перевести на outbox коли запрацює drain. (created: 2026-06-01)
 
 **Schema hardening (перед Phase 1 / multi-agency):**
 
-- [db] **S-D1** `orders.agencyId` → NOT NULL + FK `RESTRICT` (зараз nullable + SET NULL). (HIGH) (created: 2026-06-01)
+- [db] ~~**S-D1** `orders.agencyId` → NOT NULL + FK `RESTRICT`~~ ✅ **зроблено 1.06** (міграція `20260601_sd1_orders_agencyid_notnull`, verified throwaway). (HIGH) (created: 2026-06-01)
 - [db] **S-D2** singletons без `agencyId`: `PaymentSettings`/`DocumentCounter`(спільна нумерація!)/`ExchangeRate`. (HIGH) (created: 2026-06-01)
 - [db] **S-D3** `InternalTask`+`ActivityLog` без `agencyId` (виняток F6) + ADR «audit vs activity». (MEDIUM) (created: 2026-06-01)
 - [db] **S-D4** `order_chat_reads` без FK на orders/profiles → ghost-рядки. (MEDIUM) (created: 2026-06-01)

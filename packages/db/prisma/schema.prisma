@@ -142,7 +142,7 @@ model CompanyMember {
 
 model Order {
   id              String              @id @default(uuid())
-  agencyId        String?
+  agencyId        String
   title           String
   description     String?
   type            OrderType           @default(client_order)
@@ -177,7 +177,7 @@ model Order {
   activityLogs  ActivityLog[]
   payments      Payment[]
   documents     Document[]
-  agency        Agency?        @relation(fields: [agencyId], references: [id])
+  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
