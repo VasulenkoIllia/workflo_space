@@ -49,8 +49,8 @@ async function ensureNotificationSettings(profileId: string, language: 'uk' | 'e
   return settings
 }
 
-async function ensurePaymentSettings() {
-  const existing = await prisma.paymentSettings.findFirst()
+async function ensurePaymentSettings(agencyId: string) {
+  const existing = await prisma.paymentSettings.findFirst({ where: { agencyId } })
 
   if (existing) {
     return existing
@@ -58,6 +58,7 @@ async function ensurePaymentSettings() {
 
   return prisma.paymentSettings.create({
     data: {
+      agencyId,
       bankName: 'Workflo Bank',
       iban: 'UA123456789012345678901234567',
       accountName: 'WORKFLO SPACE LLC',
@@ -208,17 +209,17 @@ async function main() {
     },
   })
 
-  await ensurePaymentSettings()
+  await ensurePaymentSettings(agencyId)
 
   await prisma.exchangeRate.upsert({
-    where: { id: 'singleton' },
+    where: { agencyId },
     update: {
       usdToUah: '41.5000',
       eurToUah: '45.2000',
       updatedBy: 'seed',
     },
     create: {
-      id: 'singleton',
+      agencyId,
       usdToUah: '41.5000',
       eurToUah: '45.2000',
       updatedBy: 'seed',

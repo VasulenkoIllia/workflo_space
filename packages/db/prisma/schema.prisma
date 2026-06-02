@@ -42,6 +42,7 @@ model Profile {
   auditLogsAsActor      AuditLog[]
   agenciesOwned         Agency[]              @relation("AgencyOwner")
   agencyMemberships     AgencyMember[]
+  orderChatReads        OrderChatRead[]
 
   @@index([role])
   @@map("profiles")
@@ -62,6 +63,8 @@ model RefreshToken {
 
 model Invite {
   id          String     @id @default(uuid())
+  agencyId    String?
+  agency      Agency?    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   email       String
   token       String     @unique @default(uuid())
   type        InviteType
@@ -74,6 +77,7 @@ model Invite {
   usedAt      DateTime?  @db.Timestamptz(3)
   createdAt   DateTime   @default(now()) @db.Timestamptz(3)
 
+  @@index([agencyId])
   @@index([email])
   @@index([invitedById])
   @@index([companyId])
@@ -175,9 +179,10 @@ model Order {
   files         OrderFile[]
   internalTasks InternalTask[]
   activityLogs  ActivityLog[]
+  chatReads     OrderChatRead[]
   payments      Payment[]
   documents     Document[]
-  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  agency        Agency          @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
@@ -212,7 +217,9 @@ model OrderStage {
 /// Per-(order, profile) read marker for unread counts in chat-hub (modules 03/18).
 model OrderChatRead {
   orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   lastReadAt DateTime @db.Timestamptz(3)
 
   @@id([orderId, profileId])
@@ -264,6 +271,7 @@ model OrderFile {
 
 model InternalTask {
   id         String             @id @default(uuid())
+  agencyId   String?
   orderId    String
   order      Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   title      String
@@ -273,7 +281,9 @@ model InternalTask {
   position   Int                @default(0)
   createdAt  DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime           @updatedAt @db.Timestamptz(3)
+  agency     Agency?            @relation(fields: [agencyId], references: [id])
 
+  @@index([agencyId])
   @@index([orderId])
   @@index([assigneeId])
   @@map("internal_tasks")
@@ -388,6 +398,8 @@ model Payment {
 
 model PaymentSettings {
   id              String   @id @default(cuid())
+  agencyId        String   @unique
+  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   bankName        String?
   iban            String?
   accountName     String?
@@ -561,6 +573,7 @@ model Notification {
 
 model ActivityLog {
   id        String   @id @default(uuid())
+  agencyId  String?
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   actorId   String
@@ -568,7 +581,9 @@ model ActivityLog {
   action    String
   metadata  Json?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency?  @relation(fields: [agencyId], references: [id])
 
+  @@index([agencyId])
   @@index([orderId, createdAt])
   @@map("activity_logs")
 }
@@ -603,11 +618,13 @@ model Document {
 }
 
 model DocumentCounter {
-  type  DocumentType
-  year  Int
-  count Int          @default(0)
+  agencyId String
+  agency   Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  type     DocumentType
+  year     Int
+  count    Int          @default(0)
 
-  @@id([type, year])
+  @@id([agencyId, type, year])
   @@map("document_counters")
 }
 
@@ -650,7 +667,9 @@ model ContactForm {
 }
 
 model ExchangeRate {
-  id        String   @id @default("singleton")
+  id        String   @id @default(uuid())
+  agencyId  String   @unique
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   usdToUah  Decimal  @db.Decimal(10, 4)
   eurToUah  Decimal? @db.Decimal(10, 4)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -724,18 +743,24 @@ model Agency {
   suspendedAt        DateTime?                @db.Timestamptz(3)
   limits             Json?
 
-  members        AgencyMember[]
-  companies      Company[]
-  orders         Order[]
-  payments       Payment[]
-  documents      Document[]
-  serviceCharges ServiceCharge[]
-  orderComments  OrderComment[]
-  orderFiles     OrderFile[]
-  timeLogs       TimeLog[]
-  services       Service[]
-  executorRates  ExecutorRate[]
-  auditLogs      AuditLog[]
+  members          AgencyMember[]
+  companies        Company[]
+  orders           Order[]
+  payments         Payment[]
+  documents        Document[]
+  serviceCharges   ServiceCharge[]
+  orderComments    OrderComment[]
+  orderFiles       OrderFile[]
+  timeLogs         TimeLog[]
+  services         Service[]
+  executorRates    ExecutorRate[]
+  auditLogs        AuditLog[]
+  internalTasks    InternalTask[]
+  activityLogs     ActivityLog[]
+  invites          Invite[]
+  documentCounters DocumentCounter[]
+  paymentSettings  PaymentSettings?
+  exchangeRate     ExchangeRate?
 
   @@index([planId])
   @@map("agencies")
