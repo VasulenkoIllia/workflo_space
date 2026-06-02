@@ -31,15 +31,16 @@ Tenant: усе agency-scoped (`agencyId` + `isInternalTeam`) + кожна дія
 
 > Перевикористовує наявне: invite-флоу (`createMemberInvite`), `provisionAgency`-стиль провіжну, credentials (17). Не дублює self-service (13-settings) — це агенційний паралель.
 
-## 2. Admin password reset (рішення — потребує підтвердження власника)
+## 2. Admin password reset — рішення: **обидва (link + temp-fallback)** (зафіксовано 1.06)
 
-Чутлива операція. Варіанти (зафіксувати перед реалізацією):
+`POST /workspace/clients/:companyId/members/:profileId/reset-password` body `{ mode: 'link' | 'temp' }`:
 
-- **A (рекоменд.): надіслати reset-лінк** — owner тисне «Скинути пароль» → юзеру лист із reset-посиланням (як forgot-password). **Owner НІКОЛИ не бачить пароль.** Найбезпечніше.
-- **B: тимчасовий пароль** — згенерувати + показати раз + примус зміни при першому вході (для юзерів без email).
-- **C: обидва** (link + fallback).
+- **`link` (за замовч., рекоменд.):** генерує `PasswordResetToken` (як forgot-password) → юзеру лист із reset-посиланням. **Owner НІКОЛИ не бачить пароль.** Безпечно; вимагає email-доступу юзера.
+- **`temp` (fallback для юзерів без email):** генерує одноразовий тимчасовий пароль, **показує owner'у РІВНО раз** у відповіді (не зберігаємо plaintext) + ставить `mustChangePassword=true` → примус зміни при першому вході.
 
-Будь-який варіант: інвалідувати наявні сесії (`tokenVersion++`), `audit_logs(action='client.password_reset_by_admin')`, notify юзера.
+Обидва режими: інвалідувати наявні сесії (`tokenVersion++` → всі refresh-токени мертві), `audit_logs(action='client.password_reset_by_admin', metadata={mode})`, notify юзера (email/in-app: «адміністратор скинув ваш пароль»). UI: модалка з вибором режиму + попередження.
+
+> Потрібна схема-дельта: `Profile.mustChangePassword Boolean @default(false)` (login повертає прапор → форс-зміна). Закласти разом із реалізацією модуля.
 
 ## 3. Lifecycle клієнта (агенційний бік)
 

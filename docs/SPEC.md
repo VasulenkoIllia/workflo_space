@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Єдина продуктова специфікація (SPEC)
 
-> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-28: ліди/інтеграції/client-mgmt 1.06) (вікторина A-D) + очистки беклогу.
+> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-29: ліди/інтеграції/client-mgmt/support 1.06) (вікторина A-D) + очистки беклогу.
 > **Призначення:** єдина точка входу й джерело істини. Концепція/візія — `CONCEPT_v2.md`; деталі модуля — `modules/NN-*.md`; рішення — `adr/*`; план — `TRACKER.md` (спрінти).
 > **Як читати:** цей файл = ЩО будуємо (інвентар + наскрізна архітектура + schema-delta). `TRACKER.md` = У ЯКОМУ ПОРЯДКУ (спрінти).
 
@@ -37,7 +37,7 @@
 
 ---
 
-## 4. 28 модулів — фіналізований інвентар (+26-28: leads/integrations/client-management 1.06)
+## 4. 29 модулів — фіналізований інвентар (+26-29: leads/integrations/client-management/support 1.06)
 
 > Кожен модуль пройшов: **A** (обов'язковий reconcile зі схемою) + **B/C/D** (обрані у вікторині фічі). Деталі — у `modules/NN-*.md` секція «Аудит-фіналізація».
 
@@ -109,7 +109,9 @@
 
 **27-integrations** — інтеграційний хаб (adapter-патерн). **Inbound:** Lead Intake API `POST /v1/leads` (ApiKey, форма клієнта) + соц-адаптери. **Outbound:** `WebhookEndpoint`/`WebhookDelivery` (зміни станів→зовні, HMAC, **через outbox**). **ApiKey** (per-agency Bearer). _Статус:_ **P1** — website-form-API + Telegram + outbound-webhooks; P2 — Meta/WhatsApp/TikTok/widget; P3 — marketplace/public-API. (Поглинає `WebhookEndpoint`/`ApiKey` з 20-admin.)
 
-**28-client-management** — агенція керує клієнтами (прогалина аудиту 1.06): client-CRUD картки, **agency-side member-mgmt** юзерів клієнта, **admin-reset-password** (reset-лінк, owner не бачить пароль), deactivate/офбординг+GDPR-export. Окреме від self-service власника (13). `isInternalTeam`+owner/admin+audit. _Статус:_ P1 (backend design-independent).
+**28-client-management** — агенція керує клієнтами (прогалина аудиту 1.06): client-CRUD картки, **agency-side member-mgmt** юзерів клієнта, **admin-reset-password** (reset-лінк/temp-fallback, owner не бачить пароль у link-режимі), deactivate/офбординг+GDPR-export. Окреме від self-service власника (13). `isInternalTeam`+owner/admin+audit. _Статус:_ P1 (backend design-independent).
+
+**29-support** — тікет-система звернень **поза замовленням** (прогалина аудиту 1.06 #2): `Ticket`+`TicketMessage` (status open/pending/resolved/closed, priority, category, assignee, source, SLA-поля), internal-нотатки (leak-guard як 03), portal-відкриття + workspace-черга, convert→Order, інтеграція в chat-hub (18). _Фічі P2:_ SLA-breach-cron, auto-assign, canned-replies, CSAT, email/telegram-source. `isInternalTeam`+agency-scoped+audit. _Статус:_ P1 (backend design-independent).
 
 ---
 

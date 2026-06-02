@@ -135,6 +135,23 @@
 
 ---
 
+## 🎫 SUPPORT — Тікет-система (новий модуль 29, спец 1.06)
+
+> Спец: [`modules/29-support.md`](modules/29-support.md). Закриває прогалину аудиту #2 (звернення поза замовленням). API — design-independent (backend-фаза); екрани (черга/тред) — у фронтенд-прохід, перевикористовують thread-патерн чату (03).
+
+| ID     | Задача                                                                                                                                      | Модуль  | Статус    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
+| SUP-1  | `Ticket`+`TicketMessage` міграція + `TicketStatus`/`TicketPriority` enums + категорії per-agency                                            | [29]    | ⬜        |
+| SUP-2  | Portal API: відкрити/список/тред/відповісти (`/support/tickets`) + leak-guard (лише public) + notify `support.new_ticket`                   | [29]    | ⬜        |
+| SUP-3  | Workspace API: черга+фільтри/тред(incl. internal)/відповідь/PATCH(status·priority·assign·category)/convert→Order + SSE (`chatBus`-патерн)   | [29]    | ⬜        |
+| SUP-4  | Інтеграція в chat-hub (18): тікети поряд з order-чатами в єдиному inbox                                                                     | [29/18] | ⬜        |
+| SUP-P2 | SLA-політики+breach-cron, auto-assign-правила, canned-replies, CSAT після close, email/telegram як source (через 27-inbound), KB-self-serve | [29]    | ⬜ P2     |
+| SUP-UI | Portal (мої звернення/нове/тред) + Workspace (черга/тікет з internal-нотатками) — у фронтенд-прохід                                         | [29]    | ⏸️ design |
+
+> **SaaS-вписування:** категорії/SLA per-agency; ліміти тікетів — через quota-seam (SAAS.md F2).
+
+---
+
 ## SPRINT 3 — Portal Frontend (ядро) — ⏸️ ВІДКЛАДЕНО у фронтенд-прохід (design-gated)
 
 > Ціль: клієнт реєструється, бачить задачі, спілкується, дивиться рахунки.

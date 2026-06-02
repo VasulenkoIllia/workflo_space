@@ -97,6 +97,7 @@ turbo dev
 | [26](modules/26-leads.md)             | Leads (CRM-inbound) | Workspace, API          | Growth-P1 |
 | [27](modules/27-integrations.md)      | Integrations hub    | API, Workspace          | Growth-P1 |
 | [28](modules/28-client-management.md) | Client Management   | Workspace, API          | P1        |
+| [29](modules/29-support.md)           | Support (tickets)   | Portal, Workspace, API  | P1        |
 
 > Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `TRACKER.md` (КОЛИ). Архітектурні рішення — `adr/` (001-007). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — `AUDIT_S0_S1.md`/`AUDIT_S0_S2.md`.
 
