@@ -1,9 +1,15 @@
 import { prisma } from '@workflo/db'
+import { ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { subscribeChat } from '../../services/chatBus.js'
 import { requireOrderParticipant } from './access.js'
 
 const HEARTBEAT_MS = 30_000
+
+// R-4: cap concurrent SSE streams per user (connection / DB-handle exhaustion guard).
+// Per-replica in-memory — fine for the single-replica deployment (see rate-limit note).
+const MAX_STREAMS_PER_USER = 5
+const openStreamsByUser = new Map<string, number>()
 
 const STREAM_COMMENT_SELECT = {
   id: true,
@@ -29,6 +35,22 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const access = await requireOrderParticipant(request, request.params.id)
+
+      // R-4: reject before hijacking (so this is a normal JSON 503, not a dead stream).
+      const uid = request.user.sub
+      const openCount = openStreamsByUser.get(uid) ?? 0
+      if (openCount >= MAX_STREAMS_PER_USER) {
+        return reply.status(503).send({
+          success: false,
+          error: {
+            code: ApiErrorCode.RATE_LIMITED,
+            message: 'Забагато одночасних підключень. Закрийте зайві вкладки.',
+            details: null,
+          },
+        })
+      }
+      openStreamsByUser.set(uid, openCount + 1)
+
       const res = reply.raw
 
       reply.hijack()
@@ -81,6 +103,9 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         closed = true
         clearInterval(heartbeat)
         unsubscribe()
+        const remaining = (openStreamsByUser.get(uid) ?? 1) - 1
+        if (remaining <= 0) openStreamsByUser.delete(uid)
+        else openStreamsByUser.set(uid, remaining)
         res.end()
       }
       request.raw.on('close', cleanup)
