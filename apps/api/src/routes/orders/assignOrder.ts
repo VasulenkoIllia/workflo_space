@@ -1,7 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, assignOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
+import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -31,11 +31,12 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Призначення доступне лише команді', 403)
       }
-      const agencyId = requireActiveAgency(user)
 
       if (input.assigneeId) {
+        // Validate against the ORDER's agency (the resource), not the actor's active
+        // agency — these can differ for a multi-agency user (R-3 / Phase 1 IDOR).
         const member = await prisma.agencyMember.findUnique({
-          where: { agencyId_profileId: { agencyId, profileId: input.assigneeId } },
+          where: { agencyId_profileId: { agencyId: order.agencyId, profileId: input.assigneeId } },
           select: { profileId: true },
         })
         if (!member) {
@@ -53,6 +54,7 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: user.sub,
+        agencyId: order.agencyId,
         action: input.assigneeId ? 'order.assigned' : 'order.unassigned',
         resourceType: 'order',
         resourceId: order.id,

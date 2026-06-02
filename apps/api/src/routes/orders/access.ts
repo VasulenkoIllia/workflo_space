@@ -1,7 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
-import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
+import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 
 export interface OrderAccess {
@@ -67,5 +67,8 @@ export async function requireTeamOrder(
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
   }
   assertSameTenant(user, order.agencyId)
-  return { orderId: order.id, agencyId: requireActiveAgency(user) }
+  // Return the ORDER's agency (the resource), not the actor's active agency — they
+  // differ for a multi-agency user, and downstream stamps / assignee-membership
+  // checks must bind to the order's tenant (R-3 / Phase 1 IDOR).
+  return { orderId: order.id, agencyId: order.agencyId }
 }

@@ -10,7 +10,8 @@ import { writeAuditAsync } from '../../services/audit.js'
  * recipients the frontend routes through login/register first, then back here.
  *
  *   - company_member → create CompanyMember(role='member') with invite permissions
- *   - executor       → promote the profile to role='executor'
+ *   - executor       → create AgencyMember(role='executor') (what isInternalTeam reads)
+ *                      + set Profile.role='executor' (UI hint)
  *
  * Marks the invite used inside the same transaction (idempotent guard).
  */
@@ -28,6 +29,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         where: { token: request.params.token },
         select: {
           id: true,
+          agencyId: true,
           email: true,
           type: true,
           companyId: true,
@@ -85,6 +87,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
 
         writeAuditAsync(request.log, {
           actorId: profileId,
+          agencyId: invite.agencyId,
           action: 'company.member_joined',
           resourceType: 'company',
           resourceId: companyId,
@@ -98,7 +101,13 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         })
       }
 
-      // executor invite → promote profile to executor
+      // executor invite → create the AgencyMember (isInternalTeam reads agency
+      // membership, NOT Profile.role — R-1). The invite carries the agency.
+      const agencyId = invite.agencyId
+      if (!agencyId) {
+        // Should never happen post-migration (every invite carries agencyId).
+        throw gone()
+      }
       await prisma.$transaction(async (tx) => {
         const claimed = await tx.invite.updateMany({
           where: { id: invite.id, usedAt: null },
@@ -107,11 +116,18 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         if (claimed.count === 0) {
           throw gone()
         }
+        await tx.agencyMember.upsert({
+          where: { agencyId_profileId: { agencyId, profileId } },
+          update: {}, // already a member → idempotent
+          create: { agencyId, profileId, role: 'executor' },
+        })
+        // Profile.role is a denormalized UI hint; the authoritative signal is the membership.
         await tx.profile.update({ where: { id: profileId }, data: { role: 'executor' } })
       })
 
       writeAuditAsync(request.log, {
         actorId: profileId,
+        agencyId,
         action: 'executor.joined',
         resourceType: 'profile',
         resourceId: profileId,
@@ -121,7 +137,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
 
       return reply.status(200).send({
         success: true,
-        data: { type: 'executor', role: 'executor' },
+        data: { type: 'executor', agencyId, role: 'executor' },
       })
     }
   )

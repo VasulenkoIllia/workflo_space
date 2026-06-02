@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, INVITE_TTL_MS, inviteExecutorSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { sendExecutorInviteEmail } from '../../services/inviteEmail.js'
@@ -22,6 +23,8 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
       const input = inviteExecutorSchema.parse(request.body)
       const email = input.email.toLowerCase().trim()
       const inviterId = request.user.sub
+      // Stamp the inviter's agency so acceptance can create the AgencyMember (R-1).
+      const agencyId = requireActiveAgency(request.user)
 
       // Supersede prior pending invites + issue the new one atomically, so a
       // double-submit can't leave two live invites for the same email (audit S0-S2).
@@ -32,6 +35,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
         })
         return tx.invite.create({
           data: {
+            agencyId,
             email,
             token: generateOpaqueToken(),
             type: 'executor',
@@ -57,6 +61,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: inviterId,
+        agencyId,
         action: 'executor.invited',
         resourceType: 'invite',
         resourceId: invite.id,

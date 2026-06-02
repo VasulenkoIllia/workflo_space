@@ -13,6 +13,7 @@ const profileUpdate = vi.fn()
 const companyFindUnique = vi.fn()
 const companyMemberFindUnique = vi.fn()
 const companyMemberUpsert = vi.fn()
+const agencyMemberUpsert = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
 const notifyRecipient = vi.fn().mockResolvedValue({
@@ -31,6 +32,7 @@ vi.mock('@workflo/db', () => ({
     profile: { findUnique: profileFindUnique, update: profileUpdate },
     company: { findUnique: companyFindUnique },
     companyMember: { findUnique: companyMemberFindUnique, upsert: companyMemberUpsert },
+    agencyMember: { upsert: agencyMemberUpsert },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   },
@@ -261,6 +263,74 @@ describe('POST /invite/:token/accept', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.type).toBe('company_member')
     expect(companyMemberUpsert).toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('executor accept → creates AgencyMember(role=executor) + sets Profile.role, marks used (R-1)', async () => {
+    inviteFindUnique.mockResolvedValue({
+      id: 'inv-x',
+      agencyId: 'agency-1',
+      email: 'exec@workflo.space',
+      type: 'executor',
+      companyId: null,
+      permissions: null,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 100000),
+    })
+    profileFindUnique.mockResolvedValue({ id: 'exec-1', email: 'exec@workflo.space' })
+    inviteUpdateMany.mockResolvedValue({ count: 1 })
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        invite: { updateMany: inviteUpdateMany },
+        agencyMember: { upsert: agencyMemberUpsert },
+        profile: { update: profileUpdate },
+      })
+    )
+    auditLogCreate.mockResolvedValue({})
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/invite/tok-x/accept',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.type).toBe('executor')
+    // The authoritative signal isInternalTeam reads — must be created.
+    expect(agencyMemberUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { agencyId_profileId: { agencyId: 'agency-1', profileId: 'exec-1' } },
+        create: { agencyId: 'agency-1', profileId: 'exec-1', role: 'executor' },
+      })
+    )
+    expect(profileUpdate).toHaveBeenCalledWith({
+      where: { id: 'exec-1' },
+      data: { role: 'executor' },
+    })
+    await app.close()
+  })
+
+  it('executor accept with no agencyId on the invite → 410 (never lock the user out)', async () => {
+    inviteFindUnique.mockResolvedValue({
+      id: 'inv-x',
+      agencyId: null,
+      email: 'exec@workflo.space',
+      type: 'executor',
+      companyId: null,
+      permissions: null,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 100000),
+    })
+    profileFindUnique.mockResolvedValue({ id: 'exec-1', email: 'exec@workflo.space' })
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/invite/tok-x/accept',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+    })
+    expect(res.statusCode).toBe(410)
+    expect(agencyMemberUpsert).not.toHaveBeenCalled()
     await app.close()
   })
 

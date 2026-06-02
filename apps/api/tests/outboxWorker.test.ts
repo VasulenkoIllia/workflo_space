@@ -35,7 +35,11 @@ describe('outbox worker — order.status_changed handler', () => {
   afterEach(() => vi.clearAllMocks())
 
   it('notifies non-actor company members when the client status changes', async () => {
-    orderFindUnique.mockResolvedValue({ title: 'Land migration', companyId: 'company-1' })
+    orderFindUnique.mockResolvedValue({
+      agencyId: 'agency-1',
+      title: 'Land migration',
+      companyId: 'company-1',
+    })
     companyMemberFindMany.mockResolvedValue([{ profileId: 'p1' }, { profileId: 'p2' }])
     // in_progress (internal) → review (internal) maps to a NEW client status (pending_approval)
     await handler(event({ orderId: 'o1', from: 'in_progress', to: 'review', actorId: 'exec-1' }))
@@ -54,9 +58,20 @@ describe('outbox worker — order.status_changed handler', () => {
   })
 
   it('no-ops when the order has no company members', async () => {
-    orderFindUnique.mockResolvedValue({ title: 'X', companyId: 'company-1' })
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'X', companyId: 'company-1' })
     companyMemberFindMany.mockResolvedValue([])
     await handler(event({ orderId: 'o1', from: 'in_progress', to: 'done', actorId: 'exec-1' }))
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('skips notify when the order belongs to a different tenant than the event (defense-in-depth)', async () => {
+    orderFindUnique.mockResolvedValue({
+      agencyId: 'agency-OTHER',
+      title: 'X',
+      companyId: 'company-1',
+    })
+    companyMemberFindMany.mockResolvedValue([{ profileId: 'p1' }])
+    await handler(event({ orderId: 'o1', from: 'in_progress', to: 'review', actorId: 'exec-1' }))
     expect(notify).not.toHaveBeenCalled()
   })
 

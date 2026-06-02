@@ -87,6 +87,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         })
         await tx.activityLog.create({
           data: {
+            agencyId: order.agencyId, // S-D3: stamp tenant on the activity row
             orderId: order.id,
             actorId: user.sub,
             action: 'status_changed',
@@ -109,6 +110,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: user.sub,
+        agencyId: order.agencyId,
         action: 'order.status_changed',
         resourceType: 'order',
         resourceId: order.id,

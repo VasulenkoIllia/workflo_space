@@ -67,6 +67,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       const task = await prisma.internalTask.create({
         data: {
           order: { connect: { id: request.params.orderId } },
+          agency: { connect: { id: agencyId } }, // S-D3: stamp tenant on new tasks
           title: input.title,
           position: input.position ?? 0,
           ...(input.assigneeId ? { assignee: { connect: { id: input.assigneeId } } } : {}),
@@ -76,6 +77,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
+        agencyId,
         action: 'order.task_created',
         resourceType: 'order',
         resourceId: request.params.orderId,
@@ -119,12 +121,13 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/tasks/:taskId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await requireTeamOrder(request, request.params.orderId)
+      const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       await prisma.internalTask.delete({ where: { id: request.params.taskId } })
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
+        agencyId,
         action: 'order.task_deleted',
         resourceType: 'order',
         resourceId: request.params.orderId,

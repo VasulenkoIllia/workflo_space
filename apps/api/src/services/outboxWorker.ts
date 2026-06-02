@@ -43,9 +43,18 @@ async function handleOrderStatusChanged(
 
   const order = await prisma.order.findUnique({
     where: { id: p.orderId },
-    select: { title: true, companyId: true },
+    select: { agencyId: true, title: true, companyId: true },
   })
   if (!order?.companyId) return
+  // Defense-in-depth: the worker runs without a request tenant-context, so assert
+  // the loaded order belongs to the event's tenant — never fan out cross-tenant.
+  if (event.agencyId && order.agencyId !== event.agencyId) {
+    logger.error(
+      { orderId: p.orderId, eventAgencyId: event.agencyId, orderAgencyId: order.agencyId },
+      'outbox: order/event tenant mismatch — skipping notify'
+    )
+    return
+  }
 
   const recipients = await prisma.companyMember.findMany({
     where: { companyId: order.companyId, profileId: { not: p.actorId } },

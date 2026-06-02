@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
 
 export interface AuditEntry {
+  agencyId?: string | null
   actorId?: string | null
   action: string
   resourceType?: string | null
@@ -14,6 +15,7 @@ export interface AuditEntry {
 export async function writeAudit(entry: AuditEntry): Promise<void> {
   await prisma.auditLog.create({
     data: {
+      agencyId: entry.agencyId ?? null,
       actorId: entry.actorId ?? null,
       action: entry.action,
       resourceType: entry.resourceType ?? null,

@@ -4,6 +4,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, isAllowedFileMimeType, MAX_FILES_PER_ORDER } from '@workflo/types'
 import { buildOrderFileKey, safeExt, sha256Hex } from '@workflo/storage'
 import type { FastifyPluginAsync } from 'fastify'
+import { assertWithinQuota } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { getStorage } from '../../services/storage.js'
 import { requireOrderParticipant } from '../orders/access.js'
@@ -50,6 +51,9 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
         throw err
       }
 
+      // F2: storage quota seam (no-op Phase 0; checks plan bytes in Phase 1).
+      await assertWithinQuota(access.agencyId, 'storage', buffer.length)
+
       const fileId = randomUUID()
       const key = buildOrderFileKey(access.agencyId, access.orderId, fileId, safeExt(part.filename))
       await getStorage().upload({ key, buffer, contentType: part.mimetype })
@@ -80,6 +84,7 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
+        agencyId: access.agencyId,
         action: 'order.file_uploaded',
         resourceType: 'order',
         resourceId: access.orderId,
@@ -171,6 +176,7 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
+        agencyId: access.agencyId,
         action: 'order.file_deleted',
         resourceType: 'order',
         resourceId: file.orderId,
