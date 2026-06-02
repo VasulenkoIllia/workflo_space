@@ -784,3 +784,51 @@ turbo run type-check
 - Pre-push: TypeScript `tsc --noEmit` по всьому монорепо
 
 ---
+
+## RLS rollout (F4 / ADR-007) — tenant isolation backstop
+
+Postgres Row-Level Security is the **default-on, DB-enforced second layer** beneath
+the app-level guards (`can()` / `assertSameTenant` / loaders). The migration
+`20260603_f4_rls_policies` lays it; it is **inert until activated** (policies are
+permissive while the `app.current_agency_id` GUC is unset), so it ships safely
+ahead of the flip.
+
+**How it works**
+
+- Every tenant table has `ENABLE + FORCE ROW LEVEL SECURITY` + a `tenant_isolation`
+  policy: `wf_in_tenant("agencyId")` for column-scoped tables, a parent-join EXISTS
+  for the agency-less children (order_stages/order_chat_reads → orders;
+  company_members/company_services/referrals/referral_bonuses → companies).
+- `wf_in_tenant(agency)` = **TRUE when the GUC is unset** (permissive), on
+  `app.rls_bypass='on'`, or when `agency` equals `app.current_agency_id`.
+- `@workflo/db` binds context via `AsyncLocalStorage` (`runWithAgency` /
+  `runWithSystemContext`); the `authenticate` hook calls `enterAgencyContext(activeAgencyId)`.
+  When `RLS_ENFORCED=true`, the Prisma client extension wraps each op in
+  `$transaction([ set_config('app.current_agency_id', …, true), <op> ])` so the
+  GUC scopes it.
+
+**⚠️ RLS does NOT apply to superusers / the table owner without FORCE.** Enforcement
+therefore requires the **web layer to connect as the non-superuser `workflo_app`
+role** (created NOLOGIN by the migration). Migrations / worker / seed keep the owner
+(admin) connection — they bypass RLS, which is exactly what they need.
+
+**Activation checklist (the "one flip")**
+
+1. `ALTER ROLE workflo_app LOGIN PASSWORD '…';` then point the **web** process's
+   `DATABASE_URL` at `workflo_app`. Keep an admin URL for `migrate deploy` / seed /
+   the worker container.
+2. Set `RLS_ENFORCED=true` on the web process.
+3. **Interactive transactions** (`prisma.$transaction(async tx => …)` in
+   transitionOrderStatus / acceptInvite / register / refresh / password-reset) must
+   set the GUC as their first statement —
+   `await tx.$executeRaw\`SELECT set_config('app.current_agency_id', ${agencyId}, true)\``
+   — because the per-op extension can't wrap ops already inside an interactive tx.
+4. Worker/bootstrap: wrap DB work in `runWithSystemContext` (and add the bypass GUC
+   to the raw outbox claim query) once policies flip from permissive to deny-on-unset.
+5. Smoke-test: as `workflo_app`, confirm a cross-tenant `findUnique` returns null and
+   a same-tenant read works (mirrors the throwaway-pg verification of the migration).
+
+Verified on throwaway-pg (2-agency seed, `SET ROLE workflo_app`): column-scoped +
+parent-scoped isolation hold, `rls_bypass` sees all, GUC-unset is permissive.
+
+---

@@ -1,5 +1,6 @@
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
+import { enterAgencyContext } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fp from 'fastify-plugin'
@@ -56,6 +57,12 @@ async function jwtPlugin(fastify: FastifyInstance): Promise<void> {
       await request.jwtVerify()
     } catch {
       throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Потрібна автентифікація', 401)
+    }
+    // RLS seam (F4 / ADR-007): bind the request's tenant so the DB client sets the
+    // `app.current_agency_id` GUC for every query. No-op unless RLS_ENFORCED=true
+    // (and the app connects as the non-superuser workflo_app role) — see @workflo/db.
+    if (process.env.RLS_ENFORCED === 'true' && request.user.activeAgencyId) {
+      enterAgencyContext(request.user.activeAgencyId)
     }
   })
 }
