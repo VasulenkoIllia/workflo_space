@@ -67,24 +67,38 @@ turbo dev
 
 ### Модульні документи
 
-| #                                  | Модуль             | Стосується              | Статус |
-| ---------------------------------- | ------------------ | ----------------------- | ------ |
-| [01](modules/01-auth.md)           | Auth               | Portal, Workspace, API  | MVP    |
-| [02](modules/02-orders.md)         | Orders             | Portal, Workspace, API  | MVP    |
-| [03](modules/03-chat-comments.md)  | Chat & Comments    | Portal, Workspace, API  | MVP    |
-| [04](modules/04-files.md)          | Files & Storage    | Portal, Workspace, API  | MVP    |
-| [05](modules/05-billing.md)        | Billing & Payments | Portal, Workspace, API  | MVP    |
-| [06](modules/06-documents.md)      | Documents (PDF)    | Workspace, Portal, API  | MVP    |
-| [07](modules/07-notifications.md)  | Notifications      | API, Bot                | MVP    |
-| [08](modules/08-email.md)          | Email Templates    | API, Mailcow            | MVP    |
-| [09](modules/09-referral.md)       | Referral System    | Portal, Workspace, API  | MVP    |
-| [10](modules/10-loyalty.md)        | Loyalty & Bonuses  | Portal, Workspace, API  | MVP    |
-| [11](modules/11-content-blog.md)   | Content & Blog     | Workspace, Landing, API | MVP    |
-| [12](modules/12-team-executors.md) | Team & Executors   | Workspace, API          | MVP    |
-| [13](modules/13-settings.md)       | Settings           | Portal, Workspace, API  | MVP    |
-| [14](modules/14-landing.md)        | Landing Page       | Landing                 | MVP    |
-| [15](modules/15-bot.md)            | Telegram Bot       | Bot, API                | MVP    |
-| [16](modules/16-search.md)         | Search & Filters   | Portal, Workspace, API  | MVP    |
+| #                                     | Модуль              | Стосується              | Статус    |
+| ------------------------------------- | ------------------- | ----------------------- | --------- |
+| [01](modules/01-auth.md)              | Auth                | Portal, Workspace, API  | MVP       |
+| [02](modules/02-orders.md)            | Orders              | Portal, Workspace, API  | MVP       |
+| [03](modules/03-chat-comments.md)     | Chat & Comments     | Portal, Workspace, API  | MVP       |
+| [04](modules/04-files.md)             | Files & Storage     | Portal, Workspace, API  | MVP       |
+| [05](modules/05-billing.md)           | Billing & Payments  | Portal, Workspace, API  | MVP       |
+| [06](modules/06-documents.md)         | Documents (PDF)     | Workspace, Portal, API  | MVP       |
+| [07](modules/07-notifications.md)     | Notifications       | API, Bot                | MVP       |
+| [08](modules/08-email.md)             | Email Templates     | API, Mailcow            | MVP       |
+| [09](modules/09-referral.md)          | Referral System     | Portal, Workspace, API  | MVP       |
+| [10](modules/10-loyalty.md)           | Loyalty & Bonuses   | Portal, Workspace, API  | MVP       |
+| [11](modules/11-content-blog.md)      | Content & Blog      | Workspace, Landing, API | MVP       |
+| [12](modules/12-team-executors.md)    | Team & Executors    | Workspace, API          | MVP       |
+| [13](modules/13-settings.md)          | Settings            | Portal, Workspace, API  | MVP       |
+| [14](modules/14-landing.md)           | Landing Page        | Landing                 | MVP       |
+| [15](modules/15-bot.md)               | Telegram Bot        | Bot, API                | MVP       |
+| [16](modules/16-search.md)            | Search & Filters    | Portal, Workspace, API  | S11       |
+| [17](modules/17-credentials.md)       | Credentials Vault   | Workspace, API          | MVP       |
+| [18](modules/18-chat-hub.md)          | Chat Hub (inbox)    | Portal, Workspace, API  | S7        |
+| [19](modules/19-reports.md)           | Reports             | Workspace, API          | S5+       |
+| [20](modules/20-admin-settings.md)    | Admin Settings      | Workspace, API          | S-admin   |
+| [21](modules/21-system-monitoring.md) | System Monitoring   | Ops, API                | S7-S8     |
+| [22](modules/22-finance-expenses.md)  | Finance & Expenses  | Workspace, API          | S5        |
+| [23](modules/23-leave-tracking.md)    | Leave Tracking      | Workspace, API          | S-team    |
+| [24](modules/24-calendar.md)          | Calendar            | Portal, Workspace, API  | S-cal     |
+| [25](modules/25-wallet.md)            | Wallet (2 accounts) | Portal, Workspace, API  | S5        |
+| [26](modules/26-leads.md)             | Leads (CRM-inbound) | Workspace, API          | Growth-P1 |
+| [27](modules/27-integrations.md)      | Integrations hub    | API, Workspace          | Growth-P1 |
+| [28](modules/28-client-management.md) | Client Management   | Workspace, API          | P1        |
+
+> Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `TRACKER.md` (КОЛИ). Архітектурні рішення — `adr/` (001-007). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — `AUDIT_S0_S1.md`/`AUDIT_S0_S2.md`.
 
 ---
 

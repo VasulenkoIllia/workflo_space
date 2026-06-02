@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Єдина продуктова специфікація (SPEC)
 
-> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-27 інтеграції / ліди 1.06) (вікторина A-D) + очистки беклогу.
+> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-28: ліди/інтеграції/client-mgmt 1.06) (вікторина A-D) + очистки беклогу.
 > **Призначення:** єдина точка входу й джерело істини. Концепція/візія — `CONCEPT_v2.md`; деталі модуля — `modules/NN-*.md`; рішення — `adr/*`; план — `TRACKER.md` (спрінти).
 > **Як читати:** цей файл = ЩО будуємо (інвентар + наскрізна архітектура + schema-delta). `TRACKER.md` = У ЯКОМУ ПОРЯДКУ (спрінти).
 
@@ -37,7 +37,7 @@
 
 ---
 
-## 4. 27 модулів — фіналізований інвентар (+26-leads, +27-integrations 1.06)
+## 4. 28 модулів — фіналізований інвентар (+26-28: leads/integrations/client-management 1.06)
 
 > Кожен модуль пройшов: **A** (обов'язковий reconcile зі схемою) + **B/C/D** (обрані у вікторині фічі). Деталі — у `modules/NN-*.md` секція «Аудит-фіналізація».
 
@@ -108,6 +108,8 @@
 **26-leads** — CRM-inbound: воронка лідів (`Lead`+`LeadPipeline`/`LeadStage`/`LeadActivity`), **конфігурований канбан**, мульти-джерельна **атрибуція** (`source`: website*form/telegram/instagram/tiktok/facebook/whatsapp/email/phone/manual/referral), конверсія лід→Company. SSE-дошка, notify. *Статус:\_ P1 — manual+website+telegram; P2 — соц-канали.
 
 **27-integrations** — інтеграційний хаб (adapter-патерн). **Inbound:** Lead Intake API `POST /v1/leads` (ApiKey, форма клієнта) + соц-адаптери. **Outbound:** `WebhookEndpoint`/`WebhookDelivery` (зміни станів→зовні, HMAC, **через outbox**). **ApiKey** (per-agency Bearer). _Статус:_ **P1** — website-form-API + Telegram + outbound-webhooks; P2 — Meta/WhatsApp/TikTok/widget; P3 — marketplace/public-API. (Поглинає `WebhookEndpoint`/`ApiKey` з 20-admin.)
+
+**28-client-management** — агенція керує клієнтами (прогалина аудиту 1.06): client-CRUD картки, **agency-side member-mgmt** юзерів клієнта, **admin-reset-password** (reset-лінк, owner не бачить пароль), deactivate/офбординг+GDPR-export. Окреме від self-service власника (13). `isInternalTeam`+owner/admin+audit. _Статус:_ P1 (backend design-independent).
 
 ---
 
