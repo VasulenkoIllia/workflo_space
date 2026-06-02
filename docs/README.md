@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Документація
 
-> Версія: 1.0 | Оновлено: 12 квітня 2026
+> Версія: 1.0 | Оновлено: 2 червня 2026
 > **Головний індекс проекту. Всі зміни вносяться спочатку сюди, потім у відповідний модульний документ.**
 
 ---
@@ -60,7 +60,7 @@ turbo dev
 | [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                            |
 | [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                   |
 | [CRON_JOBS.md](CRON_JOBS.md)                         | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                                                             |
-| [TRACKER.md](TRACKER.md)                             | Трекер прогресу — всі 171 задача по спринтах S0–S8, статуси                                                                                            |
+| [TRACKER.md](TRACKER.md)                             | Трекер прогресу — всі 171 задача по спринтах S0–S14, статуси                                                                                           |
 | [S0_RUNBOOK.md](S0_RUNBOOK.md)                       | Практичний runbook для закриття S0 (GitHub, Hetzner, Traefik, deploy)                                                                                  |
 | [README.md](README.md)                               | **Цей файл** — глобальний індекс                                                                                                                       |
 
@@ -158,26 +158,26 @@ turbo dev
 
 ## КЛЮЧОВІ РІШЕННЯ (зафіксовано)
 
-| Рішення           | Вибір                                             | Причина                         |
-| ----------------- | ------------------------------------------------- | ------------------------------- |
-| Репо              | Monorepo (один приватний GitHub репо)             | Shared packages, один PR flow   |
-| API               | Fastify (не Next.js API routes)                   | 3 frontend apps + SSE streaming |
-| Auth              | Access token in memory + httpOnly refresh cookie  | XSS-safe                        |
-| DB migrations     | Тільки additive в MVP                             | Zero-downtime                   |
-| File storage      | Docker Volume → Hetzner Object Storage (Phase 2)  | StorageAdapter pattern          |
-| Payments          | Manual → LiqPay/Stripe (Phase 2)                  | PaymentProvider pattern         |
-| Реферали          | Depth = 1 (прямі тільки)                          | Не MLM, юридично чисто          |
-| Валюта            | USD base + UAH через НБУ API                      | Офіційний курс                  |
-| Timezone          | UTC в БД, Kyiv у workspace, browser у portal      | —                               |
-| Blog content      | Markdown (AI генерує)                             | Простіше ніж TipTap JSON        |
-| Версіонування     | SemVer без `/v1/` prefix в MVP                    | Не потрібно до breaking change  |
-| Bot mode          | `BOT_MODE=polling` (dev) / `webhook` (prod)       | ENV switch                      |
-| Теми              | Light / Dark / System, Tailwind `darkMode: class` | CSS variables                   |
-| Мови              | UA + EN скрізь, `next-intl` / `react-i18next`     | —                               |
-| OTP               | Таблиця `otp_tokens` (purpose + channel)          | Розширюваність                  |
-| Нотифікації       | Email + Telegram (MVP), SMS (Phase 3)             | Channel adapter pattern         |
-| Invoice нумерація | Скидається 1 січня (INV-2026-0001)                | Стандарт бухгалтерії            |
-| Referral code     | `workflo-XXXXXX` (6 символів)                     | Читабельно                      |
+| Рішення           | Вибір                                                                                    | Причина                         |
+| ----------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
+| Репо              | Monorepo (один приватний GitHub репо)                                                    | Shared packages, один PR flow   |
+| API               | Fastify (не Next.js API routes)                                                          | 3 frontend apps + SSE streaming |
+| Auth              | Access token in memory + httpOnly refresh cookie                                         | XSS-safe                        |
+| DB migrations     | Additive або backfill→tighten (S-D1: orders.agencyId → NOT NULL на backfill'нутих даних) | Zero-downtime                   |
+| File storage      | Docker Volume → Hetzner Object Storage (Phase 2)                                         | StorageAdapter pattern          |
+| Payments          | Manual → LiqPay/Stripe (Phase 2)                                                         | PaymentProvider pattern         |
+| Реферали          | Depth = 1 (прямі тільки)                                                                 | Не MLM, юридично чисто          |
+| Валюта            | USD base + UAH через НБУ API                                                             | Офіційний курс                  |
+| Timezone          | UTC в БД, Kyiv у workspace, browser у portal                                             | —                               |
+| Blog content      | Markdown (AI генерує)                                                                    | Простіше ніж TipTap JSON        |
+| Версіонування     | SemVer без `/v1/` prefix в MVP                                                           | Не потрібно до breaking change  |
+| Bot mode          | `BOT_MODE=polling` (dev) / `webhook` (prod)                                              | ENV switch                      |
+| Теми              | Light / Dark / System, Tailwind `darkMode: class`                                        | CSS variables                   |
+| Мови              | UA + EN скрізь, `next-intl` / `react-i18next`                                            | —                               |
+| OTP               | Таблиця `otp_tokens` (purpose + channel)                                                 | Розширюваність                  |
+| Нотифікації       | Email + Telegram (MVP), SMS (Phase 3)                                                    | Channel adapter pattern         |
+| Invoice нумерація | Скидається 1 січня (INV-2026-0001)                                                       | Стандарт бухгалтерії            |
+| Referral code     | `workflo-XXXXXX` (6 символів)                                                            | Читабельно                      |
 
 ---
 

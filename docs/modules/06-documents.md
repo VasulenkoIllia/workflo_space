@@ -258,16 +258,7 @@ PDF генерується мовою компанії клієнта (`Company.
 
 ### Integration з auto-invoice
 
-Cron `C02:recurring_billing` (`05-billing.md`) створює `Document(type='invoice')` для кожної recurring subscription. Sequence number generation (для номера інвойсу):
-
-```sql
-INSERT INTO documents (type, number, ...)
-SELECT 'invoice', 'INV-' || EXTRACT(year FROM NOW()) || '-' || LPAD((MAX(seq)+1)::text, 6, '0'), ...
-FROM documents
-WHERE type = 'invoice' AND number ~ ('^INV-' || EXTRACT(year FROM NOW()))
-```
-
-Атомарність: всередині transaction з `SELECT FOR UPDATE` на спеціальному `document_sequences` row.
+Cron `C02:recurring_billing` (`05-billing.md`) створює `Document(type='invoice')` для кожної recurring subscription. Номер інвойсу — через **канонічний per-agency `DocumentCounter`** (`@@id([agencyId, type, year])` + `count`): `INSERT…ON CONFLICT DO UPDATE…RETURNING count` (race-safe, без `MAX(seq)+1` self-join і без `document_sequences`). Деталі — секція «Канонічно» вище.
 
 ### Specification flow (autogeneration)
 

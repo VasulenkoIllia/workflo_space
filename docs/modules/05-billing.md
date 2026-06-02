@@ -3,7 +3,7 @@
 > App: api.workflo.space / workspace (work.workflo.space) / portal (portal.workflo.space)
 > Статус: MVP
 > Залежить від: [01-auth, 02-companies, 03-orders, 04-services]
-> Оновлено: 12 квітня 2026
+> Оновлено: 2 червня 2026 (doc-sync)
 
 ---
 
@@ -182,7 +182,7 @@ if (balanceDue <= 0) {
 
 Всі суми в БД зберігаються в **USD** (базова валюта). UAH — тільки для відображення.
 
-#### ExchangeRate (singleton)
+#### ExchangeRate (per-agency, S-D2)
 
 НБУ API оновлюється автоматично щодня о 09:10 за Києвом:
 
@@ -192,16 +192,15 @@ URL: https://bank.gov.ua/NBU_Exchange/exchange_site?valcode=USD&json
 ```
 
 ```typescript
-// Приклад відповіді НБУ API:
-;[{ r030: 840, txt: 'Долар США', rate: 41.5, cc: 'USD', exchangedate: '12.04.2026' }]
-
-// Оновлення в БД:
+// Курс — per-agency (S-D2), НЕ глобальний singleton. Upsert по agencyId:
 await prisma.exchangeRate.upsert({
-  where: { id: 'singleton' },
-  create: { id: 'singleton', usdToUah: 41.5, updatedAt: new Date() },
-  update: { usdToUah: 41.5, updatedAt: new Date() },
+  where: { agencyId },
+  create: { agencyId, usdToUah: 41.5 },
+  update: { usdToUah: 41.5, updatedBy: 'cron' },
 })
 ```
+
+> ⚠️ **Застаріле `id: 'singleton'` видалено** — `ExchangeRate.agencyId @unique` (міграція `20260602_sd234`). НБУ-курс об'єктивно один, але per-agency дає override + ізоляцію.
 
 **Fallback:** якщо НБУ API недоступне — використовується попереднє значення з БД. Логується попередження в Sentry.
 
@@ -229,7 +228,7 @@ export function formatDualCurrency(usdAmount: number, usdToUah: number): string 
 
 ### 5. PaymentSettings — реквізити
 
-Singleton-запис в таблиці `payment_settings`. Редагується тільки owner в `/settings/billing`.
+Один запис **на агенцію** (`PaymentSettings.agencyId @unique`, S-D2) у таблиці `payment_settings`. Редагується тільки owner в `/settings/billing`.
 
 **Поля:**
 
@@ -472,36 +471,14 @@ enum PaymentType {
 }
 ```
 
-### Таблиця `payment_settings` (singleton)
+### Таблиці `payment_settings` + `exchange_rates` (per-agency, S-D2)
 
-```prisma
-model PaymentSettings {
-  id              String   @id @default(cuid())
-  bankName        String?
-  iban            String?
-  accountName     String?
-  cryptoUsdt      String?  // USDT TRC20 адреса
-  notes           String?
-  invoiceCurrency String   @default("UAH")  // UAH | USD | EUR
-  updatedAt       DateTime @updatedAt
-
-  @@map("payment_settings")
-}
-```
-
-### Таблиця `exchange_rates` (singleton)
-
-```prisma
-model ExchangeRate {
-  id        String   @id @default("singleton")
-  usdToUah  Decimal  @db.Decimal(8, 4)
-  eurToUah  Decimal? @db.Decimal(8, 4)
-  updatedAt DateTime @updatedAt
-  updatedBy String?  // profileId або 'cron'
-
-  @@map("exchange_rates")
-}
-```
+> **Канон — `packages/db/prisma/schema.prisma`** (міграція `20260602_sd234`). Обидві — **per-agency**, не глобальні singletons:
+>
+> - `PaymentSettings` — `agencyId String @unique` + FK (реквізити агенції: `bankName/iban/accountName/cryptoUsdt/invoiceCurrency`).
+> - `ExchangeRate` — `agencyId String @unique` + FK; `id @default(uuid())` (НЕ `"singleton"`); `usdToUah`/`eurToUah Decimal(10,4)`; `updatedBy`.
+>
+> ⚠️ Глобальний `id='singleton'` + `Decimal(8,4)` — **видалено** (S-D2: крос-тенант реквізити/курс = катастрофа). `DocumentCounter` теж per-agency (`@@id([agencyId,type,year])`, модуль 06).
 
 ### Таблиця `service_charges`
 

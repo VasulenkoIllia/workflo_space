@@ -1,6 +1,9 @@
 # ADR-006: Extraction Seams & Web/Worker Split
 
 **Статус:** Прийнято · **Дата:** 1 червня 2026
+
+> **Реалізовано (foundation closure 2.06.2026):** web/worker split — `apps/api/src/worker.ts` + `RUN_WORKERS_INLINE` флаг + opt-in compose `worker`-сервіс (commit b1c7f98); outbox handler-registry уже в `services/outboxWorker.ts`.
+
 **Контекст:** ADR-005 фіксує моноліт. Але 90% користі мікросервісів можна отримати за 10% ціни — через **процес/пакет-екстракцію в тому ж репо/БД**, без мережевих меж. Питання: що виділити ЗАРАЗ (дешево), щоб майбутня екстракція була «флипом», а не переписуванням.
 
 ---

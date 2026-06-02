@@ -50,16 +50,31 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         })
       }
       openStreamsByUser.set(uid, openCount + 1)
+      let slotReleased = false
+      const releaseSlot = (): void => {
+        if (slotReleased) return
+        slotReleased = true
+        const remaining = (openStreamsByUser.get(uid) ?? 1) - 1
+        if (remaining <= 0) openStreamsByUser.delete(uid)
+        else openStreamsByUser.set(uid, remaining)
+      }
 
       const res = reply.raw
 
-      reply.hijack()
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no', // disable proxy buffering (nginx/traefik)
-      })
+      // If hijack/writeHead throws, release the slot so it can't leak (else the
+      // user is permanently 503'd on this replica after 5 such failures).
+      try {
+        reply.hijack()
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no', // disable proxy buffering (nginx/traefik)
+        })
+      } catch (err) {
+        releaseSlot()
+        throw err
+      }
 
       let closed = false
       const write = (chunk: string): void => {
@@ -103,9 +118,7 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         closed = true
         clearInterval(heartbeat)
         unsubscribe()
-        const remaining = (openStreamsByUser.get(uid) ?? 1) - 1
-        if (remaining <= 0) openStreamsByUser.delete(uid)
-        else openStreamsByUser.set(uid, remaining)
+        releaseSlot()
         res.end()
       }
       request.raw.on('close', cleanup)

@@ -1,6 +1,9 @@
 # ADR-007: SaaS Foundation Order & RLS Strategy
 
 **Статус:** Прийнято · **Дата:** 1 червня 2026
+
+> **Реалізовано (foundation closure 2.06.2026):** F4 RLS-політики + FORCE RLS + `workflo_app`-роль (міграція `20260603_f4_rls_policies`) + `$extends` tenant-context, flag-gated `RLS_ENFORCED` (commit a68be2d); S-D2/S-D3 schema-scoping реалізовано (`20260602_sd234`). Activation-checklist → `ENGINEERING_STANDARDS.md` §«RLS rollout».
+
 **Контекст:** Перехід на SaaS планується «у кінці» (після прод-релізу для власної агенції). Питання: чи це безпечно без переписування, і що саме закласти ЗАРАЗ vs відкласти. Зводить розкидане з ADR-004 amendment + SAAS.md F1-F6 в одне рішення про порядок і про модель ізоляції.
 
 ---

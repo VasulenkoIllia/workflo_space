@@ -397,22 +397,24 @@ export const createOrderSchema = z.object({
   title: z.string().min(1, "Назва обов'язкова").max(255, 'Назва занадто довга'),
   description: z.string().max(10000).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
-  dueDate: z.string().datetime().optional().nullable(),
+  deadline: z.string().datetime().optional().nullable(), // `deadline`, не `dueDate`
   serviceIds: z.array(z.string().uuid()).optional(),
 })
 
+// Канонічні 9 internal-статусів (OrderInternalStatus); on_hold/cancelled вимагають reason.
 export const updateOrderStatusSchema = z.object({
   status: z.enum([
     'new',
-    'in_review',
-    'approved',
+    'clarification',
+    'estimating',
     'in_progress',
     'on_hold',
-    'in_review_final',
+    'review',
     'revision',
     'done',
     'cancelled',
   ]),
+  reason: z.string().max(1000).optional(), // → Order.onHoldReason / cancelledReason
   comment: z.string().max(1000).optional(),
 })
 

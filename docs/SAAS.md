@@ -47,7 +47,7 @@
 
 `provisionAgency({ agencyName, slug, ownerEmail, ownerName, plan })` в одній транзакції:
 
-1. `Agency` (name, slug, **subdomain=slug**, **plan=free/trial**, **subscriptionStatus=trialing**, **trialEndsAt=+14д**).
+1. `Agency` (name, slug, **subdomain=slug**, **planId=null** (план із каталогу `BillingPlan` за потреби), **subscriptionStatus=active** (default; `trialing` лише при старті trial), **trialEndsAt=+14д при trial**).
 2. `Profile` власника (або привʼязка існуючого) + `AgencyMember{role: owner}`.
 3. Дефолтні per-agency налаштування: `notification_templates` (копія системних), `smtp_senders` (workflo-дефолт, поки агенція не задасть свій), `pdf_branding` (дефолт-лого), `referral_settings`, базовий `department` («Загальний»).
 4. `UsageCounter` рядки для періоду (orders/storage/seats = 0).
@@ -75,17 +75,18 @@
 ```prisma
 model Agency {
   // ...наявні поля...
-  subdomain          String?   @unique          // acme.workflo.space
-  customDomain       String?   @unique           // app.acme.com (Phase 1)
-  plan               AgencyPlan @default(free)    // free | starter | pro | business
-  subscriptionStatus SubStatus  @default(trialing)// trialing|active|past_due|canceled|suspended
-  trialEndsAt        DateTime?  @db.Timestamptz(3)
-  billingCustomerId  String?                      // Stripe customer id
-  suspendedAt        DateTime?  @db.Timestamptz(3)
-  limits             Json?                        // override планових лімітів
+  subdomain          String?                  @unique  // acme.workflo.space
+  customDomain       String?                  @unique  // app.acme.com (Phase 1)
+  planId             String?                            // → BillingPlan-каталог (НЕ enum)
+  plan               BillingPlan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscriptionStatus AgencySubscriptionStatus @default(active) // trialing|active|past_due|canceled|suspended
+  trialEndsAt        DateTime?                @db.Timestamptz(3)
+  billingCustomerId  String?                            // Stripe customer id
+  suspendedAt        DateTime?                @db.Timestamptz(3)
+  limits             Json?                              // override планових лімітів
 }
-enum AgencyPlan { free starter pro business }
-enum SubStatus  { trialing active past_due canceled suspended }
+// План — це рядок каталогу BillingPlan (FK planId), не enum.
+enum AgencySubscriptionStatus { trialing active past_due canceled suspended }
 ```
 
 ### F2. Quota / Feature seam (no-op зараз, чокпойнт потім)

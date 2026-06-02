@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Єдина продуктова специфікація (SPEC)
 
-> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 25 модулів (+26-29: ліди/інтеграції/client-mgmt/support 1.06) (вікторина A-D) + очистки беклогу.
+> **Статус:** консолідовано 30 травня 2026 після фіналізації всіх 29 модулів (25 базових + 26-29: ліди/інтеграції/client-mgmt/support 1.06) (вікторина A-D) + очистки беклогу.
 > **Призначення:** єдина точка входу й джерело істини. Концепція/візія — `CONCEPT_v2.md`; деталі модуля — `modules/NN-*.md`; рішення — `adr/*`; план — `TRACKER.md` (спрінти).
 > **Як читати:** цей файл = ЩО будуємо (інвентар + наскрізна архітектура + schema-delta). `TRACKER.md` = У ЯКОМУ ПОРЯДКУ (спрінти).
 
@@ -132,18 +132,21 @@
 
 ## 6. ADR-індекс
 
-| ADR | Рішення                                                                  |
-| --- | ------------------------------------------------------------------------ |
-| 001 | Refresh-cookie: SameSite=Lax + Path=/auth/refresh                        |
-| 002 | RBAC `can()` shim читає CompanyMember.permissions (не повний CASL зараз) |
-| 003 | Notification channels MVP: CRITICAL_EVENTS email-lock                    |
-| 004 | Multi-tenancy: Agency=tenant-root, agencyId scoping, tenant-ready→SaaS   |
+| ADR | Рішення                                                                    |
+| --- | -------------------------------------------------------------------------- |
+| 001 | Refresh-cookie: SameSite=Lax + Path=/auth/refresh                          |
+| 002 | RBAC `can()` shim читає CompanyMember.permissions (не повний CASL зараз)   |
+| 003 | Notification channels MVP: CRITICAL_EVENTS email-lock                      |
+| 004 | Multi-tenancy: Agency=tenant-root, agencyId scoping, tenant-ready→SaaS     |
+| 005 | Модульний моноліт (один образ/БД), не мікросервіси                         |
+| 006 | Extraction seams + web/worker split (`worker.ts`, outbox handler-registry) |
+| 007 | SaaS foundation order + RLS-стратегія (shared-DB + app-scoping + RLS)      |
 
 ---
 
 ## 7. Schema-delta (нове зі фіналізації — для міграцій)
 
-> Зведено з 25 «Аудит-фіналізація» секцій. Деталі — у відповідному модулі.
+> Зведено з 29 «Аудит-фіналізація» секцій. Деталі — у відповідному модулі.
 
 **Foundation:** `Agency`, `AgencyMember`; `agencyId` на всіх agency-scoped таблицях; `OutboxEvent`.
 **Auth:** `OAuthAccount`; auth-поля (totpSecretEnc, backupCodesHash, emailVerifiedAt); refresh*tokens.{ip,userAgent,lastUsedAt}.
