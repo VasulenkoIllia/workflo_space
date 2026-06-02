@@ -3,7 +3,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/storage`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -60,22 +60,9 @@ fastify.decorate('storage', storage)
 
 ## Файлова структура на диску
 
-```
-/data/uploads/
-├── orders/
-│   └── {orderId}/
-│       ├── comments/
-│       │   └── {commentId}/
-│       │       └── {uuid}-{filename}
-│       └── attachments/
-│           └── {uuid}-{filename}
-├── documents/
-│   └── {documentId}/
-│       └── {uuid}.pdf
-└── avatars/
-    └── {profileId}/
-        └── {uuid}-{filename}
-```
+> **Канонічний layout — див. «## S1 alignment update → Storage layout» + «## Аудит-фіналізація A» нижче.** Стисло: tenant-prefixed `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>`, аватари `agencies/<agencyId>/avatars/<profileId>.<ext>`. Права `0640` файли / `0750` теки.
+>
+> ⚠️ **Застарілий не-tenant layout видалено** (`/data/uploads/orders/{orderId}/comments/{commentId}/...`) — суперечив agency-ізоляції.
 
 ---
 
@@ -86,20 +73,14 @@ fastify.decorate('storage', storage)
 1. Клієнт відправляє `POST /files` з `multipart/form-data`
 2. Fastify парсить через `@fastify/multipart`
 3. Валідація: розмір ≤ ліміту, MIME-тип в allowlist
-4. Генеруємо унікальний шлях: `orders/{orderId}/comments/{uuid}-{originalName}`
+4. Генеруємо tenant-prefixed ключ: `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>` (`buildOrderFileKey`)
 5. Передаємо буфер до `storage.upload()`
 6. Зберігаємо метадані в таблицю `file_attachments`
 7. Повертаємо `{ id, url, fileName, fileSize, mimeType }`
 
 ### Прив'язка файлу
 
-Файл може бути прив'язаний до:
-
-- `orderId` — пряме вкладення до замовлення
-- `commentId` — вкладення в коментар
-- `documentId` — джерельний файл документа
-
-Поля `orderId`, `commentId`, `documentId` в `file_attachments` — всі nullable, але хоча б одне має бути встановлено.
+Файл прив'язаний до замовлення (`orderId` — **NOT NULL** у реальній `OrderFile`). Прив'язка до коментаря (`commentId`) та документа (`documentId`/`context`) — **відкладено** до відповідних фіч (comment-attachments / S5-документи), див. «## Аудит-фіналізація A».
 
 ### Ліміти
 
@@ -112,52 +93,15 @@ fastify.decorate('storage', storage)
 
 ### Дозволені MIME-типи
 
-```typescript
-const ALLOWED_MIME_TYPES = [
-  // Документи
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  // Зображення
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-  // Архіви
-  'application/zip',
-  'application/x-rar-compressed',
-  // Текст
-  'text/plain',
-  'text/csv',
-]
-```
+> **Канонічний allowlist — «## S1 alignment update → MIME allowlist (SVG removed)» нижче** (джерело: `packages/types/src/files.ts`). Стисло: png/jpeg/webp/gif, pdf, txt/csv, zip, office (docx/xlsx/pptx + ms-excel/msword), video/mp4·webm. **`image/svg+xml` ВИКЛЮЧЕНО** (stored-XSS). Інше → 415.
 
 ### Видача файлів (serving)
 
-В MVP — Fastify статично видає файли з `/data/uploads`:
-
-```typescript
-// apps/api/src/routes/files.ts
-fastify.get('/files/*', async (req, reply) => {
-  const filePath = req.params['*']
-  // Перевіряємо права доступу: чи має юзер доступ до orderId цього файлу
-  const attachment = await db.fileAttachment.findFirst({
-    where: { storagePath: filePath },
-  })
-  if (!attachment) return reply.status(404).send()
-  if (!canAccessFile(req.user, attachment)) return reply.status(403).send()
-
-  const buffer = await storage.download(filePath)
-  reply.header('Content-Type', attachment.mimeType)
-  reply.header('Content-Disposition', `inline; filename="${attachment.fileName}"`)
-  return reply.send(buffer)
-})
-```
-
-> **Phase 2:** Hetzner генерує pre-signed URLs з TTL 1 годину. Fastify тільки видає URL, не проксіює бінарний трафік.
+> **Канонічно — id-based serve** (`GET /files/:id/content`): lookup `storedAs` з БД (НЕ шлях з URL), traversal-guard (`safeResolve`, див. «## S1 alignment → Path traversal guard»), `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`. Access-check `canAccessFile` (tenant + participant + internal-comment confidentiality).
+>
+> ⚠️ **Застарілий `GET /files/*` зі шляхом-з-URL + `findFirst({storagePath})` + `Content-Disposition: inline` видалено** — це саме той анти-патерн (path-from-URL + inline-XSS), який S1 прибрав.
+>
+> **Phase 2 (S3-адаптер, «## Аудит-фіналізація C»):** presigned URL з TTL; API авторизує + редіректить, не проксіює бінарь.
 
 ### Видалення файлів
 
@@ -184,30 +128,26 @@ fastify.get('/files/*', async (req, reply) => {
 
 ## DTO
 
-### `POST /files` (multipart/form-data)
+### `POST /orders/:id/files` (multipart/form-data)
 
 ```
-fields:
-  orderId?: string       // прив'язка до замовлення (опційно при завантаженні)
-  commentId?: string     // прив'язка до коментаря
-  context: 'order_attachment' | 'comment' | 'avatar'
-file: <binary>
+file: <binary>           // 1 файл; orderId — зі шляху (order-scoped, participant-guarded)
 ```
 
-### File Response
+> `commentId`/`context` form-поля — відкладено (див. «## Аудит-фіналізація A»). Реальний upload — order-scoped, не bare `/files`.
+
+### File Response (`FILE_META_SELECT`)
 
 ```typescript
 {
   id: string
-  fileName: string // оригінальна назва
-  fileSize: number // bytes
+  filename: string // не `fileName`
   mimeType: string
-  url: string // /files/{path} або pre-signed URL (Phase 2)
-  context: string
-  orderId: string | null
-  commentId: string | null
+  sizeBytes: number // не `fileSize`
+  sha256: string
   uploadedBy: string // profileId
   createdAt: string
+  // без `url`/`storagePath`/`context`/`commentId` — контент через GET /files/:id/content
 }
 ```
 
@@ -215,31 +155,8 @@ file: <binary>
 
 ## DB Schema
 
-```prisma
-model FileAttachment {
-  id          String    @id @default(uuid())
-  fileName    String
-  fileSize    Int
-  mimeType    String
-  storagePath String    // відносний шлях на диску або Hetzner key
-  url         String    // публічний URL
-  context     String    // 'order_attachment' | 'comment' | 'avatar' | 'document'
-  orderId     String?
-  commentId   String?
-  documentId  String?
-  uploadedBy  String
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-
-  order    Order?    @relation(fields: [orderId], references: [id])
-  comment  Comment?  @relation(fields: [commentId], references: [id])
-  uploader Profile   @relation(fields: [uploadedBy], references: [id])
-
-  @@index([orderId])
-  @@index([commentId])
-  @@index([uploadedBy])
-}
-```
+> **Канонічна модель — `OrderFile` у `packages/db/prisma/schema.prisma`** (стара `FileAttachment` видалена з doc-sync).
+> Поля: `id, agencyId, orderId, filename, storedAs, mimeType, sizeBytes, sha256, deletedAt?, createdAt`. **`storedAs`** канонічне (не `url`/`storagePath`); `commentId`/`documentId`/`context`/`thumbStoredAs` — план foundation-міграції (див. «## Аудит-фіналізація A/B»).
 
 ---
 

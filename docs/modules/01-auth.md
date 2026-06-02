@@ -3,7 +3,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/notifications`, `packages/types`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -11,11 +11,13 @@
 
 Модуль відповідає за автентифікацію та авторизацію всіх акторів системи: owner, executor (сторона команди) та Company Owner / Company Member (сторона клієнтів). Реалізується схема з access token у пам'яті та refresh token у httpOnly cookie з ротацією. Invite-flow розрізняється для виконавців і членів компанії.
 
+> **Tenancy (ADR-004):** «команда» = `AgencyMember` (role `owner|executor`) під агенцією-тенантом; `isInternalTeam(user)` = має ≥1 agency-membership (**не** `Profile.role`). Профіль глобальний; членство в компаніях — `CompanyMember` (multi-company).
+
 **Ключові принципи безпеки:**
 
 - Access token живе тільки в React context (in-memory) — зникає при закритті вкладки
 - Refresh token у httpOnly cookie — недоступний через XSS
-- `SameSite=Strict` на cookie — CSRF захист без додаткових токенів
+- `SameSite=Lax` + `Path=/auth/refresh` на refresh-cookie (ADR-001) — CSRF-захист
 - Rate limiting на всі `/auth/*` endpoints: **10 запитів / 15 хвилин / IP**
 
 ---
@@ -41,11 +43,11 @@
 2. Система перевіряє унікальність email.
 3. Якщо переданий `referralCode` — знаходимо компанію-реферера, фіксуємо зв'язок у таблиці `referrals` зі статусом `pending`.
 4. Транзакційно створюються:
-   - `profiles` запис із роллю `client`
-   - `companies` запис (назва = ім'я клієнта за замовчуванням, slug = транслітерація)
+   - `profiles` запис (роль — на рівні членства, не глобальна)
+   - `companies` запис (`agencyId` = платформна агенція; назва = ім'я клієнта; slug = транслітерація)
    - `company_members` запис із роллю `owner` (Company Owner)
-   - `notification_settings` запис із дефолтними налаштуваннями
-5. Надсилається welcome email.
+   - `NotificationSettings` + дефолтні `NotificationPreference` рядки (`ensureNotificationSettings()`)
+5. Надсилається welcome email (+ `auth.email_verification` — CRITICAL-подія; `Profile.emailVerifiedAt`).
 6. Повертаються access token + встановлюється refresh cookie.
 
 **Referral code формат:** `workflo-XXXXXX`, де `XXXXXX` — перші 6 символів UUID компанії (генерується при створенні `companies`). Зберігається в полі `referralCode` таблиці `companies`.
@@ -56,7 +58,7 @@
 2. Перевіряємо `bcrypt.compare(password, passwordHash)`.
 3. Якщо `is_active = false` → помилка 403 "Акаунт деактивовано".
 4. Створюємо запис у `refresh_tokens` (UUID токен, `expiresAt = now + 30 днів`).
-5. Підписуємо JWT access token (`userId`, `role`, `companyId` якщо клієнт, `exp = now + 15 хвилин`).
+5. Підписуємо JWT access token — канонічні claims `{ sub, activeCompanyId?, memberships[], activeAgencyId?, agencyMemberships[], tokenVersion }` (НЕ `{userId, role, companyId}`); `exp = now + 15 хвилин`. (2FA: якщо увімкнено — спершу `require2fa`-крок, див. Аудит-фіналізація C.)
 6. Повертаємо `{ accessToken }` у body + `Set-Cookie: refreshToken=...`.
 
 ### Refresh Token Rotation (`POST /auth/refresh`)
@@ -101,7 +103,7 @@
 3. Створюємо `Invite` запис: `type = executor`, `expiresAt = now + 7 днів`.
 4. Надсилаємо email із посиланням: `work.workflo.space/invite/{token}`.
 5. Виконавець переходить за посиланням, встановлює пароль.
-6. Транзакційно: `profiles` (роль `executor`) + позначаємо invite `usedAt = now`.
+6. Транзакційно: `profiles` (якщо новий) + **`AgencyMember(role=executor)`** під агенцією (НЕ `Profile.role='executor'`) + позначаємо invite `usedAt = now`.
 
 **Edge cases:**
 
@@ -113,7 +115,7 @@
 
 Тільки для Company Owner або member із `can_invite_members = true`.
 
-1. Приймаємо `{ email, permissions: { can_create_tasks, can_view_billing, can_approve_estimates, can_invite_members } }`.
+1. Приймаємо `{ email, permissions }` — канонічні 5 ключів: `can_create_tasks, can_view_all_tasks, can_view_billing, can_approve_estimates, can_invite_members`.
 2. Якщо переданий email вже є профілем в системі і вже є member цієї компанії → 409.
 3. Створюємо `Invite`: `type = company_member`, `companyId = поточна компанія`, `permissions = JSON`, `expiresAt = now + 7 днів`.
 4. Надсилаємо email: `portal.workflo.space/invite/{token}`.
@@ -129,96 +131,29 @@ OTP — одноразовий код для прив'язки Telegram акау
 3. Надсилаємо code на email профілю.
 4. Клієнт відкриває Telegram bot і вводить `/start {код}`.
 5. Bot API (окремий сервіс) отримує команду → `POST /internal/telegram/verify { code, chatId }`.
-6. API знаходить `otp_tokens` запис → зберігає `profiles.telegramChatId = chatId`, `profiles.telegramConnected = true`.
+6. API знаходить `otp_tokens` запис → зберігає `NotificationSettings.telegramChatId = chatId` + `telegramLinkedAt` (НЕ на `Profile` — поля прибрано; `NotificationSettings` authoritative).
 7. Видаляємо використаний OTP.
 
 ---
 
 ## DB (relevant таблиці)
 
-```prisma
-model Profile {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  role          Role      @default(client)  // owner | executor | client
-  avatarUrl     String?
-  language      Language  @default(uk)
-  telegramChatId    String?   @unique
-  telegramConnected Boolean   @default(false)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+> **Канонічні моделі — `packages/db/prisma/schema.prisma`** (`Profile`, `RefreshToken`, `Invite`, `PasswordResetToken`, `OtpToken`, `Agency`, `AgencyMember`, `CompanyMember`). Стара inline-схема нижче видалена з doc-sync. Ключові відмінності:
+>
+> - **`Profile`** — БЕЗ глобального `role` (роль — у `AgencyMember`/`CompanyMember`); БЕЗ `telegramChatId`/`telegramConnected` (→ `NotificationSettings`); має `theme`; план Аудит-фіналізації: `tokenVersion`, `emailVerifiedAt`, `totpSecretEnc`/`backupCodes`, `mustChangePassword`.
+> - **`RefreshToken`** — + `ip`/`userAgent`/`lastUsedAt` (active-sessions + reuse-detect, Аудит-фіналізація D).
+> - **`OtpToken`** — `@@unique([profileId, purpose])`; purpose `telegram_link|two_fa|email_verify`.
+> - **Tenancy:** `Agency` (тенант-корінь) + `AgencyMember(role owner|executor)` + `agencyId`-scoping; `CompanyMember` (multi-company, partial-unique).
 
-  refreshTokens RefreshToken[]
-  invitesSent   Invite[]       @relation("InvitedBy")
-  // ...
-  @@map("profiles")
-}
-
-model RefreshToken {
-  id        String    @id @default(uuid())
-  profileId String
-  token     String    @unique
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
-  @@index([token])
-  @@map("refresh_tokens")
-}
-
-model Invite {
-  id          String     @id @default(uuid())
-  email       String
-  token       String     @unique @default(uuid())
-  type        InviteType              // executor | company_member
-  invitedById String
-  companyId   String?
-  permissions Json?
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime   @default(now())
-  @@index([token])
-  @@map("invites")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(uuid())
-  email     String
-  token     String    @unique @default(uuid())
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  @@index([token])
-  @@map("password_reset_tokens")
-}
-
--- OTP таблиця (окрема від password reset)
-model OtpToken {
-  id        String   @id @default(uuid())
-  profileId String
-  code      String                        // 6 цифр
-  purpose   OtpPurpose                   // telegram_link | two_fa | email_verify
-  channel   OtpChannel                   // email | telegram | sms
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime @default(now())
-  @@index([profileId, purpose])
-  @@map("otp_tokens")
-}
-```
-
-**Company Member permissions** зберігаються як JSON поле в `company_members.permissions`:
+**Company Member permissions** — JSON у `company_members.permissions`. Канонічний набір — рівно **5 ключів** (`can_comment` та інші legacy — видалено):
 
 ```json
 {
   "can_create_tasks": true,
+  "can_view_all_tasks": true,
   "can_view_billing": false,
   "can_approve_estimates": false,
-  "can_invite_members": false,
-  "can_view_all_tasks": true,
-  "can_comment": true
+  "can_invite_members": false
 }
 ```
 
@@ -258,14 +193,14 @@ model OtpToken {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "email": "john@company.com",
       "name": "John Doe",
-      "role": "client",
-      "companyId": "660e8400-e29b-41d4-a716-446655440001"
+      "activeCompanyId": "660e8400-e29b-41d4-a716-446655440001",
+      "memberships": [{ "companyId": "660e8400-e29b-41d4-a716-446655440001", "role": "owner" }]
     }
   }
 }
 ```
 
-**Set-Cookie:** `refreshToken=<uuid>; HttpOnly; Secure; SameSite=Strict; Path=/auth; Max-Age=2592000`
+**Set-Cookie:** `refreshToken=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/auth/refresh; Max-Age=2592000` (ADR-001)
 
 **Errors:**
 
@@ -295,15 +230,21 @@ model OtpToken {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "email": "john@company.com",
       "name": "John Doe",
-      "role": "client",
-      "companyId": "660e8400-e29b-41d4-a716-446655440001",
-      "companyRole": "owner",
-      "permissions": {
-        "can_create_tasks": true,
-        "can_view_billing": true,
-        "can_approve_estimates": true,
-        "can_invite_members": true
-      }
+      "activeCompanyId": "660e8400-e29b-41d4-a716-446655440001",
+      "memberships": [
+        {
+          "companyId": "660e8400-e29b-41d4-a716-446655440001",
+          "role": "owner",
+          "permissions": {
+            "can_create_tasks": true,
+            "can_view_all_tasks": true,
+            "can_view_billing": true,
+            "can_approve_estimates": true,
+            "can_invite_members": true
+          }
+        }
+      ],
+      "agencyMemberships": []
     }
   }
 }
@@ -394,19 +335,25 @@ Cookie `refreshToken` передається автоматично браузе
     "id": "550e8400-...",
     "email": "john@company.com",
     "name": "John Doe",
-    "role": "client",
     "avatarUrl": null,
     "language": "uk",
-    "telegramConnected": false,
-    "company": {
-      "id": "660e8400-...",
-      "name": "John's Company",
-      "slug": "johns-company",
-      "referralCode": "workflo-a1b2c3",
-      "loyaltyTier": "new"
-    },
-    "companyRole": "owner",
-    "permissions": { ... }
+    "theme": "system",
+    "activeCompanyId": "660e8400-...",
+    "memberships": [
+      {
+        "companyId": "660e8400-...",
+        "role": "owner",
+        "permissions": { "can_create_tasks": true, "can_view_all_tasks": true },
+        "company": {
+          "id": "660e8400-...",
+          "name": "John's Company",
+          "slug": "johns-company",
+          "referralCode": "workflo-a1b2c3",
+          "loyaltyTier": "new"
+        }
+      }
+    ],
+    "agencyMemberships": []
   }
 }
 ```
@@ -611,14 +558,15 @@ fastify.register(rateLimit, {
 
 ---
 
-## Phase 2
+## Phase 2 → промоутовано в Аудит-фіналізацію
 
-- **2FA (TOTP):** `purpose = two_fa` в `otp_tokens`, Google Authenticator або аналог
-- **SSO / Google OAuth:** `POST /auth/google` → OAuth flow → прив'язка до профілю
-- **Telegram OAuth:** вхід через Telegram Login Widget замість email+пароль
-- **SMS OTP:** `channel = sms` в `otp_tokens`, Twilio або ukrainian provider
-- **Session management UI:** сторінка в налаштуваннях "Активні сесії" — список refresh tokens з можливістю відкликати
-- **IP-based suspicious login detection:** якщо логін з нового IP → email сповіщення
+> Усі пункти цього старого списку **обрані й специфіковані** в «## Аудит-фіналізація» нижче (вже не «колись»):
+>
+> - **2FA (TOTP)** → §C (owner/admin, 2-step login, backup-codes).
+> - **Google OAuth** → §E (`OAuthAccount`).
+> - **Active sessions UI** + **suspicious-login** → §D (`refresh_tokens.{ip,userAgent,lastUsedAt}` + reuse-detect).
+> - **SMS OTP** → модуль 07 (SmsAdapter), Telegram-login → модуль 15.
+>   Статус реалізації — `SPEC.md` 01-auth (2FA+OAuth+sessions — спрінт S-auth-2).
 
 ---
 

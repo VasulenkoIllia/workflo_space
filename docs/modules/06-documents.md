@@ -3,7 +3,7 @@
 > App: Workspace (work.workflo.space) / Portal (portal.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/templates`, `packages/storage`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -15,13 +15,16 @@
 
 ## Типи документів
 
-| Тип                 | Enum             | Ким генерується | Кому видно       |
-| ------------------- | ---------------- | --------------- | ---------------- |
-| Рахунок             | `invoice`        | Система/Owner   | Клієнт + Команда |
-| Акт виконаних робіт | `completion_act` | Owner           | Клієнт + Команда |
-| Специфікація        | `specification`  | Owner           | Клієнт + Команда |
-| Договір             | `contract`       | Owner           | Клієнт + Команда |
-| Розрахунковий лист  | `payslip`        | Owner           | Тільки команда   |
+| Тип                 | Enum                 | Ким генерується | Кому видно       |
+| ------------------- | -------------------- | --------------- | ---------------- |
+| Рахунок             | `invoice`            | Система/Owner   | Клієнт + Команда |
+| Аванс-рахунок       | `advance_invoice`    | Система/Owner   | Клієнт + Команда |
+| Акт виконаних робіт | `completion_act`     | Owner           | Клієнт + Команда |
+| Специфікація        | `specification`      | Owner           | Клієнт + Команда |
+| Договір             | `contract`           | Owner           | Клієнт + Команда |
+| Акт звірки          | `reconciliation_act` | Система/Owner   | Клієнт + Команда |
+
+> Реальний enum `DocumentType` (схема): `invoice · advance_invoice · completion_act · specification · contract · reconciliation_act` (+ план: `credit_note`). ⚠️ `payslip` — **не** тип документа (ЗП — модулі 22/12, не `Document`).
 
 ---
 
@@ -29,51 +32,40 @@
 
 ### Invoice
 
-Формат: `INV-{YYYY}-{NNNN}` (наприклад `INV-2026-0042`)
+Формат: `INV-{YYYY}-{NNNNNN}` (6-значний, наприклад `INV-2026-000042`).
 
-- `NNNN` — порядковий номер, починається з `0001` кожного 1 січня
-- Зберігається в таблиці `document_counters`:
-
-```prisma
-model DocumentCounter {
-  year    Int
-  type    DocumentType
-  counter Int          @default(0)
-
-  @@id([year, type])
-}
-```
-
-- Видача наступного номера — транзакційно:
+**Канонічно (Аудит-фіналізація A):** лічильник **per-agency** — `DocumentCounter` з `@@id([agencyId, type, year])` + поле `count` (інакше дві агенції колізують на `INV-2026-000001`). Race-safe видача — `INSERT…ON CONFLICT DO UPDATE…RETURNING` (єдиний алгоритм; конкуруючий `MAX(seq)+1` self-join — видалити).
 
 ```sql
-INSERT INTO document_counters (year, type, counter)
-VALUES ($year, 'invoice', 1)
-ON CONFLICT (year, type)
-DO UPDATE SET counter = document_counters.counter + 1
-RETURNING counter;
+INSERT INTO document_counters (agency_id, type, year, count)
+VALUES ($agencyId, 'invoice', $year, 1)
+ON CONFLICT (agency_id, type, year)
+DO UPDATE SET count = document_counters.count + 1
+RETURNING count;
 ```
 
-- `counter` → `INV-2026-${String(counter).padStart(4, '0')}`
+`count` → `INV-2026-${String(count).padStart(6, '0')}`.
 
-### Акт, специфікація, договір
+### Акт, специфікація, договір, звірка
 
-Аналогічно: `ACT-2026-0001`, `SPEC-2026-0001`, `CTR-2026-0001`, `PAY-2026-0001`
+Аналогічно per-agency: `ACT-2026-000001`, `SPEC-2026-000001`, `CTR-2026-000001`, `REC-2026-000001`.
 
 ---
 
 ## Статуси документів
 
 ```
-draft → sent → signed → cancelled
+draft → generated → sent  (+ signed через e-signature; supersede замість редагування)
 ```
 
-| Статус      | Значення                             |
-| ----------- | ------------------------------------ |
-| `draft`     | Чернетка, ще не відправлена клієнту  |
-| `sent`      | Відправлена клієнту (видна в Portal) |
-| `signed`    | Клієнт підписав (підтвердив)         |
-| `cancelled` | Анульована                           |
+| Статус      | Значення                                         |
+| ----------- | ------------------------------------------------ |
+| `draft`     | Чернетка (preview, номер ще не зафіксовано)      |
+| `generated` | PDF згенеровано + номер зафіксовано (immutable)  |
+| `sent`      | Відправлено клієнту (видно в Portal)             |
+| `signed`    | Підписано (e-signature, Аудит-фіналізація B; S6) |
+
+> Реальний enum `DocumentStatus` (схема): `draft · generated · sent`. `signed` додає e-signature (фаза B). **Без `cancelled`** — анулювання через `supersededById` (нова версія) + immutability-lock, не статус.
 
 ---
 
@@ -81,14 +73,14 @@ draft → sent → signed → cancelled
 
 ### Генерація Invoice
 
-1. Owner/менеджер ініціює генерацію з workspace (вручну або автоматично при `status = done`)
-2. Система тягне курс USD/UAH з `exchange_rates` (актуальний на момент генерації)
-3. Обчислює `totalAmount`, `advancePaid`, `balanceDue`
-4. Передає дані в `packages/templates` → React PDF рендеринг
-5. PDF зберігається через `StorageAdapter` → запис у `file_attachments`
-6. Запис у таблиці `documents` (зв'язок з `orderId`, `fileId`, `companyId`)
-7. Присвоює номер через `DocumentCounter`
-8. Статус `draft` → відправляємо коли Owner натискає "Надіслати"
+1. Owner/менеджер ініціює генерацію з workspace (вручну або автоматично при `done`).
+2. Курс USD/UAH — рядок per-currency з `exchange_rates` (актуальний на момент) → `rateUsed`.
+3. Обчислює `amountNative`/`amountUsd` (+ tax-поля), `balanceDue`.
+4. Дані → `packages/templates/src/pdf/` → React-PDF рендер (з `pdf_branding`).
+5. PDF → `StorageAdapter` (`Document.storedAs`, не окремий `fileId`).
+6. Запис `documents` (`orderId?`, `companyId`, `createdById`, `agencyId`).
+7. Номер — per-agency `DocumentCounter` (фіксується при `draft→generated`).
+8. Флоу `draft → (preview) → approve → sent` (Аудит-фіналізація E).
 
 ### Автогенерація при done
 
@@ -106,10 +98,10 @@ draft → sent → signed → cancelled
 
 ## Специфікація документа (Structure)
 
-Специфікація (`specification`) має структуровані рядки:
+Специфікація (`specification`) має структуровані рядки `DocumentLine` (окрема таблиця, **не** `Document.meta` JSON — Аудит-фіналізація A):
 
 ```typescript
-interface SpecificationLine {
+interface DocumentLine {
   description: string // назва роботи/послуги
   quantity: number // кількість
   unit: string // 'год' | 'шт' | 'міс' | ...
@@ -118,7 +110,7 @@ interface SpecificationLine {
 }
 ```
 
-Зберігається в `Document.meta` як JSON.
+> ⚠️ `Document.meta` JSON для line-items — застаріло; канон — таблиця `DocumentLine`.
 
 ---
 
@@ -195,18 +187,20 @@ export async function generatePdf(
 {
   id: string
   type: DocumentType
-  status: DocumentStatus
-  number: string // INV-2026-0042
-  orderId: string
+  status: DocumentStatus       // draft | generated | sent (+ signed)
+  number: string               // INV-2026-000042
+  orderId: string | null
   companyId: string
-  amount: number | null
-  amountUah: number | null // amount * exchangeRate
-  exchangeRate: number // курс на момент генерації
-  meta: Record<string, any> // lines для specification, etc.
-  fileId: string // PDF file id
-  pdfUrl: string // URL для завантаження
+  amountNative: number | null  // не `amount`
+  amountUsd: number | null     // не `amountUah`
+  currency: string
+  rateUsed: number | null      // не `exchangeRate`
+  taxRatePct: number | null
+  taxAmount: number | null
+  lines: DocumentLine[]        // окрема таблиця, не `meta`
   signedAt: string | null
   signedById: string | null
+  supersededById: string | null
   createdAt: string
   updatedAt: string
 }
@@ -216,49 +210,9 @@ export async function generatePdf(
 
 ## DB Schema
 
-```prisma
-model Document {
-  id           String         @id @default(uuid())
-  type         DocumentType
-  status       DocumentStatus @default(draft)
-  number       String         @unique  // INV-2026-0042
-  orderId      String?
-  companyId    String
-  amount       Decimal?       @db.Decimal(10,2)
-  amountUah    Decimal?       @db.Decimal(12,2)
-  exchangeRate Decimal?       @db.Decimal(10,4)
-  meta         Json?          // specification lines, etc.
-  fileId       String?        // FK to file_attachments
-  signedAt     DateTime?
-  signedById   String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  order    Order?          @relation(fields: [orderId], references: [id])
-  company  Company         @relation(fields: [companyId], references: [id])
-  file     FileAttachment? @relation(fields: [fileId], references: [id])
-  signedBy Profile?        @relation(fields: [signedById], references: [id])
-
-  @@index([orderId])
-  @@index([companyId])
-  @@index([type, status])
-}
-
-enum DocumentType {
-  invoice
-  completion_act
-  specification
-  contract
-  payslip
-}
-
-enum DocumentStatus {
-  draft
-  sent
-  signed
-  cancelled
-}
-```
+> **Канонічна модель — `Document` + `DocumentCounter` у `packages/db/prisma/schema.prisma`** (стара модель нижче — видалена з doc-sync).
+> Ключове: `agencyId`; суми `amountNative`/`amountUsd`/`currency`/`rateUsed` (+ `taxRatePct`/`taxAmount`) — НЕ `amount`/`amountUah`/`exchangeRate`/`meta`; PDF як `storedAs` (не `fileId`); `createdById`/`executorId`; `sentAt`/`generatedAt`; `supersededById` (immutability); `@@unique([companyId, type, number])`. Lines — таблиця `DocumentLine`. `DocumentCounter` — `@@id([agencyId, type, year])` + `count`.
+> enum `DocumentType`: `invoice·advance_invoice·completion_act·specification·contract·reconciliation_act` (+план `credit_note`); `DocumentStatus`: `draft·generated·sent` (+`signed`). Нові моделі (DocumentTemplate/DocumentLine/CreditNote) + повний reconcile — «## Аудит-фіналізація» нижче.
 
 ---
 
@@ -273,7 +227,7 @@ enum DocumentStatus {
 
 ## Локалізація PDF
 
-PDF генерується мовою компанії клієнта (`company.preferredLanguage`):
+PDF генерується мовою компанії клієнта (`Company.language`, enum uk/en):
 
 - `uk` — українська (за замовчуванням)
 - `en` — англійська

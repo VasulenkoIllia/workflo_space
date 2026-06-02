@@ -3,7 +3,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -21,47 +21,9 @@
 
 ## Архітектура real-time
 
-```
-Client (Portal/Workspace)
-    ↓ EventSource("/orders/:id/comments/stream")
-API (Fastify SSE endpoint)
-    ↓ LISTEN "order_comments_{orderId}"
-PostgreSQL NOTIFY
-    ↑ triggered by: INSERT INTO comments / UPDATE comments
-```
-
-### Postgres NOTIFY trigger
-
-```sql
-CREATE OR REPLACE FUNCTION notify_comment_insert()
-RETURNS trigger AS $$
-BEGIN
-  PERFORM pg_notify(
-    'order_comments_' || NEW.order_id,
-    json_build_object(
-      'event', 'new_comment',
-      'commentId', NEW.id,
-      'authorId', NEW.author_id
-    )::text
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER comments_notify_trigger
-AFTER INSERT ON comments
-FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
-```
-
-### SSE Connection lifecycle
-
-1. Клієнт робить `GET /orders/:id/comments/stream` → Fastify тримає з'єднання відкритим
-2. Fastify підключається до Postgres через `pg.connect()` і виконує `LISTEN order_comments_{id}`
-3. При `NOTIFY` — Fastify відправляє `data: {...}\n\n` клієнту
-4. Клієнт по отриманому `commentId` робить `GET /orders/:id/comments/:commentId` щоб отримати повний коментар (або API відправляє повний об'єкт в NOTIFY)
-5. При закритті з'єднання — Fastify виконує `UNLISTEN` і звільняє з'єднання
-
-> **Heartbeat:** кожні 30 секунд Fastify відправляє `data: {"event":"ping"}\n\n` щоб тримати з'єднання живим через проксі.
+> **Канонічна архітектура — див. «## S1 alignment update → SSE — multi-instance + reconnect strategy» нижче** (+ «## Аудит-фіналізація»). Стисло: **один** канал `pg_notify('chat_events', {orderId,commentId,authorId,isInternal,createdAt})` через **DB-тригер** (транзакційно звʼязаний з INSERT — обійти неможливо) → **один** shared `LISTEN`-конект на інстанс (`pg.Client`, не Prisma; reconnect-backoff 1→60s) → in-memory `chatBus` fan-out до локальних SSE-стрімів. На подію — re-fetch повного коментаря + повторний leak-guard з DB-істини. Heartbeat 30s.
+>
+> ⚠️ **Застарілий дизайн видалено** (суперечив shared-bus): per-order канал `order_comments_{id}`, per-connection `LISTEN`, payload `{event,commentId,authorId}` та крок «клієнт робить `GET /comments/:commentId`». Реальність: один канал `chat_events`, сервер пушить повний обʼєкт.
 
 ---
 
@@ -79,7 +41,7 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 
 ### Редагування та видалення
 
-- Можна редагувати власний коментар протягом **15 хвилин** після публікації (`updatedAt - createdAt < 15 min`)
+- Можна редагувати власний коментар протягом **15 хвилин** після публікації (вікно рахується від `createdAt`; факт правки фіксує `editedAt`, не `updatedAt`)
 - Видалення: soft delete (`deletedAt`). Замість тексту показується "Повідомлення видалено"
 - Owner може видалити будь-який коментар у workspace
 
@@ -92,8 +54,8 @@ FOR EACH ROW EXECUTE FUNCTION notify_comment_insert();
 
 ### Згадки (@mentions)
 
-- У тексті можна написати `@ім'я` → система парсить і надсилає нотифікацію згаданому
-- Парсинг на бекенді через regex `/@(\w+)/g` → lookup по `profiles.displayName`
+- У тексті можна тегнути учасника → нотифікація згаданому (подія `chat.mention`)
+- **Канонічно:** фронт надсилає явні `mentionedUserIds` через participant-picker (див. «## @-mentions: participant picker» нижче); regex `/@(\w+)/g` по `displayName` лишається лише legacy best-effort fallback
 - MVP: тільки Telegram-нотифікація при згадці
 
 ---
@@ -140,26 +102,16 @@ before=commentId   // курсорна пагінація (older messages)
 {
   id: string
   orderId: string
-  text: string
-  type: 'public' | 'internal'
-  isEdited: boolean
+  content: string // не `text`
+  isInternal: boolean // не `type`-enum
+  editedAt: string | null // факт правки (не `isEdited`/`updatedAt`)
   deletedAt: string | null
   createdAt: string
-  updatedAt: string
   author: {
     id: string
-    displayName: string
-    avatarUrl: string | null
-    role: 'owner' | 'executor' | 'client'
+    name: string
   }
-  attachments: {
-    id: string
-    fileName: string
-    fileSize: number
-    mimeType: string
-    url: string
-  }
-  ;[]
+  // attachments — коли прив'язку файлів до коментаря увімкнено (OrderFile.commentId/context — беклог модуля 04)
 }
 ```
 
@@ -167,31 +119,8 @@ before=commentId   // курсорна пагінація (older messages)
 
 ## DB Schema
 
-```prisma
-model Comment {
-  id        String      @id @default(uuid())
-  orderId   String
-  authorId  String
-  text      String
-  type      CommentType @default(public)
-  isEdited  Boolean     @default(false)
-  deletedAt DateTime?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  order       Order            @relation(fields: [orderId], references: [id])
-  author      Profile          @relation(fields: [authorId], references: [id])
-  attachments FileAttachment[]
-
-  @@index([orderId, createdAt])
-  @@index([authorId])
-}
-
-enum CommentType {
-  public
-  internal
-}
-```
+> **Канонічна модель — `OrderComment` у `packages/db/prisma/schema.prisma`** (стара `Comment` видалена з doc-sync).
+> Поля: `id, agencyId, orderId, authorId, content, isInternal, editedAt?, deletedAt?, createdAt` (+ план foundation-міграції: `replyToId?`, `mentionedUserIds[]`). `isInternal Boolean` замість `type CommentType`; `content` замість `text`. Файли-вкладення — `OrderFile` (модуль 04). Повний reconcile + нові фічі (реакції/reply/read-receipts) — «## Аудит-фіналізація» нижче.
 
 ---
 

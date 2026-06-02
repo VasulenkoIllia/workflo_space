@@ -12,7 +12,7 @@
 ```
 1. docs/README.md               ← цей файл, огляд проекту (5 хв)
 2. docs/CONCEPT_v2.md           ← що будуємо і навіщо (15 хв)
-3. docs/IMPLEMENTATION_PLAN.md  ← DB schema, API, enums, standards (30 хв)
+3. docs/ENGINEERING_STANDARDS.md ← API-стандарти; DB-канон → packages/db/prisma/schema.prisma (20 хв)
 4. docs/FRONTEND_STANDARDS.md   ← frontend стек, auth flow, компоненти (20 хв)
 5. docs/MONOREPO_SCAFFOLD.md    ← файлова структура, .env.example (10 хв)
 6. docs/TRACKER.md              ← поточний спринт і твоя задача (5 хв)
@@ -46,22 +46,23 @@ turbo dev
 
 ### Ключові документи
 
-| Документ                                         | Що містить                                                                                                       |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| [CONCEPT_v2.md](CONCEPT_v2.md)                   | Продуктова концепція, бізнес-логіка, фінансова модель                                                            |
-| [INFRASTRUCTURE.md](INFRASTRUCTURE.md)           | Docker, CI/CD, Traefik, backup, rollback, моніторинг                                                             |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | DB schema, API endpoints, API standards, packages/types enums, Turbo, Seed, Migrations                           |
-| [FRONTEND_STANDARDS.md](FRONTEND_STANDARDS.md)   | Frontend стек, API client, Auth стан, UI компоненти, тести                                                       |
-| [UX_PAGES.md](UX_PAGES.md)                       | Структура сторінок Portal + Workspace, Dashboard, Kanban                                                         |
-| [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)             | **Дизайн ↔ код:** токени, інвентар усіх екранів, матриця покриття, workflow-гейт. Дивись СЮДИ перед будь-яким UI |
-| [DESIGN_TODO.md](DESIGN_TODO.md)                 | **Список на допрацювання дизайну** (handoff дизайнеру). Що домалювати + цикл звірки                              |
-| [design/](../design/)                            | Готовий хендофф з Claude Design (HTML/CSS/JS-прототип) — джерело правди для візуалу                              |
-| [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)     | Точна файлова структура всіх apps і packages + .env.example                                                      |
-| [GIT_WORKFLOW.md](GIT_WORKFLOW.md)               | Гілки, commit conventions, PR процес, деплой, hotfix                                                             |
-| [CRON_JOBS.md](CRON_JOBS.md)                     | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                       |
-| [TRACKER.md](TRACKER.md)                         | Трекер прогресу — всі 171 задача по спринтах S0–S8, статуси                                                      |
-| [S0_RUNBOOK.md](S0_RUNBOOK.md)                   | Практичний runbook для закриття S0 (GitHub, Hetzner, Traefik, deploy)                                            |
-| [README.md](README.md)                           | **Цей файл** — глобальний індекс                                                                                 |
+| Документ                                             | Що містить                                                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [CONCEPT_v2.md](CONCEPT_v2.md)                       | Продуктова концепція, бізнес-логіка, фінансова модель                                                                                                  |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md)               | Docker, CI/CD, Traefik, backup, rollback, моніторинг                                                                                                   |
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)     | ⚠️ Історичний план + §3 tsconfig/eslint · §7 Turbo · §8 Migrations · §11 онбординг. §4/§5/§6/§10 → вказівники (канон: schema.prisma/SPEC/TRACKER/seed) |
+| [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) | Наскрізні API-стандарти: response-envelope, ApiErrorCode/AppError, Fastify error-handler, CORS, rate-limit, Zod, Pino, health, graceful shutdown       |
+| [FRONTEND_STANDARDS.md](FRONTEND_STANDARDS.md)       | Frontend стек, API client, Auth стан, UI компоненти, тести                                                                                             |
+| [UX_PAGES.md](UX_PAGES.md)                           | Структура сторінок Portal + Workspace, Dashboard, Kanban                                                                                               |
+| [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)                 | **Дизайн ↔ код:** токени, інвентар усіх екранів, матриця покриття, workflow-гейт. Дивись СЮДИ перед будь-яким UI                                       |
+| [DESIGN_TODO.md](DESIGN_TODO.md)                     | **Список на допрацювання дизайну** (handoff дизайнеру). Що домалювати + цикл звірки                                                                    |
+| [design/](../design/)                                | Готовий хендофф з Claude Design (HTML/CSS/JS-прототип) — джерело правди для візуалу                                                                    |
+| [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                            |
+| [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                   |
+| [CRON_JOBS.md](CRON_JOBS.md)                         | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                                                             |
+| [TRACKER.md](TRACKER.md)                             | Трекер прогресу — всі 171 задача по спринтах S0–S8, статуси                                                                                            |
+| [S0_RUNBOOK.md](S0_RUNBOOK.md)                       | Практичний runbook для закриття S0 (GitHub, Hetzner, Traefik, deploy)                                                                                  |
+| [README.md](README.md)                               | **Цей файл** — глобальний індекс                                                                                                                       |
 
 > **CHANGELOG.md** знаходиться в корені репо (`/CHANGELOG.md`) — не в docs/.
 
@@ -210,10 +211,10 @@ packages/
 
 ## ПРАВИЛА РОБОТИ З ДОКУМЕНТАЦІЄЮ
 
-1. **Зміна в продукті** → спочатку оновити відповідний module doc → потім CONCEPT_v2.md якщо змінюється бізнес-логіка → потім IMPLEMENTATION_PLAN.md якщо змінюється DB/API → потім TRACKER.md
+1. **Зміна в продукті** → спочатку оновити відповідний module doc → потім CONCEPT_v2.md якщо змінюється бізнес-логіка → потім `packages/db/prisma/schema.prisma` якщо змінюється DB → потім TRACKER.md
 2. **Новий модуль** → створити `docs/modules/XX-name.md` → додати в цей README.md в таблицю
-3. **Зміна DB schema** → оновити `IMPLEMENTATION_PLAN.md` → написати міграцію `packages/db/prisma/migrations/`
-4. **Зміна API endpoint** → оновити `modules/XX-name.md` → оновити `IMPLEMENTATION_PLAN.md` якщо змінюється загальний список
+3. **Зміна DB schema** → оновити `packages/db/prisma/schema.prisma` (канон) → написати міграцію `packages/db/prisma/migrations/`
+4. **Зміна API endpoint** → оновити `modules/XX-name.md` (канон ендпоінтів) + `SPEC.md` за потреби
 5. **Завершена задача** → оновити `TRACKER.md` статус
 6. **Ніколи не вносити зміни хаотично** — завжди через відповідний документ
 

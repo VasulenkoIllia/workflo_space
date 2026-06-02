@@ -3,7 +3,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -15,50 +15,16 @@
 
 ## Статусна машина
 
-### Внутрішні статуси (Workspace)
+### Канонічна модель — 9 internal → 4 client
 
-```
-new → in_review → approved → in_progress → on_hold → in_review_final → revision → done → cancelled
-```
-
-| Статус            | Значення                             |
-| ----------------- | ------------------------------------ |
-| `new`             | Щойно надійшло, ніхто не взяв        |
-| `in_review`       | Менеджер розглядає                   |
-| `approved`        | Підтверджено, починаємо роботу       |
-| `in_progress`     | Виконавець активно працює            |
-| `on_hold`         | Заморожено (чекаємо клієнта/оплату)  |
-| `in_review_final` | Здали клієнту, чекаємо підтвердження |
-| `revision`        | Клієнт просить правки                |
-| `done`            | Закрито, акт підписано               |
-| `cancelled`       | Скасовано                            |
-
-### Клієнтські статуси (Portal)
-
-| Клієнтський статус | Внутрішні статуси                                |
-| ------------------ | ------------------------------------------------ |
-| `pending`          | `new`, `in_review`                               |
-| `in_progress`      | `approved`, `in_progress`, `on_hold`, `revision` |
-| `review`           | `in_review_final`                                |
-| `completed`        | `done`, `cancelled`                              |
-
-> Маппінг відбувається автоматично у відповіді API через `mapToClientStatus(internalStatus)` функцію в `packages/types`.
-
-### Дозволені переходи статусів
-
-```typescript
-const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  new: ['in_review', 'cancelled'],
-  in_review: ['approved', 'cancelled'],
-  approved: ['in_progress'],
-  in_progress: ['on_hold', 'in_review_final'],
-  on_hold: ['in_progress', 'cancelled'],
-  in_review_final: ['done', 'revision'],
-  revision: ['in_progress'],
-  done: [],
-  cancelled: [],
-}
-```
+> **Джерело істини — «## S1 alignment update → Status enum: 9 internal → 4 client» нижче** (`INTERNAL_TO_CLIENT_STATUS` у `@workflo/types`) + enum `OrderInternalStatus`/`OrderClientStatus` у схемі. Стисло:
+>
+> **9 internal:** `new · clarification · estimating · in_progress · on_hold · review · revision · done · cancelled`.
+> **4 client:** `in_progress · pending_approval · completed · cancelled`.
+> Маппінг — `INTERNAL_TO_CLIENT_STATUS` (зберігається як `Order.clientStatus`, не лише обчислюється).
+> Переходи — єдиний `ALLOWED_ORDER_TRANSITIONS` / `canTransitionOrder` над цими 9 станами.
+>
+> ⚠️ **Застаріла машина видалена** (суперечила реальним enum): станів `in_review`, `approved`, `in_review_final` НЕ існує; клієнтські `pending`/`review` → насправді `pending_approval`. Переходи + reason-поля (on_hold/cancelled) — S1-alignment + «## Аудит-фіналізація A».
 
 ---
 
@@ -75,11 +41,10 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Фінансова логіка
 
-- `totalAmount` — загальна вартість у USD (встановлює owner/executor)
-- Аванс — це платіж типу `advance` в таблиці `payments` з прив'язкою до `orderId`
-- `balance_due = totalAmount - SUM(payments WHERE type IN ('advance','partial') AND status = 'confirmed')`
-- При закритті (`done`) — виставляється фінальний рахунок на `balance_due`
-- Якщо `balance_due = 0` — замовлення вже повністю оплачено авансом
+- Біллінг-модель: `billingType('fixed'|'hourly')` + `fixedPrice`/`hourlyRate`/`estimatedHours`; `totalAmount` — **похідна** (не задається вручну як єдине джерело).
+- Аванс — платіж типу `advance` в `payments`, прив'язаний до `orderId`.
+- `balanceDue = totalAmount − SUM(payments WHERE type IN ('advance','partial') AND status='confirmed')`.
+- При закритті (`done`) — фінальний рахунок на `balanceDue`; `balanceDue=0` → повністю оплачено авансом. `Order.paidAt` фіксує повну оплату.
 
 ### Soft delete
 
@@ -89,14 +54,14 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Виконавці (Executors)
 
-- До одного замовлення можна прив'язати кількох виконавців через `order_executors`
-- Кожен виконавець бачить тільки замовлення, де він призначений
-- `order_executors.assignedAt` — коли призначили, `assignedBy` — хто
+- **Один виконавець на замовлення** — `Order.assigneeId String?` (НЕ many-to-many `order_executors`, якого в схемі немає).
+- Виконавець бачить лише замовлення, де `assigneeId = me`; owner призначає через triage (variant B, див. S1-alignment).
+- Зміна призначення → `ActivityLog(action='executor_assigned')`.
 
 ### Дедлайн і нагадування
 
-- `dueDate` — опціональний дедлайн
-- Cron job: щодня 09:00 Kyiv — перевіряє замовлення де `dueDate` = сьогодні або завтра → надсилає нотифікацію виконавцям
+- `deadline` — опціональний дедлайн (поле `deadline`, не `dueDate`).
+- Cron `C03` (escalation): щодня — замовлення де `deadline` сьогодні/завтра → нотифікація виконавцю.
 
 ---
 
@@ -104,12 +69,12 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 ### Portal (клієнт)
 
-| Метод   | URL           | Опис                                          |
-| ------- | ------------- | --------------------------------------------- |
-| `GET`   | `/orders`     | Список замовлень своєї компанії               |
-| `POST`  | `/orders`     | Створити нове замовлення                      |
-| `GET`   | `/orders/:id` | Деталі замовлення (client view)               |
-| `PATCH` | `/orders/:id` | Редагувати (тільки `new`/`in_review` статуси) |
+| Метод   | URL           | Опис                                                   |
+| ------- | ------------- | ------------------------------------------------------ |
+| `GET`   | `/orders`     | Список замовлень своєї компанії                        |
+| `POST`  | `/orders`     | Створити нове замовлення                               |
+| `GET`   | `/orders/:id` | Деталі замовлення (client view)                        |
+| `PATCH` | `/orders/:id` | Редагувати (лише ранні статуси: `new`/`clarification`) |
 
 ### Workspace (команда)
 
@@ -129,16 +94,17 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 ### Query параметри для `GET /orders` (workspace)
 
 ```
-status=in_progress,on_hold
+status=in_progress,on_hold      # 9 internal-станів (не старі approved/in_review_final)
 priority=high,urgent
 companyId=uuid
-executorId=uuid
+assigneeId=uuid                  # (не executorId); assigneeId=none → unassigned (triage, owner-only)
+tags=bug,urgent                  # OrderTag (Аудит-фіналізація B)
 dateFrom=2026-01-01
 dateTo=2026-12-31
-search=текст (шукає по title, description)
+search=текст                     # title + description
 page=1
 limit=20
-sortBy=createdAt|dueDate|priority
+sortBy=createdAt|deadline|priority   # deadline, не dueDate
 sortDir=asc|desc
 ```
 
@@ -165,11 +131,11 @@ sortDir=asc|desc
   id: string
   title: string
   description: string | null
-  clientStatus: 'pending' | 'in_progress' | 'review' | 'completed'
+  clientStatus: 'in_progress' | 'pending_approval' | 'completed' | 'cancelled' // 4 канонічні
   priority: string
   totalAmount: number | null
   balanceDue: number | null
-  dueDate: string | null
+  deadline: string | null // не dueDate
   createdAt: string
   updatedAt: string
 }
@@ -180,11 +146,11 @@ sortDir=asc|desc
 ```typescript
 {
   // ... всі поля Portal view +
-  internalStatus: OrderStatus
+  internalStatus: OrderInternalStatus              // 9 станів
+  assignee: { id: string; name: string } | null    // один виконавець (не executors[])
   deletedAt: string | null
-  executors: { id: string; name: string; assignedAt: string }[]
   payments: PaymentSummary[]
-  company: { id: string; name: string }
+  company: { id: string; name: string } | null     // companyId nullable (internal_task)
 }
 ```
 
@@ -192,8 +158,9 @@ sortDir=asc|desc
 
 ```typescript
 {
-  status: OrderStatus   // перевіряємо ALLOWED_TRANSITIONS
-  comment?: string      // запис в activity log
+  status: OrderInternalStatus   // перевіряємо ALLOWED_ORDER_TRANSITIONS / canTransitionOrder
+  reason?: string               // ОБОВ'ЯЗКОВО для on_hold/cancelled → Order.onHoldReason/cancelledReason
+  comment?: string              // запис у ActivityLog
 }
 ```
 
@@ -201,60 +168,22 @@ sortDir=asc|desc
 
 ## DB Schema (основні поля)
 
-```prisma
-model Order {
-  id          String      @id @default(uuid())
-  companyId   String
-  title       String
-  description String?
-  status      OrderStatus @default(new)
-  priority    Priority    @default(medium)
-  totalAmount Decimal?    @db.Decimal(10,2)
-  dueDate     DateTime?
-  deletedAt   DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  company     Company           @relation(fields: [companyId], references: [id])
-  executors   OrderExecutor[]
-  payments    Payment[]
-  comments    Comment[]
-  files       FileAttachment[]
-  documents   Document[]
-  timeLogs    TimeLog[]
-
-  @@index([companyId])
-  @@index([status])
-  @@index([deletedAt])
-  @@index([dueDate])
-}
-
-model OrderExecutor {
-  orderId    String
-  userId     String
-  assignedAt DateTime @default(now())
-  assignedBy String
-
-  order  Order   @relation(fields: [orderId], references: [id])
-  user   Profile @relation(fields: [userId], references: [id])
-
-  @@id([orderId, userId])
-}
-```
+> **Канонічна модель — `Order` у `packages/db/prisma/schema.prisma`** (стара `Order`/`OrderExecutor` нижче — видалена з doc-sync).
+> Ключове: `internalStatus OrderInternalStatus` + `clientStatus OrderClientStatus` (НЕ єдиний `status`); `deadline` (не `dueDate`); **`assigneeId String?`** — один виконавець (НЕ модель `OrderExecutor`); + `agencyId`, `type`, `createdById`, `billingType`/`fixedPrice`/`hourlyRate`/`estimatedHours`, `onHoldReason?`/`cancelledReason?`, `paidAt?`; `companyId` **nullable**. Зв'язані моделі (OrderStage/OrderTag/SlaPolicy/OrderDependency/OrderTemplate/TimeLog) + повний reconcile — «## Аудит-фіналізація» нижче.
 
 ---
 
 ## Нотифікації при зміні статусу
 
-| Подія                       | Кому                                  | Канал            |
-| --------------------------- | ------------------------------------- | ---------------- |
-| Нове замовлення від клієнта | Owner + всі executors (кому assigned) | Email + Telegram |
-| Статус → `approved`         | Company Owner                         | Email + Telegram |
-| Статус → `in_review_final`  | Company Owner                         | Email + Telegram |
-| Статус → `revision`         | Executors                             | Telegram         |
-| Статус → `done`             | Company Owner                         | Email + Telegram |
-| Статус → `cancelled`        | Company Owner + Executors             | Email + Telegram |
-| `dueDate` = завтра          | Executors                             | Telegram         |
+| Подія                       | Кому                         | Канал            |
+| --------------------------- | ---------------------------- | ---------------- |
+| Нове замовлення від клієнта | Owner (triage)               | Email + Telegram |
+| Статус → `in_progress`      | Company Owner                | Email + Telegram |
+| Статус → `review`           | Company Owner (на схвалення) | Email + Telegram |
+| Статус → `revision`         | Assignee                     | Telegram         |
+| Статус → `done`             | Company Owner                | Email + Telegram |
+| Статус → `cancelled`        | Company Owner + Assignee     | Email + Telegram |
+| `deadline` = завтра         | Assignee                     | Telegram         |
 
 ---
 
@@ -264,11 +193,10 @@ model OrderExecutor {
 
 ```typescript
 {
-  entityType: 'order'
-  entityId: orderId
-  action: 'status_changed' | 'executor_assigned' | 'amount_updated' | ...
+  orderId: orderId               // реальна модель ActivityLog: orderId (не entityType/entityId)
   actorId: profileId
-  meta: { from: 'in_progress', to: 'on_hold', comment: '...' }
+  action: 'status_changed' | 'executor_assigned' | 'amount_updated' | ...
+  metadata: { from: 'in_progress', to: 'on_hold', comment: '...' }   // поле `metadata`, не `meta`
 }
 ```
 

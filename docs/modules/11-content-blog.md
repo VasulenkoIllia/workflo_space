@@ -1,366 +1,114 @@
 # CONTENT & BLOG MODULE
 
-> App: Workspace (work.workflo.space) / Landing (workflo.space) / API (api.workflo.space)
-> Статус: MVP
-> Залежить від: `packages/db`, `packages/types`
-> Оновлено: 12 квітня 2026
+> App: Workspace (work.workflo.space) / Landing (workflo.space) / API (api.workflo.space) · Залежить від: `packages/db`, `packages/types`, **16-search**, **14-landing** (ISR).
+> Статус: **REWRITE-done** (doc-sync 1.06) · Оновлено: 1 червня 2026
+> ⚠️ Стара версія (Markdown-`content String`, `PostStatus` enum, `BlogTag`/`BlogPostTag` таблиці, плоскі SEO-поля) — **фікція**, видалена. Канон нижче.
 
 ---
 
-## Огляд
+## 0. Огляд
 
-Блог на лендингу (workflo.space/blog) для SEO та демонстрації експертизи. Статті генеруються за допомогою AI (OpenAI GPT-4), публікуються через workspace, відображаються на лендингу за допомогою Next.js ISR (Incremental Static Regeneration).
-
----
-
-## Пайплайн контенту
-
-```
-1. Owner відкриває "Новий пост" в workspace
-2. Вводить тему/заголовок
-3. Натискає "Згенерувати через AI" → API → OpenAI GPT-4 → Markdown текст
-4. Owner редагує текст у textarea (raw Markdown)
-5. Публікує → API встановлює status = 'published'
-6. API викликає Next.js revalidation: revalidatePath('/blog') + revalidatePath(`/blog/${slug}`)
-7. Лендинг оновлює статичні сторінки з нового контенту з БД
-```
+Блог на лендингу (`workflo.space/blog`) для SEO + демонстрації експертизи. Статті пишуться/AI-генеруються через workspace, рендеряться на лендингу через **Next.js ISR**. Модель **білінгва per-row**: один пост містить і `uk`, і `en` контент.
 
 ---
 
-## AI Генерація
-
-### Endpoint
-
-```
-POST /blog/generate
-{
-  topic: string          // тема статті
-  keywords?: string[]    // ключові слова для SEO
-  language?: 'uk' | 'en' // default: 'uk'
-  tone?: 'professional' | 'friendly'  // default: 'professional'
-}
-```
-
-### System Prompt
-
-```
-Ти контент-менеджер digital-агентства Workflo.Space, яке спеціалізується на автоматизації бізнес-процесів.
-Пиши статті для блогу компанії у форматі Markdown.
-Аудиторія: власники малого та середнього бізнесу в Україні.
-Стиль: {{tone}}, зрозуміло, з практичними прикладами.
-Довжина: 800-1200 слів.
-Структура: заголовок (H1), вступ, 3-5 секцій (H2), висновок.
-SEO: включи ключові слова {{keywords}} органічно.
-Мова: {{language}}.
-НЕ використовуй кліше типу "У світі, що швидко змінюється".
-```
-
-### OpenAI конфігурація
-
-```typescript
-// apps/api/src/routes/blog.ts
-const completion = await openai.chat.completions.create({
-  model: 'gpt-4-turbo',
-  messages: [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: `Напиши статтю про: ${topic}` },
-  ],
-  max_tokens: 2000,
-  temperature: 0.7,
-})
-```
-
-> `OPENAI_API_KEY` в ENV. Якщо ключ відсутній → кнопка "Згенерувати AI" прихована, тільки ручне написання.
-
----
-
-## Статуси постів
-
-```
-draft → published
-published → draft (зняти з публікації)
-draft → archived
-```
-
-| Статус      | Видно на лендингу |
-| ----------- | ----------------- |
-| `draft`     | ❌                |
-| `published` | ✅                |
-| `archived`  | ❌                |
-
----
-
-## SEO Поля
+## 1. Реальна модель `BlogPost`
 
 ```prisma
 model BlogPost {
-  id              String   @id @default(uuid())
-  title           String
-  slug            String   @unique   // auto-generated: kebab-case(title)
-  content         String   // Markdown
-  excerpt         String?  // перші 160 символів або вручну
-  coverImageUrl   String?  // URL зображення (завантажується через Files module)
-  metaTitle       String?  // SEO title (якщо відрізняється від title)
-  metaDescription String?  // SEO description, max 160 символів
-  keywords        String[] // масив ключових слів
-  language        String   @default("uk")  // 'uk' | 'en'
-  status          PostStatus @default(draft)
-  authorId        String
-  publishedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  author Profile @relation(fields: [authorId], references: [id])
-  tags   BlogPostTag[]
-
-  @@index([status, publishedAt])
-  @@index([language, status])
-  @@index([slug])
+  id          String       @id @default(uuid())
+  slug        String       @unique
+  type        BlogPostType @default(article)   // article | case_study
+  titleUk     String
+  titleEn     String
+  excerptUk   String?
+  excerptEn   String?
+  contentUk   Json          // блочний контент (НЕ Markdown-рядок)
+  contentEn   Json
+  tags        String[]      // НЕ join-таблиці BlogTag/BlogPostTag
+  authorId    String
+  published   Boolean       @default(false)    // НЕ PostStatus enum
+  featured    Boolean       @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  // ... author Profile @relation
 }
 
-model BlogTag {
-  id    String @id @default(uuid())
-  name  String @unique
-  slug  String @unique
-  posts BlogPostTag[]
-}
-
-model BlogPostTag {
-  postId String
-  tagId  String
-
-  post BlogPost @relation(fields: [postId], references: [id])
-  tag  BlogTag  @relation(fields: [tagId], references: [id])
-
-  @@id([postId, tagId])
-}
-
-enum PostStatus {
-  draft
-  published
-  archived
-}
+enum BlogPostType { article case_study }
 ```
 
-### Slug генерація
-
-```typescript
-// При збереженні поста
-const slug = slugify(title, {
-  lower: true,
-  locale: 'uk', // транслітерація з кирилиці
-  strict: true,
-  trim: true,
-})
-// Якщо slug вже існує → додаємо суфікс: -2, -3, ...
-```
+> **Чого НЕМАЄ (на відміну від старої фікції):** немає `content String` Markdown, `PostStatus(draft/published/archived)`, `BlogTag`/`BlogPostTag`, `language`-колонки (білінгва — в одному рядку), плоских `metaTitle/keywords`.
+>
+> **Заплановані колонки (Аудит-фіналізація C — ще не в схемі):** `metaTitleUk/En`, `metaDescriptionUk/En`, `ogImageUrl`, `canonicalUrl`, `coverImageUrl`, `aiModel`, `aiPromptVersion`, `agencyId`. Доти landing `generateMetadata` для SEO читає `undefined` — це відомий gap.
 
 ---
 
-## ISR (Incremental Static Regeneration)
+## 2. Життєвий цикл
 
-### При публікації поста
-
-```typescript
-// apps/api/src/routes/blog.ts — after status change to 'published'
-const NEXT_REVALIDATION_SECRET = process.env.NEXT_REVALIDATION_SECRET
-await fetch(`${process.env.LANDING_URL}/api/revalidate`, {
-  method: 'POST',
-  headers: {
-    Authorization: `Bearer ${NEXT_REVALIDATION_SECRET}`,
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({ paths: ['/blog', `/blog/${post.slug}`] }),
-})
-```
-
-### Landing revalidation endpoint
-
-```typescript
-// apps/landing/src/app/api/revalidate/route.ts
-export async function POST(request: Request) {
-  const auth = request.headers.get('Authorization')
-  if (auth !== `Bearer ${process.env.NEXT_REVALIDATION_SECRET}`) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { paths } = await request.json()
-  for (const path of paths) {
-    revalidatePath(path)
-  }
-
-  return Response.json({ revalidated: true })
-}
-```
-
-### Static generation
-
-```typescript
-// apps/landing/src/app/blog/[slug]/page.tsx
-export async function generateStaticParams() {
-  const posts = await fetch(`${API_URL}/blog?status=published&limit=100`).then((r) => r.json())
-  return posts.items.map((p: any) => ({ slug: p.slug }))
-}
-
-export const revalidate = 3600 // fallback: перегенерація кожну годину
-```
+- **Стан = два булеві:** `published` (видно на лендингу) + `featured` (промо-позиція). Немає `draft/published/archived`-машини.
+- **Slug:** `slugify(titleUk, {locale:'uk', strict:true})`; колізія → суфікс `-2/-3…` **у транзакції** (race-safe).
+- **Publish і Unpublish** обидва → ISR revalidate лендингу (publish — додає сторінку, unpublish — **прибирає**), **для обох локалей**.
+- Усе agency-scoped (`agencyId`, коли додано) + **audit** на publish/unpublish; право `can('content.manage')`.
 
 ---
 
-## API Endpoints
-
-| Метод    | URL                | Хто                    | Опис                               |
-| -------- | ------------------ | ---------------------- | ---------------------------------- |
-| `GET`    | `/blog`            | Public + Workspace     | Список постів                      |
-| `GET`    | `/blog/:slug`      | Public + Workspace     | Пост за slug                       |
-| `POST`   | `/blog`            | Workspace              | Створити пост                      |
-| `PATCH`  | `/blog/:id`        | Workspace              | Редагувати пост                    |
-| `PATCH`  | `/blog/:id/status` | Workspace              | Змінити статус (publish/unpublish) |
-| `DELETE` | `/blog/:id`        | Workspace              | Видалити пост                      |
-| `POST`   | `/blog/generate`   | Workspace              | AI генерація контенту              |
-| `POST`   | `/api/revalidate`  | Internal (API→Landing) | On-demand ISR                      |
-
-### Query для `GET /blog` (public)
+## 3. AI-генерація (Аудит-фіналізація B)
 
 ```
-language=uk|en
-tag=automation
-status=published    // public завжди тільки published
-page=1
-limit=10
+POST /blog/generate { topic, keywords?, type }   → GPT → draft (published=false)
 ```
 
-### Query для `GET /blog` (workspace)
+- Gate: `can('content.manage')` + **per-agency квота `AgencyAiUsage`** + cost-guard.
+- **Sanitize** `topic`/`keywords` (prompt-injection).
+- Зберігати `aiModel` + `aiPromptVersion` (трасування).
+- Owner редагує draft перед публікацією. Якщо `OPENAI_API_KEY` відсутній → кнопка генерації прихована (лише ручне написання).
 
-```
-status=draft|published|archived
-language=uk|en
-page=1
-limit=20
-```
+System-prompt (референс): контент-менеджер Workflo для власників МСБ в Україні; структура H1+вступ+3-5×H2+висновок; 800-1200 слів; без кліше; мова за `type`/локаллю.
 
 ---
 
-## DTO
+## 4. ISR (лендинг)
 
-### `POST /blog`
-
-```typescript
-{
-  title: string
-  content: string       // Markdown
-  excerpt?: string
-  coverImageUrl?: string
-  metaTitle?: string
-  metaDescription?: string
-  keywords?: string[]
-  language?: 'uk' | 'en'
-  tagIds?: string[]
-}
-```
-
-### BlogPost Response
-
-```typescript
-{
-  id: string
-  title: string
-  slug: string
-  content: string       // Markdown — frontend рендерить через react-markdown
-  excerpt: string
-  coverImageUrl: string | null
-  metaTitle: string | null
-  metaDescription: string | null
-  keywords: string[]
-  language: string
-  status: PostStatus
-  publishedAt: string | null
-  author: { id: string; displayName: string; avatarUrl: string | null }
-  tags: { id: string; name: string; slug: string }[]
-  createdAt: string
-  updatedAt: string
-}
-```
+- API після publish/unpublish → `POST {LANDING_URL}/api/revalidate` (Bearer `NEXT_REVALIDATION_SECRET`) з `paths` для **обох локалей**.
+- `generateStaticParams` — для **обох локалей** (не лише одна); `export const revalidate = 3600` як fallback.
+- **Sitemap** — пагінований (без truncate на 100); **JSON-LD** Article; per-locale `alternates`.
 
 ---
 
-## Frontend — Landing (Next.js)
+## 5. Рендеринг і безпека
 
-### Сторінки
-
-- `/blog` — список постів, фільтр по тегах, пошук
-- `/blog/[slug]` — стаття з SEO metadata (Open Graph, Twitter Card)
-
-### Рендеринг Markdown
-
-```tsx
-// apps/landing/src/components/BlogContent.tsx
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-
-export function BlogContent({ content }: { content: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ node, inline, className, children }) {
-          const match = /language-(\w+)/.exec(className || '')
-          return !inline && match ? (
-            <SyntaxHighlighter language={match[1]} PreTag="div">
-              {String(children)}
-            </SyntaxHighlighter>
-          ) : (
-            <code className={className}>{children}</code>
-          )
-        },
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  )
-}
-```
-
-### SEO metadata
-
-```tsx
-// apps/landing/src/app/blog/[slug]/page.tsx
-export async function generateMetadata({ params }): Promise<Metadata> {
-  const post = await getPost(params.slug)
-  return {
-    title: post.metaTitle || post.title,
-    description: post.metaDescription || post.excerpt,
-    openGraph: {
-      title: post.title,
-      description: post.excerpt,
-      images: post.coverImageUrl ? [post.coverImageUrl] : [],
-      type: 'article',
-      publishedTime: post.publishedAt,
-    },
-  }
-}
-```
+- `contentUk/En` — **JSON-блоки** → block-render на лендингу (не raw `react-markdown` на рядку).
+- **`rehype-sanitize` обов'язково** скрізь, де рендериться збережений контент (stored-XSS) — навіть якщо в блоках є markdown.
+- Workspace: блочний редактор + preview (split view) + AI-кнопка; список з фільтром `published`/`featured`.
 
 ---
 
-## Frontend — Workspace
+## 6. API Endpoints
 
-- WYSIWYG-like: textarea з Markdown + preview панель поруч (split view)
-- Кнопки форматування (Bold, Italic, Code, Link) вставляють Markdown синтаксис
-- Кнопка "Згенерувати AI" → модальне вікно з темою → показує результат → вставляє в textarea
-- Список постів з фільтром по статусу
-- Кнопка "Опублікувати" / "Зняти з публікації"
+| Метод    | URL                 | Хто                    | Опис                                                               |
+| -------- | ------------------- | ---------------------- | ------------------------------------------------------------------ |
+| `GET`    | `/blog`             | Public + Workspace     | Список (public: лише `published`; фільтри `type`/`tag`/`featured`) |
+| `GET`    | `/blog/:slug`       | Public + Workspace     | Пост за slug (обидві локалі)                                       |
+| `POST`   | `/blog`             | Workspace              | Створити (`can('content.manage')`)                                 |
+| `PATCH`  | `/blog/:id`         | Workspace              | Редагувати                                                         |
+| `PATCH`  | `/blog/:id/publish` | Workspace              | `published` true/false → ISR revalidate + audit                    |
+| `DELETE` | `/blog/:id`         | Workspace              | Видалити → ISR revalidate                                          |
+| `POST`   | `/blog/generate`    | Workspace              | AI-генерація (§3)                                                  |
+| `POST`   | `/api/revalidate`   | Internal (API→Landing) | On-demand ISR                                                      |
+
+**DTO `POST /blog`:** `{ type, titleUk, titleEn, excerptUk?, excerptEn?, contentUk(JSON), contentEn(JSON), tags?[] }` (+ SEO-поля коли додані). `published`/`featured` — через `/publish`.
 
 ---
 
-## Зв'язки з іншими модулями
+## 7. Зв'язки з іншими модулями
 
-| Модуль     | Зв'язок                                              |
-| ---------- | ---------------------------------------------------- |
-| **Files**  | Обкладинка поста — завантажується через Files module |
-| **Auth**   | `authorId` — хто опублікував                         |
-| **Search** | Пошук по блогу (tsvector на title + content)         |
+| Модуль         | Зв'язок                                               |
+| -------------- | ----------------------------------------------------- |
+| **14-landing** | ISR-рендер блогу на `workflo.space/blog` (per-locale) |
+| **04-files**   | Обкладинка/`ogImage` — через Files                    |
+| **01-auth**    | `authorId` → Profile                                  |
+| **16-search**  | tsvector по `titleUk/En` + блочний текст              |
 
 ---
 

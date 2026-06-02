@@ -2,8 +2,8 @@
 
 > App: Portal (`portal.workflo.space`) + Workspace (`work.workflo.space`)
 > Статус: MVP
-> Залежить від: [01-auth, 02-company, 07-billing-payments]
-> Оновлено: 12 квітня 2026
+> Залежить від: [01-auth, 02-company, 05-billing, **25-wallet** (єдиний ledger-writer бонусів)]
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -72,151 +72,44 @@ function generateReferralCode(): string {
 
 ### Прогресивна ставка бонусу
 
-Ставка визначається за сумою вже зароблених бонусів реферером (`referrals.totalEarned` — сума по всіх реферальних зв'язках реферера):
+Ставка визначається за сумою вже зароблених бонусів реферером. **Канонічно (фіналізація-2 §A):** тіри живуть у `ReferralSettings.tiers` (per-agency, **редаговані** в адмінці, 5-хв кеш) — джерело істини. Хардкод-константа лишається лише **дефолтним сидом**:
 
 ```typescript
-// packages/types/src/constants.ts
-export const REFERRAL_TIERS = [
+// packages/types/src/constants.ts — DEFAULT seed (НЕ source of truth)
+export const DEFAULT_REFERRAL_TIERS = [
   { minEarned: 0, maxEarned: 499.99, percent: 10 },
   { minEarned: 500, maxEarned: 1999.99, percent: 12 },
   { minEarned: 2000, maxEarned: Infinity, percent: 15 },
 ] as const
-
-function getReferralPercent(totalReferralEarned: Decimal): number {
-  const earned = totalReferralEarned.toNumber()
-  if (earned < 500) return 10
-  if (earned < 2000) return 12
-  return 15
-}
 ```
 
-Приклад: реферер вже заробив $480 бонусів → нове нарахування відбудеться за ставкою 10%. Наступне нарахування, яке підніме суму вище $500, вже відбудеться за ставкою 12% (ставка рахується на момент кожного нарахування).
+`getReferralPercent()` читає `ReferralSettings.tiers` з БД (не константу). Ставка рахується на момент кожного нарахування.
 
 ### Нарахування бонусу при оплаті
 
-Функція `processReferralBonus()` викликається автоматично після кожного підтвердження оплати (`POST /workspace/billing/payments`):
+Після підтвердження оплати реферованого клієнта нараховується бонус рефереру. **Канонічний шлях — через гаманець (модуль 25-wallet), а не прямий `increment bonusBalance`:**
 
-```typescript
-// apps/api/src/modules/billing/referral.service.ts
-async function processReferralBonus(payment: Payment): Promise<void> {
-  const company = await prisma.company.findUnique({
-    where: { id: payment.companyId },
-    select: { referredById: true },
-  })
+- запис бонусу йде як `WalletTransaction` (credit, `source='referral_bonus'`) через **`walletCredit()`** — єдиний writer балансу;
+- `Company.bonusBalance` — лише **кеш** (не пишемо в нього напряму);
+- **ідемпотентність**: `UNIQUE(sourceType, sourceId)` на нарахуванні (повторний вебхук оплати не дублює бонус);
+- ставка `percent` = `getReferralPercent(totalEarned)` з `ReferralSettings` (DB), `totalEarned` рахується через `referral`-зв'язок;
+- усе в одній транзакції + `notify(event='referral.bonus_earned')` рефереру.
 
-  if (!company?.referredById) return // не реферал — нічого не робимо
-
-  const referral = await prisma.referral.findFirst({
-    where: {
-      referrerId: company.referredById,
-      referredId: payment.companyId,
-    },
-  })
-
-  if (!referral) return
-
-  // Рахуємо загальний зароблений бонус реферера
-  const totalEarned = await prisma.referralBonus.aggregate({
-    _sum: { amount: true },
-    where: { referrerId: company.referredById },
-  })
-
-  const currentTotal = totalEarned._sum.amount ?? new Decimal(0)
-  const percent = getReferralPercent(currentTotal)
-  const bonusAmount = payment.amount.mul(percent).div(100)
-
-  await prisma.$transaction([
-    // Запис бонусу
-    prisma.referralBonus.create({
-      data: {
-        referrerId: company.referredById,
-        referredId: payment.companyId,
-        referralId: referral.id,
-        amount: bonusAmount,
-        percent,
-        sourceType: 'payment',
-        sourceId: payment.id,
-      },
-    }),
-    // Збільшуємо bonusBalance реферера
-    prisma.company.update({
-      where: { id: company.referredById },
-      data: { bonusBalance: { increment: bonusAmount } },
-    }),
-    // Оновлюємо totalEarned в referrals
-    prisma.referral.update({
-      where: { id: referral.id },
-      data: { totalEarned: { increment: bonusAmount } },
-    }),
-  ])
-
-  // Нотифікація реферера
-  await notify(referrerOwnerUserId, 'referral_bonus_earned', {
-    amount: bonusAmount,
-    percent,
-    referredCompanyName: payment.company.name,
-  })
-}
-```
-
-**Транзакційність:** всі 3 операції (запис бонусу, оновлення balansу, оновлення referral.totalEarned) виконуються в одній DB транзакції. При помилці жодна зміна не зберігається.
+> ⚠️ **Застарілий `processReferralBonus` з прямим `prisma.company.update({ bonusBalance: { increment } })` та агрегацією по `ReferralBonus.referrerId` — видалено.** У реальній схемі `ReferralBonus` НЕ має колонок `referrerId`/`referredId` (лише `referralId`); єдиний шлях запису балансу — `walletCredit()`. Деталі — «## Аудит-оновлення» + «## Аудит-фіналізація-2 §A» нижче + модуль 25.
 
 ---
 
 ## DB
 
-```prisma
-model Company {
-  // ... інші поля
-  referralCode  String   @unique  // "workflo-K7X2QM"
-  referredById  String?           // id компанії-реферера (nullable)
-  bonusBalance  Decimal  @default(0) @db.Decimal(12, 2)
+> **Канонічні моделі — `packages/db/prisma/schema.prisma`** (`Referral`, `ReferralBonus`, `ReferralSettings`, `Company` referral-поля). Ключові відмінності від стале-блоку, що був тут (фіналізація-2 §A):
+>
+> - `ReferralBonus` keyed **лише `referralId`** — НЕ має `referrerId`/`referredId`/`@relation("ReferrerBonuses")`; `percent Decimal(5,2)` (не `Int`); + **`UNIQUE(sourceType, sourceId)`** (ідемпотентність) + `agencyId`.
+> - `Referral`: `@@unique([referrerId, referredId])`.
+> - `Company.referralCode` — канонічний формат `workflo-XXXXXX` (⚠️ у схемі досі `@default(uuid())` — баг до фіксу; код-генератор авторитетний).
+> - `bonusBalance` — кеш; істина балансу — `WalletTransaction` ledger (модуль 25).
+> - Тіри — `ReferralSettings.tiers` (per-agency, редаговані).
 
-  referralsSent     Referral[] @relation("ReferrerCompany")
-  referralsReceived Referral[] @relation("ReferredCompany")
-  referralBonuses   ReferralBonus[] @relation("ReferrerBonuses")
-
-  @@index([referralCode])
-  @@map("companies")
-}
-
-// Зв'язок реферер → реферований (MVP: depth=1)
-model Referral {
-  id          String   @id @default(uuid())
-  referrerId  String                          // компанія-реферер
-  referrer    Company  @relation("ReferrerCompany", fields: [referrerId], references: [id])
-  referredId  String   @unique                // компанія-реферований (unique: одна компанія має одного реферера)
-  referred    Company  @relation("ReferredCompany", fields: [referredId], references: [id])
-  totalEarned Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt   DateTime @default(now())
-
-  bonuses ReferralBonus[]
-
-  @@index([referrerId])
-  @@map("referrals")
-}
-
-// Окремий запис по кожному нарахуванню
-model ReferralBonus {
-  id         String   @id @default(uuid())
-  referrerId String
-  referrer   Company  @relation("ReferrerBonuses", fields: [referrerId], references: [id])
-  referredId String
-  referralId String
-  referral   Referral @relation(fields: [referralId], references: [id])
-  amount     Decimal  @db.Decimal(12, 2)      // сума нарахування
-  percent    Int                               // 10 | 12 | 15
-  sourceType String   @default("payment")     // "payment" в MVP
-  sourceId   String                           // payments.id
-  createdAt  DateTime @default(now())
-
-  @@index([referrerId])
-  @@index([sourceId])
-  @@map("referral_bonuses")
-}
-```
-
-**Implicit tree в БД:** `Company.referredById` зберігає пряме посилання на компанію-реферера. Для Phase 2 (depth=2) достатньо зробити запит `WHERE referredById IN (SELECT id FROM companies WHERE referredById = $rootReferrerId)` — структура БД вже підтримує це без змін.
+**Implicit tree:** `Company.referredById` → пряме посилання на реферера; depth=2 (BACKLOG) — `WHERE referredById IN (SELECT id FROM companies WHERE referredById = $root)`, без змін схеми.
 
 ---
 
@@ -378,7 +271,7 @@ Query: ?page=1&perPage=20&search=
 ├─────────────────────────────────────────────────────┤
 │  Статус програми:  [●] Увімкнено    [Вимкнути]      │
 │                                                      │
-│  Прогресивні ставки (тільки перегляд у MVP):         │
+│  Прогресивні ставки (редаговані — admin):            │
 │  ┌─────────────────────────────┬──────────────────┐ │
 │  │ Сума зароблених бонусів     │ Відсоток         │ │
 │  ├─────────────────────────────┼──────────────────┤ │
@@ -462,13 +355,12 @@ async function generateUniqueReferralCode(): Promise<string> {
 
 ---
 
-## Phase 2
+## Подальші фази (ре-букет після фіналізації-2)
 
-- **Depth=2:** нарахування 3–5% від оплат непрямих рефералів (реферали рефералів). Реалізується через рекурсивний запит по `company.referredById` ланцюжку (максимальна глибина = 2).
-- **Бонус balance як оплата:** клієнт може використати `bonusBalance` для повної або часткової оплати замовлення. Реалізується як окремий тип платежу `payment_method = 'bonus_balance'`.
-- **Редагування ставок через UI:** owner може змінювати пороги і відсотки у `/settings/referral`.
-- **Реферальна аналітика:** графік залучення нових клієнтів, конверсія реферальних посилань.
-- **Кеш-вивід:** можливість конвертувати бонуси в реальну оплату (обговорюється).
+- **S5 — Бонус як оплата:** клієнт використовує `bonusBalance` для (часткової) оплати замовлення (через гаманець, модуль 25 + invoice-flow). _(Було «Phase 2» — тепер чітко S5.)_
+- **✅ Зроблено — Редагування ставок через UI:** owner змінює пороги/відсотки у `/settings/referral` (`ReferralSettings`, фіналізація-2 §A). _(Більше не майбутнє.)_
+- **Реферальна аналітика / гейміфікація:** дашборд залучення, конверсія, `ReferralAchievement`/leaderboard (фіналізація-2 §B).
+- **BACKLOG — Depth=2** (непрямі реферали 3–5%) + **кеш-вивід** (конвертація бонусів у гроші) — поза MVP-горизонтом.
 
 ---
 
