@@ -181,7 +181,8 @@ CREATE POLICY tenant_isolation ON orders
 
 ## 7. Відкриті рішення (зафіксувати перед Phase 1, не зараз)
 
-- **Біллінг-провайдер SaaS-підписки:** Stripe (гнучко, але податки самі) vs Paddle/LemonSqueezy (merchant-of-record, простіший VAT для глобального продажу). Рекомендація: оцінити Paddle/LMSQ як MoR для України→глобал.
+- **Білінг-провайдер SaaS-підписки:** Stripe (гнучко, але податки самі) vs Paddle/LemonSqueezy (merchant-of-record, простіший VAT для глобального продажу). Рекомендація: оцінити Paddle/LMSQ як MoR для України→глобал.
+- ✅ **White-label-модель (вирішено 1.06):** кожна агенція = власний брендований **лендинг + портал + воркспейс**. Функції/логіка/екрани конфігурування — у [`SAAS_CONFIG.md`](SAAS_CONFIG.md). Ключове: бренд = `--wf-*` токени, що інжектяться у рантаймі → фронтенд будуємо на токенах + host→tenant resolution seam (інакше ретрофіт дорогий).
 - **Domain-стратегія:** subdomain (`*.workflo.space`, просто) на старті; custom domain (`app.acme.com`, SSL-провіжн) — пізніше.
 - **Глибина ізоляції:** shared-DB+RLS (старт) → schema/DB-per-tenant (якщо enterprise-тенант вимагатиме фізичну ізоляцію).
 - **Pricing/packaging** (free/starter/pro/business, ліміти) — продуктове, до Phase 1.
