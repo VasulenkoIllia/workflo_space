@@ -127,7 +127,7 @@ CREATE POLICY tenant_isolation ON orders
   USING ("agencyId" = current_setting('app.current_agency_id', true));
 ```
 
-Інтеграція з Prisma (ціна — усвідомлена): RLS вимагає `SET LOCAL app.current_agency_id` на кожен запит у межах транзакції. Реалізація — **Prisma Client Extension**, що обгортає запити в interactive-tx із `SET LOCAL` із сесійного `activeAgencyId`. Закласти extension-seam зараз (порожній), політики додавати по таблиці.
+Інтеграція з Prisma (ціна — усвідомлена): RLS вимагає `SET LOCAL app.current_agency_id` на кожен запит у межах транзакції. Реалізація **(as-built)** — **`tenantTransaction`** (interactive-tx, що ставить `set_config('app.current_agency_id', …, LOCAL)` першим стейтментом). ⚠️ Per-op Prisma Client Extension прототиповано й відхилено (нежиттєздатно — `query(args)` біжить поза GUC-tx). Деталі — `ENGINEERING_STANDARDS.md` §«RLS rollout».
 
 > Альтернативи (задокументовано, відкладено): **schema-per-tenant** / **DB-per-tenant** — переглянути на 100+ тенантах або вимозі фізичної ізоляції (вже у ADR-004 §Перегляд). Для старту shared-DB+RLS — стандартний прагматичний вибір.
 
@@ -192,10 +192,10 @@ CREATE POLICY tenant_isolation ON orders
 
 ## 8. Чек-лист «готові продавати як SaaS»
 
-- [ ] F1 SaaS-поля Agency (міграція, nullable)
-- [ ] F2 quota/feature seam (no-op) у create-ендпоінтах
-- [ ] F3 `provisionAgency()` (seed перевикористовує)
-- [ ] F4 RLS-конвенція + Prisma-extension seam + політики на tenant-таблиці
+- [x] F1 SaaS-поля Agency (міграція, nullable) — ✅
+- [x] F2 quota/feature seam (no-op) у create-ендпоінтах (orders + files) — ✅
+- [x] F3 `provisionAgency()` (seed перевикористовує) — ✅
+- [x] F4 RLS-конвенція (`tenantTransaction` + per-table політики + `workflo_app` роль) — ✅ verified e2e, flag-gated
 - [ ] F5 tenant-aware rate-limit key + `BASE_DOMAIN` + wildcard subdomain (інфра)
 - [ ] F6 (діє) кожна нова таблиця з `agencyId` + RLS
 - [ ] E1–E7 (Phase 1, у кінці): signup, SaaS-підписка, branding-рантайм, quota-значення, super-admin, lifecycle, flags/api/webhooks

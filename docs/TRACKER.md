@@ -94,20 +94,20 @@
 
 > Повний план: [`SAAS.md`](SAAS.md). Принцип: структурне (схема/запити) закладаємо ЗАРАЗ (ретрофіт у живу мультитенантну БД дорогий); продуктове увімкнення (signup/біллінг/branding) — Phase 1 у кінці. «Перевести на SaaS наприкінці» безпечно лише якщо F1–F6 готові.
 
-| ID    | Задача                                                                                                                                  | Модуль    | Статус         |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- |
-| FDN-1 | SaaS-поля `Agency` (nullable міграція): subdomain/customDomain/plan/subscriptionStatus/trialEndsAt/billingCustomerId/suspendedAt/limits | [db]      | ✅             |
-| FDN-2 | quota/feature **seam** `assertWithinQuota()`/`featureEnabled()` (no-op) у orders.create + **files.upload** (+ S5 invite)                | [adr/007] | ✅ (invite→S5) |
-| FDN-3 | `provisionAgency()` — фабрика тенанта (Agency+owner+дефолтні налаштування); seed перевикористовує                                       | [db]      | ✅             |
-| FDN-4 | RLS: Prisma-extension + політики (FORCE RLS + `workflo_app` роль) — **scaffold+verified, flag-gated** (`RLS_ENFORCED`)                  | [adr/007] | ✅ scaffold    |
-| FDN-5 | `BASE_DOMAIN`+host-resolver stub ✅; tenant rate-limit key ⬜(ADR→Phase1); Traefik wildcard `*.workflo.space` ⬜(infra)                 | Infra     | 🔶 partial     |
-| FDN-6 | (діє) кожна нова tenant-таблиця несе `agencyId` + RLS-політику з дня 1                                                                  | [all]     | ✅             |
+| ID    | Задача                                                                                                                                    | Модуль    | Статус         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- |
+| FDN-1 | SaaS-поля `Agency` (nullable міграція): subdomain/customDomain/plan/subscriptionStatus/trialEndsAt/billingCustomerId/suspendedAt/limits   | [db]      | ✅             |
+| FDN-2 | quota/feature **seam** `assertWithinQuota()`/`featureEnabled()` (no-op) у orders.create + **files.upload** (+ S5 invite)                  | [adr/007] | ✅ (invite→S5) |
+| FDN-3 | `provisionAgency()` — фабрика тенанта (Agency+owner+дефолтні налаштування); seed перевикористовує                                         | [db]      | ✅             |
+| FDN-4 | RLS: `tenantTransaction` (interactive-tx GUC) + політики (FORCE RLS + `workflo_app` роль) — **verified e2e, flag-gated** (`RLS_ENFORCED`) | [adr/007] | ✅ scaffold    |
+| FDN-5 | `BASE_DOMAIN`+host-resolver stub ✅; tenant rate-limit key ⬜(ADR→Phase1); Traefik wildcard `*.workflo.space` ⬜(infra)                   | Infra     | 🔶 partial     |
+| FDN-6 | (діє) кожна нова tenant-таблиця несе `agencyId` + RLS-політику з дня 1                                                                    | [all]     | ✅             |
 
 > **🏗️ Foundation closure (2.06.2026) — структурні дірки S0–S3 закрито** (комміти `b3d5ea6`/`2b0ac97`/`a68be2d`/`b1c7f98`+):
 >
 > - **S-D2** per-agency `DocumentCounter`/`PaymentSettings`/`ExchangeRate` (крос-тенант нумерація інвойсів) · **S-D3** `agencyId` на `InternalTask`/`ActivityLog` · **S-D4** `order_chat_reads` FK CASCADE.
 > - **R-1** executor-онбординг створює `AgencyMember` (був зламаний — locked-out) +тести · **R-3** Phase-1 IDOR у `requireTeamOrder` (→`order.agencyId`) · tenant-стемп audit/ActivityLog · outbox tenant-mismatch guard.
-> - **F4 RLS** — політики (column + parent-join) + `FORCE RLS` + `workflo_app` роль + `$extends` tenant-context; **верифіковано на throwaway-pg** (ізоляція/bypass/permissive); активація — `ENGINEERING_STANDARDS → RLS rollout`.
+> - **F4 RLS** — політики (column + parent-join) + `FORCE RLS` + `workflo_app` роль + **`tenantTransaction`** (interactive-tx GUC; per-op `$extends` відхилено — нуль ізоляції); **верифіковано e2e на throwaway-pg як `workflo_app`**; активація — `ENGINEERING_STANDARDS → RLS rollout`.
 > - **ADR-006** web/worker split (`worker.ts` + `RUN_WORKERS_INLINE` + opt-in compose `--profile workers`) · **R-4** SSE per-user cap.
 > - **Лишилось (Tier-3, дешеве, isolated):** tenant-aware rate-limit key (ADR дозволяє Phase 1), Traefik wildcard (infra-doc), CI `migrate diff` drift-gate.
 

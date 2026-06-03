@@ -2,7 +2,7 @@
 
 **Статус:** Прийнято · **Дата:** 1 червня 2026
 
-> **Реалізовано (foundation closure 2.06.2026):** F4 RLS-політики + FORCE RLS + `workflo_app`-роль (міграція `20260603_f4_rls_policies`) + `$extends` tenant-context, flag-gated `RLS_ENFORCED` (commit a68be2d); S-D2/S-D3 schema-scoping реалізовано (`20260602_sd234`). Activation-checklist → `ENGINEERING_STANDARDS.md` §«RLS rollout».
+> **Реалізовано (foundation closure 2.06.2026):** F4 RLS-політики + FORCE RLS + `workflo_app`-роль (міграція `20260603_f4_rls_policies`) + **`tenantTransaction`** (interactive-tx GUC, flag-gated `RLS_ENFORCED`); S-D2/S-D3 schema-scoping (`20260602_sd234`). ⚠️ Per-op `$extends` прототиповано й **відхилено** (нуль ізоляції — деталі нижче + commit `6be1b5c`); верифіковано e2e на throwaway-pg як `workflo_app`. Activation-checklist → `ENGINEERING_STANDARDS.md` §«RLS rollout».
 
 **Контекст:** Перехід на SaaS планується «у кінці» (після прод-релізу для власної агенції). Питання: чи це безпечно без переписування, і що саме закласти ЗАРАЗ vs відкласти. Зводить розкидане з ADR-004 amendment + SAAS.md F1-F6 в одне рішення про порядок і про модель ізоляції.
 
@@ -18,12 +18,12 @@
 
 - Primary guard (вже діє): `assertSameTenant` + loader'и (`requireOrderParticipant`/`requireTeamOrder`), `agencyId` зі сесії.
 - **RLS — другий рубіж** перед першим зовнішнім тенантом: навіть забутий `where agencyId` фізично не поверне чужі рядки.
-- Реалізація: **Prisma Client `$extends`**, що обгортає запити в interactive-tx і робить `SET LOCAL app.current_agency_id = <activeAgencyId>`; per-table `CREATE POLICY ... USING ("agencyId" = current_setting('app.current_agency_id'))`.
+- Реалізація **(as-built)**: **`tenantTransaction`** — interactive-tx, що першим стейтментом робить `set_config('app.current_agency_id', …, LOCAL)`, далі запити на `tx`; per-table `CREATE POLICY ... USING (wf_in_tenant("agencyId"))`. ⚠️ Початковий план «per-op Prisma `$extends`» **відхилено**: у query-extension `query(args)` — звичайний Promise (не deferred PrismaPromise), тож array-`$transaction([set_config, query])` біжить запит **поза** GUC-tx → нуль ізоляції (доведено на throwaway-pg).
 - **Альтернативи відкладено:** schema-per-tenant / DB-per-tenant — переглянути на 100+ тенантах або вимозі фізичної ізоляції (enterprise).
 
 ### Закласти ЗАРАЗ (поки роутів ~25)
 
-1. **F4 — tenant-context/`$extends`-seam** (порожній: ставить GUC, політики додаємо per-table потім). **#1 пріоритет** — змінює ЯК виконується кожен запит; ретрофіт після 150+ роутів = археологія + ризик, що половина не в tx.
+1. **F4 — tenant-context seam** (as-built: `tenantTransaction`, НЕ `$extends` — див. вище; ставить GUC, політики per-table). **#1 пріоритет** — змінює ЯК виконується кожен запит; ретрофіт після 150+ роутів = археологія + ризик, що половина не в tx.
 2. **S-D2 — `agencyId` на singleton-таблиці** `DocumentCounter`/`PaymentSettings`/`ExchangeRate`. `DocumentCounter @@id([type,year])` без agencyId = **наскрізна нумерація інвойсів між тенантами** (бухгалтерська/юридична катастрофа). Дешево на порожній таблиці; неможливо після виданих документів.
 3. **S-D1 — `orders.agencyId` NOT NULL + FK RESTRICT** (backfill готовий із S1.6).
 4. **F2 — quota-seam** `assertWithinQuota()` (no-op) у create-точках — увімкнути ліміти потім = тіло однієї функції, не 20 хендлерів.
