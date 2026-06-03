@@ -5,15 +5,44 @@
 
 ---
 
+> ## ⚠️ ЧАСТКОВО SUPERSEDED (2026-05-29)
+>
+> Після ітерацій з Claude Design дизайн пішов **іншою візуальною мовою**, ніж описано в §1 (Brand identity) цього файлу.
+>
+> **Канонічне джерело візуальної мови** — [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) (зокрема §3 токени):
+>
+> - **Акцент:** лайм `#A3D90D` / `#C5F82A` (не `#0F62FE`)
+> - **Нейтралі:** теплі stone `#FAFAF9` / `#E7E5E4` / `#0C0A09` (не сіро-сині)
+> - **Шрифти:** **Geist** (body) + **JetBrains Mono** (mono) + **Caveat** (підписи) — не Inter
+> - **Семантика:** success `#059669` · warning `#D97706` · destructive `#DC2626`
+> - **Естетика:** «Engineer's Cut» — термінал (режим A), `[ … ]`-кнопки, `// group`-лейбли
+> - **Палітра свапабельна:** 6 акцент-пресетів (lime / amber / cyan / indigo / rose / emerald) + custom-picker через token-injection seam (white-label SaaS)
+>
+> **Що з цього брифу досі актуальне:**
+>
+> - §0 — контекст продукту (3 додатки, аудиторії, tone)
+> - §2–§4 (Landing / Portal / Workspace структура)
+> - §6 (responsive)
+> - §7–§9 (states / accessibility / deliverables)
+>
+> **Що superseded:**
+>
+> - §1 повністю (кольори + типографіка + dark theme) — заміна в `DESIGN_SYSTEM.md §3`
+> - §5 (Компоненти) — заміна в `DESIGN_SYSTEM.md §3.6` + brandbook у `design/project/brandbook*.jsx`
+>
+> Для нових модулів (Leads / Integrations / Client-Mgmt / Support / SaaS white-label) — окремий бриф [`DESIGN_BRIEF_GROWTH.md`](DESIGN_BRIEF_GROWTH.md).
+
+---
+
 ## 0. Контекст продукту
 
 **Workflo.space** — платформа для управління замовленнями digital-агенції. Три "обличчя":
 
-| App | Домен | Аудиторія | Тон |
-|---|---|---|---|
-| **Landing** | workflo.space | Потенційні клієнти, SEO | Маркетинговий, яскравий, переконливий |
-| **Portal** | portal.workflo.space | Клієнти агенції | Простий, дружній, прозорий |
-| **Workspace** | work.workflo.space | Команда агенції (owner + executors) | Щільний, продуктивний, data-dense |
+| App           | Домен                | Аудиторія                           | Тон                                   |
+| ------------- | -------------------- | ----------------------------------- | ------------------------------------- |
+| **Landing**   | workflo.space        | Потенційні клієнти, SEO             | Маркетинговий, яскравий, переконливий |
+| **Portal**    | portal.workflo.space | Клієнти агенції                     | Простий, дружній, прозорий            |
+| **Workspace** | work.workflo.space   | Команда агенції (owner + executors) | Щільний, продуктивний, data-dense     |
 
 Дизайн має бути **єдиним brand language** (кольори, шрифти, лого), але різна щільність інформації.
 
@@ -21,31 +50,30 @@
 
 ## 1. Brand identity
 
-### Кольори
+> ⚠️ **SUPERSEDED** (див. банер на початку файлу). Канонічні токени — у [`DESIGN_SYSTEM.md §3`](DESIGN_SYSTEM.md). Залишено для історичної довідки.
 
-| Token | Hex | Використання |
-|---|---|---|
-| `primary` | `#0F62FE` | CTA, links, active states |
-| `primary-hover` | `#0043CE` | hover на primary |
-| `text` | `#1F2933` | основний текст |
-| `text-muted` | `#6B7785` | вторинний текст, hints |
-| `border` | `#E5E9F0` | бордери, дільники |
-| `bg` | `#F4F6FA` | фон сторінки |
-| `surface` | `#FFFFFF` | картки, панелі |
-| `success` | `#24A148` | paid, completed, online |
-| `warning` | `#F1C21B` | pending, due soon |
-| `danger` | `#DA1E28` | overdue, errors, cancelled |
-| `info` | `#4589FF` | informational badges |
+### ~~Кольори~~ (superseded)
 
-Dark theme (workspace only MVP): інвертована палітра з `bg=#161616`, `surface=#262626`, `text=#F4F4F4`.
+| Token (старий) | Hex старий    | Реальне рішення (DESIGN_SYSTEM.md §3)    |
+| -------------- | ------------- | ---------------------------------------- |
+| `primary`      | ~~`#0F62FE`~~ | `--wf-accent` лайм `#A3D90D` / `#C5F82A` |
+| `text`         | ~~`#1F2933`~~ | `--wf-fg` `#0C0A09` (stone)              |
+| `text-muted`   | ~~`#6B7785`~~ | `--wf-fg-muted` `#78716C`                |
+| `border`       | ~~`#E5E9F0`~~ | `--wf-border` `#E7E5E4` (stone)          |
+| `bg`           | ~~`#F4F6FA`~~ | `--wf-bg` `#FAFAF9` (stone)              |
+| `surface`      | ~~`#FFFFFF`~~ | `--wf-surface` `#FFFFFF`                 |
+| `success`      | ~~`#24A148`~~ | `--wf-success` `#059669`                 |
+| `warning`      | ~~`#F1C21B`~~ | `--wf-warning` `#D97706`                 |
+| `danger`       | ~~`#DA1E28`~~ | `--wf-destructive` `#DC2626`             |
 
-### Типографіка
+Dark theme: `--wf-bg` `#0A0A0A` / `--wf-surface` `#161616` / `--wf-fg` `#FAFAF9` (повна таблиця у DESIGN_SYSTEM.md §3.2).
 
-- Headings: **Inter** (700/600).
-- Body: **Inter** (400/500).
-- Monospace (codes, IDs): **JetBrains Mono**.
-- Scale: 12 / 14 / 15 / 18 / 22 / 28 / 36 px.
-- Line height: 1.5 для body, 1.2 для headings.
+### ~~Типографіка~~ (superseded)
+
+- ~~Headings/Body: Inter~~ → **Geist** (300–700)
+- Monospace: **JetBrains Mono** (✅ збігається)
+- Підписи в документах: **Caveat** (нове — для PDF e-signature)
+- Scale, line-height — див. DESIGN_SYSTEM.md §3.4
 
 ### Лого
 
@@ -68,6 +96,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ## 2. Landing (workflo.space)
 
 ### Сторінки
+
 - `/` — головна.
 - `/services` — послуги.
 - `/cases` — портфоліо/кейси.
@@ -78,6 +107,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 - `/terms`, `/privacy` — legal.
 
 ### Головна — секції (зверху вниз)
+
 1. **Hero**: H1 value prop + subheading + CTA "Почати" + ілюстрація/скріншот portal.
 2. **Social proof**: логотипи клієнтів / "X замовлень виконано".
 3. **Як це працює**: 3-4 кроки з іконками (Замовлення → Робота → Контроль → Оплата).
@@ -89,6 +119,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 9. **Footer**: nav, контакти, legal, мова (uk/en).
 
 ### Особливості
+
 - **Bilingual** (uk/en) — toggle у header.
 - SEO-критичний: SSR/ISR, schema.org markup, OG-зображення per page.
 - Швидкий (Lighthouse 90+).
@@ -99,9 +130,11 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ## 3. Portal (portal.workflo.space)
 
 ### Призначення
+
 Клієнт бачить свої замовлення, статуси, рахунки, чати, лояльність. Просто й прозоро.
 
 ### Layout
+
 - Top bar: лого + company switcher + notification bell + avatar menu.
 - Sidebar (collapsible): Dashboard / Замовлення / Повідомлення / Рахунки / Лояльність / Реферали / Налаштування.
 - Content area: responsive, max-width 1200px центрований.
@@ -109,40 +142,48 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ### Екрани
 
 #### `/dashboard`
+
 - Привітання + швидка статистика (активних замовлень N, до оплати $X).
 - Список останніх замовлень (картки зі статусом).
 - Pending дії (рахунок чекає оплати, потрібне ваше схвалення).
 
 #### `/orders` + `/orders/:id`
+
 - List: фільтр по статусу (4 client statuses), search.
 - Картка замовлення: title, статус badge (color-coded), deadline, ціна.
 - Detail: опис, прогрес (stages), файли, чат (вбудований), історія статусів, кнопки дій ("Схвалити" коли pending_approval).
 
 #### `/messages` (Chat Hub)
+
 - 2-колонковий: список conversations зліва, активна розмова справа.
 - Unread badges.
 - Telegram-style. Mobile: 2-screen flow.
 
 #### `/invoices`
+
 - Список рахунків: status (pending/paid/overdue), сума, due date.
 - Detail: позиції, total, кнопка "Оплатити" / реквізити.
 - Download PDF.
 
 #### `/loyalty`
+
 - Tier картка (badge + назва + discount%).
 - Progress bar до next tier ("До VIP залишилось $7,750").
 - Список переваг.
 
 #### `/referrals`
+
 - Реферальний код + copy button + share.
 - Список запрошених + статус + отриманий бонус.
 
 #### `/settings`
+
 - Profile (name, email, avatar, мова, тема).
 - `/settings/notifications` — матриця 7×3 (категорія × email/telegram/in_app), Telegram link button. Критичні events email column disabled з tooltip.
 - Companies management (для multi-company).
 
 ### Тон
+
 - Мінімум jargon. "Замовлення в роботі", не "internal_status: in_progress".
 - Кольорові status badges зрозумілі без легенди.
 - Empty states з ілюстраціями + CTA.
@@ -152,11 +193,13 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ## 4. Workspace (work.workflo.space)
 
 ### Призначення
+
 Команда агенції керує всім: orders, executors, billing, документи, репорти, адмінка. Data-dense, продуктивно.
 
 ### Layout
+
 - Top bar: лого + company switcher + global search + timer widget + notification bell + avatar.
-- Sidebar (груповане): 
+- Sidebar (груповане):
   - **Робота**: Dashboard / Triage / Замовлення / Inbox / Kanban.
   - **Фінанси**: Рахунки / Платежі / Документи / Репорти.
   - **Команда**: Виконавці / Departments / Time tracking.
@@ -164,12 +207,14 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 - Content: full-width, data tables.
 
 ### Timer widget (top bar, persistent)
+
 ```
 ┌──────────────────────────┐
 │ ⏱ 01:23:45  "Order title" │  ← active timer running
 │ [Stop]                    │
 └──────────────────────────┘
 ```
+
 - Завжди видно якщо timer active.
 - Click → перехід до order.
 - Перемикання на інший order auto-stops + showкає toast.
@@ -177,44 +222,53 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ### Екрани
 
 #### `/dashboard`
+
 - KPI cards: revenue MTD, active orders, overdue invoices, team utilization.
 - Charts: revenue trend, orders by status.
 - Recent activity feed.
 
 #### `/triage` (owner only)
+
 - Список unassigned orders (нові від клієнтів).
 - Швидке призначення executor (dropdown) + priority + перший статус.
 - Count badge у sidebar.
 
 #### `/orders` + `/orders/:id`
+
 - Powerful table: всі колонки (internal status, executor, company, deadline, amount, billing type).
 - Bulk actions.
 - Detail: повна картка з усіма tabs (Overview / Time logs / Files / Chat / Stages / Specification / Documents / Activity).
 - Owner-only кнопки: done, revision, cancel.
 
 #### `/kanban`
+
 - Колонки = internal statuses.
 - Drag-drop між статусами (з validation rules).
 - Card: title, executor avatar, deadline, priority dot.
 
 #### `/inbox` (Chat Hub для executors)
+
 - Як portal /messages але з фільтрами assigned/mentioned/all + company column.
 
 #### Billing
+
 - `/invoices` — таблиця + create.
 - `/payments` — підтвердження платежів (manual), historія.
 - `/reports/time|revenue|debtors` — звіти з charts + CSV export.
 
 #### Team
+
 - `/executors` — список + rates + departments.
 - `/time-tracking` — overview активних таймерів + manual entry.
 
 #### `/companies/:id/credentials` (owner only)
+
 - Таблиця credentials: label / service icon / url / username / actions.
 - Reveal modal з 2FA + 10s autohide + copy.
 - Add/edit/revoke.
 
 #### Admin (admin only)
+
 - `/admin/system` — monitoring dashboard (health cards, cron table, audit feed, error log).
 - `/admin/templates` — 162 template slots, edit з preview.
 - `/admin/smtp` — sender cards + test connection.
@@ -224,6 +278,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 - `/admin/crons` — cron status + manual trigger.
 
 ### Тон
+
 - Технічна точність OK (internal statuses, codes видимі).
 - Keyboard shortcuts (J/K navigation, C create, / search).
 - Dense tables з sort/filter/column toggle.
@@ -236,6 +291,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 Будуються у `packages/ui`. Дизайнер має передбачити всі стани (default/hover/active/disabled/loading/error).
 
 ### Базові
+
 - Button (primary / secondary / ghost / danger; sm/md/lg; icon-only).
 - Input / Textarea / Select / Checkbox / Radio / Toggle / DatePicker.
 - Badge / Pill / Tag (status colors).
@@ -250,6 +306,7 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 - Pagination / Cursor "load more".
 
 ### Складні
+
 - Company switcher dropdown.
 - Notification bell + dropdown panel.
 - Timer widget.
@@ -263,12 +320,14 @@ Dark theme (workspace only MVP): інвертована палітра з `bg=#1
 ### Status badge color mapping
 
 **Client statuses (Portal):**
+
 - in_progress → info blue
 - pending_approval → warning yellow
 - completed → success green
 - cancelled → muted grey
 
 **Internal statuses (Workspace):**
+
 - new → grey, clarification → blue, estimating → purple, in_progress → blue (solid),
   review → yellow, revision → orange, done → green, cancelled → grey, on_hold → grey-dashed.
 
@@ -287,6 +346,7 @@ Breakpoints: 480 / 768 / 1024 / 1280 / 1536 px.
 ## 7. Empty / Error / Loading states
 
 Для кожного списку/екрану дизайнер передбачає:
+
 - **Loading**: skeleton (не spinner де можливо).
 - **Empty**: ілюстрація + заголовок + опис + CTA ("Ще немає замовлень. Створіть перше →").
 - **Error**: ілюстрація + "Щось пішло не так" + retry button.

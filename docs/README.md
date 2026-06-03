@@ -130,7 +130,7 @@ turbo dev
 | Dates         | date-fns + date-fns-tz                                  | latest |
 | i18n          | next-intl (landing) + react-i18next (portal/workspace)  | —      |
 | Testing       | Vitest + React Testing Library + MSW + Playwright (E2E) | —      |
-| PDF           | @react-pdf/renderer                                     | latest |
+| PDF           | Puppeteer (HTML→PDF)                                    | latest |
 | Email         | Nodemailer → Mailcow                                    | —      |
 | Storage       | LocalStorageAdapter (MVP) → HetznerAdapter (Phase 2)    | —      |
 | Payments      | ManualProvider (MVP) → LiqPay/Stripe (Phase 2)          | —      |
@@ -192,7 +192,7 @@ packages/
 ├── i18n/          Переклади uk/en + react-i18next ініціалізація
 ├── storage/       StorageAdapter interface + Local + Hetzner adapters
 ├── payments/      PaymentProvider interface + Manual + LiqPay/Stripe (Phase 2)
-└── templates/     PDF шаблони (@react-pdf/renderer)
+└── templates/     PDF шаблони (HTML → Puppeteer + DocToolkit: DocBrand/DocParties/DocSigs/DocFoot)
 ```
 
 ---

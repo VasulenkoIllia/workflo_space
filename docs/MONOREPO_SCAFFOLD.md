@@ -1,4 +1,5 @@
 # MONOREPO SCAFFOLD
+
 > Точна файлова структура проекту. Що де лежить і чому.
 > Версія: 1.0 | Оновлено: 12 квітня 2026
 
@@ -45,7 +46,7 @@ workflo/                          ← корінь монорепо
 │   ├── i18n/                     ← uk/en переклади + react-i18next init
 │   ├── storage/                  ← StorageAdapter (Local + Hetzner)
 │   ├── payments/                 ← PaymentProvider (Manual + LiqPay Phase 2)
-│   └── templates/                ← PDF шаблони (@react-pdf/renderer)
+│   └── templates/                ← PDF шаблони (HTML→Puppeteer + DocToolkit)
 │
 ├── scripts/
 │   ├── backup.sh                 ← pg_dump + архів uploads → Hetzner Volume
@@ -182,10 +183,7 @@ uploads/
 ```javascript
 module.exports = {
   root: true,
-  extends: [
-    'eslint:recommended',
-    'plugin:@typescript-eslint/recommended-type-checked',
-  ],
+  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended-type-checked'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: true,
@@ -783,7 +781,7 @@ packages/payments/
 packages/templates/
 ├── src/
 │   ├── invoice/
-│   │   ├── InvoiceTemplate.tsx   ← @react-pdf/renderer компонент
+│   │   ├── InvoiceTemplate.tsx   ← React → HTML → Puppeteer → PDF
 │   │   └── types.ts
 │   ├── completion-act/
 │   ├── specification/
@@ -823,19 +821,24 @@ packages/i18n/
 
 ```markdown
 ## Що зроблено
+
 <!-- Короткий опис змін (1-3 речення) -->
 
 ## Тип змін
+
 - [ ] `feat` — нова функція
 - [ ] `fix` — виправлення бага
 - [ ] `chore` — рефакторинг / налаштування / залежності
 - [ ] `docs` — тільки документація
 
 ## Задача
+
 <!-- ID задачі з TRACKER.md: S1-04 -->
-Задача: **S_-__**
+
+Задача: **S\_-\_\_**
 
 ## Checklist
+
 - [ ] `turbo lint` — без помилок
 - [ ] `turbo type-check` — без помилок
 - [ ] Тести написані / оновлені (якщо потрібно)
@@ -843,6 +846,7 @@ packages/i18n/
 - [ ] Документація оновлена (якщо змінилась бізнес-логіка або API)
 
 ## Скріншоти
+
 <!-- Якщо є UI зміни — до/після -->
 ```
 

@@ -550,33 +550,61 @@ export async function notify(
 
 ### packages/templates (новий — для PDF документів)
 
+> **Движок: HTML → Puppeteer → PDF** (рішення дизайн-фази, 2026-05-29 — див. `DESIGN_SYSTEM.md §5.5 + §8 row 4`). HTML/CSS-мокапи з `design/project/documents-screens.jsx` реюзяться 1:1 — точне повторення (QR, watermark SIGNED/DRAFT, Caveat-підпис). Уникає переписування дизайну в react-pdf-примітивах.
+>
+> _Примітка: попередній план використовував `@react-pdf/renderer`. Перейшли на Puppeteer для pixel-perfect-збігу з мокапами._
+
 ```
 packages/templates/
 ├── src/
-│   ├── invoice.tsx          ← @react-pdf/renderer компонент
-│   ├── completion-act.tsx
-│   ├── specification.tsx
-│   ├── contract.tsx
-│   └── index.ts             ← generatePdf(type, data) → Buffer
+│   ├── toolkit/
+│   │   ├── DocBrand.tsx     ← header (ASCII wordmark, № документа)
+│   │   ├── DocParties.tsx   ← блок реквізитів (виконавець + замовник)
+│   │   ├── DocTable.tsx     ← темна шапка, lime акцент на total
+│   │   ├── DocSigs.tsx      ← підписи (Caveat, −3°, SIGNED/DRAFT watermark)
+│   │   └── DocFoot.tsx      ← QR (IBAN + amount + ref), reference-text
+│   ├── templates/
+│   │   ├── invoice.tsx          ← Рахунок (INV)
+│   │   ├── completion-act.tsx   ← Акт виконаних робіт (ACT)
+│   │   ├── reconciliation.tsx   ← Акт звірки (REC)
+│   │   ├── specification.tsx    ← Специфікація (SPC)
+│   │   ├── contract.tsx         ← Договір (CTR)
+│   │   └── credit-note.tsx      ← Credit-note (CRN, з r4)
+│   ├── puppeteer.ts         ← singleton + lifecycle (browser pool, recycle)
+│   └── index.ts             ← generatePdf(type, data, locale) → Buffer
 └── package.json
 ```
 
 ```typescript
 // packages/templates/src/index.ts
-import { renderToBuffer } from '@react-pdf/renderer';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { getBrowser } from './puppeteer'; // singleton headless-chrome
+import * as Templates from './templates';
 
-export async function generatePdf(type: DocumentType, data: DocumentData): Promise<Buffer> {
-  const components = {
-    invoice: InvoiceTemplate,
-    completion_act: CompletionActTemplate,
-    specification: SpecificationTemplate,
-    contract: ContractTemplate,
-    advance_invoice: InvoiceTemplate,  // той самий шаблон, інший заголовок
-  };
-  const Component = components[type];
-  return renderToBuffer(<Component data={data} />);
+export async function generatePdf(
+  type: DocumentType, // INV | ACT | REC | SPC | CTR | CRN
+  data: DocumentData,
+  locale: 'uk' | 'en' = 'uk',
+): Promise<Buffer> {
+  const Component = Templates[type];
+  const html = renderToStaticMarkup(<Component data={data} locale={locale} />);
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true, // зберігає watermark + кольорові акценти
+    margin: { top: 56, bottom: 64, left: 56, right: 56 },
+  });
+  await page.close();
+  return pdf;
 }
 ```
+
+**Чому Puppeteer:** дизайн `design/project/documents-screens.jsx` уже HTML/CSS → реюз без переписування. Watermark `SIGNED/DRAFT`, QR-код, Caveat-підпис (−3°) працюють «з коробки». Browser-pool через singleton — амортизація запуску chrome (~300ms cold).
+
+**Trade-off:** headless-chrome на сервері (~120MB пам'яті). Прийнятно для Hetzner VPS. Альтернатива — `@sparticuz/chromium` якщо переїдемо у serverless.
 
 Генерований PDF → зберігається у `/srv/uploads/documents/{id}.pdf` → той самий volume що і файли задач.
 

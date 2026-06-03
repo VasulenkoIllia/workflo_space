@@ -39,6 +39,51 @@ notify(event, recipients, payload)
 
 > Нові email-шаблони додаються як render-функції + рядок у матриці 07, не як HTML-файли.
 
+### 1.1. Заплановані шаблони (за дизайном r2 — `DESIGN_SYSTEM.md §5.6`)
+
+Дизайн повернув **15 HTML-мокапів** ([`design/project/email-templates.jsx`](../../design/project/email-templates.jsx)). 4 з них реалізовані вище; **11 — заплановані** для S3+ (frontend integration phase). Кожен має готовий мокап у фірмовому стилі (лайм/stone/Geist) — імплементація = пере-вираження мокапу через `render*`-примітиви + reuse `renderLayout()`.
+
+**Transactional (5):**
+
+| Функція (план)                | Подія (07)                               | Реалізовано? | Дизайн                    |
+| ----------------------------- | ---------------------------------------- | ------------ | ------------------------- |
+| `renderInvitePortalEmail`     | `system.invite_sent` (member)            | ✅ (= вище)  | `email-invite`            |
+| `renderOrderReceivedEmail`    | `orders.created` (підтвердження клієнту) | ❌           | `email-order`             |
+| `renderInvoiceSentEmail`      | `billing.invoice_sent`                   | ❌           | `email-invoice` (pay CTA) |
+| `renderPaymentOkEmail`        | `billing.invoice_paid`                   | ❌           | `email-payment` (receipt) |
+| `renderDeadlineReminderEmail` | `billing.invoice_overdue` (warning)      | ❌           | `email-deadline`          |
+
+**Auth + безпека (6):**
+
+| Функція (план)               | Подія (07)                               | Реалізовано? | Дизайн                    |
+| ---------------------------- | ---------------------------------------- | ------------ | ------------------------- |
+| `renderEmailVerifyEmail`     | `auth.email_verification`                | ❌           | `email-verify` (код)      |
+| `renderPasswordResetEmail`   | `auth.password_reset`                    | ✅ (= вище)  | `email-reset`             |
+| `renderPasswordChangedEmail` | `auth.password_changed` (security alert) | ❌           | `email-pwd-changed`       |
+| `renderNewLoginEmail`        | `auth.login_from_new_device`             | ❌           | `email-new-login` (alert) |
+| `renderOtpEmail`             | `auth.otp_code` (2FA login)              | ❌           | `email-otp`               |
+| `renderEmailChangeEmail`     | `auth.email_change_confirm`              | ❌           | `email-change`            |
+
+**Системні + інфо (4):**
+
+| Функція (план)              | Подія (07)                         | Реалізовано? | Дизайн                      |
+| --------------------------- | ---------------------------------- | ------------ | --------------------------- |
+| `renderInviteExecutorEmail` | `system.invite_sent` (executor)    | ✅ (= вище)  | `email-team-invite`         |
+| `renderMentionEmail`        | `chat.mention`                     | ❌           | `email-mention`             |
+| `renderDocReadyEmail`       | `documents.completion_act_ready`   | ❌           | `email-doc-ready`           |
+| `renderDigestEmail`         | `weekly_digest` (новий event у 07) | ❌           | `email-digest` (stat-сітка) |
+
+**Інтеграційні (r4, додано в дизайні):**
+
+| Функція (план)                      | Подія (07)              | Реалізовано? | Дизайн                                                     |
+| ----------------------------------- | ----------------------- | ------------ | ---------------------------------------------------------- |
+| `renderRefundIssuedEmail` (від G13) | `billing.refund_issued` | ❌           | у `round4-billing.jsx`                                     |
+| `renderWelcomeEmail`                | `auth.welcome`          | ✅ (= вище)  | _окремого мокапу нема — використовується дефолтний layout_ |
+
+> **Total:** 15 у дизайні · 4 ✅ у коді · **11 todo** + inline-CSS існуючих 4 треба пере-перевірити проти токенів §3 (DESIGN_SYSTEM) — фактично виконано через `render.ts` primitives.
+>
+> **Імплементація:** для кожного нового шаблону — нова TS-функція + рядок у матриці модуля 07 (`docs/modules/07-notifications.md §матриця`). HTML-структура + inline-CSS береться з відповідного компонента у [`email-templates.jsx`](../../design/project/email-templates.jsx) і перевиражається через `renderLayout`/`renderButton`/`renderHeading`/`renderParagraph`/`renderMuted` для XSS-безпеки.
+
 ---
 
 ## 2. Транспорт

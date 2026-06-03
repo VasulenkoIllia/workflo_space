@@ -9,7 +9,9 @@
 
 ## Огляд
 
-Модуль генерації PDF-документів: рахунки (invoice), акти виконаних робіт, специфікації, договори та розрахункові листи. Всі документи генеруються через `@react-pdf/renderer` в пакеті `packages/templates`. Зберігаються як PDF-файли через `StorageAdapter`.
+Модуль генерації PDF-документів: рахунки (invoice), акти виконаних робіт, акти звірки, специфікації, договори + credit-note (CRN, з r4). Всі документи генеруються через **HTML → Puppeteer → PDF** у пакеті `packages/templates` (toolkit `DocBrand`/`DocParties`/`DocSigs`/`DocFoot`, реюз HTML/CSS-мокапів з `design/project/documents-screens.jsx` 1:1). Зберігаються як PDF-файли через `StorageAdapter`.
+
+> Движок зафіксовано 2026-05-29 (`DESIGN_SYSTEM.md §5.5 + §8 row 4`). Старіші згадки `@react-pdf/renderer` нижче — застаріли; код-приклади треба переписати під Puppeteer (TODO).
 
 ---
 
@@ -119,7 +121,7 @@ interface DocumentLine {
 ```
 packages/templates/src/
 ├── invoice/
-│   ├── InvoiceTemplate.tsx    // @react-pdf/renderer компонент
+│   ├── InvoiceTemplate.tsx    // React → HTML → Puppeteer → PDF
 │   └── InvoiceData.ts         // TypeScript DTO для шаблону
 ├── completion-act/
 │   ├── ActTemplate.tsx

@@ -910,7 +910,7 @@ created_at, updated_at, published_at
 ```
 Owner у workspace → /orders/:id → вкладка "Документи"
   → "Сформувати рахунок" / "Сформувати акт" / "Специфікація"
-  → система генерує PDF через @react-pdf/renderer
+  → система генерує PDF через HTML→Puppeteer (toolkit DocBrand/DocParties/DocSigs/DocFoot)
   → PDF зберігається у /srv/uploads/documents/{id}.pdf
   → Owner: preview → "Надіслати клієнту"
   → клієнт отримує email з PDF + бачить у portal /orders/:id → "Документи"
