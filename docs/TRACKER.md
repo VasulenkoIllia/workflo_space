@@ -172,7 +172,7 @@
 | S3-01  | packages/ui примітиви — Button/Input/Badge/StatusDot/Card/EmptyState/Skeleton/Avatar/Modal (+Storybook+тести)  | [UI]        | ✅ 🧪  |
 | S3-02  | packages/ui shell — AppShell(термінал-chrome)/Sidebar/Topbar/AuthShell/Icon + ThemeProvider(theme+6 accent)    | [UI]        | ✅ 🧪  |
 | S3-03  | Portal wiring — api-client(Bearer+401-refresh)/queryClient/SSE/AuthContext/ProtectedRoute/router/i18n + /login | [01]        | ✅ 🧪  |
-| S3-03b | Portal auth — /register(2-step) /forgot /reset /invite                                                         | [01]        | 🔄     |
+| S3-03b | Portal auth — /register(2-step+strength) /forgot(sent+timer) /reset(token+strength); /invite ⬜                | [01]        | ✅ 🧪  |
 | S3-04  | Portal — /orders (список+фільтри+stats)                                                                        | [02-orders] | ⬜     |
 | S3-05  | Portal — /orders/:id (статус+етапи)                                                                            | [02-orders] | ⬜     |
 | S3-06  | Portal — /orders/:id чат (SSE) + файли + activity                                                              | [03/04]     | ⬜     |
