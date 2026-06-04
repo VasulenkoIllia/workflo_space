@@ -6,6 +6,7 @@ import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/layouts/AppLayout'
 import { OrdersPage } from '@/routes/orders/OrdersPage'
+import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -24,6 +25,8 @@ export default function App() {
         }
       >
         <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/orders/new" element={<Placeholder title="Нове замовлення" />} />
+        <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/billing" element={<Placeholder title="Фінанси" />} />
         <Route path="/wallet" element={<Placeholder title="Гаманець" />} />
         <Route path="/documents" element={<Placeholder title="Документи" />} />
