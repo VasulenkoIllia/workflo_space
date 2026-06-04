@@ -174,14 +174,14 @@
 | S3-03  | Portal wiring — api-client(Bearer+401-refresh)/queryClient/SSE/AuthContext/ProtectedRoute/router/i18n + /login | [01]        | ✅ 🧪  |
 | S3-03b | Portal auth — /register(2-step+strength) /forgot(sent+timer) /reset(token+strength); /invite ⬜                | [01]        | ✅ 🧪  |
 | S3-04  | Portal — /orders (список+фільтри+пошук+stats+empty/loading/error; React Query); E2E-з-даними ⏳                | [02-orders] | ✅     |
-| S3-05  | Portal — /orders/:id (статус+етапи)                                                                            | [02-orders] | ⬜     |
-| S3-06  | Portal — /orders/:id чат (SSE) + файли + activity                                                              | [03/04]     | ⬜     |
+| S3-05  | Portal — /orders/:id (header+статус+етапи, sidebar Фінанси/Деталі, approval-banner, skeleton/404)              | [02-orders] | ✅     |
+| S3-06  | Portal — /orders/:id чат (live-SSE+send+read) + файли (upload/download/delete) + activity                      | [03/04]     | ✅     |
 | S3-07  | Portal — /team (члени+invite)                                                                                  | [01-auth]   | ⬜     |
 | S3-08  | Portal — /settings (профіль/пароль/нотифікації/мова/тема)                                                      | [13]        | ⬜     |
 | S3-09  | i18n UA+EN + error-toasts (✅ каркас) + mobile responsive (⬜)                                                 | [UI]        | 🔄     |
 | S3-10  | Deploy Sprint 3 → staging                                                                                      | Infra       | 🚀     |
 
-> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs** ✅ — примітив на дизайн-класах `.wfp-od-tab*` (C4 prereq, +story+тест). **Toast** = Sonner. **Аудит C1 (2026-06-04):** 2-агентний рев'ю (code+TS), виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. **Аудит C2/C3 (2026-06-04):** ResetPassword→zodResolver (помилки під правильними полями + server-error окремо), orders `status=all` URL-guard, RegisterForm=`z.infer` (anti-drift) + Enter-guard на кроці-0, `internalStatusesFor` без касту, `counts` тип, a11y Space-клавіша, прибрано dead-code. Декомпозиція — здорова обидва рази.
+> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs** ✅ — примітив на дизайн-класах `.wfp-od-tab*` (C4 prereq, +story+тест). **Toast** = Sonner. **Аудит C1 (2026-06-04):** 2-агентний рев'ю (code+TS), виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. **Аудит C2/C3 (2026-06-04):** ResetPassword→zodResolver (помилки під правильними полями + server-error окремо), orders `status=all` URL-guard, RegisterForm=`z.infer` (anti-drift) + Enter-guard на кроці-0, `internalStatusesFor` без касту, `counts` тип, a11y Space-клавіша, прибрано dead-code. **Аудит C4 (2026-06-04):** lifted SSE на рівень сторінки (не губимо апдейти поза чат-табом), query `enabled`-guard, SSE shape-guard (захист від кривого payload), download revoke-race fix, near-bottom autoscroll, upload error-state. Декомпозиція (`lib/orderDetail` + `ChatTab` + `FilesTab` + page) — здорова. Декомпозиція — здорова всі рази.
 
 ---
 
@@ -346,16 +346,16 @@
 
 ## ПРОГРЕС
 
-| Фаза                           | Спрінти      | Статус                         |
-| ------------------------------ | ------------ | ------------------------------ |
-| Foundation                     | S0, S1, S1.5 | ✅ done                        |
-| Tenancy + schema               | S1.6         | ✅ done                        |
-| Orders/Chat/Files backend      | S2           | ✅ done                        |
-| MVP ядро frontend              | S3-S4        | 🔄 S3 (UI-ядро ✅ · екрани ⏳) |
-| Billing/Wallet/Finance backend | S5           | ⬜ next                        |
-| MVP доки+контент               | S6-S7        | ⬜                             |
-| MVP launch v0.1.0              | S8           | ⬜                             |
-| Повний продукт (фічі)          | S9-S14       | ⬜                             |
+| Фаза                           | Спрінти      | Статус                                                                          |
+| ------------------------------ | ------------ | ------------------------------------------------------------------------------- |
+| Foundation                     | S0, S1, S1.5 | ✅ done                                                                         |
+| Tenancy + schema               | S1.6         | ✅ done                                                                         |
+| Orders/Chat/Files backend      | S2           | ✅ done                                                                         |
+| MVP ядро frontend              | S3-S4        | 🔄 S3 core ✅ (auth+orders+detail) · хвіст: team/settings/invite/responsive/E2E |
+| Billing/Wallet/Finance backend | S5           | ⬜ next                                                                         |
+| MVP доки+контент               | S6-S7        | ⬜                                                                              |
+| MVP launch v0.1.0              | S8           | ⬜                                                                              |
+| Повний продукт (фічі)          | S9-S14       | ⬜                                                                              |
 
 > **MVP-межа:** S8 (v0.1.0, перший клієнт). **Повноцінний продукт:** через S14.
 > Деталі скоупу кожного модуля — `SPEC.md` + `modules/NN-*.md`.

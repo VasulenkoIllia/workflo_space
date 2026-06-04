@@ -27,3 +27,15 @@ export function deadlineMeta(
   if (days <= 3) return { label: 'скоро', tone: 'soon' }
   return { label: 'у строк', tone: 'ok' }
 }
+
+/** "dd.MM HH:mm" — compact timestamp for chat/activity. */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  return format(new Date(iso), 'dd.MM HH:mm')
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
+}
