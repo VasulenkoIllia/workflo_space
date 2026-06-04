@@ -1,0 +1,48 @@
+/* components.css — @workflo/ui component-layer styles that EXTEND the ported design
+ * CSS (product.css). Only token-based additions for component states/variants the
+ * design stylesheet does not itself define. Ported design classes live in product.css
+ * (treat as vendored — do not hand-edit; re-sync from design/ deliberately).
+ */
+
+/* ─────────────────────────── Button extensions ─────────────────────────── */
+/* design defines: .wfp-btn (base), --primary, --ghost, --danger, --sm.
+ * Added here ONLY the functional states the static design omits but a working
+ * button needs: disabled, full-width (used by auth screens), loading spinner. */
+.wfp-btn:disabled,
+.wfp-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wfp-btn--block {
+  display: flex;
+  width: 100%;
+}
+.wfp-btn[data-loading='true'] {
+  cursor: progress;
+}
+.wfp-btn-spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 1.5px solid color-mix(in oklab, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: wfp-spin 0.6s linear infinite;
+}
+@keyframes wfp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wfp-btn-spinner {
+    animation-duration: 1.4s;
+  }
+}
+
+/* ─────────────────────────── Input / Field extensions ─────────────────────────── */
+/* design defines .wfp-field, .wfp-field--error input, .wfp-field-hint, --ok.
+ * Added: error-coloured hint text (design ships --ok but not --error). */
+.wfp-field-hint--error {
+  color: var(--wf-destructive);
+}

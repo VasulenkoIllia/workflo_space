@@ -162,22 +162,26 @@
 
 ---
 
-## SPRINT 3 — Portal Frontend (ядро) — ⏸️ ВІДКЛАДЕНО у фронтенд-прохід (design-gated)
+## SPRINT 3 — Portal Frontend (ядро) — 🔄 У РОБОТІ (design-system-first)
 
 > Ціль: клієнт реєструється, бачить задачі, спілкується, дивиться рахунки.
+> **Підхід (рішення власника 2026-06-04): design-system-first** — спершу ядро `@workflo/ui` (компонент → Storybook-дока → reuse), потім екрани. Деталі — [`UI_COMPONENTS.md`](UI_COMPONENTS.md). Естетика «Engineer's Cut» портована з `design/` (токени `--wf-*` + класи `.wfp-*`, verbatim CSS). Фаза A=фундамент+flagship, B=решта ядра+shell, C=екрани Portal.
 
-| ID    | Задача                                                          | Модуль      | Статус |
-| ----- | --------------------------------------------------------------- | ----------- | ------ |
-| S3-01 | packages/ui — Button/Input/Badge/Modal/Table/Avatar             | [UI]        | ⬜     |
-| S3-02 | packages/ui — AuthLayout/DashboardLayout/ThemeProvider          | [UI]        | ⬜     |
-| S3-03 | Portal — auth context + /login /register /forgot /reset /invite | [01]        | ⬜     |
-| S3-04 | Portal — /dashboard + /tasks (список+фільтри)                   | [02-orders] | ⬜     |
-| S3-05 | Portal — /tasks/new + /tasks/:id (статус+етапи)                 | [02-orders] | ⬜     |
-| S3-06 | Portal — /tasks/:id чат (SSE) + файли + activity                | [03/04]     | ⬜     |
-| S3-07 | Portal — /team (члени+invite)                                   | [01-auth]   | ⬜     |
-| S3-08 | Portal — /settings (профіль/пароль/нотифікації/мова/тема)       | [13]        | ⬜     |
-| S3-09 | i18n UA+EN + error-toasts + mobile responsive                   | [UI]        | ⬜     |
-| S3-10 | Deploy Sprint 3 → staging                                       | Infra       | 🚀     |
+| ID     | Задача                                                                                                         | Модуль      | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S3-01  | packages/ui примітиви — Button/Input/Badge/StatusDot/Card/EmptyState/Skeleton/Avatar/Modal (+Storybook+тести)  | [UI]        | ✅ 🧪  |
+| S3-02  | packages/ui shell — AppShell(термінал-chrome)/Sidebar/Topbar/AuthShell/Icon + ThemeProvider(theme+6 accent)    | [UI]        | ✅ 🧪  |
+| S3-03  | Portal wiring — api-client(Bearer+401-refresh)/queryClient/SSE/AuthContext/ProtectedRoute/router/i18n + /login | [01]        | ✅ 🧪  |
+| S3-03b | Portal auth — /register(2-step) /forgot /reset /invite                                                         | [01]        | 🔄     |
+| S3-04  | Portal — /orders (список+фільтри+stats)                                                                        | [02-orders] | ⬜     |
+| S3-05  | Portal — /orders/:id (статус+етапи)                                                                            | [02-orders] | ⬜     |
+| S3-06  | Portal — /orders/:id чат (SSE) + файли + activity                                                              | [03/04]     | ⬜     |
+| S3-07  | Portal — /team (члени+invite)                                                                                  | [01-auth]   | ⬜     |
+| S3-08  | Portal — /settings (профіль/пароль/нотифікації/мова/тема)                                                      | [13]        | ⬜     |
+| S3-09  | i18n UA+EN + error-toasts (✅ каркас) + mobile responsive (⬜)                                                 | [UI]        | 🔄     |
+| S3-10  | Deploy Sprint 3 → staging                                                                                      | Infra       | 🚀     |
+
+> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs/Toast** — не generic у дизайні, робимо з їхнім екраном (Tabs→order-detail; Toast=Sonner). **Аудит коду (2026-06-04):** 2-агентний рев'ю (code+TS) пройдено, виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. Декомпозиція — здорова.
 
 ---
 
@@ -342,16 +346,16 @@
 
 ## ПРОГРЕС
 
-| Фаза                           | Спрінти      | Статус    |
-| ------------------------------ | ------------ | --------- |
-| Foundation                     | S0, S1, S1.5 | ✅ done   |
-| Tenancy + schema               | S1.6         | ✅ done   |
-| Orders/Chat/Files backend      | S2           | ✅ done   |
-| MVP ядро frontend              | S3-S4        | ⏸️ design |
-| Billing/Wallet/Finance backend | S5           | ⬜ next   |
-| MVP доки+контент               | S6-S7        | ⬜        |
-| MVP launch v0.1.0              | S8           | ⬜        |
-| Повний продукт (фічі)          | S9-S14       | ⬜        |
+| Фаза                           | Спрінти      | Статус                         |
+| ------------------------------ | ------------ | ------------------------------ |
+| Foundation                     | S0, S1, S1.5 | ✅ done                        |
+| Tenancy + schema               | S1.6         | ✅ done                        |
+| Orders/Chat/Files backend      | S2           | ✅ done                        |
+| MVP ядро frontend              | S3-S4        | 🔄 S3 (UI-ядро ✅ · екрани ⏳) |
+| Billing/Wallet/Finance backend | S5           | ⬜ next                        |
+| MVP доки+контент               | S6-S7        | ⬜                             |
+| MVP launch v0.1.0              | S8           | ⬜                             |
+| Повний продукт (фічі)          | S9-S14       | ⬜                             |
 
 > **MVP-межа:** S8 (v0.1.0, перший клієнт). **Повноцінний продукт:** через S14.
 > Деталі скоупу кожного модуля — `SPEC.md` + `modules/NN-*.md`.

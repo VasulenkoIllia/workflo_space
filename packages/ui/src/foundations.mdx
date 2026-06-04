@@ -1,0 +1,74 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Foundations/Overview" />
+
+# workflo.space — Design Core
+
+«Engineer's Cut» — термінальна естетика на теплих stone-нейтралях + лаймовий акцент,
+шрифти Geist / JetBrains Mono / Caveat. Усе ядро читає колір **лише через `--wf-*`
+токени** — ніколи не хардкодимо hex. Тема перемикається через `data-theme`, акцент —
+через `data-accent` (6 свапабельних пресетів). Спробуй перемикачі **Theme / Accent /
+Aesthetic** у тулбарі на будь-якій сторінці компонента.
+
+> Джерело токенів: `docs/DESIGN_SYSTEM.md §3` + `packages/ui/src/styles/tokens.css`.
+> Воркфлоу додавання компонента: `docs/UI_COMPONENTS.md`.
+
+## Кольори — light
+
+<div className="wfp-root" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, padding: 16, borderRadius: 8 }}>
+  {[
+    ['--wf-bg', 'Фон'],
+    ['--wf-surface', 'Поверхня'],
+    ['--wf-subtle', 'Підкладка'],
+    ['--wf-border', 'Бордер'],
+    ['--wf-fg', 'Текст'],
+    ['--wf-fg-muted', 'Текст muted'],
+    ['--wf-accent', 'Accent'],
+    ['--wf-accent-bg', 'Accent fill'],
+    ['--wf-accent-soft', 'Accent soft'],
+    ['--wf-success', 'Success'],
+    ['--wf-warning', 'Warning'],
+    ['--wf-destructive', 'Destructive'],
+  ].map(([token, label]) => (
+    <div key={token} style={{ border: '1px solid var(--wf-border)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ height: 56, background: `var(${token})` }} />
+      <div style={{ padding: '8px 10px' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--wf-fg)' }}>{label}</div>
+        <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--wf-fg-muted)' }}>{token}</code>
+      </div>
+    </div>
+  ))}
+</div>
+
+## Типографіка
+
+<div className="wfp-root" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+  <div style={{ fontFamily: "'Geist', sans-serif", fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--wf-fg)' }}>Geist — інтерфейс і заголовки</div>
+  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: 'var(--wf-fg-secondary)' }}>JetBrains Mono — числа, ID, метадані · 1234567890</div>
+  <div style={{ fontFamily: "'Caveat', cursive", fontSize: 26, color: 'var(--wf-fg)' }}>Caveat — підписи в документах</div>
+</div>
+
+## Accent-пресети
+
+Палітра свапабельна: інший вигляд = інший пресет, **без перемалювання екранів**.
+
+<div className="wfp-root" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: 16 }}>
+  {[
+    ['Lime', '#A3D90D'],
+    ['Amber', '#D97706'],
+    ['Phosphor', '#16A34A'],
+    ['Cyan', '#0891B2'],
+    ['Magenta', '#C026D3'],
+    ['Orange', '#EA580C'],
+  ].map(([name, hex]) => (
+    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--wf-border)', borderRadius: 999, padding: '6px 12px' }}>
+      <span style={{ width: 16, height: 16, borderRadius: '50%', background: hex }} />
+      <span style={{ fontSize: 13, color: 'var(--wf-fg)' }}>{name}</span>
+    </div>
+  ))}
+</div>
+
+## Shape
+
+- Radius: `--wf-radius` 8px (картки/інпути), `--wf-radius-btn` 6px (кнопки), pills 999px.
+- Дві естетики shell: **A · Terminal** (macOS-chrome, кнопки в `[ ]`) та **B · Studio** (чисто).

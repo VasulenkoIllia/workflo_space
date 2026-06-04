@@ -1,0 +1,53 @@
+/* tokens.css — workflo design tokens (ported from design/project/styles.css §Tokens).
+ * Re-scoped .wf-root → .wfp-root so the product layer (product.css) resolves the
+ * --wf-* custom properties WITHOUT pulling in the landing stylesheet.
+ * Source of truth: docs/DESIGN_SYSTEM.md §3.
+ *
+ * Theme: toggled via [data-theme="dark"] on the .wfp-root node.
+ * Accent: 6 swappable presets applied at runtime by ThemeProvider as inline
+ *   --wf-accent / --wf-accent-bg / --wf-accent-soft (see ACCENT_PRESETS), mirroring
+ *   design/project/product-shell.jsx. The lime defaults below are the baseline.
+ */
+
+/* ───────── Tokens (light · default accent = lime) ───────── */
+.wfp-root {
+  /* surface */
+  --wf-bg: #fafaf9;
+  --wf-surface: #ffffff;
+  --wf-subtle: #f5f5f4;
+  --wf-border: #e7e5e4;
+  --wf-border-strong: #d6d3d1;
+  /* text */
+  --wf-fg: #0c0a09;
+  --wf-fg-secondary: #44403c;
+  --wf-fg-muted: #78716c;
+  --wf-fg-subtle: #a8a29e;
+  /* accent (lime) */
+  --wf-accent: #a3d90d;
+  --wf-accent-bg: #c5f82a;
+  --wf-accent-soft: #ecfcc4;
+  --wf-on-accent: #0c0a09; /* text/icons on any bright accent fill — always dark */
+  /* semantic */
+  --wf-destructive: #dc2626;
+  --wf-warning: #d97706;
+  --wf-success: #059669;
+  /* shape */
+  --wf-radius: 8px;
+  --wf-radius-btn: 6px;
+}
+
+/* ───────── Dark ───────── */
+.wfp-root[data-theme='dark'] {
+  --wf-bg: #0a0a0a;
+  --wf-surface: #161616;
+  --wf-subtle: #1c1917;
+  --wf-border: #27272a;
+  --wf-border-strong: #3f3f46;
+  --wf-fg: #fafaf9;
+  --wf-fg-secondary: #d6d3d1;
+  --wf-fg-muted: #a8a29e;
+  --wf-fg-subtle: #78716c;
+  --wf-accent: #c5f82a;
+  --wf-accent-bg: #c5f82a;
+  --wf-accent-soft: #3f4f0f;
+}
