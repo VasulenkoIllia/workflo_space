@@ -12,13 +12,16 @@ const FILTERS: { id: 'all' | OrderClientStatus; label: string }[] = [
   { id: OrderClientStatus.COMPLETED, label: 'готово' },
 ]
 
+const VALID_STATUS = new Set<string>(FILTERS.map((f) => f.id))
+
 export function OrdersPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const statusParam = params.get('status')
-  const status = FILTERS.some((f) => f.id === statusParam)
-    ? (statusParam as OrderClientStatus)
-    : undefined
+  const status =
+    statusParam != null && statusParam !== 'all' && VALID_STATUS.has(statusParam)
+      ? (statusParam as OrderClientStatus)
+      : undefined
 
   const [searchInput, setSearchInput] = useState('')
   const search = useDebounce(searchInput, 300)
@@ -27,7 +30,9 @@ export function OrdersPage() {
   const orders = data?.orders ?? []
   const total = data?.pagination.total ?? 0
 
-  const counts = orders.reduce<Record<string, number>>((acc, o) => {
+  // Per-status counts reflect the loaded page (limit 50); "всього" uses pagination.total.
+  // Accurate for typical small order counts — a per-status API aggregate is the proper fix later.
+  const counts = orders.reduce<Partial<Record<OrderClientStatus, number>>>((acc, o) => {
     acc[o.clientStatus] = (acc[o.clientStatus] ?? 0) + 1
     return acc
   }, {})
@@ -164,7 +169,10 @@ function OrderRow({ order, onOpen }: { order: PortalOrder; onOpen: () => void })
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onOpen()
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
       }}
     >
       <div className="wfp-order-num">#{order.id.slice(0, 6)}</div>

@@ -24,6 +24,6 @@ export function deadlineMeta(
   if (!iso) return { label: 'без дедлайну', tone: null }
   const days = differenceInCalendarDays(new Date(iso), now)
   if (days < 0) return { label: 'прострочено', tone: 'over' }
-  if (days <= 3) return { label: '⚠ скоро', tone: 'soon' }
+  if (days <= 3) return { label: 'скоро', tone: 'soon' }
   return { label: 'у строк', tone: 'ok' }
 }

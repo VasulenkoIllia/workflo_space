@@ -28,9 +28,8 @@ export interface OrdersPage {
 
 /** The API filters by internalStatus; expand a client status to its internal set. */
 function internalStatusesFor(client: OrderClientStatus): string {
-  return (Object.entries(INTERNAL_TO_CLIENT_STATUS) as [OrderInternalStatus, OrderClientStatus][])
-    .filter(([, c]) => c === client)
-    .map(([internal]) => internal)
+  return (Object.keys(INTERNAL_TO_CLIENT_STATUS) as OrderInternalStatus[])
+    .filter((internal) => INTERNAL_TO_CLIENT_STATUS[internal] === client)
     .join(',')
 }
 

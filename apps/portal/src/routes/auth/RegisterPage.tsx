@@ -3,12 +3,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { registerSchema } from '@workflo/types'
+import type { z } from 'zod'
 import { AuthShell, AuthHeader, AuthStatus, Input, Button } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
 
-type RegisterForm = { displayName: string; email: string; password: string; companyName: string }
+type RegisterForm = z.infer<typeof registerSchema>
 
 export function RegisterPage() {
   const { register: registerUser } = useAuth()
@@ -49,7 +50,16 @@ export function RegisterPage() {
       <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
         // крок {step + 1} з 2
       </div>
-      <form onSubmit={(e) => void onSubmit(e)} style={{ display: 'contents' }}>
+      <form
+        onSubmit={(e) => {
+          if (step === 0) {
+            e.preventDefault()
+            return
+          }
+          void onSubmit(e)
+        }}
+        style={{ display: 'contents' }}
+      >
         {step === 0 ? (
           <>
             <Input
