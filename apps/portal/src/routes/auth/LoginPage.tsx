@@ -6,6 +6,7 @@ import { loginSchema } from '@workflo/types'
 import { AuthShell, AuthHeader, AuthStatus, Input, Button } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
+import { safeRedirect } from '@/lib/navigation'
 
 type LoginForm = { email: string; password: string }
 
@@ -25,7 +26,7 @@ export function LoginPage() {
     try {
       await login(values.email, values.password)
       const from = (location.state as { from?: string } | null)?.from
-      navigate(from && from !== '/login' ? from : '/orders', { replace: true })
+      navigate(safeRedirect(from === '/login' ? null : from), { replace: true })
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Не вдалося увійти')
     }

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { registerSchema } from '@workflo/types'
 import type { z } from 'zod'
 import { AuthShell, AuthHeader, AuthStatus, Input, Button } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
+import { safeRedirect } from '@/lib/navigation'
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
 
 type RegisterForm = z.infer<typeof registerSchema>
@@ -14,6 +15,7 @@ type RegisterForm = z.infer<typeof registerSchema>
 export function RegisterPage() {
   const { register: registerUser } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [step, setStep] = useState(0)
   const [agreed, setAgreed] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -35,7 +37,8 @@ export function RegisterPage() {
     setFormError(null)
     try {
       await registerUser(values)
-      navigate('/orders', { replace: true })
+      const from = (location.state as { from?: string } | null)?.from
+      navigate(safeRedirect(from), { replace: true })
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Не вдалося зареєструватися')
     }

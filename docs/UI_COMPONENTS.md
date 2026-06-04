@@ -91,7 +91,7 @@ pnpm --filter @workflo/ui build-storybook
 
 **Фаза A+B ✅ — ядро готове** (кожен компонент = wrapper + Storybook-story + тест; **30 тестів**):
 
-- **Примітиви:** `Button` · `Input` · `Badge` · `StatusDot` · `Card` · `EmptyState` · `Skeleton` · `Avatar` (+`AvatarStack`) · `Modal`.
+- **Примітиви:** `Button` · `Input` · `Badge` · `StatusDot` · `Card` · `EmptyState` · `Skeleton` · `Avatar` (+`AvatarStack`) · `Modal` · `Tabs`.
 - **Shell:** `Icon` · `Sidebar` (config-driven) · `Topbar` · `AppShell` (термінал-вікно, aesA/B) · `AuthShell` (+`AuthHeader`/`AuthStatus`).
 - **Foundation:** токени (light/dark + 6 accent-пресетів) · `ThemeProvider` · `useTheme`/`useMediaQuery`/`useDebounce` · Storybook (a11y, autodocs, Foundations, тулбар theme/accent/aesthetic).
 

@@ -6,14 +6,17 @@ const NON_RETRYABLE = new Set([400, 401, 403, 404, 409, 422])
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
-    onError: (error) => {
+    onError: (error, query) => {
+      // Opt-out: queries that render their own inline error (e.g. invite preview).
+      if (query.meta?.suppressGlobalToast) return
       // 401s are handled by the auth bootstrap/redirect — don't toast those.
       if (error instanceof ApiError && error.status === 401) return
       toast.error(error instanceof ApiError ? error.message : 'Помилка завантаження даних')
     },
   }),
   mutationCache: new MutationCache({
-    onError: (error) => {
+    onError: (error, _vars, _ctx, mutation) => {
+      if (mutation.meta?.suppressGlobalToast) return
       toast.error(error instanceof ApiError ? error.message : 'Сталася помилка. Спробуйте ще раз.')
     },
   }),
