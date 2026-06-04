@@ -181,7 +181,7 @@
 | S3-09  | i18n UA+EN + error-toasts (✅ каркас) + mobile responsive (⬜)                                                 | [UI]        | 🔄     |
 | S3-10  | Deploy Sprint 3 → staging                                                                                      | Infra       | 🚀     |
 
-> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs/Toast** — не generic у дизайні, робимо з їхнім екраном (Tabs→order-detail; Toast=Sonner). **Аудит C1 (2026-06-04):** 2-агентний рев'ю (code+TS), виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. **Аудит C2/C3 (2026-06-04):** ResetPassword→zodResolver (помилки під правильними полями + server-error окремо), orders `status=all` URL-guard, RegisterForm=`z.infer` (anti-drift) + Enter-guard на кроці-0, `internalStatusesFor` без касту, `counts` тип, a11y Space-клавіша, прибрано dead-code. Декомпозиція — здорова обидва рази.
+> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs** ✅ — примітив на дизайн-класах `.wfp-od-tab*` (C4 prereq, +story+тест). **Toast** = Sonner. **Аудит C1 (2026-06-04):** 2-агентний рев'ю (code+TS), виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. **Аудит C2/C3 (2026-06-04):** ResetPassword→zodResolver (помилки під правильними полями + server-error окремо), orders `status=all` URL-guard, RegisterForm=`z.infer` (anti-drift) + Enter-guard на кроці-0, `internalStatusesFor` без касту, `counts` тип, a11y Space-клавіша, прибрано dead-code. Декомпозиція — здорова обидва рази.
 
 ---
 

@@ -8,6 +8,7 @@ export * from './components/EmptyState.js'
 export * from './components/Skeleton.js'
 export * from './components/Avatar.js'
 export * from './components/Modal.js'
+export * from './components/Tabs.js'
 
 // Shell
 export * from './components/Icon.js'
