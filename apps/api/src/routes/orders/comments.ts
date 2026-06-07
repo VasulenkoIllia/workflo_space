@@ -27,30 +27,31 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       if (!access.isInternal) where.isInternal = false // leak guard: clients never see team notes
       if (q.before) where.createdAt = { lt: new Date(q.before) }
 
-      // take limit+1 to detect older history without a second count. RLS read
-      // scope (F4): the page read + read-marker + unread count share one tenant tx.
-      const read = await withTenant((tx) =>
-        tx.orderChatRead.findUnique({
+      // One tenant tx (F4 RLS scope): read the unread-marker first to build the
+      // unread filter, then the page + unread count — a consistent snapshot, and
+      // sequential awaits (Prisma interactive tx forbids concurrent queries).
+      const { read, rows, unreadCount } = await withTenant(async (tx) => {
+        const read = await tx.orderChatRead.findUnique({
           where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
           select: { lastReadAt: true },
         })
-      )
-      const unreadWhere: Prisma.OrderCommentWhereInput = {
-        orderId: access.orderId,
-        deletedAt: null,
-        authorId: { not: user.sub }, // your own messages are never "unread"
-        ...(access.isInternal ? {} : { isInternal: false }),
-        ...(read ? { createdAt: { gt: read.lastReadAt } } : {}),
-      }
-      const { rows, unreadCount } = await withTenant(async (tx) => ({
-        rows: await tx.orderComment.findMany({
+        const unreadWhere: Prisma.OrderCommentWhereInput = {
+          orderId: access.orderId,
+          deletedAt: null,
+          authorId: { not: user.sub }, // your own messages are never "unread"
+          ...(access.isInternal ? {} : { isInternal: false }),
+          ...(read ? { createdAt: { gt: read.lastReadAt } } : {}),
+        }
+        // take limit+1 to detect older history without a separate count query.
+        const rows = await tx.orderComment.findMany({
           where,
           orderBy: { createdAt: 'desc' },
           take: q.limit + 1,
           select: COMMENT_SELECT,
-        }),
-        unreadCount: await tx.orderComment.count({ where: unreadWhere }),
-      }))
+        })
+        const unreadCount = await tx.orderComment.count({ where: unreadWhere })
+        return { read, rows, unreadCount }
+      })
       const hasMore = rows.length > q.limit
       const page = (hasMore ? rows.slice(0, q.limit) : rows).reverse() // ascending
 

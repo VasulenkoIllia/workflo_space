@@ -391,7 +391,10 @@ model Payment {
   confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
   agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
-  @@unique([provider, providerPaymentId]) // webhook idempotency: NULLs are distinct in PG, so manual rows (providerPaymentId=NULL) are unconstrained
+  // Webhook idempotency. Standard PG unique indexes treat each NULL as distinct, so
+  // multiple manual rows (providerPaymentId=NULL) are INTENTIONALLY allowed. Do NOT
+  // add NULLS NOT DISTINCT — it would reject existing manual payments.
+  @@unique([provider, providerPaymentId])
   @@index([agencyId])
   @@index([companyId])
   @@index([orderId])
@@ -418,7 +421,7 @@ model PaymentSettings {
 
 model ExecutorRate {
   id                String    @id @default(uuid())
-  agencyId          String?
+  agencyId          String
   executorId        String
   executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
   monthlySalary     Decimal?  @db.Decimal(10, 2)
@@ -428,7 +431,7 @@ model ExecutorRate {
   effectiveUntil    DateTime? @db.Timestamptz(3)
   hireDate          DateTime? @db.Timestamptz(3) // for leave accrual (module 23)
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
-  agency            Agency?   @relation(fields: [agencyId], references: [id])
+  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@unique([executorId, effectiveFrom]) // one rate row per (executor, validity-start); enables historical-rate windows (modules 19/22)
   @@index([agencyId])
@@ -804,7 +807,7 @@ model UsageCounter {
   resource  String
   period    String
   value     BigInt   @default(0)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   @@id([agencyId, resource, period])
   @@index([agencyId])
@@ -819,7 +822,7 @@ model AgencyFeatureFlag {
   agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   flag      String
   enabled   Boolean  @default(true)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   @@unique([agencyId, flag])
   @@index([agencyId])
