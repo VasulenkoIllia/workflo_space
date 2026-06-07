@@ -196,18 +196,19 @@ async function main() {
   await ensureNotificationSettings(clientProfile.id, 'uk')
   console.log('✅ Notification settings + default preferences initialized')
 
-  await prisma.executorRate.upsert({
-    where: { executorId: executor.id },
-    update: {
-      monthlySalary: '1200',
-      commissionPercent: '15',
-    },
-    create: {
-      executorId: executor.id,
-      monthlySalary: '1200',
-      commissionPercent: '15',
-    },
-  })
+  // ExecutorRate no longer has @unique(executorId) (historical-rate windows), so
+  // upsert-by-executorId is gone. Seed keeps a single current rate idempotently.
+  const existingRate = await prisma.executorRate.findFirst({ where: { executorId: executor.id } })
+  if (existingRate) {
+    await prisma.executorRate.update({
+      where: { id: existingRate.id },
+      data: { monthlySalary: '1200', commissionPercent: '15', agencyId },
+    })
+  } else {
+    await prisma.executorRate.create({
+      data: { executorId: executor.id, agencyId, monthlySalary: '1200', commissionPercent: '15' },
+    })
+  }
 
   await ensurePaymentSettings(agencyId)
 

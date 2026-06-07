@@ -30,7 +30,7 @@ model Profile {
   notificationSettings  NotificationSettings?
   refreshTokens         RefreshToken[]
   invitesSent           Invite[]              @relation("InvitedBy")
-  executorRate          ExecutorRate?
+  executorRates         ExecutorRate[]
   blogPosts             BlogPost[]
   uploadedFiles         OrderFile[]
   notifications         Notification[]
@@ -229,7 +229,7 @@ model OrderChatRead {
 
 model OrderComment {
   id         String    @id @default(uuid())
-  agencyId   String?
+  agencyId   String
   orderId    String
   order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   authorId   String
@@ -239,7 +239,7 @@ model OrderComment {
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
   editedAt   DateTime? @db.Timestamptz(3)
   deletedAt  DateTime? @db.Timestamptz(3)
-  agency     Agency?   @relation(fields: [agencyId], references: [id])
+  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId, createdAt])
@@ -250,7 +250,7 @@ model OrderComment {
 
 model OrderFile {
   id         String    @id @default(uuid())
-  agencyId   String?
+  agencyId   String
   orderId    String
   order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   uploadedBy String
@@ -262,7 +262,7 @@ model OrderFile {
   sha256     String
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
   deletedAt  DateTime? @db.Timestamptz(3)
-  agency     Agency?   @relation(fields: [agencyId], references: [id])
+  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId])
@@ -271,7 +271,7 @@ model OrderFile {
 
 model InternalTask {
   id         String             @id @default(uuid())
-  agencyId   String?
+  agencyId   String
   orderId    String
   order      Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   title      String
@@ -281,7 +281,7 @@ model InternalTask {
   position   Int                @default(0)
   createdAt  DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime           @updatedAt @db.Timestamptz(3)
-  agency     Agency?            @relation(fields: [agencyId], references: [id])
+  agency     Agency             @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId])
@@ -291,7 +291,7 @@ model InternalTask {
 
 model TimeLog {
   id         String   @id @default(uuid())
-  agencyId   String?
+  agencyId   String
   orderId    String
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   executorId String
@@ -300,7 +300,7 @@ model TimeLog {
   comment    String?
   date       DateTime @db.Date
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  agency     Agency?  @relation(fields: [agencyId], references: [id])
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId])
@@ -344,7 +344,7 @@ model CompanyService {
 
 model ServiceCharge {
   id               String         @id @default(uuid())
-  agencyId         String?
+  agencyId         String
   companyId        String
   company          Company        @relation(fields: [companyId], references: [id])
   companyServiceId String
@@ -357,7 +357,7 @@ model ServiceCharge {
   paidAt           DateTime?      @db.Timestamptz(3)
   notes            String?
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
-  agency           Agency?        @relation(fields: [agencyId], references: [id])
+  agency           Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@unique([companyServiceId, month])
   @@index([agencyId])
@@ -367,7 +367,7 @@ model ServiceCharge {
 
 model Payment {
   id                String        @id @default(uuid())
-  agencyId          String?
+  agencyId          String
   companyId         String
   company           Company       @relation(fields: [companyId], references: [id])
   orderId           String?
@@ -385,8 +385,9 @@ model Payment {
   confirmedBy       String
   confirmer         Profile       @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
   confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
-  agency            Agency?       @relation(fields: [agencyId], references: [id])
+  agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@unique([provider, providerPaymentId]) // webhook idempotency: NULLs are distinct in PG, so manual rows (providerPaymentId=NULL) are unconstrained
   @@index([agencyId])
   @@index([companyId])
   @@index([orderId])
@@ -414,7 +415,7 @@ model PaymentSettings {
 model ExecutorRate {
   id                String    @id @default(uuid())
   agencyId          String?
-  executorId        String    @unique
+  executorId        String
   executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
   monthlySalary     Decimal?  @db.Decimal(10, 2)
   currency          String    @default("USD") // currency of monthlySalary — needed for P&L (module 22)
@@ -425,8 +426,8 @@ model ExecutorRate {
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
   agency            Agency?   @relation(fields: [agencyId], references: [id])
 
+  @@unique([executorId, effectiveFrom]) // one rate row per (executor, validity-start); enables historical-rate windows (modules 19/22)
   @@index([agencyId])
-  @@index([executorId, effectiveFrom])
   @@map("executor_rates")
 }
 
@@ -457,6 +458,7 @@ model ReferralBonus {
   sourceId   String
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
+  @@unique([sourceType, sourceId]) // idempotency: a given source (payment/charge) accrues a referral bonus at most once (SPEC §5)
   @@index([referralId])
   @@map("referral_bonuses")
 }
@@ -573,7 +575,7 @@ model Notification {
 
 model ActivityLog {
   id        String   @id @default(uuid())
-  agencyId  String?
+  agencyId  String
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   actorId   String
@@ -581,7 +583,7 @@ model ActivityLog {
   action    String
   metadata  Json?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-  agency    Agency?  @relation(fields: [agencyId], references: [id])
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId, createdAt])
@@ -590,7 +592,7 @@ model ActivityLog {
 
 model Document {
   id          String         @id @default(uuid())
-  agencyId    String?
+  agencyId    String
   type        DocumentType
   number      String
   orderId     String?
@@ -605,7 +607,7 @@ model Document {
   createdBy   Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
   executorId  String?
   executor    Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
-  agency      Agency?        @relation(fields: [agencyId], references: [id])
+  agency      Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@unique([companyId, type, number])
   @@index([agencyId])
@@ -761,6 +763,8 @@ model Agency {
   documentCounters DocumentCounter[]
   paymentSettings  PaymentSettings?
   exchangeRate     ExchangeRate?
+  usageCounters    UsageCounter[]
+  featureFlags     AgencyFeatureFlag[]
 
   @@index([planId])
   @@map("agencies")
@@ -784,6 +788,38 @@ model AgencyMember {
 enum AgencyMemberRole {
   owner
   executor
+}
+
+/// Per-agency usage metering substrate for SaaS quotas/billing (SAAS.md F2/E4).
+/// Recorded now (even while `assertWithinQuota` is a no-op) so historical usage
+/// accrues before monetization. `period` = 'YYYY-MM' (resets monthly) or 'total'.
+/// `resource` matches QuotaResource in apps/api/src/saas/limits.ts.
+model UsageCounter {
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  resource  String
+  period    String
+  value     BigInt   @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([agencyId, resource, period])
+  @@index([agencyId])
+  @@map("usage_counters")
+}
+
+/// Per-agency feature toggle (SAAS.md E7). Read by `featureEnabled()` once SaaS
+/// enablement lands; absent flag = fall back to plan default.
+model AgencyFeatureFlag {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  flag      String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, flag])
+  @@index([agencyId])
+  @@map("agency_feature_flags")
 }
 
 /// Transactional outbox (ADR topic #2-3): durable domain-event queue for

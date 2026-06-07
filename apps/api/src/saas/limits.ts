@@ -27,3 +27,15 @@ export async function featureEnabled(_agencyId: string, _flag: string): Promise<
   // Phase 0: on. Phase 1: per-agency AgencyFeatureFlag + plan tier.
   return Promise.resolve(true)
 }
+
+/**
+ * Write-gate seam (SAAS.md E2/E6): block mutations for a suspended/past-due tenant.
+ * Placed at write sites NOW (no-op) so SaaS subscription suspension becomes a
+ * one-function flip later instead of threading a check through every handler.
+ * Phase 1: throw `AppError(402/403, 'agency_suspended')` when
+ * `Agency.subscriptionStatus ∈ {past_due, suspended, canceled}` (read-only mode).
+ */
+export async function assertAgencyActive(_agencyId: string): Promise<void> {
+  // Phase 0: allow. Phase 1: look up Agency.subscriptionStatus/suspendedAt.
+  return Promise.resolve()
+}
