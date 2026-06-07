@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { INTERNAL_TO_CLIENT_STATUS, type OrderInternalStatus } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireOrderParticipant } from './access.js'
@@ -33,18 +33,20 @@ const activityRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const access = await requireOrderParticipant(request, request.params.id)
-      const rows = await prisma.activityLog.findMany({
-        where: { orderId: access.orderId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        select: {
-          id: true,
-          action: true,
-          metadata: true,
-          createdAt: true,
-          actor: { select: { id: true, name: true } },
-        },
-      })
+      const rows = await withTenant((tx) =>
+        tx.activityLog.findMany({
+          where: { orderId: access.orderId },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: {
+            id: true,
+            action: true,
+            metadata: true,
+            createdAt: true,
+            actor: { select: { id: true, name: true } },
+          },
+        })
+      )
 
       const activity = access.isInternal
         ? rows

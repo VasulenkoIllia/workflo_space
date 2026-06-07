@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -16,10 +16,12 @@ const deleteOrderRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
 
-      const order = await prisma.order.findUnique({
-        where: { id: request.params.id },
-        select: { id: true, agencyId: true, deletedAt: true },
-      })
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: { id: true, agencyId: true, deletedAt: true },
+        })
+      )
       if (!order || order.deletedAt) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
       }
@@ -29,10 +31,12 @@ const deleteOrderRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалення доступне лише команді', 403)
       }
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { deletedAt: new Date() },
-      })
+      await withTenant((tx) =>
+        tx.order.update({
+          where: { id: order.id },
+          data: { deletedAt: new Date() },
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

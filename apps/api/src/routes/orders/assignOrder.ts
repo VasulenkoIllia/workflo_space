@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, assignOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -19,10 +19,12 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
       const input = assignOrderSchema.parse(request.body)
       const user = request.user
 
-      const order = await prisma.order.findUnique({
-        where: { id: request.params.id },
-        select: { id: true, agencyId: true, deletedAt: true },
-      })
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: { id: true, agencyId: true, deletedAt: true },
+        })
+      )
       if (!order || order.deletedAt) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
       }
@@ -44,13 +46,15 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
         }
       }
 
-      const updated = await prisma.order.update({
-        where: { id: order.id },
-        data: input.assigneeId
-          ? { assignee: { connect: { id: input.assigneeId } } }
-          : { assignee: { disconnect: true } },
-        select: { id: true, assigneeId: true, updatedAt: true },
-      })
+      const updated = await withTenant((tx) =>
+        tx.order.update({
+          where: { id: order.id },
+          data: input.assigneeId
+            ? { assignee: { connect: { id: input.assigneeId } } }
+            : { assignee: { disconnect: true } },
+          select: { id: true, assigneeId: true, updatedAt: true },
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

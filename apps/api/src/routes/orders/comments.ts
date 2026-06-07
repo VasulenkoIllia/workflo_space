@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, withTenant } from '@workflo/db'
 import { createCommentSchema, listCommentsQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -27,20 +27,14 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       if (!access.isInternal) where.isInternal = false // leak guard: clients never see team notes
       if (q.before) where.createdAt = { lt: new Date(q.before) }
 
-      // take limit+1 to detect older history without a second count
-      const rows = await prisma.orderComment.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: q.limit + 1,
-        select: COMMENT_SELECT,
-      })
-      const hasMore = rows.length > q.limit
-      const page = (hasMore ? rows.slice(0, q.limit) : rows).reverse() // ascending
-
-      const read = await prisma.orderChatRead.findUnique({
-        where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
-        select: { lastReadAt: true },
-      })
+      // take limit+1 to detect older history without a second count. RLS read
+      // scope (F4): the page read + read-marker + unread count share one tenant tx.
+      const read = await withTenant((tx) =>
+        tx.orderChatRead.findUnique({
+          where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
+          select: { lastReadAt: true },
+        })
+      )
       const unreadWhere: Prisma.OrderCommentWhereInput = {
         orderId: access.orderId,
         deletedAt: null,
@@ -48,7 +42,17 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
         ...(access.isInternal ? {} : { isInternal: false }),
         ...(read ? { createdAt: { gt: read.lastReadAt } } : {}),
       }
-      const unreadCount = await prisma.orderComment.count({ where: unreadWhere })
+      const { rows, unreadCount } = await withTenant(async (tx) => ({
+        rows: await tx.orderComment.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: q.limit + 1,
+          select: COMMENT_SELECT,
+        }),
+        unreadCount: await tx.orderComment.count({ where: unreadWhere }),
+      }))
+      const hasMore = rows.length > q.limit
+      const page = (hasMore ? rows.slice(0, q.limit) : rows).reverse() // ascending
 
       return reply.send({
         success: true,
@@ -71,16 +75,18 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       // Clients can never author internal notes regardless of the flag they send.
       const isInternal = access.isInternal && input.isInternal
 
-      const comment = await prisma.orderComment.create({
-        data: {
-          order: { connect: { id: access.orderId } },
-          agency: { connect: { id: access.agencyId } },
-          author: { connect: { id: user.sub } },
-          content: input.content,
-          isInternal,
-        },
-        select: COMMENT_SELECT,
-      })
+      const comment = await withTenant((tx) =>
+        tx.orderComment.create({
+          data: {
+            order: { connect: { id: access.orderId } },
+            agency: { connect: { id: access.agencyId } },
+            author: { connect: { id: user.sub } },
+            content: input.content,
+            isInternal,
+          },
+          select: COMMENT_SELECT,
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: user.sub,
@@ -104,11 +110,13 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const lastReadAt = new Date()
 
-      await prisma.orderChatRead.upsert({
-        where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
-        create: { orderId: access.orderId, profileId: user.sub, lastReadAt },
-        update: { lastReadAt },
-      })
+      await withTenant((tx) =>
+        tx.orderChatRead.upsert({
+          where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
+          create: { orderId: access.orderId, profileId: user.sub, lastReadAt },
+          update: { lastReadAt },
+        })
+      )
 
       return reply.send({ success: true, data: { lastReadAt } })
     }

@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, withTenant } from '@workflo/db'
 import { listOrdersQuerySchema, OrderInternalStatus, OrderPriority } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
@@ -62,28 +62,31 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
     const sortField = q.sortBy === 'dueDate' ? 'deadline' : q.sortBy
     const orderBy = { [sortField]: q.sortDir } as Prisma.OrderOrderByWithRelationInput
 
-    // Two standalone queries (the RLS extension scopes each on its own connection
-    // via the tenant GUC); count + rows needn't share one transaction for a list.
-    const total = await prisma.order.count({ where })
-    const rows = await prisma.order.findMany({
-      where,
-      orderBy,
-      skip: (q.page - 1) * q.limit,
-      take: q.limit,
-      select: {
-        id: true,
-        title: true,
-        internalStatus: true,
-        clientStatus: true,
-        priority: true,
-        deadline: true,
-        totalAmount: true,
-        companyId: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: { select: { stages: true } },
-      },
-    })
+    // RLS read scope (F4 / ADR-007): count + rows run inside one tenant tx so the
+    // `app.current_agency_id` GUC is set for both (no-op unless RLS_ENFORCED). The
+    // app-layer `where.agencyId` is the primary filter; RLS is the DB backstop.
+    const { total, rows } = await withTenant(async (tx) => ({
+      total: await tx.order.count({ where }),
+      rows: await tx.order.findMany({
+        where,
+        orderBy,
+        skip: (q.page - 1) * q.limit,
+        take: q.limit,
+        select: {
+          id: true,
+          title: true,
+          internalStatus: true,
+          clientStatus: true,
+          priority: true,
+          deadline: true,
+          totalAmount: true,
+          companyId: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: { select: { stages: true } },
+        },
+      }),
+    }))
 
     return reply.send({
       success: true,

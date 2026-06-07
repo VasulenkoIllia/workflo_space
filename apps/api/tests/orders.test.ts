@@ -29,8 +29,8 @@ const activityCreate = vi.fn()
 const activityFindMany = vi.fn()
 const outboxCreate = vi.fn()
 
-vi.mock('@workflo/db', () => ({
-  prisma: {
+vi.mock('@workflo/db', () => {
+  const prisma = {
     order: {
       create: orderCreate,
       count: orderCount,
@@ -66,11 +66,17 @@ vi.mock('@workflo/db', () => ({
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
-  },
-  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
-    client.$transaction(fn),
-  Prisma: {},
-}))
+  }
+  return {
+    prisma,
+    tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+      client.$transaction(fn),
+    // Reads/single writes are wrapped in withTenant() (RLS seam); run the callback
+    // against the same mocked client so the route's tx.* calls hit these mocks.
+    withTenant: (fn: (tx: unknown) => unknown) => fn(prisma),
+    Prisma: {},
+  }
+})
 
 /** Interactive-tx ($transaction(cb)) → call cb with a tx routed to our mocks;
  *  array form ($transaction([...])) → Promise.all. */

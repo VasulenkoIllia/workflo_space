@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -21,39 +21,41 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const notFound = () => new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
 
-      const order = await prisma.order.findUnique({
-        where: { id: request.params.id },
-        select: {
-          id: true,
-          agencyId: true,
-          companyId: true,
-          title: true,
-          description: true,
-          type: true,
-          priority: true,
-          internalStatus: true,
-          clientStatus: true,
-          billingType: true,
-          fixedPrice: true,
-          hourlyRate: true,
-          estimatedHours: true,
-          totalAmount: true,
-          currency: true,
-          deadline: true,
-          paidAt: true,
-          deletedAt: true,
-          onHoldReason: true,
-          cancelledReason: true,
-          createdAt: true,
-          updatedAt: true,
-          company: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true } },
-          stages: {
-            select: { id: true, title: true, description: true, status: true, position: true },
-            orderBy: { position: 'asc' },
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: {
+            id: true,
+            agencyId: true,
+            companyId: true,
+            title: true,
+            description: true,
+            type: true,
+            priority: true,
+            internalStatus: true,
+            clientStatus: true,
+            billingType: true,
+            fixedPrice: true,
+            hourlyRate: true,
+            estimatedHours: true,
+            totalAmount: true,
+            currency: true,
+            deadline: true,
+            paidAt: true,
+            deletedAt: true,
+            onHoldReason: true,
+            cancelledReason: true,
+            createdAt: true,
+            updatedAt: true,
+            company: { select: { id: true, name: true } },
+            assignee: { select: { id: true, name: true } },
+            stages: {
+              select: { id: true, title: true, description: true, status: true, position: true },
+              orderBy: { position: 'asc' },
+            },
           },
-        },
-      })
+        })
+      )
 
       if (!order || order.deletedAt) throw notFound()
       assertSameTenant(user, order.agencyId)

@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
@@ -35,41 +35,43 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
       // SaaS quota seam (no-op Phase 0; per-plan limit Phase 1) — SAAS.md F2 / ADR-007.
       await assertWithinQuota(agencyId, 'orders')
 
-      const order = await prisma.order.create({
-        data: {
-          agency: { connect: { id: agencyId } },
-          company: { connect: { id: companyId } },
-          createdBy: { connect: { id: user.sub } },
-          title: input.title,
-          description: input.description ?? null,
-          type: input.type,
-          priority: input.priority,
-          internalStatus: 'new',
-          clientStatus: 'in_progress',
-          deadline: input.dueDate ? new Date(input.dueDate) : null,
-          ...(input.stages?.length
-            ? {
-                stages: {
-                  create: input.stages.map((s, i) => ({
-                    title: s.title,
-                    description: s.description ?? null,
-                    position: i + 1,
-                  })),
-                },
-              }
-            : {}),
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          clientStatus: true,
-          priority: true,
-          deadline: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      })
+      const order = await withTenant((tx) =>
+        tx.order.create({
+          data: {
+            agency: { connect: { id: agencyId } },
+            company: { connect: { id: companyId } },
+            createdBy: { connect: { id: user.sub } },
+            title: input.title,
+            description: input.description ?? null,
+            type: input.type,
+            priority: input.priority,
+            internalStatus: 'new',
+            clientStatus: 'in_progress',
+            deadline: input.dueDate ? new Date(input.dueDate) : null,
+            ...(input.stages?.length
+              ? {
+                  stages: {
+                    create: input.stages.map((s, i) => ({
+                      title: s.title,
+                      description: s.description ?? null,
+                      position: i + 1,
+                    })),
+                  },
+                }
+              : {}),
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            clientStatus: true,
+            priority: true,
+            deadline: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

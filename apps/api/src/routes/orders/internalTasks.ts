@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, prisma, withTenant } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -31,10 +31,12 @@ async function assertAgencyMember(agencyId: string, profileId: string): Promise<
 
 /** Ensure the task exists AND belongs to the given order (path consistency + IDOR). */
 async function loadTaskOfOrder(taskId: string, orderId: string) {
-  const task = await prisma.internalTask.findUnique({
-    where: { id: taskId },
-    select: { id: true, orderId: true },
-  })
+  const task = await withTenant((tx) =>
+    tx.internalTask.findUnique({
+      where: { id: taskId },
+      select: { id: true, orderId: true },
+    })
+  )
   if (!task || task.orderId !== orderId) {
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Задачу не знайдено', 404)
   }
@@ -47,11 +49,13 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       await requireTeamOrder(request, request.params.orderId)
-      const tasks = await prisma.internalTask.findMany({
-        where: { orderId: request.params.orderId },
-        orderBy: { position: 'asc' },
-        select: TASK_SELECT,
-      })
+      const tasks = await withTenant((tx) =>
+        tx.internalTask.findMany({
+          where: { orderId: request.params.orderId },
+          orderBy: { position: 'asc' },
+          select: TASK_SELECT,
+        })
+      )
       return reply.send({ success: true, data: { tasks } })
     }
   )
@@ -64,16 +68,18 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       const input = createInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
 
-      const task = await prisma.internalTask.create({
-        data: {
-          order: { connect: { id: request.params.orderId } },
-          agency: { connect: { id: agencyId } }, // S-D3: stamp tenant on new tasks
-          title: input.title,
-          position: input.position ?? 0,
-          ...(input.assigneeId ? { assignee: { connect: { id: input.assigneeId } } } : {}),
-        },
-        select: TASK_SELECT,
-      })
+      const task = await withTenant((tx) =>
+        tx.internalTask.create({
+          data: {
+            order: { connect: { id: request.params.orderId } },
+            agency: { connect: { id: agencyId } }, // S-D3: stamp tenant on new tasks
+            title: input.title,
+            position: input.position ?? 0,
+            ...(input.assigneeId ? { assignee: { connect: { id: input.assigneeId } } } : {}),
+          },
+          select: TASK_SELECT,
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
@@ -108,11 +114,13 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           : { disconnect: true }
       }
 
-      const task = await prisma.internalTask.update({
-        where: { id: request.params.taskId },
-        data,
-        select: TASK_SELECT,
-      })
+      const task = await withTenant((tx) =>
+        tx.internalTask.update({
+          where: { id: request.params.taskId },
+          data,
+          select: TASK_SELECT,
+        })
+      )
       return reply.send({ success: true, data: { task } })
     }
   )
@@ -123,7 +131,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
-      await prisma.internalTask.delete({ where: { id: request.params.taskId } })
+      await withTenant((tx) => tx.internalTask.delete({ where: { id: request.params.taskId } }))
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,

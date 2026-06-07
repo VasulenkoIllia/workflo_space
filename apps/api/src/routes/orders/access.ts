@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -30,10 +30,12 @@ export async function requireOrderParticipant(
   const user = request.user
   const notFound = () => new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, agencyId: true, companyId: true, deletedAt: true },
-  })
+  const order = await withTenant((tx) =>
+    tx.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, agencyId: true, companyId: true, deletedAt: true },
+    })
+  )
   if (!order || order.deletedAt || !order.agencyId) throw notFound()
   const agencyId = order.agencyId // narrowed string; survives the calls below
   assertSameTenant(user, agencyId)
@@ -59,10 +61,12 @@ export async function requireTeamOrder(
   if (!isInternalTeam(user)) {
     throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
   }
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, agencyId: true, deletedAt: true },
-  })
+  const order = await withTenant((tx) =>
+    tx.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, agencyId: true, deletedAt: true },
+    })
+  )
   if (!order || order.deletedAt) {
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
   }

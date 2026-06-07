@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
 import { type OrderAccess, requireOrderParticipant } from '../orders/access.js'
@@ -41,21 +41,23 @@ export async function requireFileAccess(
   request: FastifyRequest,
   fileId: string
 ): Promise<FileWithAccess> {
-  const file = await prisma.orderFile.findUnique({
-    where: { id: fileId },
-    select: {
-      id: true,
-      orderId: true,
-      uploadedBy: true,
-      filename: true,
-      storedAs: true,
-      mimeType: true,
-      sizeBytes: true,
-      sha256: true,
-      createdAt: true,
-      deletedAt: true,
-    },
-  })
+  const file = await withTenant((tx) =>
+    tx.orderFile.findUnique({
+      where: { id: fileId },
+      select: {
+        id: true,
+        orderId: true,
+        uploadedBy: true,
+        filename: true,
+        storedAs: true,
+        mimeType: true,
+        sizeBytes: true,
+        sha256: true,
+        createdAt: true,
+        deletedAt: true,
+      },
+    })
+  )
   if (!file || file.deletedAt) {
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Файл не знайдено', 404)
   }

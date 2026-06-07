@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createTimeLogSchema, updateTimeLogSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -36,10 +36,12 @@ function toDto(row: TimeLogRow) {
 
 /** Load a time log and assert it belongs to the given order (path consistency + IDOR). */
 async function loadLogOfOrder(logId: string, orderId: string) {
-  const log = await prisma.timeLog.findUnique({
-    where: { id: logId },
-    select: { id: true, orderId: true, executorId: true },
-  })
+  const log = await withTenant((tx) =>
+    tx.timeLog.findUnique({
+      where: { id: logId },
+      select: { id: true, orderId: true, executorId: true },
+    })
+  )
   if (!log || log.orderId !== orderId) {
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Запис часу не знайдено', 404)
   }
@@ -53,11 +55,13 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       await requireTeamOrder(request, request.params.orderId)
-      const rows = await prisma.timeLog.findMany({
-        where: { orderId: request.params.orderId },
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-        select: TIMELOG_SELECT,
-      })
+      const rows = await withTenant((tx) =>
+        tx.timeLog.findMany({
+          where: { orderId: request.params.orderId },
+          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+          select: TIMELOG_SELECT,
+        })
+      )
       const logs = rows.map(toDto)
       const totalHours = logs.reduce((sum, l) => sum + l.hours, 0)
       return reply.send({ success: true, data: { logs, totalHours } })
@@ -72,17 +76,19 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
       const input = createTimeLogSchema.parse(request.body)
 
-      const row = await prisma.timeLog.create({
-        data: {
-          agency: { connect: { id: agencyId } },
-          order: { connect: { id: orderId } },
-          executor: { connect: { id: request.user.sub } },
-          hours: input.hours,
-          date: new Date(input.date),
-          comment: input.comment ?? null,
-        },
-        select: TIMELOG_SELECT,
-      })
+      const row = await withTenant((tx) =>
+        tx.timeLog.create({
+          data: {
+            agency: { connect: { id: agencyId } },
+            order: { connect: { id: orderId } },
+            executor: { connect: { id: request.user.sub } },
+            hours: input.hours,
+            date: new Date(input.date),
+            comment: input.comment ?? null,
+          },
+          select: TIMELOG_SELECT,
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
@@ -114,11 +120,13 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       if (input.date !== undefined) data.date = new Date(input.date)
       if (input.comment !== undefined) data.comment = input.comment
 
-      const row = await prisma.timeLog.update({
-        where: { id: log.id },
-        data,
-        select: TIMELOG_SELECT,
-      })
+      const row = await withTenant((tx) =>
+        tx.timeLog.update({
+          where: { id: log.id },
+          data,
+          select: TIMELOG_SELECT,
+        })
+      )
       return reply.send({ success: true, data: { log: toDto(row) } })
     }
   )
@@ -133,7 +141,7 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       if (log.executorId !== request.user.sub) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалити може лише автор запису', 403)
       }
-      await prisma.timeLog.delete({ where: { id: log.id } })
+      await withTenant((tx) => tx.timeLog.delete({ where: { id: log.id } }))
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,

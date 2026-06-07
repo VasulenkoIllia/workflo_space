@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { runWithAgency, withTenant } from '@workflo/db'
 import { ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { subscribeChat } from '../../services/chatBus.js'
@@ -92,8 +92,17 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
       const unsubscribe = subscribeChat(access.orderId, (event) => {
         if (closed) return
         if (event.isInternal && !access.isInternal) return // leak guard (fast path)
-        prisma.orderComment
-          .findUnique({ where: { id: event.commentId }, select: STREAM_COMMENT_SELECT })
+        // Bus callbacks run outside the request's async context, so bind the
+        // order's (already access-checked) agency explicitly so this RLS-scoped
+        // read sets the tenant GUC (F4) instead of relying on ALS propagation.
+        runWithAgency(access.agencyId, () =>
+          withTenant((tx) =>
+            tx.orderComment.findUnique({
+              where: { id: event.commentId },
+              select: STREAM_COMMENT_SELECT,
+            })
+          )
+        )
           .then((comment) => {
             if (!comment || comment.deletedAt) return
             if (comment.isInternal && !access.isInternal) return // leak guard (authoritative)

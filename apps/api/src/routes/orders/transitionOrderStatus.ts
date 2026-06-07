@@ -1,4 +1,4 @@
-import { type Prisma, prisma, tenantTransaction } from '@workflo/db'
+import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -27,16 +27,18 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       const input = transitionOrderStatusSchema.parse(request.body)
       const user = request.user
 
-      const order = await prisma.order.findUnique({
-        where: { id: request.params.id },
-        select: {
-          id: true,
-          agencyId: true,
-          companyId: true,
-          internalStatus: true,
-          deletedAt: true,
-        },
-      })
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: {
+            id: true,
+            agencyId: true,
+            companyId: true,
+            internalStatus: true,
+            deletedAt: true,
+          },
+        })
+      )
       if (!order || order.deletedAt) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
       }

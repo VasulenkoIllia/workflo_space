@@ -14,8 +14,8 @@ const storageUpload = vi.fn()
 const storageRead = vi.fn()
 const storageDelete = vi.fn()
 
-vi.mock('@workflo/db', () => ({
-  prisma: {
+vi.mock('@workflo/db', () => {
+  const prisma = {
     order: { findUnique: orderFindUnique },
     orderFile: {
       count: fileCount,
@@ -25,9 +25,15 @@ vi.mock('@workflo/db', () => ({
       update: fileUpdate,
     },
     auditLog: { create: auditLogCreate },
-  },
-  Prisma: {},
-}))
+  }
+  return {
+    prisma,
+    // Reads/single writes are wrapped in withTenant() (RLS seam); run the callback
+    // against the same mocked client so the route's tx.* calls hit these mocks.
+    withTenant: (fn: (tx: unknown) => unknown) => fn(prisma),
+    Prisma: {},
+  }
+})
 
 vi.mock('../src/services/storage.js', () => ({
   getStorage: () => ({ upload: storageUpload, read: storageRead, delete: storageDelete }),

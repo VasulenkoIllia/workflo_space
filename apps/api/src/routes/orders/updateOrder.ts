@@ -1,4 +1,4 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, OrderInternalStatus, updateOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -19,16 +19,18 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const notFound = () => new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
 
-      const order = await prisma.order.findUnique({
-        where: { id: request.params.id },
-        select: {
-          id: true,
-          agencyId: true,
-          companyId: true,
-          internalStatus: true,
-          deletedAt: true,
-        },
-      })
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: {
+            id: true,
+            agencyId: true,
+            companyId: true,
+            internalStatus: true,
+            deletedAt: true,
+          },
+        })
+      )
       if (!order || order.deletedAt) throw notFound()
       assertSameTenant(user, order.agencyId)
 
@@ -68,19 +70,21 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
         if (input.estimatedHours !== undefined) data.estimatedHours = input.estimatedHours
       }
 
-      const updated = await prisma.order.update({
-        where: { id: order.id },
-        data,
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          priority: true,
-          deadline: true,
-          clientStatus: true,
-          updatedAt: true,
-        },
-      })
+      const updated = await withTenant((tx) =>
+        tx.order.update({
+          where: { id: order.id },
+          data,
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            priority: true,
+            deadline: true,
+            clientStatus: true,
+            updatedAt: true,
+          },
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

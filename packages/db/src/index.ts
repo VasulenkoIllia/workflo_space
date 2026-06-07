@@ -32,6 +32,20 @@ export async function tenantTransaction<T>(
   })
 }
 
+/**
+ * Convenience wrapper: run a single tenant-scoped read OR write through
+ * `tenantTransaction` on the shared client, so the RLS GUC is set for it
+ * (F4 / ADR-007). Use at every handler that touches a tenant table:
+ *
+ *   const orders = await withTenant((tx) => tx.order.findMany({ where }))
+ *
+ * No tenant bound (RLS off / pre-auth) → behaves like a plain query. For
+ * multi-statement writes that must be atomic, call `tenantTransaction` directly.
+ */
+export function withTenant<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return tenantTransaction(prisma, fn)
+}
+
 // Re-export Prisma runtime + types so consumers don't need a direct
 // @prisma/client dependency (keeps the generated client a db-package concern).
 export { Prisma, PrismaClient } from '@prisma/client'

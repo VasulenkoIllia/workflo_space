@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import '@fastify/multipart'
-import { prisma } from '@workflo/db'
+import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, isAllowedFileMimeType, MAX_FILES_PER_ORDER } from '@workflo/types'
 import { buildOrderFileKey, safeExt, sha256Hex } from '@workflo/storage'
 import type { FastifyPluginAsync } from 'fastify'
@@ -30,9 +30,11 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Тип файлу не дозволено', 415)
       }
 
-      const existing = await prisma.orderFile.count({
-        where: { orderId: access.orderId, deletedAt: null },
-      })
+      const existing = await withTenant((tx) =>
+        tx.orderFile.count({
+          where: { orderId: access.orderId, deletedAt: null },
+        })
+      )
       if (existing >= MAX_FILES_PER_ORDER) {
         throw new AppError(
           ApiErrorCode.CONFLICT,
@@ -60,20 +62,22 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
 
       let file
       try {
-        file = await prisma.orderFile.create({
-          data: {
-            id: fileId,
-            agency: { connect: { id: access.agencyId } },
-            order: { connect: { id: access.orderId } },
-            uploader: { connect: { id: request.user.sub } },
-            filename: part.filename,
-            storedAs: key,
-            mimeType: part.mimetype,
-            sizeBytes: buffer.length,
-            sha256: sha256Hex(buffer),
-          },
-          select: FILE_META_SELECT,
-        })
+        file = await withTenant((tx) =>
+          tx.orderFile.create({
+            data: {
+              id: fileId,
+              agency: { connect: { id: access.agencyId } },
+              order: { connect: { id: access.orderId } },
+              uploader: { connect: { id: request.user.sub } },
+              filename: part.filename,
+              storedAs: key,
+              mimeType: part.mimetype,
+              sizeBytes: buffer.length,
+              sha256: sha256Hex(buffer),
+            },
+            select: FILE_META_SELECT,
+          })
+        )
       } catch (err) {
         // DB insert failed after the blob landed → remove the orphan blob.
         await getStorage()
@@ -102,11 +106,13 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const access = await requireOrderParticipant(request, request.params.id)
-      const files = await prisma.orderFile.findMany({
-        where: { orderId: access.orderId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: FILE_META_SELECT,
-      })
+      const files = await withTenant((tx) =>
+        tx.orderFile.findMany({
+          where: { orderId: access.orderId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: FILE_META_SELECT,
+        })
+      )
       return reply.send({ success: true, data: { files } })
     }
   )
@@ -169,10 +175,12 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видаляти може лише автор або команда', 403)
       }
 
-      await prisma.orderFile.update({
-        where: { id: file.id },
-        data: { deletedAt: new Date() },
-      })
+      await withTenant((tx) =>
+        tx.orderFile.update({
+          where: { id: file.id },
+          data: { deletedAt: new Date() },
+        })
+      )
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
