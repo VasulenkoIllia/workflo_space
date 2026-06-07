@@ -53,7 +53,7 @@ turbo dev
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)     | ⚠️ Історичний план + §3 tsconfig/eslint · §7 Turbo · §8 Migrations · §11 онбординг. §4/§5/§6/§10 → вказівники (канон: schema.prisma/SPEC/TRACKER/seed) |
 | [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) | Наскрізні API-стандарти: response-envelope, ApiErrorCode/AppError, Fastify error-handler, CORS, rate-limit, Zod, Pino, health, graceful shutdown       |
 | [FRONTEND_STANDARDS.md](FRONTEND_STANDARDS.md)       | Frontend стек, API client, Auth стан, UI компоненти, тести                                                                                             |
-| [UX_PAGES.md](UX_PAGES.md)                           | Структура сторінок Portal + Workspace, Dashboard, Kanban                                                                                               |
+| [UX_PAGES.md](UX_PAGES.md)                           | Інвентар роутів/сторінок Portal + Workspace (візуальна мова → DESIGN_SYSTEM.md)                                                                        |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)                 | **Дизайн ↔ код:** токени, інвентар усіх екранів, матриця покриття, workflow-гейт. Дивись СЮДИ перед будь-яким UI                                       |
 | [DESIGN_TODO.md](DESIGN_TODO.md)                     | **Список на допрацювання дизайну** (handoff дизайнеру). Що домалювати + цикл звірки                                                                    |
 | [design/](../design/)                                | Готовий хендофф з Claude Design (HTML/CSS/JS-прототип) — джерело правди для візуалу                                                                    |
@@ -94,9 +94,9 @@ turbo dev
 | Документ                                                                              | Статус                                        |
 | ------------------------------------------------------------------------------------- | --------------------------------------------- |
 | [AUDIT_S0_S2.md](AUDIT_S0_S2.md)                                                      | найрелевантніший прийдешньому аудиту контекст |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)                                      | історичний план; канон — schema/SPEC/TRACKER  |
-| [UX_PAGES.md](UX_PAGES.md)                                                            | інвентар роутів; візуал → DESIGN_SYSTEM.md    |
 | [DESIGN_BRIEF.md](DESIGN_BRIEF.md) / [DESIGN_BRIEF_GROWTH.md](DESIGN_BRIEF_GROWTH.md) | дизайн-handoff; візуал → DESIGN_SYSTEM.md     |
+
+> `UX_PAGES.md` та `IMPLEMENTATION_PLAN.md` — у «Ключових документах» вище (мають банер, частково ще чинні: роут-інвентар / §3·7·8·11 відповідно).
 
 ### Модульні документи
 
