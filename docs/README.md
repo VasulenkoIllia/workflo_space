@@ -66,6 +66,17 @@ turbo dev
 
 > **CHANGELOG.md** знаходиться в корені репо (`/CHANGELOG.md`) — не в docs/.
 
+### SaaS / контракт / дані (додано аудитом 2026-06)
+
+| Документ                     | Що містить                                                         |
+| ---------------------------- | ------------------------------------------------------------------ |
+| [ERD.md](ERD.md)             | Mermaid-мапа ядра tenant-графа (онбординг; канон — schema.prisma)  |
+| [PRICING.md](PRICING.md)     | SaaS бізнес-модель: ICP, тіри, метрика білінгу, MoR (**гіпотеза**) |
+| [SLA.md](SLA.md)             | SLO/SLA-цілі, RPO/RTO, gaps до контрактного SLA (**draft**)        |
+| [SECURITY.md](SECURITY.md)   | Security posture + threat model + pre-tenant чек-лист (**draft**)  |
+| [LEGAL/](LEGAL/README.md)    | Privacy/ToS/DPA/subprocessors — заглушки до юриста (**draft**)     |
+| [LIFECYCLE.md](LIFECYCLE.md) | §8 Agency-lifecycle: suspend/export/delete (SaaS)                  |
+
 ### Модульні документи
 
 | #                                     | Модуль              | Стосується              | Статус    |
