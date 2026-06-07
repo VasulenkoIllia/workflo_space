@@ -1,4 +1,9 @@
 # UX PAGES — Структура сторінок та Dashboard
+
+> ⚠️ **Інвентар роутів/сторінок (актуальний як перелік екранів), але візуальна мова
+> SUPERSEDED `DESIGN_SYSTEM.md`** (lime «Engineer's Cut», `.wfp-*`/`--wf-*`). Чинний
+> UI-канон — `DESIGN_SYSTEM.md` + `UI_COMPONENTS.md` + `packages/ui`.
+
 > Portal (portal.workflo.space) / Workspace (work.workflo.space)
 > Версія: 1.0 | Оновлено: 12 квітня 2026
 
@@ -79,6 +84,7 @@
 ```
 
 **Кожна картка замовлення містить:**
+
 - Пріоритет (кольорова крапка або стрілка)
 - Назва (клікабельна)
 - Клієнтський статус (badge)
@@ -372,12 +378,12 @@
 
 **Колонки та маппінг статусів:**
 
-| Колонка | Статуси | Колір |
-|---|---|---|
-| Вхідні | `new`, `in_review` | Сірий |
-| В роботі | `approved`, `in_progress`, `on_hold` | Синій |
-| Перевірка | `in_review_final`, `revision` | Жовтий |
-| Готово | `done` | Зелений (лічильник, без карток) |
+| Колонка   | Статуси                              | Колір                           |
+| --------- | ------------------------------------ | ------------------------------- |
+| Вхідні    | `new`, `in_review`                   | Сірий                           |
+| В роботі  | `approved`, `in_progress`, `on_hold` | Синій                           |
+| Перевірка | `in_review_final`, `revision`        | Жовтий                          |
+| Готово    | `done`                               | Зелений (лічильник, без карток) |
 
 > `cancelled` — окрема вкладка якщо потрібно, або в фільтрі "Архів"
 > `done` — не показуємо картки (їх може бути сотні) — тільки число
@@ -566,7 +572,7 @@ toast.error('Недостатньо бонусних балів')
 
 // З дією
 toast.success('Файл видалено', {
-  action: { label: 'Скасувати', onClick: () => restoreFile(fileId) }
+  action: { label: 'Скасувати', onClick: () => restoreFile(fileId) },
 })
 
 // Loading → success
@@ -597,33 +603,33 @@ Mobile: кожен рядок → картка (card layout)
 
 ### Portal (portal.workflo.space)
 
-| Route | Опис | Auth | Модуль |
-|---|---|---|---|
-| `/companies` | Список моїх компаній + company switcher | client | 01-auth |
-| `/loyalty` | Поточний tier + progress + переваги | client | 10-loyalty |
-| `/referrals` | Реферальний код + список запрошених + бонуси | client | 09-referral |
-| `/messages` | Chat Hub — inbox всіх чатів замовлень | client | 18-chat-hub |
-| `/messages/:orderId` | Деталі розмови (mobile: окремий екран) | client | 18-chat-hub |
-| `/profile/settings/notifications` | Матриця 7×3 preferences + Telegram link | client | 07-notifications |
+| Route                             | Опис                                         | Auth   | Модуль           |
+| --------------------------------- | -------------------------------------------- | ------ | ---------------- |
+| `/companies`                      | Список моїх компаній + company switcher      | client | 01-auth          |
+| `/loyalty`                        | Поточний tier + progress + переваги          | client | 10-loyalty       |
+| `/referrals`                      | Реферальний код + список запрошених + бонуси | client | 09-referral      |
+| `/messages`                       | Chat Hub — inbox всіх чатів замовлень        | client | 18-chat-hub      |
+| `/messages/:orderId`              | Деталі розмови (mobile: окремий екран)       | client | 18-chat-hub      |
+| `/profile/settings/notifications` | Матриця 7×3 preferences + Telegram link      | client | 07-notifications |
 
 ### Workspace (work.workflo.space)
 
-| Route | Опис | Auth | Модуль |
-|---|---|---|---|
-| `/triage` | Unassigned orders (owner only) | owner | 02-orders |
-| `/inbox` | Chat Hub для executors (assigned/mentioned/all) | executor+ | 18-chat-hub |
-| `/companies/:id/credentials` | Credentials vault (owner only) | owner | 17-credentials |
-| `/reports` | Звіти головна (3 картки) | owner | 19-reports |
-| `/reports/time` | Time report | owner | 19-reports |
-| `/reports/revenue` | Revenue report | owner | 19-reports |
-| `/reports/debtors` | Debtors report | owner | 19-reports |
-| `/admin/system` | System monitoring dashboard | admin | 21-system-monitoring |
-| `/admin/templates` | Notification templates editor | admin | 20-admin-settings |
-| `/admin/smtp` | Multi-sender SMTP config | admin | 20-admin-settings |
-| `/admin/branding` | PDF branding | admin | 20-admin-settings |
-| `/admin/nomenclature` | Service nomenclature CRUD | admin | 20-admin-settings |
-| `/admin/departments` | Departments CRUD | admin | 20-admin-settings |
-| `/admin/crons` | Cron monitoring + manual trigger | admin | 20-admin-settings |
+| Route                        | Опис                                            | Auth      | Модуль               |
+| ---------------------------- | ----------------------------------------------- | --------- | -------------------- |
+| `/triage`                    | Unassigned orders (owner only)                  | owner     | 02-orders            |
+| `/inbox`                     | Chat Hub для executors (assigned/mentioned/all) | executor+ | 18-chat-hub          |
+| `/companies/:id/credentials` | Credentials vault (owner only)                  | owner     | 17-credentials       |
+| `/reports`                   | Звіти головна (3 картки)                        | owner     | 19-reports           |
+| `/reports/time`              | Time report                                     | owner     | 19-reports           |
+| `/reports/revenue`           | Revenue report                                  | owner     | 19-reports           |
+| `/reports/debtors`           | Debtors report                                  | owner     | 19-reports           |
+| `/admin/system`              | System monitoring dashboard                     | admin     | 21-system-monitoring |
+| `/admin/templates`           | Notification templates editor                   | admin     | 20-admin-settings    |
+| `/admin/smtp`                | Multi-sender SMTP config                        | admin     | 20-admin-settings    |
+| `/admin/branding`            | PDF branding                                    | admin     | 20-admin-settings    |
+| `/admin/nomenclature`        | Service nomenclature CRUD                       | admin     | 20-admin-settings    |
+| `/admin/departments`         | Departments CRUD                                | admin     | 20-admin-settings    |
+| `/admin/crons`               | Cron monitoring + manual trigger                | admin     | 20-admin-settings    |
 
 ### Company switcher (header component, both apps)
 

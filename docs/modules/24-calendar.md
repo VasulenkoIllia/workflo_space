@@ -1,5 +1,7 @@
 # CALENDAR / MEETINGS MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Workspace + Portal (clients see meetings they're invited to)
 > Статус: Проєктування (post-MVP, complexity: L — large)
 > Залежить від: `07-notifications` (з розширенням recipient), `01-auth`, `23-leave`

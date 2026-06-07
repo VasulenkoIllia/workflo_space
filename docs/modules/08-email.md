@@ -1,5 +1,7 @@
 # EMAIL MODULE (канал notify-матриці)
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: API (api.workflo.space) / Mailcow · Залежить від: **07-notifications** (notify-матриця), `packages/notifications`, `packages/i18n`.
 > Статус: **REWRITE-done** (doc-sync 1.06) · Оновлено: 1 червня 2026
 > ⚠️ Стара версія цього доку (EmailLog-модель, file-HTML-шаблони, 9 листів, `replaceAll`-без-escape) — **фікція**, видалена. Канон нижче.

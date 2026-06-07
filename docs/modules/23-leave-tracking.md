@@ -1,5 +1,7 @@
 # LEAVE / VACATION MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Workspace (executor self-service + owner approval)
 > Статус: Проєктування (post-MVP, complexity: S — small)
 > Залежить від: `12-team-executors`, `07-notifications`, `24-calendar` (availability)

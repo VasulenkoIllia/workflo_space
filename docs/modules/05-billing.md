@@ -1,5 +1,7 @@
 # MODULE 05 — BILLING
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: api.workflo.space / workspace (work.workflo.space) / portal (portal.workflo.space)
 > Статус: MVP
 > Залежить від: [01-auth, 02-companies, 03-orders, 04-services]

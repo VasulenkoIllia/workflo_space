@@ -1,5 +1,7 @@
 # FINANCE / EXPENSES MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Workspace (owner-only)
 > Статус: Проєктування (заплановано після S1 Auth) — реалізація поетапна
 > Залежить від: `packages/db`, `05-billing`, `12-team-executors`, `19-reports`

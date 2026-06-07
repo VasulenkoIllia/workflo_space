@@ -1,5 +1,7 @@
 # CONTENT & BLOG MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Workspace (work.workflo.space) / Landing (workflo.space) / API (api.workflo.space) · Залежить від: `packages/db`, `packages/types`, **16-search**, **14-landing** (ISR).
 > Статус: **REWRITE-done** (doc-sync 1.06) · Оновлено: 1 червня 2026
 > ⚠️ Стара версія (Markdown-`content String`, `PostStatus` enum, `BlogTag`/`BlogPostTag` таблиці, плоскі SEO-поля) — **фікція**, видалена. Канон нижче.

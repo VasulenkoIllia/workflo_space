@@ -1,5 +1,7 @@
 # LOYALTY MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: API + Portal
 > Статус: MVP (%discount tiers — не points/cashback)
 > Залежить від: `packages/db`, `packages/types`

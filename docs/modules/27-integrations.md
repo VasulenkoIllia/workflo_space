@@ -1,5 +1,7 @@
 # INTEGRATIONS MODULE (inbound лідів + outbound webhooks + адаптери)
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: API (+ Workspace settings UI) · Залежить від: **outbox** (доставка), **26-leads** (inbound → Lead), `ApiKey`/`WebhookEndpoint` (раніше згадані в 20-admin).
 > Статус: **Спец** · Створено: 1.06.2026 · Модуль **27** (новий, окремий блок — важлива складова системи).
 > Консолідує розкидане: inbound `ContactForm` (14), `ApiKey` + `WebhookEndpoint`/`WebhookDelivery` (20) → **єдиний інтеграційний хаб**, що розвивається поетапно.

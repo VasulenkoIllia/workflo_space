@@ -1,5 +1,7 @@
 # CHAT HUB MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal + Workspace
 > Статус: S4+ (post-MVP)
 > Залежить від: `03-chat-comments`, SSE infra

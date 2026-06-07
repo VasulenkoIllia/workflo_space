@@ -1,5 +1,7 @@
 # CLIENT FINANCIAL ACCOUNT (WALLET) MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal (клієнт бачить свої рахунки) + Workspace (owner/admin керує)
 > Статус: Проєктування — bonus ledger + admin зараз; money-account + спендинг разом з білінгом (S5)
 > Залежить від: `09-referral` (кредити бонусів), `05-billing` (charges/payments), `06-documents` (інвойси), `21-system-monitoring` (audit)

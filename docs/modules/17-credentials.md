@@ -1,5 +1,7 @@
 # CREDENTIALS VAULT MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: API + Workspace
 > Статус: S5+ (post-MVP)
 > Залежить від: `packages/db`, `packages/types`, KEK через env

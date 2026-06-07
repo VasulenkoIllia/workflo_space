@@ -1,5 +1,7 @@
 # NOTIFICATIONS MODULE
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: API (api.workflo.space) + всі consumer-додатки
 > Статус: S1 (multi-channel matrix architecture)
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`

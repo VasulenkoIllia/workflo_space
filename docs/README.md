@@ -77,6 +77,21 @@ turbo dev
 | [LEGAL/](LEGAL/README.md)    | Privacy/ToS/DPA/subprocessors — заглушки до юриста (**draft**)     |
 | [LIFECYCLE.md](LIFECYCLE.md) | §8 Agency-lifecycle: suspend/export/delete (SaaS)                  |
 
+### Архів / історичне (НЕ джерело істини — мають банери)
+
+> Залишені як слід процесу/думки. Чинний канон завжди: `SPEC.md` + `TRACKER.md` + `schema.prisma` + код.
+
+| Документ                                                                              | Чим замінено                                         |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [CONCEPT_v1.md](CONCEPT_v1.md)                                                        | CONCEPT_v2.md (archive-кандидат)                     |
+| [S0_RUNBOOK.md](S0_RUNBOOK.md)                                                        | INFRASTRUCTURE.md (S0 закрито; archive-канд.)        |
+| [MODULE_AUDIT.md](MODULE_AUDIT.md)                                                    | SPEC.md / schema.prisma (історичний знімок)          |
+| [AUDIT_S0_S1.md](AUDIT_S0_S1.md)                                                      | AUDIT_S0_S2.md (точковий аудит)                      |
+| [AUDIT_S0_S2.md](AUDIT_S0_S2.md)                                                      | контекст останньої ремедіації (історичний)           |
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)                                      | schema/SPEC/TRACKER (історичний план)                |
+| [UX_PAGES.md](UX_PAGES.md)                                                            | DESIGN_SYSTEM.md (візуал); лишається інвентар роутів |
+| [DESIGN_BRIEF.md](DESIGN_BRIEF.md) / [DESIGN_BRIEF_GROWTH.md](DESIGN_BRIEF_GROWTH.md) | DESIGN_SYSTEM.md (візуальна мова)                    |
+
 ### Модульні документи
 
 | #                                     | Модуль              | Стосується              | Статус    |

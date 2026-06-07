@@ -1,5 +1,7 @@
 # MODULE 09 — REFERRAL SYSTEM
 
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal (`portal.workflo.space`) + Workspace (`work.workflo.space`)
 > Статус: MVP
 > Залежить від: [01-auth, 02-company, 05-billing, **25-wallet** (єдиний ledger-writer бонусів)]

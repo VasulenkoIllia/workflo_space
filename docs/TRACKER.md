@@ -1,8 +1,35 @@
 # WORKFLO.SPACE — Tracker (спрінти)
 
-> Оновлено: **2 червня 2026** — перерозбито після фіналізації всіх 29 модулів (`SPEC.md`) + очистки беклогу.
+> Оновлено: **7 червня 2026** (аудит + ремедіація).
 > Статуси: ⬜ pending | 🔄 in progress | ✅ done | 🧪 tested | 🚀 deployed | ❌ blocked
-> `SPEC.md` = ЩО будуємо. Цей файл = У ЯКОМУ ПОРЯДКУ.
+> `SPEC.md` = ЩО будуємо. Цей файл = У ЯКОМУ ПОРЯДКУ. Канон БД — `schema.prisma`; код — git.
+
+---
+
+## 🧭 СТАН ЗАРАЗ (7 червня 2026)
+
+**✅ ГОТОВО (закодовано + verified, гілка `dev`):**
+
+- **S0** Foundation (monorepo/CI/Hetzner/Traefik/DNS/schema+seed/health) 🚀
+- **S1 + S1.5** Auth+Core (register/login/logout/refresh+rotation/reset/me/invites/profile) + hardening 🚀🧪
+- **S1.6** Tenancy (Agency/AgencyMember, `agencyId` скрізь) + Outbox+drain + web/worker split 🧪
+- **S2** Orders+Chat+Files API (CRUD, 9-станова машина, SSE-чат, файли, time-logs, activity) 🧪
+- **S3** Portal frontend: auth-екрани, /orders (список+деталь+SSE-чат+файли+activity), /settings, /team, /invite + дизайн-система `@workflo/ui` 🧪
+- **Аудит-ремедіація (11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening (ExecutorRate-історія, ідемпотентність Payment/ReferralBonus, `agencyId` NOT NULL на tenant-таблицях, `UsageCounter`+`AgencyFeatureFlag`) · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes на завантаженні · runtime-branding seam (ThemeProvider token-map + `GET /tenant/branding`) · exec-доки (ERD/PRICING/SLA/SECURITY/LEGAL) · узгодження документації.
+
+**🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
+
+1. **Ручне тестування готового** (S2 API + S3 Portal) — поточний крок власника.
+2. **S4 Workspace frontend** (owner+executor: kanban, /clients, /orders) — наступний великий блок UI.
+3. **S5 Billing+Wallet+Finance+Team** (фінансове ядро; ship **test-first** + idempotency-first — `WalletTransaction`/`PaymentAllocation`/`Expense`).
+4. **S6 Documents+Notifications+Bot**, **S7 Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
+
+**⏸️ ВІДКЛАДЕНО СВІДОМО (не для соло-фази):**
+
+- **SaaS-Enablement** (signup/підписка/super-admin/quota-значення/custom-домени/runtime-fetch брендингу) — окремий пізній спринт, коли вирішиш продавати. Фундамент (F1–F6) готовий; це додавання поверх, без міграції даних.
+- **Block 7b:** i18n-світ ~21 portal-файлу (UA→`t()`, en-локаль) + self-host шрифтів (GDPR). Seam готовий; робота механічна.
+- **RLS-активація** (workflo_app LOGIN + `DATABASE_APP_URL` + `RLS_ENFORCED=true` + soak) — перед першим зовнішнім тенантом, не зараз.
+- **Дисципліна по дорозі** (щоб «SaaS в кінці» лишався дешевим): кожна нова таблиця з `agencyId`; кожен запит scoped; UI на токенах `--wf-*`; `t()` на нових екранах.
 
 ---
 
