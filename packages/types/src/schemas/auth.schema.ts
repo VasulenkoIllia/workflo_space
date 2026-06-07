@@ -25,3 +25,8 @@ export const resetPasswordSchema = z.object({
   token: z.string().min(1),
   password: passwordSchema,
 })
+
+/** Switch the session's active agency (ADR-004 multi-agency staffer). */
+export const switchAgencySchema = z.object({
+  agencyId: z.string().uuid(),
+})

@@ -1,7 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, loginSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { loadAgencyMemberships } from '../../auth/memberships.js'
+import { loadAgencyMemberships, pickActiveAgencyId } from '../../auth/memberships.js'
 import { verifyPassword } from '../../auth/password.js'
 import {
   buildAccessClaims,
@@ -38,6 +38,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
           role: true,
           isActive: true,
           name: true,
+          lastActiveAgencyId: true,
         },
       })
 
@@ -100,9 +101,9 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
       // tenant is the agency of their active company.
       const agencyMemberships = await loadAgencyMemberships(prisma, profile.id)
       const activeAgencyId =
-        agencyMemberships[0]?.agencyId ??
-        memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId ??
-        null
+        (agencyMemberships.length > 0
+          ? pickActiveAgencyId(agencyMemberships, profile.lastActiveAgencyId)
+          : memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId) ?? null
 
       const claims = buildAccessClaims({
         profileId: profile.id,

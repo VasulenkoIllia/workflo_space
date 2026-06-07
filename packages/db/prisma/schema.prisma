@@ -9,17 +9,21 @@ datasource db {
 }
 
 model Profile {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role     @default(client)
-  avatarUrl    String?
-  language     Language @default(uk)
-  theme        Theme    @default(system)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  passwordHash       String
+  name               String
+  role               Role     @default(client)
+  avatarUrl          String?
+  language           Language @default(uk)
+  theme              Theme    @default(system)
+  isActive           Boolean  @default(true)
+  // Last agency a multi-agency staffer chose via /auth/switch-agency (ADR-004).
+  // Soft preference — always re-validated against current agencyMemberships at
+  // login/refresh, so a stale/dangling value harmlessly falls back to the first.
+  lastActiveAgencyId String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
   companyMembership     CompanyMember[]
   ordersAssigned        Order[]               @relation("OrderAssignee")

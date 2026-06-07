@@ -79,7 +79,13 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
           revokedAt: true,
           expiresAt: true,
           profile: {
-            select: { id: true, email: true, role: true, isActive: true },
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              isActive: true,
+              lastActiveAgencyId: true,
+            },
           },
         },
       })
@@ -97,6 +103,7 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
       const activeAgencyId = await resolveActiveAgencyId(prisma, {
         agencyMemberships,
         activeCompanyId,
+        preferredAgencyId: stored.profile.lastActiveAgencyId,
       })
 
       // Rotate atomically: the conditional updateMany (revokedAt IS NULL in the
