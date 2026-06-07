@@ -1,12 +1,13 @@
 import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import type { FastifyPluginAsync } from 'fastify'
 import {
   defaultActiveCompanyId,
   loadAgencyMemberships,
   loadMemberships,
   resolveActiveAgencyId,
 } from '../../auth/memberships.js'
+import { isOriginAllowed } from '../../config/origins.js'
 import {
   buildAccessClaims,
   issueRefreshToken,
@@ -17,41 +18,13 @@ import { writeAuditAsync } from '../../services/audit.js'
 
 /**
  * CSRF guard (ADR-001): /auth/refresh validates the Origin header against the
- * same allowlist the CORS plugin uses (CORS_ALLOWED_ORIGINS, comma-separated —
- * already injected into the API container by docker-compose). The refresh
- * cookie is SameSite=Lax + Path=/auth/refresh, so this is defense-in-depth.
- *
- * Policy: a request with NO Origin header is allowed (non-browser/native
- * clients can't forge cross-site requests anyway); a request WITH an Origin
- * must be in the allowlist. In dev, localhost origins are always allowed.
+ * SAME allowlist the CORS plugin uses (config/origins.ts — CORS_ALLOWED_ORIGINS,
+ * else the workflo prod defaults). The refresh cookie is SameSite=Lax +
+ * Path=/auth/refresh, so this is defense-in-depth. No Origin header → allowed
+ * (non-browser clients can't forge cross-site requests); a present Origin must be
+ * allowlisted. Sharing the allowlist means it can never silently fail closed in
+ * prod when CORS_ALLOWED_ORIGINS is unset (audit 2026-06).
  */
-function allowedOrigins(): string[] {
-  return (process.env.CORS_ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean)
-}
-
-function isAllowedOrigin(request: FastifyRequest): boolean {
-  const origin = request.headers.origin
-  if (!origin) return true // no Origin → not a forgeable cross-site browser request
-
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const host = new URL(origin).hostname
-      if (['localhost', '127.0.0.1', '::1'].includes(host)) return true
-    } catch {
-      return false
-    }
-  }
-
-  const allowed = allowedOrigins()
-  // Fail CLOSED in production if no allowlist is configured — never silently
-  // disable the CSRF guard. In dev, allow (DX).
-  if (allowed.length === 0) return process.env.NODE_ENV !== 'production'
-  return allowed.includes(origin)
-}
-
 const refreshRoute: FastifyPluginAsync = (fastify) => {
   fastify.post(
     '/auth/refresh',
@@ -59,7 +32,7 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
       config: { rateLimit: { max: 60, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      if (!isAllowedOrigin(request)) {
+      if (!isOriginAllowed(request.headers.origin)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Недозволене джерело запиту', 403)
       }
 

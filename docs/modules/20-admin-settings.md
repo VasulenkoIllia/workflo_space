@@ -5,6 +5,14 @@
 > Залежить від: `packages/db`, `packages/notifications`, `packages/templates`
 > Оновлено: 27 травня 2026
 
+> ⚠️ **Легенда «✅» у цьому доку = SPECCED (дизайн), НЕ shipped.** Канон побудованого —
+> `schema.prisma` + `TRACKER.md` (✅/🧪/🚀). Станом на аудит 2026-06 у схемі **НЕ існують**:
+> `WebhookEndpoint`, `WebhookDelivery`, `ApiKey`, config export/import (`AgencyFeatureFlag`
+>
+> - `UsageCounter` — вже побудовані, Block 1). `PdfBranding` тут показано як `id="singleton"`
+>   — **застаріло**: settings-таблиці мусять нести `agencyId` + scoped `@@unique` з дня 1 (F6).
+>   Не копіювати singleton-схему.
+
 ---
 
 ## Огляд

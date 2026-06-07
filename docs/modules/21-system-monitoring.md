@@ -5,6 +5,12 @@
 > Залежить від: Sentry SDK, audit_logs, cron_runs
 > Оновлено: 27 травня 2026
 
+> ⚠️ **Легенда «✅» = SPECCED (дизайн), НЕ shipped.** Канон побудованого — `schema.prisma`
+>
+> - `TRACKER.md`. Аудит 2026-06: у схемі **НЕ існують** `StatusIncident`, `SloTarget`,
+>   `InfraCost`, `cron_runs`. `UsageCounter` — **побудовано** (Block 1). Sentry SDK —
+>   **підключено** (`@sentry/node`, guarded, Block 5), активний лише з `SENTRY_DSN`.
+
 ---
 
 ## Огляд

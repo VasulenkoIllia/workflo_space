@@ -827,29 +827,44 @@ through `tenantTransaction`.
 > EAGERLY outside the GUC transaction → **zero isolation** (verified failing on
 > throwaway-pg). `tenantTransaction` is the proven mechanism.
 
-**Enforcement model (current)**
+**Enforcement model (current — full read+write RLS, audit 2026-06)**
 
-- **Interactive writes** via `tenantTransaction` (transitions, invites, register,
-  refresh, password change/reset, notification prefs) → GUC-scoped by RLS once
-  activated. Covers the cross-tenant-**write** corruption surface.
-- **Standalone reads** (`prisma.order.findMany(...)`) are NOT auto-scoped by RLS — they
-  rely on the existing app-level `where`/loader scoping (as today). Full read-RLS would
-  route reads through `tenantTransaction` too (a deliberate future effort).
+- **Interactive multi-writes** via `tenantTransaction` (status transitions, etc.) and
+- **All tenant-data reads + single writes** via `withTenant(fn)` (= `tenantTransaction`
+  on the singleton) — list/detail/comments/activity/time-logs/internal-tasks/files +
+  create/update/delete in `routes/orders/*` and `routes/files/*`. So both the
+  cross-tenant **read (IDOR)** and **write** surfaces are GUC-scoped once activated.
+- **Deliberately NOT wrapped** (would be wrong): identity/auth reads (profiles,
+  refresh_tokens, otp, pre-auth invites) — not tenant tables; `agency_members`
+  membership checks; the **worker** (owner connection + GUC-unset = permissive →
+  drains all tenants, by design). SSE bus callbacks bind the order's agency
+  explicitly via `runWithAgency` since they run outside the request context.
+- **Proven, not just claimed:** `apps/api/tests/integration/tenantIsolation.test.ts`
+  runs as `workflo_app` with `RLS_ENFORCED=on` against a real PG and asserts
+  cross-agency invisibility (USING) + unwritability (WITH CHECK) on column- and
+  parent-scoped tables. CI `db-integration` job gates every PR on it.
 
 **Activation checklist**
 
 1. `ALTER ROLE workflo_app LOGIN PASSWORD '…';` point the **web** process's DB URL at
-   `workflo_app`; keep the owner/admin URL for `migrate deploy` / seed / the worker.
-2. `RLS_ENFORCED=true` on the web process (binds the request tenant so
-   `tenantTransaction` sets the GUC). A loud startup WARN fires as a reminder.
+   `workflo_app` (`DATABASE_APP_URL`); keep the owner/admin URL for `migrate deploy` /
+   seed / the worker.
+2. `RLS_ENFORCED=true` on the web process (binds the request tenant so `withTenant` /
+   `tenantTransaction` set the GUC). A loud startup WARN fires as a reminder.
 3. Worker / bootstrap keep the owner connection (bypass RLS — they drain all tenants).
-4. (Optional hardening) flip `wf_in_tenant` from permissive-on-unset to deny-on-unset
-   AND route remaining standalone reads through `tenantTransaction`, for full read-RLS.
+4. Soak on staging for a full sprint, then (optional hardening) flip `wf_in_tenant`
+   from permissive-on-unset to deny-on-unset.
 
-**Verified end-to-end on throwaway-pg** (real Prisma client connected as `workflo_app`,
-2-agency seed): `tenantTransaction` under agency A → count=1, cannot read agency B's
-order (null); agency B → 1; `runWithSystemContext` (bypass) → sees all 2; an unwrapped
-standalone query is permissive (by design). DB-level `SET ROLE workflo_app` +
-`SET app.current_agency_id` also confirmed isolating.
+**Migration discipline — expand/contract (so image-rollback is safe).** `migrate deploy`
+runs forward-only on every deploy; an image rollback restores OLD code against the NEW
+schema. Keep each deploy's schema change backward-compatible with BOTH image versions:
+add columns/tables nullable first (expand), backfill, switch code, tighten in a LATER
+deploy (contract) — never add a NOT NULL column the previous image doesn't write in the
+same release. `pg_dump` (pre-migrate) mitigates data loss, not the code/schema mismatch.
+
+**Verified end-to-end** (real Prisma client connected as `workflo_app`, 2-agency seed):
+under agency A → sees only A's rows, cannot read/update/insert B's (RLS → null / 0 /
+throw); agency B symmetric; `runWithSystemContext` (bypass) → sees all. See the
+committed integration suite above.
 
 ---

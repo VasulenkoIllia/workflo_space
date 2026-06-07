@@ -295,45 +295,29 @@ async function getCompanyDebt(companyId: string): Promise<number> {
 
 ### 8. Loyalty Tier Update
 
-Оновлюється при кожному підтвердженні оплати:
+> ⚠️ **SUPERSEDED — канон лояльності НЕ тут.** Пороги/відсотки нижче (500/2k/5k @ 0/5/10/15)
+> застарілі. Єдине джерело істини — `@workflo/types` `LOYALTY_DISCOUNT_PCT`
+> (NEW/REGULAR/PARTNER/VIP @ **0/3/7/12%** від **$0/1k/5k/15k**) + модуль
+> [`10-loyalty.md`](10-loyalty.md). Не реалізовувати з прикладу нижче.
 
-```typescript
-// Тири:
-// new       → до $500 total spent      → знижка 0%
-// regular   → $500 – $2,000            → знижка 5%
-// partner   → $2,000 – $5,000          → знижка 10%
-// vip       → $5,000+                  → знижка 15%
+Канонічні правила (звіряй з кодом `packages/types/src/constants.ts`):
 
-async function updateLoyaltyTier(companyId: string, paidAmount: number): Promise<void> {
-  const company = await prisma.company.update({
-    where: { id: companyId },
-    data: { totalSpent: { increment: paidAmount } },
-  })
+- Тири і знижки: див. `LOYALTY_DISCOUNT_PCT` / `LOYALTY_TIER_THRESHOLDS` у `@workflo/types`.
+- `Company.totalSpent` має **єдиного писаря** — cron перерахунку лояльності (модуль 10),
+  а НЕ `increment` на кожному платежі (анти-подвійний-запис, аудит 10-loyalty §КРИТИЧНО).
+- Подія: `loyalty.tier_upgraded` (не `loyalty_tier_changed`).
+- Override: `Company.tierOverride` + `LoyaltyTierHistory` (S5).
 
-  const newTier = calculateTier(Number(company.totalSpent))
-  const oldTier = company.loyaltyTier
-
-  if (newTier !== oldTier) {
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { loyaltyTier: newTier },
-    })
-    // Відправити нотифікацію loyalty_tier_changed
-    await notify(company.ownerId, 'loyalty_tier_changed', { oldTier, newTier })
-  }
-}
-
-function calculateTier(totalSpent: number): LoyaltyTier {
-  if (totalSpent >= 5000) return 'vip'
-  if (totalSpent >= 2000) return 'partner'
-  if (totalSpent >= 500) return 'regular'
-  return 'new'
-}
-```
-
-**Важливо:** Owner може перевизначити tier вручну в workspace (з причиною). При цьому `manuallyOverridden = true` і автоматичне оновлення при наступних платежах ігнорується доки owner не скасує override.
+**Важливо:** Owner може перевизначити tier вручну (`tierOverride`) — тоді автоперерахунок
+cron'ом ігнорується, доки override не знято.
 
 ### 9. Referral Bonus при оплаті
+
+> ⚠️ **SUPERSEDED — канон рефералів у [`09-referral.md`](09-referral.md).** Нарахування
+> йде ЄДИНИМ шляхом через wallet (`walletCredit`, ledger `WalletTransaction`) з
+> ідемпотентністю `UNIQUE(sourceType,sourceId)` (закладено в схемі), а НЕ прямим
+> `bonusBalance: { increment }` нижче. Ставки/пороги — теж у 09-referral (звіряй з кодом).
+> Приклад нижче лишено історично, не реалізовувати.
 
 При підтвердженні оплати (depth=1 — тільки прямий реферер, без мультирівнів в MVP):
 

@@ -1,4 +1,8 @@
-# WORKFLO.SPACE — Концепція v3.0
+# WORKFLO.SPACE — Концепція (CONCEPT_v2)
+
+> Версія документа = v2 (назва файлу — канон). Раніше всередині стояло «v3.0» —
+> розбіжність прибрано (аудит 2026-06). Технічний канон завжди: `SPEC.md` +
+> `schema.prisma` + `@workflo/types`.
 
 > Статус: **ФІНАЛЬНА. Готова до технічного плану.**
 > Дата: 12 квітня 2026
@@ -75,6 +79,15 @@ company_members
 ---
 
 ## LIFECYCLE ЗАМОВЛЕННЯ
+
+> ⚠️ **SUPERSEDED — це концептуальний ескіз, НЕ модель станів коду.** Канон —
+> enum'и `@workflo/types` (`OrderInternalStatus` 9 станів / `OrderClientStatus`
+> 4 стани) + `INTERNAL_TO_CLIENT_STATUS` мапа + машина переходів
+> `ALLOWED_ORDER_TRANSITIONS`/`canTransitionOrder`, описана в
+> [`LIFECYCLE.md`](LIFECYCLE.md). Внутрішні стани: new · clarification ·
+> estimating · in_progress · review · revision · done · cancelled · on_hold.
+> Потоки draft/submitted/under_review/estimated/approved/paid нижче в коді НЕ
+> існують — не реалізовувати з цього блоку.
 
 ```
 [draft]

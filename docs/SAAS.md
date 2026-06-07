@@ -195,7 +195,7 @@ CREATE POLICY tenant_isolation ON orders
 - [x] F1 SaaS-поля Agency (міграція, nullable) — ✅
 - [x] F2 quota/feature seam (no-op) у create-ендпоінтах (orders + files) — ✅
 - [x] F3 `provisionAgency()` (seed перевикористовує) — ✅
-- [x] F4 RLS-конвенція (`tenantTransaction` + per-table політики + `workflo_app` роль) — ✅ verified e2e, flag-gated
+- [x] F4 RLS-конвенція — ✅ **повне read+write покриття** (`withTenant` на reads/single-writes + `tenantTransaction` на multi-writes) + per-table політики + `workflo_app` роль, flag-gated. **Доведено committed-тестом** `apps/api/tests/integration/tenantIsolation.test.ts` (CI-гейт `db-integration`), не лише ручною throwaway-перевіркою (аудит 2026-06).
 - [ ] F5 tenant-aware rate-limit key + `BASE_DOMAIN` + wildcard subdomain (інфра)
 - [ ] F6 (діє) кожна нова таблиця з `agencyId` + RLS
 - [ ] E1–E7 (Phase 1, у кінці): signup, SaaS-підписка, branding-рантайм, quota-значення, super-admin, lifecycle, flags/api/webhooks
