@@ -852,7 +852,7 @@ Cron C02 обробляє `WHERE nextChargeAt <= now()` замість фікс�
 
 ## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
 
-> Авторитетна секція. Деталі foundational-фіксів — у `docs/MODULE_AUDIT.md` (T3).
+> Авторитетна секція. Деталі foundational-фіксів — у `docs/archive/MODULE_AUDIT.md` (T3).
 
 ### A. Обов'язкові reconcile (T3)
 

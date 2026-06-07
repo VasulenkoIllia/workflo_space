@@ -1,5 +1,9 @@
 # DESIGN BRIEF — нові модулі (Leads · Integrations · Client-Mgmt · Support · SaaS-config)
 
+> ⚠️ **Дизайн-handoff для НЕпобудованих модулів 26-29 + SaaS-config (forward-spec).**
+> Візуальна мова — канон у `DESIGN_SYSTEM.md` (не тут). Цей бриф = ЩО малювати для
+> growth-екранів, коли дійде черга; статус готовності — `TRACKER.md`.
+
 > ТЗ-екрани для дизайну (компаньйон до `DESIGN_BRIEF.md`). Покриває **нову логіку/екрани**, що зʼявилися 1.06: модулі 26/27/28/29 + SaaS white-label config.
 > Стек/токени/естетика — як у `DESIGN_SYSTEM.md` (лайм-акцент, теплі stone, Geist/JetBrains Mono, «Engineer's Cut», `--wf-*` свапабельні токени). **Усі екрани мусять бути на токенах** (для white-label per-agency бренду).
 > Формат екрана: **Призначення · App · Макет · Елементи · Стани · Флоу.**

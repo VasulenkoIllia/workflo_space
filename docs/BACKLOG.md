@@ -90,7 +90,7 @@
 
 ---
 
-## 🔍 Audit S0-S1 follow-ups (31.05.2026) — див. `AUDIT_S0_S1.md`
+## 🔍 Audit S0-S1 follow-ups (31.05.2026) — див. `archive/AUDIT_S0_S1.md`
 
 > Знайдено критичним аудитом; баги/security вже виправлено. Нижче — покращення під масштаб + supply-chain (потребують власного verify-циклу).
 

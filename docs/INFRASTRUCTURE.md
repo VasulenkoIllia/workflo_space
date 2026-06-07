@@ -3,7 +3,7 @@
 > Статус: Фінальна v2.1
 > Дата: 16 квітня 2026
 >
-> Примітка: якщо є розбіжності з фактичними S0 скриптами/compose/workflows, джерелом істини є `docs/S0_RUNBOOK.md`.
+> Примітка: цей файл — чинна операційна довідка. Разовий runbook закриття S0 заархівовано (`docs/archive/S0_RUNBOOK.md`, історичне); джерело істини щодо інфри тепер тут + фактичні `infra/`/compose/workflows.
 > Поточний S0-факт: staging/production PostgreSQL працює dockerized (custom `infra/postgres` image з `postgresql-16-cron`).
 > Поточний hardening-факт: runtime контейнери запускаються non-root, `portal/workspace` працюють на unprivileged `8080`, у staging/prod compose є resource + log rotation limits, API security headers через `@fastify/helmet`, а в Prisma застосовано міграцію `20260413215510_timestamptz_and_index_cleanup`.
 > Mailcow-факт: сервер встановлено і повністю налаштовано (16 квітня 2026). Реальні шляхи: `/var/www/mail/` (Mailcow) і `/var/www/proxy/` (Traefik). Docker network: `proxy`.
@@ -1861,6 +1861,7 @@ TLS:
 ```
 
 **Ключові рішення:**
+
 - `SKIP_LETS_ENCRYPT=y` — Mailcow не отримує власний ACME-сертифікат
 - Traefik проксує на **HTTPS** порт 8443 (не HTTP 8880), бо Mailcow nginx завжди редіректить HTTP → HTTPS
 - `insecureSkipVerify=true` в Traefik serversTransport — дозволяє Traefik підключатися до Mailcow nginx за HTTPS без валідації самопідписаного сертифіката бекенду
@@ -1930,15 +1931,15 @@ services:
     networks:
       - proxy
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mailcow.rule=Host(`mail.workflo.space`)"
-      - "traefik.http.routers.mailcow.entrypoints=websecure"
-      - "traefik.http.routers.mailcow.tls.certresolver=cf"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.mailcow.rule=Host(`mail.workflo.space`)'
+      - 'traefik.http.routers.mailcow.entrypoints=websecure'
+      - 'traefik.http.routers.mailcow.tls.certresolver=cf'
       # HTTPS backend (8443), не HTTP (8880) — бо nginx завжди редіректить 8880 → 8443
-      - "traefik.http.services.mailcow.loadbalancer.server.port=8443"
-      - "traefik.http.services.mailcow.loadbalancer.server.scheme=https"
-      - "traefik.http.services.mailcow.loadbalancer.serversTransport=mailcow-transport@file"
-      - "traefik.docker.network=proxy"
+      - 'traefik.http.services.mailcow.loadbalancer.server.port=8443'
+      - 'traefik.http.services.mailcow.loadbalancer.server.scheme=https'
+      - 'traefik.http.services.mailcow.loadbalancer.serversTransport=mailcow-transport@file'
+      - 'traefik.docker.network=proxy'
 
 networks:
   proxy:
@@ -1951,7 +1952,7 @@ networks:
 http:
   serversTransports:
     mailcow-transport:
-      insecureSkipVerify: true  # Mailcow nginx має self-signed cert на бекенді
+      insecureSkipVerify: true # Mailcow nginx має self-signed cert на бекенді
 ```
 
 > Цей файл підхоплюється Traefik автоматично через `providers.file` (директорія `dynamic/`).
@@ -1960,17 +1961,18 @@ http:
 ### 15.7 traefik-certs-dumper (в /var/www/proxy/traefik/docker-compose.yml)
 
 ```yaml
-  certs-dumper:
-    image: ldez/traefik-certs-dumper:v2.8.3
-    container_name: certs-dumper
-    restart: unless-stopped
-    entrypoint: sh -c "traefik-certs-dumper file --version v2 --watch --clean=false --source /acme/acme.json --dest /output --domain-subdir --crt-name cert --key-name key"
-    volumes:
-      - ./acme/acme.json:/acme/acme.json:ro
-      - /var/www/mail/data/assets/ssl:/output
+certs-dumper:
+  image: ldez/traefik-certs-dumper:v2.8.3
+  container_name: certs-dumper
+  restart: unless-stopped
+  entrypoint: sh -c "traefik-certs-dumper file --version v2 --watch --clean=false --source /acme/acme.json --dest /output --domain-subdir --crt-name cert --key-name key"
+  volumes:
+    - ./acme/acme.json:/acme/acme.json:ro
+    - /var/www/mail/data/assets/ssl:/output
 ```
 
 **Критичні прапори:**
+
 - `--clean=false` — без цього certs-dumper **видалить** `dhparams.pem` і `cert.pem/key.pem` при запуску
 - `--domain-subdir` — створює піддиректорію `mail.workflo.space/`
 - `--crt-name cert --key-name key` — файли будуть `cert.crt` і `key.key` (не `.pem`!)
@@ -2127,15 +2129,15 @@ docker compose exec postfix-mailcow postqueue -f
 
 ### 15.17 Відомі проблеми та рішення
 
-| Проблема | Причина | Рішення |
-|---|---|---|
-| `generate_config.sh` виходить при питанні IPv6 | Відсутній `/etc/docker/daemon.json` | `echo '{"ipv6": true}' > /etc/docker/daemon.json` перед запуском |
-| Docker network conflict `172.22.x` | Інший проект на сервері використовує ту ж підмережу | `IPV4_NETWORK=172.26.1` в `mailcow.conf` |
-| Traefik → Mailcow 301 redirect loop | Mailcow nginx завжди редіректить HTTP(8880)→HTTPS(8443) | Traefik має роутити на порт **8443** з `scheme=https` + `insecureSkipVerify` |
-| Dovecot падає: `Can't open file dhparams.pem` | Файл не існує після свіжого клону | `openssl dhparam -out .../ssl/dhparams.pem 2048` |
-| `certs-dumper` видаляє `dhparams.pem` та `cert.pem` | Прапор `--clean=true` за замовчуванням | Обов'язково `--clean=false` |
-| `certs-dumper` створює `cert.crt`/`key.key` а не `.pem` | Прапори `--crt-name cert --key-name key` | Sync-скрипт копіює `.crt`→`.pem` і `.key`→`.pem` |
-| SOGo відкриває адмін-панель замість webmail | Сесійний cookie від `/admin/` перекриває `/SOGo/` | Відкривати SOGo в інкогніто або очистити cookies |
+| Проблема                                                | Причина                                                 | Рішення                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `generate_config.sh` виходить при питанні IPv6          | Відсутній `/etc/docker/daemon.json`                     | `echo '{"ipv6": true}' > /etc/docker/daemon.json` перед запуском             |
+| Docker network conflict `172.22.x`                      | Інший проект на сервері використовує ту ж підмережу     | `IPV4_NETWORK=172.26.1` в `mailcow.conf`                                     |
+| Traefik → Mailcow 301 redirect loop                     | Mailcow nginx завжди редіректить HTTP(8880)→HTTPS(8443) | Traefik має роутити на порт **8443** з `scheme=https` + `insecureSkipVerify` |
+| Dovecot падає: `Can't open file dhparams.pem`           | Файл не існує після свіжого клону                       | `openssl dhparam -out .../ssl/dhparams.pem 2048`                             |
+| `certs-dumper` видаляє `dhparams.pem` та `cert.pem`     | Прапор `--clean=true` за замовчуванням                  | Обов'язково `--clean=false`                                                  |
+| `certs-dumper` створює `cert.crt`/`key.key` а не `.pem` | Прапори `--crt-name cert --key-name key`                | Sync-скрипт копіює `.crt`→`.pem` і `.key`→`.pem`                             |
+| SOGo відкриває адмін-панель замість webmail             | Сесійний cookie від `/admin/` перекриває `/SOGo/`       | Відкривати SOGo в інкогніто або очистити cookies                             |
 
 ---
 

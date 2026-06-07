@@ -585,7 +585,7 @@
 | 11  | **Round 6 повернувся (2026-06-02)**      | **G20–G24 ✅ закрито.** 5 нових файлів: `workspace-leads.jsx` (G20) · `workspace-integrations.jsx` (G21) · `workspace-clients.jsx` (G22) · `workspace-support.jsx` (G23) · `workspace-branding.jsx` (G24). Bonus: Portal `/support` (PortalSupport), 2 live brand variants demo (workflo lime + Acme indigo), 6 accent-presets (lime/indigo/amber/cyan/rose/emerald + custom). PORTAL_NAV +2, WORKSPACE_NAV +5. **Повний скоуп MVP + модулі 26-29 + white-label = 100% дизайн готовий.** |
 | 12  | **Round 7 (SaaS-enablement) — deferred** | Повний SaaS: public signup · plan tiers · SaaS billing · trial+paywall · per-agency limits UI · **super-admin** · email-to-task. Малюємо, коли власник дасть відповіді на 5 перевірочних питань (модель / тіри / провайдер / триал / super-admin scope).                                                                                                                                                                                                                                 |
 
-Похідні TODO (не блокуючі, трекати окремо): оновити `DESIGN_BRIEF.md` (§2), оновити `IMPLEMENTATION_PLAN.md` під Puppeteer (§5.5), синхронізувати `docs/modules/08-email.md` під 15 реальних шаблонів (зараз дрифт — див. `MODULE_AUDIT.md`). Додати `wallet` пункт у `PORTAL_NAV` (вже в `prototype.jsx`).
+Похідні TODO (не блокуючі, трекати окремо): оновити `DESIGN_BRIEF.md` (§2), оновити `IMPLEMENTATION_PLAN.md` під Puppeteer (§5.5), синхронізувати `docs/modules/08-email.md` під 15 реальних шаблонів (зараз дрифт — див. `archive/MODULE_AUDIT.md`). Додати `wallet` пункт у `PORTAL_NAV` (вже в `prototype.jsx`).
 
 ---
 

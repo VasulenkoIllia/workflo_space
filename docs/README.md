@@ -60,8 +60,7 @@ turbo dev
 | [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                            |
 | [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                   |
 | [CRON_JOBS.md](CRON_JOBS.md)                         | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                                                             |
-| [TRACKER.md](TRACKER.md)                             | Трекер прогресу — всі 171 задача по спринтах S0–S14, статуси                                                                                           |
-| [S0_RUNBOOK.md](S0_RUNBOOK.md)                       | Практичний runbook для закриття S0 (GitHub, Hetzner, Traefik, deploy)                                                                                  |
+| [TRACKER.md](TRACKER.md)                             | Трекер прогресу: блок **«СТАН ЗАРАЗ»** (готово/далі/відкладено) + спринти S0–S14                                                                       |
 | [README.md](README.md)                               | **Цей файл** — глобальний індекс                                                                                                                       |
 
 > **CHANGELOG.md** знаходиться в корені репо (`/CHANGELOG.md`) — не в docs/.
@@ -77,20 +76,27 @@ turbo dev
 | [LEGAL/](LEGAL/README.md)    | Privacy/ToS/DPA/subprocessors — заглушки до юриста (**draft**)     |
 | [LIFECYCLE.md](LIFECYCLE.md) | §8 Agency-lifecycle: suspend/export/delete (SaaS)                  |
 
-### Архів / історичне (НЕ джерело істини — мають банери)
+### Архів / історичне (НЕ джерело істини)
 
-> Залишені як слід процесу/думки. Чинний канон завжди: `SPEC.md` + `TRACKER.md` + `schema.prisma` + код.
+> Чинний канон завжди: `SPEC.md` + `TRACKER.md` + `schema.prisma` + код.
 
-| Документ                                                                              | Чим замінено                                         |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [CONCEPT_v1.md](CONCEPT_v1.md)                                                        | CONCEPT_v2.md (archive-кандидат)                     |
-| [S0_RUNBOOK.md](S0_RUNBOOK.md)                                                        | INFRASTRUCTURE.md (S0 закрито; archive-канд.)        |
-| [MODULE_AUDIT.md](MODULE_AUDIT.md)                                                    | SPEC.md / schema.prisma (історичний знімок)          |
-| [AUDIT_S0_S1.md](AUDIT_S0_S1.md)                                                      | AUDIT_S0_S2.md (точковий аудит)                      |
-| [AUDIT_S0_S2.md](AUDIT_S0_S2.md)                                                      | контекст останньої ремедіації (історичний)           |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)                                      | schema/SPEC/TRACKER (історичний план)                |
-| [UX_PAGES.md](UX_PAGES.md)                                                            | DESIGN_SYSTEM.md (візуал); лишається інвентар роутів |
-| [DESIGN_BRIEF.md](DESIGN_BRIEF.md) / [DESIGN_BRIEF_GROWTH.md](DESIGN_BRIEF_GROWTH.md) | DESIGN_SYSTEM.md (візуальна мова)                    |
+**Переміщено в [`docs/archive/`](archive/README.md)** (заморожено):
+
+| Документ                                           | Чим замінено                                |
+| -------------------------------------------------- | ------------------------------------------- |
+| [archive/CONCEPT_v1.md](archive/CONCEPT_v1.md)     | CONCEPT_v2.md                               |
+| [archive/S0_RUNBOOK.md](archive/S0_RUNBOOK.md)     | INFRASTRUCTURE.md (S0 закрито)              |
+| [archive/MODULE_AUDIT.md](archive/MODULE_AUDIT.md) | SPEC.md / schema.prisma (історичний знімок) |
+| [archive/AUDIT_S0_S1.md](archive/AUDIT_S0_S1.md)   | AUDIT_S0_S2.md                              |
+
+**Лишаються в `docs/` із банером** (історичні, але ще корисні як довідка):
+
+| Документ                                                                              | Статус                                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------------- |
+| [AUDIT_S0_S2.md](AUDIT_S0_S2.md)                                                      | найрелевантніший прийдешньому аудиту контекст |
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)                                      | історичний план; канон — schema/SPEC/TRACKER  |
+| [UX_PAGES.md](UX_PAGES.md)                                                            | інвентар роутів; візуал → DESIGN_SYSTEM.md    |
+| [DESIGN_BRIEF.md](DESIGN_BRIEF.md) / [DESIGN_BRIEF_GROWTH.md](DESIGN_BRIEF_GROWTH.md) | дизайн-handoff; візуал → DESIGN_SYSTEM.md     |
 
 ### Модульні документи
 
@@ -126,7 +132,7 @@ turbo dev
 | [28](modules/28-client-management.md) | Client Management   | Workspace, API          | P1        |
 | [29](modules/29-support.md)           | Support (tickets)   | Portal, Workspace, API  | P1        |
 
-> Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `TRACKER.md` (КОЛИ). Архітектурні рішення — `adr/` (001-007). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — `AUDIT_S0_S1.md`/`AUDIT_S0_S2.md`.
+> Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `TRACKER.md` (КОЛИ). Архітектурні рішення — `adr/` (001-007). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — `archive/AUDIT_S0_S1.md` (історичний) / `AUDIT_S0_S2.md`.
 
 ---
 
