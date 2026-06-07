@@ -38,3 +38,54 @@ jobs:
 
       - name: Test
         run: pnpm turbo test
+
+  db:
+    name: db-integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: workflo
+          POSTGRES_PASSWORD: workflo_ci
+          POSTGRES_DB: workflo_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U workflo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://workflo:workflo_ci@localhost:5432/workflo_ci
+      JWT_SECRET: ci-secret-at-least-32-characters-long!!
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @workflo/db db:generate
+
+      # Migration smoke (S8-06): every migration applies cleanly to a fresh DB.
+      - name: Apply migrations (clean DB)
+        run: pnpm --filter @workflo/db exec prisma migrate deploy
+
+      - name: Seed
+        run: pnpm --filter @workflo/db run seed
+
+      # P1 hard gate: cross-tenant isolation under RLS as the workflo_app role. A
+      # leak here blocks the PR — the precondition for onboarding any external tenant.
+      - name: Cross-tenant isolation tests (RLS)
+        run: pnpm --filter @workflo/api run test:integration
+        env:
+          RUN_DB_TESTS: '1'
