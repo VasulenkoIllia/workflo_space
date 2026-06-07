@@ -1,6 +1,7 @@
 import { prisma } from '@workflo/db'
 import Fastify from 'fastify'
 import { validateRuntimeEnv } from './config/env.js'
+import { flushSentry, initSentry } from './observability/sentry.js'
 import { startWorkers, stopWorkers } from './workers.js'
 
 /**
@@ -10,6 +11,7 @@ import { startWorkers, stopWorkers } from './workers.js'
  * chat-listener + outbox drain. Scale web and worker independently.
  */
 validateRuntimeEnv()
+initSentry() // no-op unless SENTRY_DSN is set
 
 // A bare Fastify instance (never listens) purely for its pino logger config.
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } })
@@ -19,6 +21,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'worker: received shutdown signal')
   await stopWorkers()
   await prisma.$disconnect()
+  await flushSentry()
   await app.close()
   logger.info('worker: stopped cleanly')
   process.exit(0)

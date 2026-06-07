@@ -3,6 +3,7 @@ import { notify } from '@workflo/notifications'
 import { INTERNAL_TO_CLIENT_STATUS, type OrderInternalStatus } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
+import { captureException } from '../observability/sentry.js'
 import { buildNotifyDeps } from './notifications.js'
 import { type OutboxEventView, type OutboxHandler, processOutboxBatch } from './outbox.js'
 
@@ -104,7 +105,10 @@ export function startOutboxWorker(logger: FastifyBaseLogger): void {
       .then((r) => {
         if (r.processed || r.failed || r.dead) logger.info(r, 'outbox: batch drained')
       })
-      .catch((err: unknown) => logger.error({ err }, 'outbox: drain failed'))
+      .catch((err: unknown) => {
+        logger.error({ err }, 'outbox: drain failed')
+        captureException(err, { scope: 'outbox.drain' })
+      })
       .finally(() => {
         draining = false
       })

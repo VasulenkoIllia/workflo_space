@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { ZodError } from 'zod'
 import { AppError, ApiErrorCode } from '@workflo/types'
+import { captureException } from '../observability/sentry.js'
 
 interface ValidationIssue {
   field: string
@@ -82,6 +83,12 @@ export function registerErrorHandlers(fastify: FastifyInstance): void {
     }
 
     request.log.error({ err: error }, 'Unhandled error')
+    captureException(error, {
+      reqId: request.id,
+      method: request.method,
+      url: request.url,
+      agencyId: request.user?.activeAgencyId ?? null,
+    })
 
     return reply.status(500).send({
       success: false,

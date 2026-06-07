@@ -1,12 +1,14 @@
 import { prisma } from '@workflo/db'
 import { buildApp } from './app.js'
 import { validateRuntimeEnv } from './config/env.js'
+import { flushSentry, initSentry } from './observability/sentry.js'
 import { shouldRunWorkersInline, startWorkers, stopWorkers } from './workers.js'
 
 const port = Number(process.env.API_PORT ?? 4000)
 const host = process.env.API_HOST ?? '0.0.0.0'
 
 validateRuntimeEnv()
+initSentry() // no-op unless SENTRY_DSN is set
 
 const app = buildApp()
 
@@ -23,6 +25,8 @@ async function shutdown(signal: string) {
 
   await prisma.$disconnect()
   app.log.info('Database disconnected')
+
+  await flushSentry()
 
   process.exit(0)
 }

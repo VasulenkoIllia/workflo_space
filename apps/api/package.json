@@ -19,6 +19,7 @@
     "@fastify/jwt": "^10.1.0",
     "@fastify/multipart": "^9.0.3",
     "@fastify/rate-limit": "^10.3.0",
+    "@sentry/node": "^10.56.0",
     "@workflo/db": "workspace:*",
     "@workflo/notifications": "workspace:*",
     "@workflo/payments": "workspace:*",

@@ -80,6 +80,12 @@ jobs:
       - name: Apply migrations (clean DB)
         run: pnpm --filter @workflo/db exec prisma migrate deploy
 
+      # Drift gate: the applied migrations must reproduce schema.prisma exactly
+      # (--exit-code → fail on any diff). Triggers + RLS policies are raw SQL that
+      # Prisma doesn't model, so they don't register as drift (no allowlist needed).
+      - name: Schema drift gate (migrations ↔ schema)
+        run: pnpm --filter @workflo/db exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
       - name: Seed
         run: pnpm --filter @workflo/db run seed
 
