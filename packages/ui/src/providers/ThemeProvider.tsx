@@ -95,6 +95,38 @@ export function accentVars(accent: AccentKey, resolvedTheme: ResolvedTheme): CSS
   } as CSSProperties
 }
 
+/**
+ * Per-tenant white-label branding (SAAS.md / SAAS_CONFIG.md). Injected at runtime as
+ * inline `--wf-*` overrides on `.wfp-root`, so a tenant can override the accent AND
+ * neutrals/fonts — not just the 6 accent presets. `tokens` is an arbitrary
+ * `--wf-*` → value map (e.g. `--wf-bg`, `--wf-font-sans`); it wins over the preset.
+ * Fetch it host→tenant at bootstrap (GET /tenant/branding) and pass here.
+ */
+export interface TenantBranding {
+  /** Direct accent hex override (light/dark); takes precedence over the preset for --wf-accent. */
+  accent?: { light: string; dark: string; soft?: string; softDark?: string }
+  /** Raw --wf-* token overrides (neutrals, fonts, radii…). Applied last → highest priority. */
+  tokens?: Record<`--wf-${string}`, string>
+}
+
+/** Merge accent preset vars + optional per-tenant branding into one inline style. */
+export function brandingVars(
+  accent: AccentKey,
+  resolvedTheme: ResolvedTheme,
+  branding?: TenantBranding
+): CSSProperties {
+  const base = accentVars(accent, resolvedTheme) as Record<string, string>
+  if (branding?.accent) {
+    const a = branding.accent
+    base['--wf-accent'] = resolvedTheme === 'dark' ? a.dark : a.light
+    base['--wf-accent-bg'] = a.dark
+    const soft = resolvedTheme === 'dark' ? (a.softDark ?? a.soft) : (a.soft ?? a.softDark)
+    if (soft) base['--wf-accent-soft'] = soft
+  }
+  if (branding?.tokens) Object.assign(base, branding.tokens)
+  return base as CSSProperties
+}
+
 export interface ThemeProviderProps extends PropsWithChildren {
   defaultTheme?: ThemeMode
   defaultAccent?: AccentKey
@@ -102,6 +134,8 @@ export interface ThemeProviderProps extends PropsWithChildren {
   className?: string
   /** When false, do not persist to localStorage (useful for Storybook/tests). */
   persist?: boolean
+  /** Per-tenant white-label overrides (accent + neutrals + fonts). White-label seam. */
+  branding?: TenantBranding
 }
 
 /**
@@ -115,6 +149,7 @@ export function ThemeProvider({
   defaultAccent = 'lime',
   className,
   persist = true,
+  branding,
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<ThemeMode>(() =>
     readStored<ThemeMode>(THEME_KEY, ['light', 'dark', 'system'], defaultTheme)
@@ -163,7 +198,7 @@ export function ThemeProvider({
         className={cn('wfp-root', className)}
         data-theme={resolvedTheme}
         data-accent={accent}
-        style={accentVars(accent, resolvedTheme)}
+        style={brandingVars(accent, resolvedTheme, branding)}
       >
         {children}
       </div>

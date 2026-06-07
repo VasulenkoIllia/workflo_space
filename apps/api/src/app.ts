@@ -12,6 +12,7 @@ import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
 import orderRoutes from './routes/orders/index.js'
 import profileRoutes from './routes/profile/index.js'
+import tenantBrandingRoute from './routes/tenant/branding.js'
 
 function buildLoggerConfig() {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -73,6 +74,7 @@ export function buildApp() {
   })
 
   app.register(healthRoute)
+  app.register(tenantBrandingRoute)
   app.register(authRoutes)
   app.register(profileRoutes)
   app.register(inviteRoutes)
