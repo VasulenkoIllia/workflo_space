@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import '@fastify/multipart'
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, isAllowedFileMimeType, MAX_FILES_PER_ORDER } from '@workflo/types'
+import {
+  ApiErrorCode,
+  AppError,
+  isAllowedFileMimeType,
+  magicMatchesMime,
+  MAX_FILES_PER_ORDER,
+} from '@workflo/types'
 import { buildOrderFileKey, safeExt, sha256Hex } from '@workflo/storage'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertWithinQuota } from '../../saas/limits.js'
@@ -51,6 +57,12 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
           throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Файл перевищує ліміт розміру', 413)
         }
         throw err
+      }
+
+      // Magic-bytes guard: the declared MIME is client-controlled, so verify the
+      // actual bytes match its category (a renamed script → 415). Audit 2026-06.
+      if (!magicMatchesMime(buffer, part.mimetype)) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Вміст файлу не відповідає типу', 415)
       }
 
       // F2: storage quota seam (no-op Phase 0; checks plan bytes in Phase 1).

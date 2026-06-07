@@ -106,7 +106,7 @@ describe('POST /orders/:id/files', () => {
     fileCreate.mockResolvedValue({ id: 'file-1', filename: 'doc.pdf' })
     storageUpload.mockResolvedValue({ key: 'k' })
     const { app, token } = await authed(EXECUTOR)
-    const mp = multipart('doc.pdf', 'application/pdf', 'hello')
+    const mp = multipart('doc.pdf', 'application/pdf', '%PDF-') // valid PDF magic, 5 bytes
     const res = await app.inject({
       method: 'POST',
       url: '/orders/order-1/files',
@@ -127,6 +127,23 @@ describe('POST /orders/:id/files', () => {
     orderFindUnique.mockResolvedValue(order)
     const { app, token } = await authed(EXECUTOR)
     const mp = multipart('x.svg', 'image/svg+xml', '<svg/>')
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/order-1/files',
+      headers: { authorization: `Bearer ${token}`, ...mp.headers },
+      payload: mp.body,
+    })
+    expect(res.statusCode).toBe(415)
+    expect(storageUpload).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('rejects content whose magic bytes do not match the declared MIME → 415', async () => {
+    orderFindUnique.mockResolvedValue(order)
+    fileCount.mockResolvedValue(0)
+    const { app, token } = await authed(EXECUTOR)
+    // declared image/png but the bytes are plain text → magic mismatch
+    const mp = multipart('fake.png', 'image/png', 'hello not a png')
     const res = await app.inject({
       method: 'POST',
       url: '/orders/order-1/files',
