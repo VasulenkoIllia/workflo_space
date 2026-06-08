@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
+import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 
 /**
  * Scheduled background jobs (Sprint 5+). They run wherever the workers run —
@@ -11,8 +12,10 @@ import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
  */
 export function startCronJobs(logger: FastifyBaseLogger): void {
   startExchangeRateCron(logger)
+  startRecurringChargesCron(logger)
 }
 
 export function stopCronJobs(): void {
   stopExchangeRateCron()
+  stopRecurringChargesCron()
 }

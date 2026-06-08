@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BillingType,
   BlogPostType,
+  ChargeFrequency,
   ChargeStatus,
   CompanyMemberRole,
   DocumentStatus,
@@ -65,6 +66,7 @@ const PAIRS: Array<[string, Record<string, string>]> = [
   ['InternalTaskStatus', InternalTaskStatus],
   ['BillingType', BillingType],
   ['ChargeStatus', ChargeStatus],
+  ['ChargeFrequency', ChargeFrequency],
   ['PaymentType', PaymentType],
   ['PaymentStatus', PaymentStatus],
   ['DocumentType', DocumentType],

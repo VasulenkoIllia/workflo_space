@@ -112,6 +112,13 @@ export enum ChargeStatus {
   WRITTEN_OFF = 'written_off',
 }
 
+/** Recurring-charge cadence for a CompanyService subscription (module 05). */
+export enum ChargeFrequency {
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  ANNUAL = 'annual',
+}
+
 export enum PaymentType {
   ADVANCE = 'advance',
   FINAL = 'final',

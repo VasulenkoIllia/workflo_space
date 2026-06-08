@@ -13,6 +13,7 @@ import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
 import orderRoutes from './routes/orders/index.js'
 import profileRoutes from './routes/profile/index.js'
+import serviceRoutes from './routes/services/index.js'
 import tenantBrandingRoute from './routes/tenant/branding.js'
 
 function buildLoggerConfig() {
@@ -82,6 +83,7 @@ export function buildApp() {
   app.register(orderRoutes)
   app.register(fileRoutes)
   app.register(billingRoutes)
+  app.register(serviceRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)
