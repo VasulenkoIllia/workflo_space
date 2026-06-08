@@ -318,7 +318,11 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
 
-  packages/payments: {}
+  packages/payments:
+    devDependencies:
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
 
   packages/storage:
     devDependencies:
