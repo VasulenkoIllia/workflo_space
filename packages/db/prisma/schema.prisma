@@ -101,31 +101,35 @@ model PasswordResetToken {
 }
 
 model Company {
-  id           String      @id @default(uuid())
+  id           String       @id @default(uuid())
   agencyId     String
   name         String
-  slug         String      @unique
-  language     Language    @default(uk)
-  currency     String      @default("USD")
+  slug         String       @unique
+  language     Language     @default(uk)
+  currency     String       @default("USD")
   notes        String?
-  loyaltyTier  LoyaltyTier @default(new)
-  totalSpent   Decimal     @default(0) @db.Decimal(12, 2)
-  bonusBalance Decimal     @default(0) @db.Decimal(12, 2)
-  referralCode String      @unique @default(uuid())
+  loyaltyTier  LoyaltyTier  @default(new)
+  tierOverride LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
+  totalSpent   Decimal      @default(0) @db.Decimal(12, 2)
+  bonusBalance Decimal      @default(0) @db.Decimal(12, 2)
+  moneyBalance Decimal      @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
+  referralCode String       @unique @default(uuid())
   referredById String?
-  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
-  members           CompanyMember[]
-  orders            Order[]
-  serviceAssigns    CompanyService[]
-  charges           ServiceCharge[]
-  payments          Payment[]
-  referralsSent     Referral[]       @relation("ReferrerCompany")
-  referralsReceived Referral[]       @relation("ReferredCompany")
-  documents         Document[]
-  invites           Invite[]
-  agency            Agency           @relation(fields: [agencyId], references: [id])
+  members            CompanyMember[]
+  orders             Order[]
+  serviceAssigns     CompanyService[]
+  charges            ServiceCharge[]
+  payments           Payment[]
+  referralsSent      Referral[]           @relation("ReferrerCompany")
+  referralsReceived  Referral[]           @relation("ReferredCompany")
+  documents          Document[]
+  invites            Invite[]
+  walletTransactions WalletTransaction[]
+  loyaltyHistory     LoyaltyTierHistory[]
+  agency             Agency               @relation(fields: [agencyId], references: [id])
 
   @@index([agencyId])
   @@map("companies")
@@ -314,13 +318,15 @@ model TimeLog {
 }
 
 model Service {
-  id          String   @id @default(uuid())
-  agencyId    String?
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  id              String   @id @default(uuid())
+  agencyId        String?
+  name            String
+  description     String?
+  isActive        Boolean  @default(true)
+  isRecurring     Boolean  @default(true) // recurring-subscription service vs one-off (module 05)
+  defaultPriceUsd Decimal? @db.Decimal(10, 2) // catalog default; CompanyService.customPrice overrides per client
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
 
   companyAssigns CompanyService[]
   agency         Agency?          @relation(fields: [agencyId], references: [id])
@@ -330,14 +336,16 @@ model Service {
 }
 
 model CompanyService {
-  id          String   @id @default(uuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  serviceId   String
-  service     Service  @relation(fields: [serviceId], references: [id])
-  customPrice Decimal  @db.Decimal(10, 2)
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  id           String          @id @default(uuid())
+  companyId    String
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  serviceId    String
+  service      Service         @relation(fields: [serviceId], references: [id])
+  customPrice  Decimal         @db.Decimal(10, 2)
+  active       Boolean         @default(true)
+  frequency    ChargeFrequency @default(monthly) // recurring-charge cadence (module 05)
+  nextChargeAt DateTime?       @db.Timestamptz(3) // first-of-next-period anchor for the recurring cron
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
 
   charges ServiceCharge[]
 
@@ -354,6 +362,11 @@ model ServiceCharge {
   companyServiceId String
   companyService   CompanyService @relation(fields: [companyServiceId], references: [id])
   amount           Decimal        @db.Decimal(10, 2)
+  baseAmount       Decimal?       @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
+  discountPct      Decimal?       @db.Decimal(5, 2)
+  discountAmount   Decimal?       @db.Decimal(10, 2)
+  totalAmount      Decimal?       @db.Decimal(10, 2) // post-discount amount owed
+  currency         String         @default("USD")
   uahRate          Decimal?       @db.Decimal(10, 4)
   month            DateTime       @db.Date
   status           ChargeStatus   @default(pending)
@@ -362,6 +375,8 @@ model ServiceCharge {
   notes            String?
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
   agency           Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+
+  allocations PaymentAllocation[]
 
   @@unique([companyServiceId, month])
   @@index([agencyId])
@@ -378,10 +393,14 @@ model Payment {
   order             Order?        @relation(fields: [orderId], references: [id])
   amount            Decimal       @db.Decimal(10, 2)
   currency          String        @default("USD")
+  amountUsd         Decimal?      @db.Decimal(10, 2) // FX snapshot at confirm-time (USD base); immutable. Loyalty lifetime + P&L revenue read this.
+  rateUsed          Decimal?      @db.Decimal(10, 4) // native→USD rate used for the snapshot (1 for USD-native)
   type              PaymentType   @default(final)
   status            PaymentStatus @default(confirmed)
   provider          String        @default("manual")
   providerPaymentId String?
+  sourceType        String? // optional link to what this payment settles (e.g. 'charge')
+  sourceId          String?
   paymentLink       String?
   paymentMethod     String?
   paymentReference  String?
@@ -391,10 +410,15 @@ model Payment {
   confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
   agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  allocations PaymentAllocation[]
+
   // Webhook idempotency. Standard PG unique indexes treat each NULL as distinct, so
   // multiple manual rows (providerPaymentId=NULL) are INTENTIONALLY allowed. Do NOT
   // add NULLS NOT DISTINCT — it would reject existing manual payments.
   @@unique([provider, providerPaymentId])
+  // Source-anchored idempotency for non-manual flows; manual rows leave source NULL
+  // (NULLs distinct → still allowed). Manual dedup is via the IdempotencyKey table.
+  @@unique([agencyId, sourceType, sourceId])
   @@index([agencyId])
   @@index([companyId])
   @@index([orderId])
@@ -773,6 +797,14 @@ model Agency {
   usageCounters    UsageCounter[]
   featureFlags     AgencyFeatureFlag[]
 
+  // Sprint 5 — financial core
+  walletTransactions WalletTransaction[]
+  paymentAllocations PaymentAllocation[]
+  referralSettings   ReferralSettings?
+  loyaltyHistory     LoyaltyTierHistory[]
+  executorPayouts    ExecutorPayout[]
+  expenses           Expense[]
+
   @@index([planId])
   @@map("agencies")
 }
@@ -919,8 +951,10 @@ enum InternalTaskStatus {
 
 enum ChargeStatus {
   pending
+  partial
   paid
   overdue
+  written_off
 }
 
 enum InviteType {
@@ -972,4 +1006,202 @@ enum OtpChannel {
   email
   telegram
   sms
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint 5 — Financial core (migration s5_00_financial_core). See docs/S5_PLAN.md.
+// All tenant tables carry `agencyId` + get RLS `tenant_isolation` in the migration.
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Bonus-account ledger (module 25). Append-only; `balanceAfter` is the running
+/// balance snapshot computed under a FOR UPDATE lock on the company row.
+model WalletTransaction {
+  id           String          @id @default(uuid())
+  agencyId     String
+  agency       Agency          @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  companyId    String
+  company      Company         @relation(fields: [companyId], references: [id])
+  type         WalletTxnType
+  source       WalletTxnSource
+  amount       Decimal         @db.Decimal(12, 2)
+  balanceAfter Decimal         @db.Decimal(12, 2)
+  currency     String          @default("USD")
+  sourceId     String?
+  note         String?
+  createdById  String?
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
+  @@index([agencyId])
+  @@map("wallet_transactions")
+}
+
+/// Money-account: links a confirmed payment to the charge(s) it settles (module 25).
+model PaymentAllocation {
+  id        String        @id @default(uuid())
+  agencyId  String
+  agency    Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  paymentId String
+  payment   Payment       @relation(fields: [paymentId], references: [id])
+  chargeId  String
+  charge    ServiceCharge @relation(fields: [chargeId], references: [id])
+  amount    Decimal       @db.Decimal(12, 2)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([paymentId, chargeId])
+  @@index([chargeId])
+  @@index([agencyId])
+  @@map("payment_allocations")
+}
+
+/// Per-agency referral % tiers (module 09/25). Editable; `tiers` = JSON tier table.
+model ReferralSettings {
+  id        String   @id @default(uuid())
+  agencyId  String   @unique
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(true)
+  tiers     Json     @default("[]")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  updatedBy String?
+
+  @@map("referral_settings")
+}
+
+/// Audit trail of loyalty-tier changes (module 10). Append-only.
+model LoyaltyTierHistory {
+  id        String       @id @default(uuid())
+  agencyId  String
+  agency    Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromTier  LoyaltyTier?
+  toTier    LoyaltyTier
+  reason    String?
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
+  @@index([agencyId])
+  @@map("loyalty_tier_history")
+}
+
+/// Per-executor, per-period payroll settlement (module 12). One row per
+/// (executor, period) → idempotent generation; status draft→approved→paid.
+model ExecutorPayout {
+  id               String       @id @default(uuid())
+  agencyId         String
+  agency           Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  executorId       String
+  period           String // 'YYYY-MM'
+  baseSalary       Decimal      @default(0) @db.Decimal(10, 2)
+  billableHours    Decimal      @default(0) @db.Decimal(8, 2)
+  hourlyEarned     Decimal      @default(0) @db.Decimal(10, 2)
+  commissionAmount Decimal      @default(0) @db.Decimal(10, 2)
+  total            Decimal      @default(0) @db.Decimal(10, 2)
+  currency         String       @default("USD")
+  status           PayoutStatus @default(draft)
+  approvedBy       String?
+  paidAt           DateTime?    @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@unique([executorId, period])
+  @@index([agencyId])
+  @@map("executor_payouts")
+}
+
+/// Operating expenses for P&L (module 22). `source=executor_rate` rows are derived
+/// from ExecutorRate (salary) and must NOT duplicate a manual salary line.
+model Expense {
+  id          String            @id @default(uuid())
+  agencyId    String
+  agency      Agency            @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  type        ExpenseType
+  category    ExpenseCategory
+  source      ExpenseSource     @default(manual)
+  vendor      String?
+  amount      Decimal           @db.Decimal(10, 2)
+  currency    String            @default("USD")
+  frequency   ExpenseFrequency?
+  startDate   DateTime          @db.Date
+  endDate     DateTime?         @db.Date
+  executorId  String?
+  companyId   String?
+  isActive    Boolean           @default(true)
+  createdById String
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, category])
+  @@map("expenses")
+}
+
+/// Header-based request idempotency (module 05). One stored response per
+/// (key, endpoint); replayed on retry. Swept after `expiresAt` (24h TTL).
+/// `agencyId` is a plain column (RLS-scoped) — ephemeral, no FK relation needed.
+model IdempotencyKey {
+  key            String
+  endpoint       String
+  agencyId       String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime @db.Timestamptz(3)
+
+  @@id([key, endpoint])
+  @@index([expiresAt])
+  @@index([agencyId])
+  @@map("idempotency_keys")
+}
+
+enum WalletTxnType {
+  credit
+  debit
+}
+
+enum WalletTxnSource {
+  referral_bonus
+  manual_adjustment
+  invoice_payment
+  refund
+}
+
+enum PayoutStatus {
+  draft
+  approved
+  paid
+}
+
+enum ExpenseType {
+  recurring
+  one_time
+}
+
+enum ExpenseCategory {
+  infrastructure
+  software
+  salary
+  contractor
+  rent
+  tax
+  marketing
+  other
+}
+
+enum ExpenseSource {
+  manual
+  executor_rate
+}
+
+enum ExpenseFrequency {
+  monthly
+  quarterly
+  annual
+  one_time
+}
+
+enum ChargeFrequency {
+  monthly
+  quarterly
+  annual
 }
