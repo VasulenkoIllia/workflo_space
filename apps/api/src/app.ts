@@ -7,6 +7,7 @@ import jwtPlugin from './plugins/jwt.js'
 import rateLimitingPlugin from './plugins/rateLimiting.js'
 import securityHeadersPlugin from './plugins/securityHeaders.js'
 import authRoutes from './routes/auth/index.js'
+import billingRoutes from './routes/billing/index.js'
 import fileRoutes from './routes/files/index.js'
 import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
@@ -80,6 +81,7 @@ export function buildApp() {
   app.register(inviteRoutes)
   app.register(orderRoutes)
   app.register(fileRoutes)
+  app.register(billingRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)

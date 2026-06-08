@@ -106,8 +106,10 @@ export enum BillingMode {
 
 export enum ChargeStatus {
   PENDING = 'pending',
+  PARTIAL = 'partial',
   PAID = 'paid',
   OVERDUE = 'overdue',
+  WRITTEN_OFF = 'written_off',
 }
 
 export enum PaymentType {
