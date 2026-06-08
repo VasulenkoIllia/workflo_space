@@ -76,6 +76,10 @@ jobs:
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
           tags: ghcr.io/${{ steps.owner.outputs.value }}/workflo-${{ matrix.app }}:sha-${{ github.sha }}
+          # Baked into the SPA bundles (portal/workspace). Ignored by api/bot/landing
+          # Dockerfiles (they don't declare the ARG). Staging API host.
+          build-args: |
+            VITE_API_URL=https://dev-api.workflo.space
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 

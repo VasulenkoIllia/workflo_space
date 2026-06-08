@@ -3,7 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Workflo Workspace</title>
+    <title>workflo.space — workspace</title>
+    <!-- White-label anti-FOUC (SAAS_CONFIG.md): apply the cached per-tenant brand
+         tokens to :root BEFORE first paint, so a tenant's subdomain never flashes the
+         default brand. The app refreshes the cache from GET /tenant/branding after
+         mount (and passes the same branding into <ThemeProvider branding=…>). -->
+    <script>
+      try {
+        var b = JSON.parse(localStorage.getItem('wf-branding') || 'null')
+        if (b && b.tokens) {
+          var r = document.documentElement
+          for (var k in b.tokens) if (k.indexOf('--wf-') === 0) r.style.setProperty(k, b.tokens[k])
+        }
+      } catch (e) {}
+    </script>
+    <!-- TODO (GDPR, audit P8): self-host these fonts (drop the Google Fonts CDN) for
+         EU data-protection — third-party font CDN leaks visitor IPs. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=JetBrains+Mono:wght@400..600&family=Caveat:wght@500..700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+      }
+      /* ThemeProvider renders .wfp-root.wf-app — make it fill the viewport */
+      .wf-app {
+        height: 100%;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -19,9 +19,9 @@
 
 **🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
 
-1. **Ручне тестування готового** (S2 API + S3 Portal) — поточний крок власника.
-2. **S4 Workspace frontend** (owner+executor: kanban, /clients, /orders) — наступний великий блок UI.
-3. **S5 Billing+Wallet+Finance+Team** (фінансове ядро; ship **test-first** + idempotency-first — `WalletTransaction`/`PaymentAllocation`/`Expense`).
+1. **Ручне тестування готового** (S2 API + S3 Portal + S4 Workspace) — поточний крок власника.
+2. **S4 Workspace frontend** 🔄 — S4-01…S4-06 закодовано (`apps/workspace`, дзеркало Portal: role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients). Лишилось S4-07 (IP-whitelist Traefik + i18n) → S4-08 deploy. Бек-гейти (заробіток/assign/rich-clients) чекають S5.
+3. **S5 Billing+Wallet+Finance+Team** (фінансове ядро; ship **test-first** + idempotency-first — `WalletTransaction`/`PaymentAllocation`/`Expense`). Розблоковує бек-гейти S4-03/05/06.
 4. **S6 Documents+Notifications+Bot**, **S7 Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
 
 **⏸️ ВІДКЛАДЕНО СВІДОМО (не для соло-фази):**
@@ -214,20 +214,26 @@
 
 ---
 
-## SPRINT 4 — Workspace Frontend (ядро)
+## SPRINT 4 — Workspace Frontend (ядро) — 🔄 У РОБОТІ (design-system-first)
 
 > Ціль: owner і executor повноцінно працюють.
+> **Підхід:** дзеркало S3 (`apps/portal`) — той самий wiring (`api`/`sse`/`queryClient`/`AuthContext`/i18n), `@workflo/ui` shell (`AppShell kind="workspace"`), екрани 1:1 на `.wfp-*` дизайн-класах. Єдина апка з **role-based** nav+routing (owner ↔ executor); клієнтів у Workspace не пускає `ProtectedRoute` (`isInternal`).
 
-| ID    | Задача                                             | Модуль      | Статус |
-| ----- | -------------------------------------------------- | ----------- | ------ |
-| S4-01 | Workspace — auth + /login + /invite (executor)     | [01-auth]   | ⬜     |
-| S4-02 | Executor — kanban своїх задач + /tasks/:id + time  | [02/12]     | ⬜     |
-| S4-03 | Executor — /profile заробіток                      | [12-team]   | ⬜     |
-| S4-04 | Owner — overview dashboard                         | [02-orders] | ⬜     |
-| S4-05 | Owner — /orders kanban+таблиця+пошук + /orders/:id | [02]        | ⬜     |
-| S4-06 | Owner — /clients список + /clients/:id картка      | [02-orders] | ⬜     |
-| S4-07 | IP-whitelist middleware (workspace) + i18n         | Infra       | ⬜     |
-| S4-08 | Deploy Sprint 4 → staging                          | Infra       | 🚀     |
+| ID     | Задача                                                                                                                                 | Модуль      | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S4-01  | Workspace — auth (/login /forgot /reset) + /invite (executor) + owner /team-invite + фундамент (role-shell, ProtectedRoute, RoleRoute) | [01-auth]   | ✅     |
+| S4-02  | Executor — kanban своїх задач (`/`) + /orders/:id (internal: Чат+internal-toggle / Файли / Час) + time-logs CRUD                       | [02/12]     | ✅     |
+| S4-03  | Executor — /profile (обліковий запис; заробіток-секція ⏸️ S5 — ставки/виплати)                                                         | [12-team]   | ✅ 🟡  |
+| S4-04  | Owner — overview dashboard (stats + attention items + all-orders board)                                                                | [02-orders] | ✅     |
+| S4-05  | Owner — /orders (board+таблиця+пошук) + /orders/:id (status-transition; assign ⏸️ потребує members-API S5)                             | [02]        | ✅     |
+| S4-06  | Owner — /clients (derived з orders за companyId) + /clients/:id (orders+назва з деталі) — rich-профілі ⏸️ S5/28                        | [02-orders] | ✅ 🟡  |
+| S4-07a | IP-whitelist (workspace) — Traefik `ipwhitelist` middleware `sourcerange=${TEAM_IPS}` на обох compose (stg+prod)                       | Infra       | ✅ 🟢  |
+| S4-07b | i18n `t()`-світ workspace-екранів (Block 7b, UA→ключі)                                                                                 | Infra       | ⬜     |
+| S4-08  | Deploy Sprint 4 → staging (CI вже білдить+пушить+деплоїть `workspace`; треба заповнити `TEAM_IPS`+secrets)                             | Infra       | 🚀     |
+
+> **Прогрес (2026-06-07):** S4-01…S4-06 закодовано в `apps/workspace` (дзеркало `apps/portal`). **Свідомі бек-гейти (НЕ дефекти):** заробіток виконавця (S4-03) + assign-виконавця (S4-05) + rich client-профілі/назви (S4-06) чекають S5-API (ExecutorRate/earnings · members-list · clients-модуль 28). Самостійна реєстрація запрошеного виконавця без акаунта — окремий auth-таск.
+>
+> **🔎 Аудит S4 + ремедіація (2026-06-08):** 3-агентний аудит (code · TypeScript · design-conformance/coverage/decomposition). **Регресій 0** (лише нові `apps/workspace`-файли + additive infra; спільні пакети не чіпані). **Декомпозиція здорова** (файли ≤282 рядків, делегують у sub-компоненти/хуки — легші за portal-аналоги; split не потрібен). **Дизайн-відповідність ~95%** (75/76 `.wfp-*` класів валідні; `.wfp-field-hint--error` існує в `components.css`). Виправлено 10 пунктів: SSE-guard `isChatComment` (+isInternal/+createdAt) · InviteAccept відхиляє non-executor (інакше CompanyMember→lockout) · a11y-клавіатура на рядках таблиць ×3 · `useTransitionStatus` generic→`Pick` · явний cast статусу · тайтенінг DTO-типів (clientStatus/type/billingType→enum, StageStatus) · compile-time exhaustiveness `STATUS_COLUMN` · OwnerDashboard total з пагінації · `RoleRoute` loading-guard · `api.ts ?? → \|\|`. **Інфра-фікс (критичний для прода):** SPA звертались до `/api` (відносний) без проксі, а API на окремому піддомені → `VITE_API_URL` тепер бейкається на білді (`ARG` у Dockerfile portal+workspace + `build-args` у CI stg/prod). Гейт після правок зелений (21/21 · 13/13 · 18/18). План тестування + серверний чек-лист — `docs/S4_TEST_PLAN.md`.
 
 ---
 

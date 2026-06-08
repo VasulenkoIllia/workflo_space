@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@workflo/portal", "dev"],
       "port": 3001
+    },
+    {
+      "name": "workspace",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workflo/workspace", "dev"],
+      "port": 3002
     }
   ]
 }
