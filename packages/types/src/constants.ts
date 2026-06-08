@@ -238,6 +238,34 @@ export const CHANNELS: Record<NotificationChannel, ChannelDescriptor> = {
 export const REFERRAL_CODE_PREFIX = 'workflo-'
 export const REFERRAL_CODE_LENGTH = 6
 
+/**
+ * A referral payout tier: a referrer whose lifetime paid is ≥ `minPaidUsd` earns
+ * `percent` of each referred company's payment as a bonus-wallet credit. Stored
+ * per-agency in `ReferralSettings.tiers` (owner-editable); these defaults apply
+ * when an agency has no settings row or an empty tier list.
+ */
+export interface ReferralTier {
+  minPaidUsd: number
+  percent: number
+}
+
+export const DEFAULT_REFERRAL_TIERS: ReferralTier[] = [
+  { minPaidUsd: 0, percent: 5 },
+  { minPaidUsd: 5_000, percent: 7 },
+  { minPaidUsd: 15_000, percent: 10 },
+]
+
+/** Pick the applicable tier (highest `minPaidUsd` the referrer's lifetime meets) → its percent. */
+export function getReferralPercent(tiers: ReferralTier[], referrerLifetimeUsd: number): number {
+  let best: ReferralTier | null = null
+  for (const t of tiers) {
+    if (referrerLifetimeUsd >= t.minPaidUsd && (!best || t.minPaidUsd > best.minPaidUsd)) {
+      best = t
+    }
+  }
+  return best?.percent ?? 0
+}
+
 // ============================================================================
 // Department default seeds (departments are a CRUD table, not enum)
 // ============================================================================

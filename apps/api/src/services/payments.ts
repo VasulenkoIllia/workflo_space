@@ -1,6 +1,7 @@
 import { Prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, type PaymentType } from '@workflo/types'
 import { ManualProvider, type PaymentProvider } from '@workflo/payments'
+import { processReferralBonus } from './referral.js'
 
 /**
  * The money-correctness heart of S5-02. `confirmManualPayment` records ONE
@@ -195,6 +196,15 @@ export async function confirmManualPayment(
       orderPaidAt = now.toISOString()
     }
   }
+
+  // 6. Referral accrual (S5-06) — in-tx, idempotent, no-op when there is no referrer.
+  //    A confirmed payment credits the referrer's bonus wallet at most once.
+  await processReferralBonus(tx, {
+    id: created.id,
+    agencyId: args.agencyId,
+    companyId: args.companyId,
+    amountUsd,
+  })
 
   return {
     payment: {

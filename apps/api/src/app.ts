@@ -13,6 +13,7 @@ import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
 import orderRoutes from './routes/orders/index.js'
 import profileRoutes from './routes/profile/index.js'
+import referralRoutes from './routes/referral/index.js'
 import serviceRoutes from './routes/services/index.js'
 import tenantBrandingRoute from './routes/tenant/branding.js'
 import walletRoutes from './routes/wallet/index.js'
@@ -86,6 +87,7 @@ export function buildApp() {
   app.register(billingRoutes)
   app.register(serviceRoutes)
   app.register(walletRoutes)
+  app.register(referralRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)
