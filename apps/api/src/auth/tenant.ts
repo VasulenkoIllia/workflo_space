@@ -37,6 +37,14 @@ export function requireActiveAgency(user: TenantClaims): string {
   return user.activeAgencyId
 }
 
+/** True if the user is an OWNER of the given agency (not merely a member/executor). */
+export function isAgencyOwner(
+  user: Pick<AccessClaims, 'agencyMemberships'>,
+  agencyId: string
+): boolean {
+  return user.agencyMemberships.some((m) => m.agencyId === agencyId && m.role === 'owner')
+}
+
 /**
  * Throw 403 unless the resource's agency is the caller's tenant. A null
  * `resourceAgencyId` is denied (a legacy / un-stamped row is invisible to every

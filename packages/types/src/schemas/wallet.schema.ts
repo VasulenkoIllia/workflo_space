@@ -1,0 +1,33 @@
+import { z } from 'zod'
+import { WalletTxnType } from '../enums.js'
+import { moneyAmount } from './billing.schema.js'
+
+/**
+ * POST /admin/wallet/companies/:companyId/adjust — a manual bonus credit/debit.
+ * `note` is mandatory: a hand-made balance change must always carry a reason
+ * (audit + the wallet invariant that manual adjustments are explained).
+ */
+export const walletAdjustSchema = z
+  .object({
+    type: z.nativeEnum(WalletTxnType),
+    amount: moneyAmount,
+    note: z.string().min(1, 'Потрібна причина коригування').max(1000),
+  })
+  .strict()
+export type WalletAdjustInput = z.infer<typeof walletAdjustSchema>
+
+/** GET /…/wallet/transactions — paginated ledger, optional direction filter. */
+export const walletTxnQuerySchema = z.object({
+  type: z.nativeEnum(WalletTxnType).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+export type WalletTxnQuery = z.infer<typeof walletTxnQuerySchema>
+
+/** GET /admin/wallet/companies — searchable, paginated company balances. */
+export const walletCompaniesQuerySchema = z.object({
+  search: z.string().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+export type WalletCompaniesQuery = z.infer<typeof walletCompaniesQuerySchema>

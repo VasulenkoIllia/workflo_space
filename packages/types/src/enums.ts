@@ -132,6 +132,20 @@ export enum PaymentStatus {
   REFUNDED = 'refunded',
 }
 
+/** Direction of a bonus-wallet ledger entry (module 25). */
+export enum WalletTxnType {
+  CREDIT = 'credit',
+  DEBIT = 'debit',
+}
+
+/** What produced a bonus-wallet ledger entry (module 25). */
+export enum WalletTxnSource {
+  REFERRAL_BONUS = 'referral_bonus',
+  MANUAL_ADJUSTMENT = 'manual_adjustment',
+  INVOICE_PAYMENT = 'invoice_payment',
+  REFUND = 'refund',
+}
+
 // ─── Documents ──────────────────────────────────────────────────────────────
 export enum DocumentType {
   CONTRACT = 'contract',

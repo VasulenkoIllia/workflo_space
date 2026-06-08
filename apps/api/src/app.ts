@@ -15,6 +15,7 @@ import orderRoutes from './routes/orders/index.js'
 import profileRoutes from './routes/profile/index.js'
 import serviceRoutes from './routes/services/index.js'
 import tenantBrandingRoute from './routes/tenant/branding.js'
+import walletRoutes from './routes/wallet/index.js'
 
 function buildLoggerConfig() {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -84,6 +85,7 @@ export function buildApp() {
   app.register(fileRoutes)
   app.register(billingRoutes)
   app.register(serviceRoutes)
+  app.register(walletRoutes)
 
   // Root-level error/not-found handlers (must not be encapsulated).
   registerErrorHandlers(app)

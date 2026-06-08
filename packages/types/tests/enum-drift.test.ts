@@ -24,6 +24,8 @@ import {
   Role,
   StageStatus,
   Theme,
+  WalletTxnSource,
+  WalletTxnType,
 } from '../src/enums.js'
 
 /**
@@ -69,6 +71,8 @@ const PAIRS: Array<[string, Record<string, string>]> = [
   ['ChargeFrequency', ChargeFrequency],
   ['PaymentType', PaymentType],
   ['PaymentStatus', PaymentStatus],
+  ['WalletTxnType', WalletTxnType],
+  ['WalletTxnSource', WalletTxnSource],
   ['DocumentType', DocumentType],
   ['DocumentStatus', DocumentStatus],
   ['InviteType', InviteType],

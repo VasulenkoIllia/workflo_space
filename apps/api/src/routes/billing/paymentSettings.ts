@@ -1,9 +1,8 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, updatePaymentSettingsSchema } from '@workflo/types'
-import type { AccessClaims } from '../../auth/tokens.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
-import { requireActiveAgency } from '../../auth/tenant.js'
+import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -15,11 +14,6 @@ const SETTINGS_SELECT = {
   notes: true,
   invoiceCurrency: true,
 } as const
-
-/** Agency payment config is owner-managed; reads are open to the whole internal team. */
-function isAgencyOwner(user: AccessClaims, agencyId: string): boolean {
-  return user.agencyMemberships.some((m) => m.agencyId === agencyId && m.role === 'owner')
-}
 
 /**
  * Agency payment details (bank / IBAN / USDT) shown to clients on an invoice.
