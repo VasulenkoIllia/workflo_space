@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify'
+import { startCronJobs, stopCronJobs } from './cron/index.js'
 import { startChatListener, stopChatListener } from './services/chatListener.js'
 import { startOutboxWorker, stopOutboxWorker } from './services/outboxWorker.js'
 
@@ -21,9 +22,12 @@ export function startWorkers(logger: FastifyBaseLogger): void {
   startChatListener(logger)
   // Durable domain-event delivery (status-change notifications, …).
   startOutboxWorker(logger)
+  // Scheduled jobs (NBU exchange-rate sync, …).
+  startCronJobs(logger)
 }
 
 export async function stopWorkers(): Promise<void> {
+  stopCronJobs()
   stopOutboxWorker()
   await stopChatListener()
 }

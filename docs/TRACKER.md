@@ -261,7 +261,8 @@
 > **Прогрес (2026-06-08, backend-first):**
 > — **S5-01 ✅** `@workflo/payments` (PaymentProvider+ManualProvider+RaceGuard single-flight), 13 тестів.
 > — **`s5_00_financial_core` міграція ✅** (WAVE A foundation): 7 net-new моделей (WalletTransaction, PaymentAllocation, ReferralSettings, LoyaltyTierHistory, ExecutorPayout, Expense, IdempotencyKey) + дельти (Payment.amountUsd/rateUsed/sourceType/sourceId+`@@unique`, ServiceCharge.base/discount/total/currency+allocations, CompanyService.frequency/nextChargeAt, Company.moneyBalance/tierOverride, Service.isRecurring/defaultPriceUsd) + 8 enum'ів + ChargeStatus(+partial/+written_off) + **RLS** `tenant_isolation` на всіх 7 (F4-патерн). Згенеровано через `migrate diff` на throwaway PG16, **drift-free**, клієнт regenerated. Гейт 21/21·13/13·19/19.
-> — **Далі (WAVE A→B):** S5-03a (ExchangeRate cron) → S5-02 (billing summary/charges + POST payments idempotent через `IdempotencyKey` + `FOR UPDATE`).
+> — **S5-03a ✅** ExchangeRate НБУ cron: `apps/api/src/cron/{index,exchangeRate}.ts` — `syncExchangeRates` (per-agency upsert, fetch-fail→keep-last+warn, stale>3d warn) + daily 06:10 UTC scheduler (setTimeout→setInterval, no node-cron) wired у `startWorkers`. 10 тестів (mock fetch+prisma). Settings-endpoints (GET/PATCH/refresh) → S5-03b.
+> — **Далі (WAVE B):** S5-02 (billing summary/charges + POST payments idempotent через `IdempotencyKey` + `SELECT…FOR UPDATE` + `amountUsd`-снапшот з ExchangeRate).
 
 ---
 
