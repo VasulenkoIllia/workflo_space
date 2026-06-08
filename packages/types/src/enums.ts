@@ -112,6 +112,15 @@ export enum ChargeStatus {
   WRITTEN_OFF = 'written_off',
 }
 
+/**
+ * Derived (computed) charge state for read DTOs (S5-07, module 25). A function of
+ * Σ(allocations) vs `totalAmount` + `dueDate` — NOT the stored `ChargeStatus`
+ * enum, which has no `awaiting`/`overpaid`. `deriveChargeState` produces these;
+ * the stored status is updated to the nearest persistable `ChargeStatus`.
+ */
+export const CHARGE_DERIVED_STATES = ['awaiting', 'partial', 'paid', 'overdue', 'overpaid'] as const
+export type ChargeDerivedState = (typeof CHARGE_DERIVED_STATES)[number]
+
 /** Recurring-charge cadence for a CompanyService subscription (module 05). */
 export enum ChargeFrequency {
   MONTHLY = 'monthly',

@@ -44,6 +44,24 @@ export const createPaymentSchema = z.object({
 })
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
 
+/**
+ * Body for `POST /workspace/billing/payments/:id/allocate` (S5-07). Either hand an
+ * explicit list of `{chargeId, amount}` pairs, or omit `allocations` entirely to
+ * auto-allocate the payment's unallocated remainder across the company's outstanding
+ * charges FIFO by `dueDate`. Σ allocated can never exceed the payment amount — the
+ * service enforces it under a payment row lock (→ 409 over-allocation).
+ */
+export const allocatePaymentSchema = z
+  .object({
+    allocations: z
+      .array(z.object({ chargeId: z.string().uuid(), amount: moneyAmount }))
+      .min(1)
+      .max(100)
+      .optional(),
+  })
+  .strict()
+export type AllocatePaymentInput = z.infer<typeof allocatePaymentSchema>
+
 /** `YYYY-MM` calendar month (charges/payments filter). */
 export const monthString = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected YYYY-MM')
 
