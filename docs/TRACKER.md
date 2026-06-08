@@ -245,12 +245,12 @@
 | ID    | Задача                                                                                     | Модуль        | Статус |
 | ----- | ------------------------------------------------------------------------------------------ | ------------- | ------ |
 | S5-01 | packages/payments — PaymentProvider interface + ManualProvider + RaceGuard (single-flight) | [05-billing]  | ✅ 🧪  |
-| S5-02 | API — /billing/summary /charges + POST payments + advance + idempotency                    | [05-billing]  | ⬜     |
-| S5-03 | ExchangeRate НБУ cron + Services CRUD + recurring charges cron (CompanyService)            | [05-billing]  | ⬜     |
+| S5-02 | API — /billing/summary /charges + POST payments + advance + idempotency                    | [05-billing]  | ✅ 🧪  |
+| S5-03 | ExchangeRate НБУ cron + Services CRUD + recurring charges cron (CompanyService)            | [05-billing]  | ✅ 🧪  |
 | S5-04 | API — Team rates/earnings + ExecutorPayout + company members+permissions                   | [12-team]     | ⬜     |
-| S5-05 | Wallet — WalletTransaction ledger + walletCredit/Debit (інваріант, FOR UPDATE)             | [25-wallet]   | ⬜     |
-| S5-06 | Wallet — referral accrual→credit + ReferralSettings (редаговані %)                         | [25/09]       | ⬜     |
-| S5-07 | Wallet — money-account: PaymentAllocation + moneyBalance + стани                           | [25-wallet]   | ⬜     |
+| S5-05 | Wallet — WalletTransaction ledger + walletCredit/Debit (інваріант, FOR UPDATE)             | [25-wallet]   | ✅ 🧪  |
+| S5-06 | Wallet — referral accrual→credit + ReferralSettings (редаговані %)                         | [25/09]       | ✅ 🧪  |
+| S5-07 | Wallet — money-account: PaymentAllocation + moneyBalance + стани                           | [25-wallet]   | ✅ 🧪  |
 | S5-08 | Wallet — unified statement + spending (bonus/prepaid на invoice)                           | [25-wallet]   | ⬜     |
 | S5-09 | Loyalty — tier-recalc cron + discount-apply + LoyaltyTierHistory                           | [10-loyalty]  | ⬜     |
 | S5-10 | Finance — Expense model + CRUD + P&L (revenue−expenses, ЗП з ExecutorRate)                 | [22-finance]  | ⬜     |
@@ -262,7 +262,10 @@
 > — **S5-01 ✅** `@workflo/payments` (PaymentProvider+ManualProvider+RaceGuard single-flight), 13 тестів.
 > — **`s5_00_financial_core` міграція ✅** (WAVE A foundation): 7 net-new моделей (WalletTransaction, PaymentAllocation, ReferralSettings, LoyaltyTierHistory, ExecutorPayout, Expense, IdempotencyKey) + дельти (Payment.amountUsd/rateUsed/sourceType/sourceId+`@@unique`, ServiceCharge.base/discount/total/currency+allocations, CompanyService.frequency/nextChargeAt, Company.moneyBalance/tierOverride, Service.isRecurring/defaultPriceUsd) + 8 enum'ів + ChargeStatus(+partial/+written_off) + **RLS** `tenant_isolation` на всіх 7 (F4-патерн). Згенеровано через `migrate diff` на throwaway PG16, **drift-free**, клієнт regenerated. Гейт 21/21·13/13·19/19.
 > — **S5-03a ✅** ExchangeRate НБУ cron: `apps/api/src/cron/{index,exchangeRate}.ts` — `syncExchangeRates` (per-agency upsert, fetch-fail→keep-last+warn, stale>3d warn) + daily 06:10 UTC scheduler (setTimeout→setInterval, no node-cron) wired у `startWorkers`. 10 тестів (mock fetch+prisma). Settings-endpoints (GET/PATCH/refresh) → S5-03b.
-> — **Далі (WAVE B):** S5-02 (billing summary/charges + POST payments idempotent через `IdempotencyKey` + `SELECT…FOR UPDATE` + `amountUsd`-снапшот з ExchangeRate).
+> — **WAVE B ✅ — S5-02** idempotent billing payments + reads: `confirmManualPayment` (`SELECT…FOR UPDATE` на order, Decimal-математика, immutable `amountUsd`/`rateUsed`-снапшот, re-pay guard) обгорнутий у `withIdempotency`+`tenantTransaction`; `/billing/summary` /charges /overview /payments + paymentSettings. **S5-03b** services-каталог + CompanyService-підписки + recurring-charge cron (idempotent через `@@unique([companyServiceId, month])`).
+> — **WAVE C ✅ (ledgers) — S5-05** bonus-гаманець: `walletCredit`/`walletDebit` (company-row `FOR UPDATE`, інваріант `bonusBalance == Σcredit − Σdebit ≥ 0`, debit-guard 409) + portal/admin wallet-endpoints. **S5-07** money-account: `allocatePayment` (payment-row `FOR UPDATE` → `Σalloc ≤ amount` else 409, `@@unique([paymentId, chargeId])`, FIFO-by-dueDate), derived charge-state (awaiting/partial/paid/overdue/overpaid; stored → nearest `ChargeStatus`), single-writer `recomputeMoneyBalance = Σ(no-order confirmed payments).amountUsd − Σ(charge.totalAmount)` (order-track виключений). **S5-06** referral-accrual → `walletCredit` (in-tx з payment-confirm, idempotent `ON CONFLICT(sourceType,sourceId)`, історичний `percent` immutable) + `ReferralSettings` GET/PATCH. Порядок виконання: 05 → 07 → 06 (06 та 07 склались чисто, спільних файлів немає, `confirmManualPayment` лишився цілим окрім no-op referral-хука).
+> — **Гейт (S5-07):** type-check 21/21 · lint 13/13 · build 13/13 · test (api 294 unit + **37 integration проти живого PG**, з них 9 нових allocation-інваріантів: FOR-UPDATE concurrency, over-allocation 409, FIFO, order-exclusion, recompute) · types 29 · payments 13 · notifications 64.
+> — **Далі (WAVE D — convergence tail):** S5-08 (unified statement + bonus-spend на invoice; залежить від 05+07), S5-09 (loyalty tier-recalc cron + discount-apply), S5-04 (team rates/earnings + ExecutorPayout — незалежний, можна паралельно), S5-10 (Expense + P&L).
 
 ---
 
