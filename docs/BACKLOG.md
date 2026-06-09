@@ -8,6 +8,27 @@
 
 ---
 
+## ⚙️ CI/CD + DX (9.06.2026)
+
+- [ci] **CI-D1 affected-only Docker build** (LOW, ~1–1.5 хв на дрібних змінах): build-матриця staging/prod білдить ВСІ 5 образів (`landing/portal/workspace/api/bot`) щоразу, навіть якщо змінився лише `api`. Не баг — Docker layer-cache (`type=gha`) робить незмінні білди швидкими, матриця паралельна, незнижуваний пол ~3 хв (push GHCR → pull → migrate-контейнер → recreate → health `sleep`). Опт: фільтрувати матрицю за зміненими апками — `turbo run build --filter='...[HEAD^1]'` (visited-packages) або `dorny/paths-filter@v3` per-app → skip незмінні. Тригер: коли деплої почнуть муляти або зросте к-сть апок. (created: 2026-06-09)
+
+## 🧮 S5 follow-ups (аудит 9.06.2026 — `S5_AUDIT.md`)
+
+> Реальні баги/security вже виправлено (коміти `6941cd3`/`586d0bd`). Нижче — свідомо відкладена косметика/perf, БЕЗ баг-ризику (дублі коректні).
+
+- [arch] **S5-DRY1 консолідувати period/date-хелпери** (MEDIUM-maint): `startOfMonthUtc`/`addFrequency`/`endOfMonthUtc`/`periodBounds`/`periodOf`/`monthsInRange`/`monthFilter`/`firstOfNextMonth` розкидані по payout/pnl/recurringCharges/overview/charges/assignments (`Date.UTC(y,m,1)-1` у 3 копіях). Винести в `apps/api/src/lib/period.ts`. Зробити поки споживачів ~6. (created: 2026-06-09)
+- [arch] **S5-DRY2 спільні RBAC/портал хелпери** (MEDIUM): `assertInternalTeam`/`assertAgencyOwner` (дубль ~14×) + `requirePortalCompany(user,agencyId)` (дубль ~7×) у `auth/tenant.ts`. (created: 2026-06-09)
+- [arch] **S5-DRY3 hoist schema-примітиви** (MEDIUM): `moneyAmount`/`priceAmount`/`isoDate`/`monthString` у `schemas/common.ts` (зараз пере-оголошені у 4 файлах — ризик дрейфу валідації). (created: 2026-06-09)
+- [arch] **S5-D4 split `allocation.ts`** (MEDIUM): виділити `chargeState.ts`(derive+toStored) + `moneyBalance.ts`(recompute) → focused `allocation.ts` ~200 рядків. (created: 2026-06-09)
+- [arch] **S5-D5 `cron/scheduler.ts` factory** (MEDIUM): `scheduleDaily`/`scheduleMonthly` — прибрати дубль lifecycle-boilerplate у 3 кронах. (created: 2026-06-09)
+- [perf] **S5-P1 N+1 у loyaltyRecalc / fifoTargets** (LOW, MVP-scale ок): per-company/per-charge aggregate у циклі → один `GROUP BY`. Тригер: обсяги. (created: 2026-06-09)
+- [db] **S5-D6 `ExecutorRate.hourlyRate`** (LOW): додати колонку → payout `hourlyEarned = billableHours × hourlyRate` (зараз 0; `billableHours` уже пишеться). (created: 2026-06-09)
+- [ops] **S5-D7 IdempotencyKey TTL-sweep cron** (LOW): прибирати протермінований (24h) ключі. Об'єднати з retention-кронами (SC-D2). (created: 2026-06-09)
+- [test] **S5-D8 enum-drift inverse-check** (LOW): drift-тест не ловить Prisma-only enum (`OutboxStatus` юзається як raw-SQL літерал в `outbox.ts`). Додати reverse-перевірку. (created: 2026-06-09)
+- [notify] **S5→S6 активувати відкладені нотифікації** (промоут у S6, не лімбо): outbox-події `billing.invoice_paid/invoice_sent`, `wallet.credited/debited`, `payment_confirmed`, `loyalty.tier_upgraded` — enqueue в money-tx + handler у `buildDispatch`. Зараз `// S6:` seam-коментарі; ledger-рядки вже durable. (created: 2026-06-09)
+
+---
+
 ## 🔧 Аудит S0-S2 (1.06.2026) — відкладені пункти
 
 > Повний аудит + 6 виправлених проблем — `AUDIT_S0_S2.md`. Нижче — те, що свідомо відкладено (severity · тригер).
