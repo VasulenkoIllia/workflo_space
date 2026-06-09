@@ -98,6 +98,8 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
       const input = createTimeLogSchema.parse(request.body)
+      // A new entry in a period that's already been paid out would desync the payroll.
+      await assertNotLocked(request.user.sub, new Date(input.date))
 
       const row = await withTenant((tx) =>
         tx.timeLog.create({

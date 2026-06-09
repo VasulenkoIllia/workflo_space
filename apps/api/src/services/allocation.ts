@@ -76,7 +76,10 @@ interface LockedCompany {
  * A full re-read (not an increment) → idempotent regardless of what triggered it, so
  * concurrent recomputes serialize on the lock and the last one writes the truth.
  */
-export async function recomputeMoneyBalance(
+// Not exported: it must only run inside allocatePayment, which holds the payment +
+// company locks first (lock order payment→company). A bare external call would risk
+// the lock-ordering invariant.
+async function recomputeMoneyBalance(
   tx: Prisma.TransactionClient,
   args: { agencyId: string; companyId: string }
 ): Promise<Prisma.Decimal> {

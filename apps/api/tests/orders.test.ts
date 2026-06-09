@@ -28,6 +28,7 @@ const timeLogDelete = vi.fn()
 const activityCreate = vi.fn()
 const activityFindMany = vi.fn()
 const outboxCreate = vi.fn()
+const payoutFindUnique = vi.fn() // S5-04 time-log lock; default → null (unlocked)
 
 vi.mock('@workflo/db', () => {
   const prisma = {
@@ -62,8 +63,8 @@ vi.mock('@workflo/db', () => {
       delete: timeLogDelete,
     },
     activityLog: { create: activityCreate, findMany: activityFindMany },
-    // S5-04 time-log lock: no payout → never locked.
-    executorPayout: { findUnique: () => Promise.resolve(null) },
+    // S5-04 time-log lock: defaults to null (unlocked); overridden per-test.
+    executorPayout: { findUnique: payoutFindUnique },
     outboxEvent: { create: outboxCreate },
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
@@ -1144,6 +1145,7 @@ describe('time logs (workspace-only)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     auditLogCreate.mockResolvedValue({})
+    payoutFindUnique.mockResolvedValue(null) // unlocked by default (clearAllMocks keeps impls)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -1186,6 +1188,21 @@ describe('time logs (workspace-only)', () => {
         payload: { hours: 1, date: '2026-05-31' },
       })
       expect(res.statusCode).toBe(403)
+      await app.close()
+    })
+
+    it('409 when the period is locked by an approved payout (S5-04)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      payoutFindUnique.mockResolvedValue({ status: 'approved' }) // period frozen
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/time-logs',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { hours: 2, date: '2026-05-31' },
+      })
+      expect(res.statusCode).toBe(409)
+      expect(timeLogCreate).not.toHaveBeenCalled()
       await app.close()
     })
 
