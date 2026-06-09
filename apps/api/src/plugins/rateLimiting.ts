@@ -1,6 +1,7 @@
 import rateLimit from '@fastify/rate-limit'
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { ApiErrorCode } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import fp from 'fastify-plugin'
 
 function getRateLimitKey(request: FastifyRequest): string {
   return request.ip
@@ -29,4 +30,8 @@ const rateLimitingPlugin: FastifyPluginAsync = async (fastify) => {
   })
 }
 
-export default rateLimitingPlugin
+// MUST be fp-wrapped: @fastify/rate-limit's `global` hook is added in the
+// registering context. Without fp the plugin is encapsulated and the limiter
+// never reaches the sibling route plugins — brute-force ceilings (e.g. login
+// 10/15m) are silently NOT enforced (caught during S5 UI testing, 2026-06).
+export default fp(rateLimitingPlugin, { name: 'rate-limiting-plugin', fastify: '5.x' })

@@ -1,5 +1,6 @@
-import type { FastifyPluginAsync } from 'fastify'
 import helmet from '@fastify/helmet'
+import type { FastifyPluginAsync } from 'fastify'
+import fp from 'fastify-plugin'
 
 const securityHeadersPlugin: FastifyPluginAsync = async (fastify) => {
   await fastify.register(helmet, {
@@ -24,4 +25,8 @@ const securityHeadersPlugin: FastifyPluginAsync = async (fastify) => {
   })
 }
 
-export default securityHeadersPlugin
+// MUST be fp-wrapped: helmet's `global` hook is added in the registering context.
+// Without fp the plugin is encapsulated and security headers (CSP, HSTS,
+// X-Content-Type-Options, …) never reach the sibling route plugins, silently
+// disabling them on every real response (caught during S5 UI testing, 2026-06).
+export default fp(securityHeadersPlugin, { name: 'security-headers-plugin', fastify: '5.x' })

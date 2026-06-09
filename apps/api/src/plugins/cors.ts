@@ -1,5 +1,6 @@
 import cors from '@fastify/cors'
 import type { FastifyPluginAsync } from 'fastify'
+import fp from 'fastify-plugin'
 import { isOriginAllowed } from '../config/origins.js'
 
 const corsPlugin: FastifyPluginAsync = async (fastify) => {
@@ -16,4 +17,9 @@ const corsPlugin: FastifyPluginAsync = async (fastify) => {
   })
 }
 
-export default corsPlugin
+// MUST be fp-wrapped: @fastify/cors adds its onRequest hook in the registering
+// context. Without fp this plugin is encapsulated, so the hook never reaches the
+// sibling route plugins — preflight (a global OPTIONS * route) still gets ACAO,
+// but ACTUAL responses ship without Access-Control-Allow-Origin and every browser
+// client is blocked from reading them (caught during S5 UI testing, 2026-06).
+export default fp(corsPlugin, { name: 'cors-plugin', fastify: '5.x' })

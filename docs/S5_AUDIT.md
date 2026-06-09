@@ -48,3 +48,13 @@
 ## Регресія S0↔S5 — чисто
 
 Route-реєстрація (14 груп, 0 колізій, error-handler останній) · import-граф DAG (payments→referral→wallet, без циклів) · lock-ordering deadlock-free · `// S6:` стаби нічого не enqueue (без DLQ) · усі 8 S5-enum у drift-guard · усі сервіси/маршрути зашиті.
+
+## Addendum — знахідка під час UI-тесту (2026-06-10, P0 infra)
+
+**Global-плагіни не діставали маршрутів через відсутню `fastify-plugin` обгортку (S0-seam, blocker для всього UI).**
+
+- **Симптом:** браузер-логін у портал падав `«No 'Access-Control-Allow-Origin' header»`, хоча curl (без Origin) працював і повертав 200+token.
+- **Корінь:** `cors.ts`, `securityHeaders.ts`, `rateLimiting.ts` реєструвались `app.register(plugin)` **без `fp()`** (на відміну від `jwt.ts`). Їхні `onRequest`-хуки лишались в інкапсульованому дочірньому контексті й **не застосовувались до сусідніх route-плагінів**. Preflight маскував баг (глобальний `OPTIONS *` маршрут все одно віддавав ACAO), тому curl-аудит без браузера його не ловив.
+- **Наслідок (ширше за CORS):** на КОЖНІЙ реальній відповіді були відсутні (1) ACAO → весь браузер-UI неробочий; (2) helmet-хедери (CSP/HSTS/X-Frame-Options/X-Content-Type-Options) → регресія безпеки; (3) rate-limit → brute-force ceilings (login 10/15m тощо) фактично **не діяли**.
+- **Фікс:** обгорнуто всі три у `fp(plugin, { name, fastify: '5.x' })`. Регресія-гард: `tests/globalPlugins.test.ts` (ACAO + CSP + nosniff + x-ratelimit на `GET /health`). Усі 345 юніт-тестів зелені.
+- **Урок для аудиту:** curl-перевірки CORS/headers МУСЯТЬ слати `Origin:` і перевіряти **фактичну** відповідь, а не лише preflight. Додано в чек-лист тест-плану.
