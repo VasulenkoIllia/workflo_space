@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
+import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 
 /**
@@ -13,9 +14,11 @@ import { startRecurringChargesCron, stopRecurringChargesCron } from './recurring
 export function startCronJobs(logger: FastifyBaseLogger): void {
   startExchangeRateCron(logger)
   startRecurringChargesCron(logger)
+  startLoyaltyRecalcCron(logger)
 }
 
 export function stopCronJobs(): void {
   stopExchangeRateCron()
   stopRecurringChargesCron()
+  stopLoyaltyRecalcCron()
 }
