@@ -1,12 +1,12 @@
 # WORKFLO.SPACE — Tracker (спрінти)
 
-> Оновлено: **7 червня 2026** (аудит + ремедіація).
+> Оновлено: **9 червня 2026** (Sprint 5 завершено + аудит-ремедіація).
 > Статуси: ⬜ pending | 🔄 in progress | ✅ done | 🧪 tested | 🚀 deployed | ❌ blocked
 > `SPEC.md` = ЩО будуємо. Цей файл = У ЯКОМУ ПОРЯДКУ. Канон БД — `schema.prisma`; код — git.
 
 ---
 
-## 🧭 СТАН ЗАРАЗ (7 червня 2026)
+## 🧭 СТАН ЗАРАЗ (9 червня 2026)
 
 **✅ ГОТОВО (закодовано + verified, гілка `dev`):**
 
@@ -15,14 +15,33 @@
 - **S1.6** Tenancy (Agency/AgencyMember, `agencyId` скрізь) + Outbox+drain + web/worker split 🧪
 - **S2** Orders+Chat+Files API (CRUD, 9-станова машина, SSE-чат, файли, time-logs, activity) 🧪
 - **S3** Portal frontend: auth-екрани, /orders (список+деталь+SSE-чат+файли+activity), /settings, /team, /invite + дизайн-система `@workflo/ui` 🧪
-- **Аудит-ремедіація (11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening (ExecutorRate-історія, ідемпотентність Payment/ReferralBonus, `agencyId` NOT NULL на tenant-таблицях, `UsageCounter`+`AgencyFeatureFlag`) · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes на завантаженні · runtime-branding seam (ThemeProvider token-map + `GET /tenant/branding`) · exec-доки (ERD/PRICING/SLA/SECURITY/LEGAL) · узгодження документації.
+- **S4** Workspace frontend (role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients) + IP-whitelist 🧪
+- **S5 Billing+Wallet+Finance+Team — ✅ ЗАВЕРШЕНО (фінансове ядро, backend, гілка `dev`):** усі S5-01…S5-10 + міграція `s5_00_financial_core` + 4-вимірний аудит з ремедіацією. Деталі — нижче «S5 РОЗГОРНУТО» та [`S5_AUDIT.md`](S5_AUDIT.md). Гейт: type-check 21/21 · lint 13/13 · **test (api 343 unit + 57 gated integration на реальному PG16) + types 46** · build 13/13. **НЕ запушено** (чекає рішення власника) + **не протестовано вручну на staging** — план: [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md), оновлення сервера: [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md).
+- **Аудит-ремедіація (S0-S4, 11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes · runtime-branding seam · exec-доки.
 
 **🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
 
-1. **Ручне тестування готового** (S2 API + S3 Portal + S4 Workspace) — поточний крок власника.
-2. **S4 Workspace frontend** 🔄 — S4-01…S4-06 закодовано (`apps/workspace`, дзеркало Portal: role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients). Лишилось S4-07 (IP-whitelist Traefik + i18n) → S4-08 deploy. Бек-гейти (заробіток/assign/rich-clients) чекають S5.
-3. **S5 Billing+Wallet+Finance+Team** (фінансове ядро; ship **test-first** + idempotency-first — `WalletTransaction`/`PaymentAllocation`/`Expense`). Розблоковує бек-гейти S4-03/05/06.
-4. **S6 Documents+Notifications+Bot**, **S7 Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
+1. **Запушити S5** (6 комітів на `dev`) + **ручне тестування на staging** за [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md) (спершу звірити env/міграції за [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md)).
+2. **S6 Documents+Notifications+Bot** — зокрема **активувати відкладені S5-нотифікації** (outbox-події billing/wallet/loyalty: enqueue+handler; зараз ledger durable, бракує лише доставки) + IdempotencyKey TTL-sweep cron.
+3. **S7 Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
+
+### S5 РОЗГОРНУТО (10 тасків, усі ✅ + verified на реальному PG)
+
+| Таск     | Що                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------- |
+| S5-01    | `@workflo/payments` PaymentProvider + ManualProvider + RaceGuard                            |
+| s5_00    | міграція financial-core (7 таблиць + 8 enum + дельти + RLS)                                 |
+| S5-02    | idempotent POST payments (Idempotency-Key + SELECT…FOR UPDATE + FX-снапшот) + billing reads |
+| S5-03a/b | NBU exchange-rate cron · Services CRUD + assign + recurring-charge cron                     |
+| S5-04    | team rates (append-only) + ExecutorPayout (idempotent, draft→approved→paid) + time-log lock |
+| S5-05    | bonus-wallet ledger (walletCredit/Debit, FOR UPDATE, інваріант Σcredit−Σdebit≥0)            |
+| S5-06    | referral accrual → walletCredit (in-tx, idempotent, intra-agency)                           |
+| S5-07    | money-account: PaymentAllocation + moneyBalance + charge-states                             |
+| S5-08    | unified statement + bonus-spend на інвойс (bonus amountUsd=0 → не роздуває revenue)         |
+| S5-09    | loyalty tier-recalc cron + history + override                                               |
+| S5-10    | Expense CRUD + P&L (revenue−expenses, salary з ExecutorRate)                                |
+
+**Наскрізні відкладення → S6:** нотифікації (outbox enqueue+handler), IdempotencyKey TTL-sweep cron, referral 5-min cache, `ExecutorRate.hourlyRate`.
 
 **⏸️ ВІДКЛАДЕНО СВІДОМО (не для соло-фази):**
 
