@@ -62,6 +62,8 @@ vi.mock('@workflo/db', () => {
       delete: timeLogDelete,
     },
     activityLog: { create: activityCreate, findMany: activityFindMany },
+    // S5-04 time-log lock: no payout → never locked.
+    executorPayout: { findUnique: () => Promise.resolve(null) },
     outboxEvent: { create: outboxCreate },
     agencyMember: { findUnique: agencyMemberFindUnique },
     auditLog: { create: auditLogCreate },
@@ -1258,7 +1260,12 @@ describe('time logs (workspace-only)', () => {
   describe('PATCH/DELETE /orders/:orderId/time-logs/:logId', () => {
     it('author edits own entry (200)', async () => {
       orderFindUnique.mockResolvedValue(order)
-      timeLogFindUnique.mockResolvedValue({ id: 'tl1', orderId: 'order-1', executorId: 'exec-1' })
+      timeLogFindUnique.mockResolvedValue({
+        id: 'tl1',
+        orderId: 'order-1',
+        executorId: 'exec-1',
+        date: new Date('2026-05-31'),
+      })
       timeLogUpdate.mockResolvedValue({ ...row, hours: 3 })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
@@ -1306,7 +1313,12 @@ describe('time logs (workspace-only)', () => {
 
     it('author deletes own entry (200)', async () => {
       orderFindUnique.mockResolvedValue(order)
-      timeLogFindUnique.mockResolvedValue({ id: 'tl1', orderId: 'order-1', executorId: 'exec-1' })
+      timeLogFindUnique.mockResolvedValue({
+        id: 'tl1',
+        orderId: 'order-1',
+        executorId: 'exec-1',
+        date: new Date('2026-05-31'),
+      })
       timeLogDelete.mockResolvedValue({ id: 'tl1' })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({

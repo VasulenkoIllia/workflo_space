@@ -2,7 +2,30 @@ import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createTimeLogSchema, updateTimeLogSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { isPeriodLocked, periodOf } from '../../services/payout.js'
 import { requireTeamOrder } from './access.js'
+
+/**
+ * Time logs in a period that has an approved/paid payout are frozen (S5-04) — editing
+ * or deleting them would change a settled payroll figure. Checks the log's current
+ * period and, for an edit that moves the date, the destination period too.
+ */
+async function assertNotLocked(executorId: string, ...dates: Date[]): Promise<void> {
+  const periods = [...new Set(dates.map(periodOf))]
+  const locked = await withTenant(async (tx) => {
+    for (const p of periods) {
+      if (await isPeriodLocked(tx, executorId, p)) return true
+    }
+    return false
+  })
+  if (locked) {
+    throw new AppError(
+      ApiErrorCode.CONFLICT,
+      'Період закрито виплатою — запис часу заблоковано',
+      409
+    )
+  }
+}
 
 const TIMELOG_SELECT = {
   id: true,
@@ -39,7 +62,7 @@ async function loadLogOfOrder(logId: string, orderId: string) {
   const log = await withTenant((tx) =>
     tx.timeLog.findUnique({
       where: { id: logId },
-      select: { id: true, orderId: true, executorId: true },
+      select: { id: true, orderId: true, executorId: true, date: true },
     })
   )
   if (!log || log.orderId !== orderId) {
@@ -114,6 +137,9 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Редагувати може лише автор запису', 403)
       }
       const input = updateTimeLogSchema.parse(request.body)
+      // Freeze edits once the period is settled (current period + destination if the date moves).
+      const dates = [log.date, ...(input.date !== undefined ? [new Date(input.date)] : [])]
+      await assertNotLocked(log.executorId, ...dates)
 
       const data: Prisma.TimeLogUpdateInput = {}
       if (input.hours !== undefined) data.hours = input.hours
@@ -141,6 +167,7 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       if (log.executorId !== request.user.sub) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалити може лише автор запису', 403)
       }
+      await assertNotLocked(log.executorId, log.date)
       await withTenant((tx) => tx.timeLog.delete({ where: { id: log.id } }))
 
       writeAuditAsync(request.log, {
