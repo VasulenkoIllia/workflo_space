@@ -31,3 +31,21 @@ export const walletCompaniesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 export type WalletCompaniesQuery = z.infer<typeof walletCompaniesQuerySchema>
+
+/**
+ * POST /portal/invoices/:chargeId/pay-with-bonus (S5-08). Omit `amount` to apply
+ * as much bonus as possible (min of the charge's outstanding and the bonus balance);
+ * pass an explicit `amount` to cap it. The service clamps to that minimum either way.
+ */
+export const payWithBonusSchema = z.object({ amount: moneyAmount.optional() }).strict()
+export type PayWithBonusInput = z.infer<typeof payWithBonusSchema>
+
+/** GET /…/wallet/statement — inclusive `YYYY-MM-DD` date-range filter for the timeline. */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Expected YYYY-MM-DD')
+export const statementQuerySchema = z.object({
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+})
+export type StatementQuery = z.infer<typeof statementQuerySchema>

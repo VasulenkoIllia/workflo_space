@@ -64,7 +64,15 @@ interface LockedCompany {
 
 /**
  * Single-writer recompute of `Company.moneyBalance` under the company row lock.
- * `moneyBalance = Σ(confirmed payments with NO orderId).amountUsd − Σ(charge.totalAmount)`.
+ * `moneyBalance = Σ(confirmed no-order payments).amountUsd − Σ(charge.totalAmount)
+ *                 + Σ(bonus applied to invoices)`.
+ *
+ * The bonus term (S5-08) is what keeps the money-account honest once charges can be
+ * settled with bonus: a bonus-backed payment carries `amountUsd = 0` (so it never
+ * inflates revenue), so without adding back the `invoice_payment` wallet debits a
+ * bonus-settled charge would wrongly read as money still owed. Backward-compatible —
+ * with no bonus spends the term is 0.
+ *
  * A full re-read (not an increment) → idempotent regardless of what triggered it, so
  * concurrent recomputes serialize on the lock and the last one writes the truth.
  */
@@ -83,7 +91,7 @@ export async function recomputeMoneyBalance(
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
   }
 
-  const [paidAgg, chargeAgg] = await Promise.all([
+  const [paidAgg, chargeAgg, bonusAgg] = await Promise.all([
     tx.payment.aggregate({
       where: {
         agencyId: args.agencyId,
@@ -97,10 +105,20 @@ export async function recomputeMoneyBalance(
       where: { agencyId: args.agencyId, companyId: args.companyId },
       _sum: { totalAmount: true },
     }),
+    tx.walletTransaction.aggregate({
+      where: {
+        agencyId: args.agencyId,
+        companyId: args.companyId,
+        type: 'debit',
+        source: 'invoice_payment',
+      },
+      _sum: { amount: true },
+    }),
   ])
   const paid = paidAgg._sum.amountUsd ?? new Prisma.Decimal(0)
   const charged = chargeAgg._sum.totalAmount ?? new Prisma.Decimal(0)
-  const balance = paid.minus(charged)
+  const bonusApplied = bonusAgg._sum.amount ?? new Prisma.Decimal(0)
+  const balance = paid.minus(charged).plus(bonusApplied)
 
   await tx.company.update({ where: { id: args.companyId }, data: { moneyBalance: balance } })
   return balance
