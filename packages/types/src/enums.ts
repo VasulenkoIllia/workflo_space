@@ -155,6 +155,45 @@ export enum WalletTxnSource {
   REFUND = 'refund',
 }
 
+/** Executor payout settlement status (module 12). */
+export enum PayoutStatus {
+  DRAFT = 'draft',
+  APPROVED = 'approved',
+  PAID = 'paid',
+}
+
+/** Operating-expense recurrence type (module 22). */
+export enum ExpenseType {
+  RECURRING = 'recurring',
+  ONE_TIME = 'one_time',
+}
+
+/** Operating-expense category for P&L grouping (module 22). */
+export enum ExpenseCategory {
+  INFRASTRUCTURE = 'infrastructure',
+  SOFTWARE = 'software',
+  SALARY = 'salary',
+  CONTRACTOR = 'contractor',
+  RENT = 'rent',
+  TAX = 'tax',
+  MARKETING = 'marketing',
+  OTHER = 'other',
+}
+
+/** Where an expense came from (module 22). `executor_rate` rows are synthesized in P&L. */
+export enum ExpenseSource {
+  MANUAL = 'manual',
+  EXECUTOR_RATE = 'executor_rate',
+}
+
+/** Operating-expense billing cadence (module 22). */
+export enum ExpenseFrequency {
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  ANNUAL = 'annual',
+  ONE_TIME = 'one_time',
+}
+
 // ─── Documents ──────────────────────────────────────────────────────────────
 export enum DocumentType {
   CONTRACT = 'contract',
