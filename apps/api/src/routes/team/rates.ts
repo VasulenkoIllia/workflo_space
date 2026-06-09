@@ -64,8 +64,12 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      // Salary history is private: the owner sees anyone's, an executor only their own.
+      if (
+        !isInternalTeam(user) ||
+        (!isAgencyOwner(user, agencyId) && request.params.id !== user.sub)
+      ) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до ставок виконавця', 403)
       }
       const rows = await withTenant(async (tx) => {
         await assertAgencyMember(tx, agencyId, request.params.id)

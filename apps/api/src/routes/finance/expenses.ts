@@ -161,6 +161,15 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
           select: EXPENSE_SELECT,
         })
       })
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'expense.updated',
+        resourceType: 'expense',
+        resourceId: expense.id,
+        result: 'allowed',
+        metadata: { fields: Object.keys(input) },
+      })
       return reply.send({ success: true, data: { expense: toDto(expense) } })
     }
   )
@@ -185,6 +194,14 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
           data: { isActive: false },
           select: EXPENSE_SELECT,
         })
+      })
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'expense.archived',
+        resourceType: 'expense',
+        resourceId: expense.id,
+        result: 'allowed',
       })
       return reply.send({ success: true, data: { expense: toDto(expense) } })
     }

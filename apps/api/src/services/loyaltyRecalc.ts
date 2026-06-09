@@ -50,7 +50,8 @@ export async function recalcLoyaltyTiers(
 
     // A manual override pins the effective tier — the cron never auto-moves it.
     if (!c.tierOverride) {
-      const earned = calculateLoyaltyTier(Number(lifetime))
+      // Clamp to 2dp before the number-typed threshold comparator (no FP noise at $1k/$5k/$15k).
+      const earned = calculateLoyaltyTier(Number(lifetime.toDecimalPlaces(2)))
       if ((TIER_RANK[earned] ?? 0) > (TIER_RANK[c.loyaltyTier] ?? 0)) {
         data.loyaltyTier = earned
         upgradedTo = earned

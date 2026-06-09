@@ -223,6 +223,24 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
     expect((agg._sum.amount ?? new Prisma.Decimal(0)).toFixed(2)).toBe('100.00') // never overshoots
   })
 
+  it('CONCURRENCY (audit fix): two payments FIFO-allocating the SAME charge never over-cover it', async () => {
+    // Regression for the audit finding: without the company-row lock in allocatePayment,
+    // two concurrent FIFO allocations of different payments both grabbed the charge's full
+    // outstanding. The company lock now serializes them → Σ(allocations) ≤ charge total.
+    const charge = await createCharge({ total: 100 })
+    const p1 = await createPayment({ amount: 100 })
+    const p2 = await createPayment({ amount: 100 })
+
+    await Promise.allSettled([allocate(p1.id), allocate(p2.id)]) // FIFO (no explicit list)
+
+    const agg = await prisma.paymentAllocation.aggregate({
+      where: { chargeId: charge.id },
+      _sum: { amount: true },
+    })
+    expect((agg._sum.amount ?? new Prisma.Decimal(0)).toFixed(2)).toBe('100.00') // not 200
+    expect((await chargeStatus(charge.id))?.status).toBe('paid')
+  })
+
   it('order-payments are EXCLUDED from moneyBalance (two-track split)', async () => {
     const order = await prisma.order.create({
       data: { agencyId, companyId, title: 'AL Order', createdById: creatorId },

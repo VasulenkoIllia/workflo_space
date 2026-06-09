@@ -1,4 +1,4 @@
-import { prisma, tenantTransaction } from '@workflo/db'
+import { prisma, runWithSystemContext, tenantTransaction } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
 import { captureException } from '../observability/sentry.js'
 import { recalcLoyaltyTiers } from '../services/loyaltyRecalc.js'
@@ -20,7 +20,10 @@ async function runOnce(logger: FastifyBaseLogger): Promise<void> {
   if (running) return
   running = true
   try {
-    const res = await tenantTransaction(prisma, (tx) => recalcLoyaltyTiers(tx))
+    // Explicit RLS-bypass: recalcs every tenant's companies (see recurringCharges note).
+    const res = await runWithSystemContext(() =>
+      tenantTransaction(prisma, (tx) => recalcLoyaltyTiers(tx))
+    )
     logger.info(res, 'loyaltyRecalc: done')
   } catch (err) {
     logger.error({ err }, 'loyaltyRecalc: run failed')

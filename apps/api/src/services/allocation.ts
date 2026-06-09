@@ -101,10 +101,13 @@ export async function recomputeMoneyBalance(
       },
       _sum: { amountUsd: true },
     }),
-    tx.serviceCharge.aggregate({
-      where: { agencyId: args.agencyId, companyId: args.companyId },
-      _sum: { totalAmount: true },
-    }),
+    // COALESCE(totalAmount, amount): a charge with a null post-discount total (legacy /
+    // hand-made) still counts its `amount`, so `_sum.totalAmount` can't silently drop it.
+    tx.$queryRaw<Array<{ charged: Prisma.Decimal | null }>>`
+      SELECT COALESCE(SUM(COALESCE("totalAmount", "amount")), 0) AS "charged"
+      FROM "service_charges"
+      WHERE "agencyId" = ${args.agencyId} AND "companyId" = ${args.companyId}
+    `,
     tx.walletTransaction.aggregate({
       where: {
         agencyId: args.agencyId,
@@ -116,7 +119,7 @@ export async function recomputeMoneyBalance(
     }),
   ])
   const paid = paidAgg._sum.amountUsd ?? new Prisma.Decimal(0)
-  const charged = chargeAgg._sum.totalAmount ?? new Prisma.Decimal(0)
+  const charged = new Prisma.Decimal(chargeAgg[0]?.charged ?? 0)
   const bonusApplied = bonusAgg._sum.amount ?? new Prisma.Decimal(0)
   const balance = paid.minus(charged).plus(bonusApplied)
 
@@ -227,6 +230,12 @@ export async function allocatePayment(
     throw new AppError(ApiErrorCode.CONFLICT, 'Платіж не підтверджено', 409)
   }
 
+  // 1b. Lock the COMPANY too (order: payment → company, consistent with bonusSpend's
+  //     company→… re-entrant path). This serializes ALL allocations for the company, so
+  //     two concurrent FIFO allocations of different payments can't each grab the same
+  //     charge's outstanding and over-cover it. recomputeMoneyBalance re-takes this lock.
+  await tx.$queryRaw`SELECT "id" FROM "companies" WHERE "id" = ${payment.companyId} FOR UPDATE`
+
   // 2. Already-allocated Σ + pairs (under the lock) → the unallocated remainder.
   const existing = await tx.paymentAllocation.findMany({
     where: { paymentId: payment.id },
@@ -281,6 +290,7 @@ export async function allocatePayment(
         totalAmount: true,
         amount: true,
         dueDate: true,
+        paidAt: true,
       },
     })
     if (!charge || charge.agencyId !== payment.agencyId || charge.companyId !== payment.companyId) {
@@ -315,7 +325,8 @@ export async function allocatePayment(
       where: { id: charge.id },
       data: {
         status: toStoredStatus(state),
-        paidAt: state === 'paid' || state === 'overpaid' ? now : null,
+        // Preserve the original settlement timestamp if the charge was already paid.
+        paidAt: state === 'paid' || state === 'overpaid' ? (charge.paidAt ?? now) : null,
       },
     })
     const outstanding = total.minus(allocated)

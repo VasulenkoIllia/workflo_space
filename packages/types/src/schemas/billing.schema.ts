@@ -8,7 +8,8 @@ import { PaymentType } from '../enums.js'
  * this only validates the inbound shape.
  */
 function hasTwoFractionDigits(value: number): boolean {
-  return Math.round(value * 100) === value * 100
+  // toFixed avoids the float trap where e.g. 1.12*100 === 112.00000000000001 (rejects valid input).
+  return Number(value.toFixed(2)) === value
 }
 
 export const moneyAmount = z

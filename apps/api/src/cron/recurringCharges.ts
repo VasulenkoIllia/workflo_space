@@ -1,4 +1,4 @@
-import { prisma, tenantTransaction } from '@workflo/db'
+import { prisma, runWithSystemContext, tenantTransaction } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
 import { captureException } from '../observability/sentry.js'
 import { generateRecurringCharges } from '../services/recurringCharges.js'
@@ -31,8 +31,10 @@ async function runOnce(logger: FastifyBaseLogger): Promise<void> {
   if (running) return // never overlap a slow run with the next tick
   running = true
   try {
-    const res = await tenantTransaction(prisma, (tx) =>
-      generateRecurringCharges(tx, { now: new Date() })
+    // Explicit RLS-bypass: this cron bills EVERY tenant, so it must not be scoped to
+    // one agency once RLS is enforced (don't rely on the connection happening to bypass).
+    const res = await runWithSystemContext(() =>
+      tenantTransaction(prisma, (tx) => generateRecurringCharges(tx, { now: new Date() }))
     )
     logger.info(res, 'recurringCharges: generated')
   } catch (err) {

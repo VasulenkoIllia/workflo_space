@@ -107,7 +107,7 @@ export async function spendBonusOnCharge(
   }
 
   // 4. Debit the bonus wallet (re-locks the company; guards overdraw).
-  await walletDebit(tx, {
+  const debit = await walletDebit(tx, {
     agencyId: args.agencyId,
     companyId: args.companyId,
     source: WalletTxnSource.INVOICE_PAYMENT,
@@ -150,7 +150,8 @@ export async function spendBonusOnCharge(
   }
   return {
     spent: spend.toFixed(2),
-    bonusBalance: bonusBalance.minus(spend).toFixed(2),
+    // Authoritative post-debit balance from the ledger op (not recomputed here).
+    bonusBalance: debit.balanceAfter,
     charge: charge0,
   }
 }

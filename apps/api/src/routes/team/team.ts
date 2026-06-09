@@ -1,7 +1,7 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { requireActiveAgency } from '../../auth/tenant.js'
+import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 
 /**
@@ -15,6 +15,8 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
     if (!isInternalTeam(user)) {
       throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
     }
+    // Compensation is owner-only — an executor must not see teammates' salaries.
+    const canSeeRates = isAgencyOwner(user, agencyId)
 
     const { members, rates } = await withTenant(async (tx) => {
       const [members, rates] = await Promise.all([
@@ -47,7 +49,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
       success: true,
       data: {
         members: members.map((m) => {
-          const rate = rateByExec.get(m.profileId)
+          const rate = canSeeRates ? rateByExec.get(m.profileId) : undefined
           return {
             profileId: m.profileId,
             role: m.role,

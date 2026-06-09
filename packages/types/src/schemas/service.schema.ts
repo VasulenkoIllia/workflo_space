@@ -3,7 +3,8 @@ import { ChargeFrequency } from '../enums.js'
 
 /** Catalog/assignment prices are decimal currency amounts; ≥ 0 (a free tier is allowed), max 2dp. */
 function hasTwoFractionDigits(value: number): boolean {
-  return Math.round(value * 100) === value * 100
+  // toFixed avoids the float trap where e.g. 1.12*100 === 112.00000000000001 (rejects valid input).
+  return Number(value.toFixed(2)) === value
 }
 
 const priceAmount = z

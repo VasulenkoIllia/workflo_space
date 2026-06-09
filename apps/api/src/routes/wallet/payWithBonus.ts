@@ -1,7 +1,6 @@
 import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, payWithBonusSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { spendBonusOnCharge } from '../../services/bonusSpend.js'
@@ -23,8 +22,17 @@ const payWithBonusRoute: FastifyPluginAsync = (fastify) => {
       if (!companyId) {
         throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Немає активної компанії', 400)
       }
-      if (!can(user, 'billing.view', { agencyId, companyId })) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до білінгу', 403)
+      // Spending bonus is a money write — gate on company OWNER, not the read-only
+      // `billing.view`. A view-only member must not be able to drain the wallet.
+      const isCompanyOwner = user.memberships.some(
+        (m) => m.companyId === companyId && m.role === 'owner'
+      )
+      if (!isCompanyOwner) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Лише власник компанії може оплачувати бонусами',
+          403
+        )
       }
 
       const result = await tenantTransaction(prisma, (tx) =>

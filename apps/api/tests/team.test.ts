@@ -226,10 +226,10 @@ describe('executor rates', () => {
     await app.close()
   })
 
-  it('internal team lists rate history', async () => {
+  it('owner lists any executor rate history', async () => {
     memberFindUnique.mockResolvedValue({ id: 'm1' })
     rateFindMany.mockResolvedValue([])
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/workspace/executors/${EXEC_ID}/rates`,
@@ -237,6 +237,28 @@ describe('executor rates', () => {
     })
     expect(res.statusCode).toBe(200)
     await app.close()
+  })
+
+  it('executor reads their OWN rates (200) but not another executor (403)', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateFindMany.mockResolvedValue([])
+    const own = await authed({ ...EXECUTOR, sub: EXEC_ID })
+    const ownRes = await own.app.inject({
+      method: 'GET',
+      url: `/workspace/executors/${EXEC_ID}/rates`,
+      headers: { authorization: `Bearer ${own.token}` },
+    })
+    expect(ownRes.statusCode).toBe(200)
+    await own.app.close()
+
+    const other = await authed(EXECUTOR) // sub='exec-1' ≠ EXEC_ID
+    const otherRes = await other.app.inject({
+      method: 'GET',
+      url: `/workspace/executors/${EXEC_ID}/rates`,
+      headers: { authorization: `Bearer ${other.token}` },
+    })
+    expect(otherRes.statusCode).toBe(403)
+    await other.app.close()
   })
 })
 

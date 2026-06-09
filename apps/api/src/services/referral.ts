@@ -83,17 +83,27 @@ export async function processReferralBonus(
     select: { referredById: true },
   })
   const referrerId = company?.referredById
-  if (!referrerId) return null
+  if (!referrerId || referrerId === payment.companyId) return null
+
+  // Referrals are intra-agency only. A cross-agency `referredById` (data error) must
+  // NOT accrue: the aggregate below would read another tenant's revenue, and the
+  // walletCredit would 404 on the referrer's agency mismatch and roll back the payment.
+  const referrer = await tx.company.findUnique({
+    where: { id: referrerId },
+    select: { agencyId: true },
+  })
+  if (!referrer || referrer.agencyId !== payment.agencyId) return null
 
   const config = await resolveReferralConfig(tx, payment.agencyId)
   if (!config.enabled) return null
 
-  // Referrer's standing = their own lifetime confirmed revenue (USD snapshot).
+  // Referrer's standing = their own lifetime confirmed revenue (USD snapshot), scoped to the tenant.
   const lifetimeAgg = await tx.payment.aggregate({
-    where: { companyId: referrerId, status: 'confirmed' },
+    where: { agencyId: payment.agencyId, companyId: referrerId, status: 'confirmed' },
     _sum: { amountUsd: true },
   })
-  const lifetime = Number(lifetimeAgg._sum.amountUsd ?? 0)
+  // Clamp to 2dp before crossing into the number-typed tier comparator (avoids FP noise at thresholds).
+  const lifetime = Number((lifetimeAgg._sum.amountUsd ?? new Prisma.Decimal(0)).toDecimalPlaces(2))
   const percent = getReferralPercent(config.tiers, lifetime)
   if (percent <= 0) return null
 
