@@ -72,6 +72,18 @@ services:
       - traefik.http.middlewares.workflo-www-redirect.redirectregex.replacement=https://workflo.space/$${1}
       - traefik.http.middlewares.workflo-www-redirect.redirectregex.permanent=true
       - traefik.http.routers.workflo-landing.middlewares=workflo-www-redirect
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -94,6 +106,12 @@ services:
       - traefik.http.routers.workflo-portal.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-portal.priority=10000
       - traefik.http.services.workflo-portal.loadbalancer.server.port=8080
+    healthcheck:
+      test: ['CMD', 'wget', '-qO', '/dev/null', 'http://127.0.0.1:8080/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:
@@ -118,6 +136,12 @@ services:
       - traefik.http.services.workflo-workspace.loadbalancer.server.port=8080
       - traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
       - traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist
+    healthcheck:
+      test: ['CMD', 'wget', '-qO', '/dev/null', 'http://127.0.0.1:8080/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:

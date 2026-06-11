@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+# AR-02: serialize deploys — overlapping pushes must not race on server state
+# (docker rm/prune, .last_deploy/.previous_deploy bookkeeping).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -45,9 +51,15 @@ jobs:
       - name: Test
         run: pnpm turbo test
 
+  # AR-01: real-PG gate (migration smoke + drift + RLS isolation + money invariants)
+  # blocks every production deploy.
+  db:
+    name: DB gate
+    uses: ./.github/workflows/db-gate.yml
+
   build:
     name: Build ${{ matrix.app }}
-    needs: check
+    needs: [check, db]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -157,6 +169,8 @@ jobs:
             cleanup_conflicting_router_containers 'traefik.http.routers.workflo-api.rule=Host(`api.workflo.space`)'
             cleanup_conflicting_router_containers 'traefik.http.routers.api.rule=Host(`api.workflo.space`)'
 
+            # AR-05: .last_deploy now only ever holds VERIFIED tags (written by the
+            # verify job), so .previous_deploy is always a safe rollback target.
             current_tag=$(cat .last_deploy 2>/dev/null || echo "none")
             echo "$current_tag" > .previous_deploy
 
@@ -191,40 +205,37 @@ jobs:
 
             ensure_pg_cron_enabled
 
-            echo "Backing up DB before migrations (safety net for destructive DDL)..."
+            # AR-03: blocking — Prisma has no down-migrations; restore-from-backup IS
+            # the rollback plan (INFRASTRUCTURE.md §12.3), so production must never
+            # migrate without a verified backup.
+            echo "Backing up DB before migrations (blocking)..."
             mkdir -p backups
-            compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean --if-exists' \
-              | gzip > "backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz" \
-              || echo "WARN: pre-migrate backup failed (continuing)"
+            raw_dump="backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql"
+            if ! compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean --if-exists' > "$raw_dump"; then
+              echo "FATAL: pre-migrate backup failed — refusing to run migrations"
+              rm -f "$raw_dump"
+              exit 1
+            fi
+            dump_bytes=$(wc -c < "$raw_dump")
+            if (( dump_bytes < 1024 )); then
+              echo "FATAL: pre-migrate backup is suspiciously small (${dump_bytes} bytes) — refusing to run migrations"
+              exit 1
+            fi
+            gzip -f "$raw_dump"
             ls -1t backups/pre-migrate-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 
             echo "Applying database migrations (prisma migrate deploy)..."
             compose run --rm --no-deps migrate
 
-            compose up -d --no-deps api
-            compose up -d --no-deps bot
-            compose up -d --no-deps portal
-            compose up -d --no-deps workspace
-            compose up -d --no-deps landing
-
-            assert_service_started() {
-              svc="$1"
-              service_row="$(compose ps "$svc" | sed -n '2p' || true)"
-              if [[ -z "$service_row" ]]; then
-                echo "Service '$svc' is missing from compose ps output"
-                compose ps
-                exit 1
-              fi
-              if echo "$service_row" | grep -Eq 'Exited|Exit|Restarting|Dead'; then
-                echo "Service '$svc' is not healthy enough for deploy continuation"
-                compose ps
-                exit 1
-              fi
-            }
-
-            for svc in postgres api bot landing portal workspace; do
-              assert_service_started "$svc"
-            done
+            # AR-04: --wait blocks until healthchecked services report healthy (bot has
+            # no HTTP surface → no healthcheck → counted as started). Replaces the old
+            # `compose ps` grep, which passed containers that crashed seconds later.
+            if ! compose up -d --no-deps --wait --wait-timeout 180 api bot portal workspace landing; then
+              echo "Deploy failed: services did not become healthy within 180s"
+              compose ps
+              compose logs --tail 50 api landing portal workspace bot || true
+              exit 1
+            fi
 
             cleanup_old_workflo_images() {
               keep_count="${{ env.IMAGE_RETENTION }}"
@@ -276,8 +287,6 @@ jobs:
             wait_for_non_default_cert work.workflo.space /health
             wait_for_non_default_cert api.workflo.space /health
 
-            echo "$new_tag" > .last_deploy
-
   verify:
     name: Verify and rollback
     needs: deploy-production
@@ -287,6 +296,19 @@ jobs:
 
       - name: Health check
         run: ./scripts/healthcheck.sh --env production --delay 20 --retries 3 --retry-delay 5
+
+      # AR-05: record the tag as last-known-good ONLY after verification passed,
+      # so a failed first deploy can never poison the rollback bookkeeping.
+      - name: Record verified deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd "${{ env.RUNTIME_ROOT }}/production"
+            echo "sha-${{ github.sha }}" > .last_deploy
 
       - name: Auto rollback on failure
         if: failure()

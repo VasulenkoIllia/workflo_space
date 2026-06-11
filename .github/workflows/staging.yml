@@ -4,6 +4,12 @@ on:
   push:
     branches: [dev]
 
+# AR-02: serialize deploys — two quick pushes must not run two SSH sessions
+# mutating the same server state concurrently. No cancel: a started deploy finishes.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -45,9 +51,16 @@ jobs:
       - name: Test
         run: pnpm turbo test
 
+  # AR-01: real-PG gate (migration smoke + drift + RLS isolation + money invariants)
+  # now blocks every staging deploy — previously it lived only in pull_request CI,
+  # which the direct-push workflow never triggered.
+  db:
+    name: DB gate
+    uses: ./.github/workflows/db-gate.yml
+
   build:
     name: Build ${{ matrix.app }}
-    needs: check
+    needs: [check, db]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -177,40 +190,36 @@ jobs:
 
             ensure_pg_cron_enabled
 
-            echo "Backing up DB before migrations (best-effort safety net)..."
+            # AR-03: blocking — Prisma has no down-migrations; restore-from-backup IS
+            # the rollback plan, so migrating without a verified backup is forbidden.
+            echo "Backing up DB before migrations (blocking)..."
             mkdir -p backups
-            compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean --if-exists' \
-              | gzip > "backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql.gz" \
-              || echo "WARN: pre-migrate backup failed (continuing)"
+            raw_dump="backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql"
+            if ! compose exec -T postgres sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --clean --if-exists' > "$raw_dump"; then
+              echo "FATAL: pre-migrate backup failed — refusing to run migrations"
+              rm -f "$raw_dump"
+              exit 1
+            fi
+            dump_bytes=$(wc -c < "$raw_dump")
+            if (( dump_bytes < 1024 )); then
+              echo "FATAL: pre-migrate backup is suspiciously small (${dump_bytes} bytes) — refusing to run migrations"
+              exit 1
+            fi
+            gzip -f "$raw_dump"
             ls -1t backups/pre-migrate-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 
             echo "Applying database migrations (prisma migrate deploy)..."
             compose run --rm --no-deps migrate
 
-            compose up -d --no-deps api
-            compose up -d --no-deps bot
-            compose up -d --no-deps landing
-            compose up -d --no-deps portal
-            compose up -d --no-deps workspace
-
-            assert_service_started() {
-              svc="$1"
-              service_row="$(compose ps "$svc" | sed -n '2p' || true)"
-              if [[ -z "$service_row" ]]; then
-                echo "Service '$svc' is missing from compose ps output"
-                compose ps
-                exit 1
-              fi
-              if echo "$service_row" | grep -Eq 'Exited|Exit|Restarting|Dead'; then
-                echo "Service '$svc' is not healthy enough for deploy continuation"
-                compose ps
-                exit 1
-              fi
-            }
-
-            for svc in postgres api bot landing portal workspace; do
-              assert_service_started "$svc"
-            done
+            # AR-04: --wait blocks until healthchecked services report healthy (bot has
+            # no HTTP surface → no healthcheck → counted as started). Replaces the old
+            # `compose ps` grep, which passed containers that crashed seconds later.
+            if ! compose up -d --no-deps --wait --wait-timeout 180 api bot landing portal workspace; then
+              echo "Deploy failed: services did not become healthy within 180s"
+              compose ps
+              compose logs --tail 50 api landing portal workspace bot || true
+              exit 1
+            fi
 
             cleanup_old_workflo_images() {
               keep_count="${{ env.IMAGE_RETENTION }}"

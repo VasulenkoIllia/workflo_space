@@ -39,59 +39,8 @@ jobs:
       - name: Test
         run: pnpm turbo test
 
+  # AR-01: shared with staging/production deploy workflows (the actual delivery
+  # path is direct push → those workflows; this PR entry stays for future PR flow).
   db:
-    name: db-integration
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: workflo
-          POSTGRES_PASSWORD: workflo_ci
-          POSTGRES_DB: workflo_ci
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U workflo"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://workflo:workflo_ci@localhost:5432/workflo_ci
-      JWT_SECRET: ci-secret-at-least-32-characters-long!!
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm --filter @workflo/db db:generate
-
-      # Migration smoke (S8-06): every migration applies cleanly to a fresh DB.
-      - name: Apply migrations (clean DB)
-        run: pnpm --filter @workflo/db exec prisma migrate deploy
-
-      # Drift gate: the applied migrations must reproduce schema.prisma exactly
-      # (--exit-code → fail on any diff). Triggers + RLS policies are raw SQL that
-      # Prisma doesn't model, so they don't register as drift (no allowlist needed).
-      - name: Schema drift gate (migrations ↔ schema)
-        run: pnpm --filter @workflo/db exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
-
-      - name: Seed
-        run: pnpm --filter @workflo/db run seed
-
-      # P1 hard gate: cross-tenant isolation under RLS as the workflo_app role. A
-      # leak here blocks the PR — the precondition for onboarding any external tenant.
-      - name: Cross-tenant isolation tests (RLS)
-        run: pnpm --filter @workflo/api run test:integration
-        env:
-          RUN_DB_TESTS: '1'
+    name: DB gate
+    uses: ./.github/workflows/db-gate.yml
