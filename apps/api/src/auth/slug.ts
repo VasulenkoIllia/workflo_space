@@ -57,18 +57,22 @@ export function slugify(input: string): string {
 }
 
 /**
- * Generate a unique company slug, appending -2, -3, ... on collision.
+ * Generate a company slug unique WITHIN the agency (AR-22: slugs are per-tenant —
+ * two agencies may both have an "acme"), appending -2, -3, ... on collision.
  * Accepts a Prisma client or a transaction client (both expose company.findUnique).
  */
 export async function generateUniqueCompanySlug(
   tx: Pick<PrismaClient, 'company'>,
+  agencyId: string,
   name: string
 ): Promise<string> {
   const base = slugify(name)
   let candidate = base
 
   for (let suffix = 2; suffix <= 1000; suffix += 1) {
-    const existing = await tx.company.findUnique({ where: { slug: candidate } })
+    const existing = await tx.company.findUnique({
+      where: { agencyId_slug: { agencyId, slug: candidate } },
+    })
     if (!existing) {
       return candidate
     }

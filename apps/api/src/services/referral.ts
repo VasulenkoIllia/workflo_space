@@ -111,9 +111,10 @@ export async function processReferralBonus(
   if (!bonusAmount.greaterThan(0)) return null
 
   // The relationship row carries totalEarned; create it lazily if onboarding didn't.
+  // AR-21: the row is tenant-stamped — both companies are same-agency (guarded above).
   const referral = await tx.referral.upsert({
     where: { referrerId_referredId: { referrerId, referredId: payment.companyId } },
-    create: { referrerId, referredId: payment.companyId },
+    create: { agencyId: payment.agencyId, referrerId, referredId: payment.companyId },
     update: {},
     select: { id: true },
   })

@@ -59,10 +59,10 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             select: { id: true },
           })
 
-          const slug = await generateUniqueCompanySlug(tx, companyName)
           // Multi-tenancy (ADR-004): attach the new client company to the
           // platform agency (Phase 0 = single tenant).
           const agencyId = await resolvePlatformAgencyId(tx)
+          const slug = await generateUniqueCompanySlug(tx, agencyId, companyName)
           const company = await tx.company.create({
             data: {
               agencyId,

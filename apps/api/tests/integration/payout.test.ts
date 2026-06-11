@@ -160,12 +160,18 @@ run('S5-04 payout (real PG)', () => {
   it('period lock: draft → unlocked, approved → locked', async () => {
     await seedRate(1000, 0)
     const p = await generate('2026-06')
-    expect(await tenantTransaction(prisma, (tx) => isPeriodLocked(tx, executorId, '2026-06'))).toBe(
-      false
-    )
+    expect(
+      await tenantTransaction(prisma, (tx) => isPeriodLocked(tx, agencyId, executorId, '2026-06'))
+    ).toBe(false)
     await prisma.executorPayout.update({ where: { id: p.id }, data: { status: 'approved' } })
-    expect(await tenantTransaction(prisma, (tx) => isPeriodLocked(tx, executorId, '2026-06'))).toBe(
-      true
-    )
+    expect(
+      await tenantTransaction(prisma, (tx) => isPeriodLocked(tx, agencyId, executorId, '2026-06'))
+    ).toBe(true)
+    // AR-20: the SAME period in ANOTHER agency must not be locked by this payout.
+    expect(
+      await tenantTransaction(prisma, (tx) =>
+        isPeriodLocked(tx, 'another-agency-id', executorId, '2026-06')
+      )
+    ).toBe(false)
   })
 })

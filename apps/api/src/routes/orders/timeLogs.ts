@@ -10,11 +10,15 @@ import { requireTeamOrder } from './access.js'
  * or deleting them would change a settled payroll figure. Checks the log's current
  * period and, for an edit that moves the date, the destination period too.
  */
-async function assertNotLocked(executorId: string, ...dates: Date[]): Promise<void> {
+async function assertNotLocked(
+  agencyId: string,
+  executorId: string,
+  ...dates: Date[]
+): Promise<void> {
   const periods = [...new Set(dates.map(periodOf))]
   const locked = await withTenant(async (tx) => {
     for (const p of periods) {
-      if (await isPeriodLocked(tx, executorId, p)) return true
+      if (await isPeriodLocked(tx, agencyId, executorId, p)) return true
     }
     return false
   })
@@ -99,7 +103,7 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
       const input = createTimeLogSchema.parse(request.body)
       // A new entry in a period that's already been paid out would desync the payroll.
-      await assertNotLocked(request.user.sub, new Date(input.date))
+      await assertNotLocked(agencyId, request.user.sub, new Date(input.date))
 
       const row = await withTenant((tx) =>
         tx.timeLog.create({
@@ -133,7 +137,7 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/time-logs/:logId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await requireTeamOrder(request, request.params.orderId)
+      const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       const log = await loadLogOfOrder(request.params.logId, request.params.orderId)
       if (log.executorId !== request.user.sub) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Редагувати може лише автор запису', 403)
@@ -141,7 +145,7 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       const input = updateTimeLogSchema.parse(request.body)
       // Freeze edits once the period is settled (current period + destination if the date moves).
       const dates = [log.date, ...(input.date !== undefined ? [new Date(input.date)] : [])]
-      await assertNotLocked(log.executorId, ...dates)
+      await assertNotLocked(agencyId, log.executorId, ...dates)
 
       const data: Prisma.TimeLogUpdateInput = {}
       if (input.hours !== undefined) data.hours = input.hours
@@ -164,12 +168,12 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     '/orders/:orderId/time-logs/:logId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await requireTeamOrder(request, request.params.orderId)
+      const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       const log = await loadLogOfOrder(request.params.logId, request.params.orderId)
       if (log.executorId !== request.user.sub) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалити може лише автор запису', 403)
       }
-      await assertNotLocked(log.executorId, log.date)
+      await assertNotLocked(agencyId, log.executorId, log.date)
       await withTenant((tx) => tx.timeLog.delete({ where: { id: log.id } }))
 
       writeAuditAsync(request.log, {

@@ -55,11 +55,14 @@ export async function getActiveRate(
 /** True if the executor's period has an approved/paid payout — its time logs are locked. */
 export async function isPeriodLocked(
   tx: Prisma.TransactionClient,
+  agencyId: string,
   executorId: string,
   period: string
 ): Promise<boolean> {
+  // AR-20: payouts are tenant-scoped — the same staffer's period in ANOTHER agency
+  // must not lock this agency's time logs.
   const payout = await tx.executorPayout.findUnique({
-    where: { executorId_period: { executorId, period } },
+    where: { agencyId_executorId_period: { agencyId, executorId, period } },
     select: { status: true },
   })
   return payout != null && payout.status !== 'draft'
@@ -139,7 +142,13 @@ export async function generatePayout(
 
   // Never recompute over an approved/paid payout.
   const existing = await tx.executorPayout.findUnique({
-    where: { executorId_period: { executorId: args.executorId, period: args.period } },
+    where: {
+      agencyId_executorId_period: {
+        agencyId: args.agencyId,
+        executorId: args.executorId,
+        period: args.period,
+      },
+    },
     select: PAYOUT_SELECT,
   })
   if (existing && existing.status !== 'draft') {
@@ -177,7 +186,13 @@ export async function generatePayout(
   const total = baseSalary.plus(hourlyEarned).plus(commissionAmount)
 
   const payout = await tx.executorPayout.upsert({
-    where: { executorId_period: { executorId: args.executorId, period: args.period } },
+    where: {
+      agencyId_executorId_period: {
+        agencyId: args.agencyId,
+        executorId: args.executorId,
+        period: args.period,
+      },
+    },
     create: {
       agencyId: args.agencyId,
       executorId: args.executorId,

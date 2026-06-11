@@ -152,7 +152,8 @@ async function main() {
   console.log(`✅ Agency provisioned: Workflo (owner=${ownerEmail}, +1 executor)`)
 
   const company = await prisma.company.upsert({
-    where: { slug: 'test-company' },
+    // AR-22: company slugs are per-agency unique now.
+    where: { agencyId_slug: { agencyId, slug: 'test-company' } },
     update: {
       name: 'ТОВ Тестова Компанія',
       language: 'uk',

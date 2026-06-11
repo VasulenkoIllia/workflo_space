@@ -13,8 +13,13 @@ export const prisma: PrismaClient = new PrismaClient()
  * query])` runs the query EAGERLY outside the GUC tx → zero isolation (verified on
  * throwaway-pg). The interactive-tx form below IS proven to isolate.
  *
- * No tenant bound (RLS_ENFORCED off / pre-auth bootstrap) → behaves exactly like a
- * plain `$transaction`. See docs/ENGINEERING_STANDARDS.md → "RLS rollout".
+ * No tenant bound + RLS_ENFORCED off (pre-auth bootstrap / rollout-transitional) →
+ * behaves exactly like a plain `$transaction`. No tenant bound + RLS_ENFORCED=true →
+ * THROWS (AR-23, audit 2026-06-11): the RLS policies are permissive when the GUC is
+ * unset, so a lost AsyncLocalStorage context (timer / event-emitter callback) would
+ * otherwise degrade to a silent cross-tenant query. System paths (workers, seed,
+ * bootstrap) must wrap themselves in `runWithSystemContext` — that binds an explicit
+ * bypass context and is unaffected. See docs/ENGINEERING_STANDARDS.md → "RLS rollout".
  */
 export async function tenantTransaction<T>(
   client: PrismaClient,
@@ -22,7 +27,16 @@ export async function tenantTransaction<T>(
 ): Promise<T> {
   return client.$transaction(async (tx) => {
     const ctx = tenantStore.getStore()
-    if (!ctx) return fn(tx)
+    if (!ctx) {
+      if (process.env.RLS_ENFORCED === 'true') {
+        throw new Error(
+          'tenantTransaction: no tenant context bound while RLS_ENFORCED=true — ' +
+            'refusing a fail-open query. Request paths must pass through ' +
+            'enterAgencyContext; system paths must use runWithSystemContext.'
+        )
+      }
+      return fn(tx)
+    }
     if (ctx.bypass) {
       await tx.$executeRaw`SELECT set_config('app.rls_bypass', 'on', true)`
     } else {

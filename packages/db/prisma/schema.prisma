@@ -104,7 +104,9 @@ model Company {
   id           String       @id @default(uuid())
   agencyId     String
   name         String
-  slug         String       @unique
+  // AR-22 (audit 2026-06-11): per-agency unique (@@unique below) — two tenants may both
+  // have an "acme" client. referralCode stays globally unique (uuid; agency-less lookup).
+  slug         String
   language     Language     @default(uk)
   currency     String       @default("USD")
   notes        String?
@@ -131,6 +133,7 @@ model Company {
   loyaltyHistory     LoyaltyTierHistory[]
   agency             Agency               @relation(fields: [agencyId], references: [id])
 
+  @@unique([agencyId, slug])
   @@index([agencyId])
   @@map("companies")
 }
@@ -464,6 +467,11 @@ model ExecutorRate {
 
 model Referral {
   id          String   @id @default(uuid())
+  // AR-21 (audit 2026-06-11): referrals are intra-agency only (S5-06 enforces it at
+  // accrual) — the row carries the tenant explicitly so column-scoped RLS applies
+  // instead of the weaker referrer-side-only join policy.
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   referrerId  String
   referrer    Company  @relation("ReferrerCompany", fields: [referrerId], references: [id])
   referredId  String
@@ -474,6 +482,7 @@ model Referral {
   bonuses ReferralBonus[]
 
   @@unique([referrerId, referredId])
+  @@index([agencyId])
   @@index([referrerId])
   @@index([referredId])
   @@map("referrals")
@@ -804,6 +813,7 @@ model Agency {
   loyaltyHistory     LoyaltyTierHistory[]
   executorPayouts    ExecutorPayout[]
   expenses           Expense[]
+  referrals          Referral[] // AR-21 (S5.5)
 
   @@index([planId])
   @@map("agencies")
@@ -1104,7 +1114,10 @@ model ExecutorPayout {
   createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
 
-  @@unique([executorId, period])
+  // AR-20 (audit 2026-06-11): tenant-scoped — a multi-agency staffer needs a payout
+  // per agency for the same period (the global key collided with a row the other
+  // agency cannot even see under RLS).
+  @@unique([agencyId, executorId, period])
   @@index([agencyId])
   @@map("executor_payouts")
 }

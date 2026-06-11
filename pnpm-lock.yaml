@@ -161,6 +161,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.74.4
         version: 5.99.0(react@18.3.1)
+      '@workflo/app-core':
+        specifier: workspace:^
+        version: link:../../packages/app-core
       '@workflo/i18n':
         specifier: workspace:^
         version: link:../../packages/i18n
@@ -219,6 +222,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.74.4
         version: 5.99.0(react@18.3.1)
+      '@workflo/app-core':
+        specifier: workspace:^
+        version: link:../../packages/app-core
       '@workflo/i18n':
         specifier: workspace:^
         version: link:../../packages/i18n
@@ -269,6 +275,37 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
 
+  packages/app-core:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.74.4
+        version: 5.99.0(react@18.3.1)
+      '@workflo/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@workflo/types':
+        specifier: workspace:*
+        version: link:../types
+      date-fns:
+        specifier: ^4.4.0
+        version: 4.4.0
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.20
+        version: 18.3.28
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
+
   packages/db:
     dependencies:
       '@prisma/client':
@@ -287,6 +324,9 @@ importers:
       tsx:
         specifier: ^4.19.3
         version: 4.21.0
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
 
   packages/eslint-config: {}
 
