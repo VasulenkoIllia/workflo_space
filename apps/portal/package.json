@@ -14,6 +14,7 @@
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@tanstack/react-query": "^5.74.4",
+    "@workflo/app-core": "workspace:^",
     "@workflo/i18n": "workspace:^",
     "@workflo/types": "workspace:^",
     "@workflo/ui": "workspace:^",
