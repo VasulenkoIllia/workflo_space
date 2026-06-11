@@ -51,6 +51,12 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @workflo/db db:generate
 
+      # The integration tests import @workflo/db etc. via their package entry
+      # (dist/) — a fresh runner has no build output. Latent in the original
+      # ci.yml job too (it never ran). ^... = api's dependencies only.
+      - name: Build workspace packages (api deps)
+        run: pnpm turbo build --filter @workflo/api^...
+
       # Migration smoke (S8-06): every migration applies cleanly to a fresh DB.
       - name: Apply migrations (clean DB)
         run: pnpm --filter @workflo/db exec prisma migrate deploy
