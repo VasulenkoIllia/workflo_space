@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { prisma, runWithSystemContext } from '@workflo/db'
 import { notify } from '@workflo/notifications'
 import { INTERNAL_TO_CLIENT_STATUS, type OrderInternalStatus } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
@@ -65,8 +65,19 @@ async function handleOrderStatusChanged(
 
   const deps = buildNotifyDeps(logger)
   const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  // AR-32 (audit 2026-06-11): notify() never throws — it reports per-channel
+  // outcomes. Previously we ignored them, so an SMTP/Telegram outage marked the
+  // event done and the notification was lost FOREVER. Now: a recipient whose
+  // every attempted channel failed counts as undelivered; if NO recipient got
+  // anything, throw → the outbox loop redelivers with backoff (→ DLQ after max
+  // attempts). Partial delivery does NOT retry (at-least-once would double-send
+  // the recipients that succeeded) — it is logged instead.
+  let attemptedTotal = 0
+  let deliveredRecipients = 0
+  let failedRecipients = 0
+  let maxRetryAfterSec = 0
   for (const r of recipients) {
-    await notify(deps, {
+    const outcome = await notify(deps, {
       profileId: r.profileId,
       event: 'orders.status_changed',
       vars: {
@@ -76,6 +87,36 @@ async function handleOrderStatusChanged(
       },
       inApp: { title: 'Оновлення замовлення', body: `«${order.title}» — новий статус` },
     })
+    const attempted = outcome.results.filter((res) => res.result.status !== 'skipped')
+    attemptedTotal += attempted.length
+    if (attempted.length === 0) continue // no enabled channels → nothing to deliver
+    const failures = attempted.filter((res) => res.result.status === 'failed')
+    if (failures.length === attempted.length) {
+      failedRecipients += 1
+      for (const f of failures) {
+        const fr = f.result as { reason?: string; retryAfter?: number }
+        if (fr.reason === 'rate_limited' && typeof fr.retryAfter === 'number') {
+          maxRetryAfterSec = Math.max(maxRetryAfterSec, fr.retryAfter)
+        }
+      }
+    } else {
+      deliveredRecipients += 1
+    }
+  }
+
+  if (failedRecipients > 0 && deliveredRecipients === 0 && attemptedTotal > 0) {
+    // Honor Telegram's retryAfter as a floor hint in the error (the outbox backoff
+    // is coarser, but the next attempt will land after the rate window anyway).
+    throw new Error(
+      `outbox: notify failed for all ${failedRecipients} recipient(s) of order ${p.orderId}` +
+        (maxRetryAfterSec > 0 ? ` (rate_limited, retryAfter=${maxRetryAfterSec}s)` : '')
+    )
+  }
+  if (failedRecipients > 0) {
+    logger.warn(
+      { orderId: p.orderId, deliveredRecipients, failedRecipients },
+      'outbox: partial notify delivery (will NOT retry — successes would double-send)'
+    )
   }
 }
 
@@ -101,7 +142,10 @@ export function startOutboxWorker(logger: FastifyBaseLogger): void {
   timer = setInterval(() => {
     if (draining) return // never overlap batches
     draining = true
-    processOutboxBatch(prisma, dispatch)
+    // System context (review fix, S5.5): the timer callback has no request ALS, and
+    // the notify facade routes DB I/O through withTenant — without an explicit
+    // bypass context every event would fail-closed the day RLS_ENFORCED flips.
+    runWithSystemContext(() => processOutboxBatch(prisma, dispatch))
       .then((r) => {
         if (r.processed || r.failed || r.dead) logger.info(r, 'outbox: batch drained')
       })

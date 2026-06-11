@@ -81,6 +81,11 @@ describe('POST /auth/refresh', () => {
     const setCookie = String(res.headers['set-cookie'])
     expect(setCookie).toContain('refresh_token=')
     expect(setCookie).not.toContain('valid-token-123')
+    // AR-31: the DB row holds a sha256 hex digest, never the raw cookie value.
+    const storedToken = (refreshTokenCreate.mock.calls[0][0] as { data: { token: string } }).data
+      .token
+    expect(storedToken).toMatch(/^[0-9a-f]{64}$/)
+    expect(setCookie).not.toContain(storedToken)
     await app.close()
   })
 
@@ -193,9 +198,12 @@ describe('POST /auth/logout', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.loggedOut).toBe(true)
     // Scoped to profileId — a leaked token can't log out someone else.
+    // AR-31: the DB stores sha256 digests — the WHERE must carry the hash, not the raw value.
+    const { createHash } = await import('node:crypto')
+    const hashedToken = createHash('sha256').update('some-token').digest('hex')
     expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { token: 'some-token', profileId: 'profile-1', revokedAt: null },
+        where: { token: hashedToken, profileId: 'profile-1', revokedAt: null },
       })
     )
     expect(String(res.headers['set-cookie'])).toContain('refresh_token=')

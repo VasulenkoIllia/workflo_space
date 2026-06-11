@@ -70,6 +70,9 @@ export function buildApp() {
     // Trust exactly ONE proxy hop (Traefik). `true` trusted ALL X-Forwarded-For
     // hops → request.ip could be spoofed to bypass IP rate-limits (audit 31.05).
     trustProxy: 1,
+    // AR-30: close idle keep-alive connections on app.close() so shutdown doesn't
+    // wait on them. Live SSE streams are ended explicitly (closeAllChatStreams).
+    forceCloseConnections: 'idle',
   })
 
   app.register(corsPlugin)

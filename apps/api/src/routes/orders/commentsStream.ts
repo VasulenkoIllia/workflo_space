@@ -11,6 +11,18 @@ const HEARTBEAT_MS = 30_000
 const MAX_STREAMS_PER_USER = 5
 const openStreamsByUser = new Map<string, number>()
 
+// AR-30 (audit 2026-06-11): registry of live SSE closers. Hijacked sockets keep
+// `server.close()` pending forever, so SIGTERM hung until the orchestrator SIGKILLed
+// the process (skipping prisma.$disconnect/Sentry flush). Shutdown drains this first.
+const liveStreamClosers = new Set<() => void>()
+
+/** End every live chat stream (sends a final `shutdown` event). Returns how many were open. */
+export function closeAllChatStreams(): number {
+  const count = liveStreamClosers.size
+  for (const close of [...liveStreamClosers]) close()
+  return count
+}
+
 const STREAM_COMMENT_SELECT = {
   id: true,
   content: true,
@@ -128,8 +140,16 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         clearInterval(heartbeat)
         unsubscribe()
         releaseSlot()
+        liveStreamClosers.delete(shutdownClose)
         res.end()
       }
+      // AR-30: registered closer notifies the client (EventSource auto-reconnects
+      // after the deploy) and ends the socket so app.close() can resolve.
+      const shutdownClose = (): void => {
+        write('event: shutdown\ndata: {}\n\n')
+        cleanup()
+      }
+      liveStreamClosers.add(shutdownClose)
       request.raw.on('close', cleanup)
       request.raw.on('error', cleanup)
     }

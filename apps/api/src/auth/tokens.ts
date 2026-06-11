@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { PrismaClient } from '@workflo/db'
 import type { FastifyReply } from 'fastify'
 
@@ -102,8 +102,20 @@ export function buildAccessClaims(params: {
 }
 
 /**
- * Create an opaque refresh token row and return its value. Opaque (not a JWT)
- * so it can be revoked server-side via refresh_tokens.revokedAt.
+ * AR-31 (audit 2026-06-11): refresh tokens are stored as sha256 hex digests, never
+ * raw — a DB dump/backup leak must not yield live session tokens. The raw value
+ * lives only in the httpOnly cookie; every DB lookup hashes first. sha256 (not
+ * bcrypt) is correct here: the input is 256 bits of entropy, so brute-force is
+ * infeasible and the lookup stays index-friendly.
+ */
+export function hashRefreshToken(raw: string): string {
+  return createHash('sha256').update(raw).digest('hex')
+}
+
+/**
+ * Create an opaque refresh token row and return its RAW value (the DB stores only
+ * the sha256 digest — AR-31). Opaque (not a JWT) so it can be revoked server-side
+ * via refresh_tokens.revokedAt.
  * Accepts a tx client so it can run inside the registration transaction.
  */
 export async function issueRefreshToken(
@@ -114,7 +126,7 @@ export async function issueRefreshToken(
   // High-entropy opaque token (256 bits). base64url so it's cookie-safe.
   const token = randomBytes(32).toString('base64url')
   await tx.refreshToken.create({
-    data: { profileId, token, expiresAt },
+    data: { profileId, token: hashRefreshToken(token), expiresAt },
   })
   return { token, expiresAt }
 }

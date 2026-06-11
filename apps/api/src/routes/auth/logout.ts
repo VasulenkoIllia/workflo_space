@@ -1,6 +1,6 @@
 import { prisma } from '@workflo/db'
 import type { FastifyPluginAsync } from 'fastify'
-import { clearRefreshCookie } from '../../auth/tokens.js'
+import { clearRefreshCookie, hashRefreshToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -19,7 +19,10 @@ const logoutRoute: FastifyPluginAsync = (fastify) => {
     const body = (request.body ?? {}) as { refreshToken?: unknown }
     const token = typeof body.refreshToken === 'string' ? body.refreshToken : null
 
-    const where = token ? { token, profileId, revokedAt: null } : { profileId, revokedAt: null }
+    // AR-31: the DB holds sha256 digests — hash the supplied raw token for matching.
+    const where = token
+      ? { token: hashRefreshToken(token), profileId, revokedAt: null }
+      : { profileId, revokedAt: null }
 
     const updated = await prisma.refreshToken.updateMany({
       where,

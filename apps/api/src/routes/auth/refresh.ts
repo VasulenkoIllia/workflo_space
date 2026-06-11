@@ -10,6 +10,7 @@ import {
 import { isOriginAllowed } from '../../config/origins.js'
 import {
   buildAccessClaims,
+  hashRefreshToken,
   issueRefreshToken,
   REFRESH_COOKIE_NAME,
   setRefreshCookie,
@@ -44,8 +45,9 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         throw invalid()
       }
 
+      // AR-31: the DB holds sha256 digests — hash the cookie value for the lookup.
       const stored = await prisma.refreshToken.findUnique({
-        where: { token },
+        where: { token: hashRefreshToken(token) },
         select: {
           id: true,
           profileId: true,
