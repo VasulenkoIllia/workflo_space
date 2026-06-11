@@ -22,8 +22,11 @@ jobs:
           POSTGRES_PASSWORD: workflo_ci
           POSTGRES_DB: workflo_ci
         ports: ['5432:5432']
+        # -d workflo_ci: without it pg_isready dials a DB named after the user
+        # ("workflo"), which doesn't exist → the healthcheck never passed. Latent
+        # since the job was added to ci.yml — proof it had never actually run.
         options: >-
-          --health-cmd "pg_isready -U workflo"
+          --health-cmd "pg_isready -U workflo -d workflo_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
