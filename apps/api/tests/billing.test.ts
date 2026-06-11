@@ -17,14 +17,23 @@ const paymentSettingsFindUnique = vi.fn()
 const paymentSettingsUpsert = vi.fn()
 const auditLogCreate = vi.fn()
 const executeRaw = vi.fn()
+// AR-11: a no-order confirm now refreshes Company.moneyBalance in the same tx.
+const companyUpdate = vi.fn()
+const walletTxAggregate = vi.fn()
 
 let orderLockRows: unknown[] = []
+let companyLockRows: unknown[] = []
+let chargedSumRows: unknown[] = []
 let idemExistingRows: unknown[] = []
 let overviewDebtRows: unknown[] = []
 let portalDebtRows: unknown[] = []
 
 const queryRaw = vi.fn((strings: TemplateStringsArray) => {
   const sql = Array.isArray(strings) ? strings.join('?') : String(strings)
+  if (sql.includes('"companies"') && sql.includes('FOR UPDATE'))
+    return Promise.resolve(companyLockRows)
+  if (sql.includes('"service_charges"') && sql.includes('charged'))
+    return Promise.resolve(chargedSumRows)
   if (sql.includes('FOR UPDATE')) return Promise.resolve(orderLockRows)
   if (sql.includes('idempotency_keys')) return Promise.resolve(idemExistingRows)
   if (sql.includes('c."name"')) return Promise.resolve(overviewDebtRows)
@@ -42,7 +51,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
   const Prisma = actual.Prisma
   Dec = (v: string | number) => new Prisma.Decimal(v) as never
   const prisma = {
-    company: { findUnique: companyFindUnique },
+    company: { findUnique: companyFindUnique, update: companyUpdate },
+    walletTransaction: { aggregate: walletTxAggregate },
     payment: {
       create: paymentCreate,
       aggregate: paymentAggregate,
@@ -113,10 +123,15 @@ const KEY = 'idem-key-12345678'
 
 function resetState() {
   orderLockRows = []
+  // AR-11 recompute defaults: company row lockable, zero charges, zero bonus spends.
+  companyLockRows = [COMPANY]
+  chargedSumRows = [{ charged: Dec('0') }]
   idemExistingRows = []
   overviewDebtRows = []
   portalDebtRows = []
   companyFindUnique.mockResolvedValue(COMPANY)
+  companyUpdate.mockResolvedValue({})
+  walletTxAggregate.mockResolvedValue({ _sum: { amount: Dec('0') } })
   executeRaw.mockResolvedValue(1) // claimed by default
   idempotencyUpdate.mockResolvedValue({})
   orderUpdate.mockResolvedValue({})

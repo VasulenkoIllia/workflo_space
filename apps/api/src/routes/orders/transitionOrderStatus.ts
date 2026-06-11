@@ -64,7 +64,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для зміни статусу', 403)
       }
 
-      const data: Prisma.OrderUpdateInput = {
+      const data: Prisma.OrderUpdateManyMutationInput = {
         internalStatus: to,
         clientStatus: INTERNAL_TO_CLIENT_STATUS[to],
       }
@@ -75,9 +75,22 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       // together, so a delivered notification always reflects a persisted change
       // (and a rolled-back change never notifies).
       const updated = await tenantTransaction(prisma, async (tx) => {
-        const u = await tx.order.update({
-          where: { id: order.id },
+        // AR-13: the state-machine check above ran on a snapshot — re-assert the
+        // from-state INSIDE the write (guarded WHERE), so a concurrent transition
+        // can't slip an invalid from→to through the gap (TOCTOU).
+        const guarded = await tx.order.updateMany({
+          where: { id: order.id, internalStatus: from, deletedAt: null },
           data,
+        })
+        if (guarded.count === 0) {
+          throw new AppError(
+            ApiErrorCode.CONFLICT,
+            'Статус замовлення щойно змінився — оновіть сторінку і повторіть',
+            409
+          )
+        }
+        const u = await tx.order.findUniqueOrThrow({
+          where: { id: order.id },
           select: {
             id: true,
             internalStatus: true,

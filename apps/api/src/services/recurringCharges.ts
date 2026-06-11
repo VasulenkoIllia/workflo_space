@@ -1,5 +1,6 @@
 import { Prisma } from '@workflo/db'
 import { LOYALTY_DISCOUNT_PCT, type LoyaltyTier } from '@workflo/types'
+import { refreshMoneyBalance } from './allocation.js'
 
 /**
  * Recurring service-charge generation (S5-03b). One charge per
@@ -126,6 +127,19 @@ export async function generateRecurringCharges(
   }
   for (const a of advances) {
     await tx.companyService.update({ where: { id: a.id }, data: { nextChargeAt: a.nextChargeAt } })
+  }
+
+  // AR-11: new charges change Σ(charge.totalAmount) — refresh each affected company's
+  // cached moneyBalance in the same tx (sorted for a deterministic lock order; the
+  // recompute is a full re-read, so refreshing a skipDuplicates no-op is harmless).
+  if (rows.length > 0) {
+    const companies = new Map<string, string>()
+    for (const r of rows) companies.set(r.companyId, r.agencyId)
+    for (const companyId of [...companies.keys()].sort()) {
+      const agencyId = companies.get(companyId)
+      if (!agencyId) continue
+      await refreshMoneyBalance(tx, { agencyId, companyId })
+    }
   }
 
   return { created, due: due.length }

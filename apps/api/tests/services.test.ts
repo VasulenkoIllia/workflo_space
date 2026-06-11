@@ -15,6 +15,18 @@ const csFindMany = vi.fn()
 const companyFindUnique = vi.fn()
 const chargeCreateMany = vi.fn()
 const auditLogCreate = vi.fn()
+// AR-11: charge generation refreshes Company.moneyBalance per affected company.
+const companyUpdate = vi.fn()
+const paymentAggregate = vi.fn()
+const walletTxAggregate = vi.fn()
+const queryRaw = vi.fn((strings: TemplateStringsArray) => {
+  const sql = Array.isArray(strings) ? strings.join('?') : String(strings)
+  if (sql.includes('"companies"') && sql.includes('FOR UPDATE'))
+    return Promise.resolve([{ id: COMPANY_ID, agencyId: 'agency-1' }])
+  if (sql.includes('"service_charges"') && sql.includes('charged'))
+    return Promise.resolve([{ charged: 0 }])
+  return Promise.resolve([])
+})
 
 let Dec: (v: string | number) => unknown
 
@@ -39,9 +51,12 @@ vi.mock('@workflo/db', async (importOriginal) => {
       count: csCount,
       findMany: csFindMany,
     },
-    company: { findUnique: companyFindUnique },
+    company: { findUnique: companyFindUnique, update: companyUpdate },
     serviceCharge: { createMany: chargeCreateMany },
+    payment: { aggregate: paymentAggregate },
+    walletTransaction: { aggregate: walletTxAggregate },
     auditLog: { create: auditLogCreate },
+    $queryRaw: queryRaw,
   }
   return {
     prisma,
@@ -99,6 +114,10 @@ function svcRow(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   auditLogCreate.mockResolvedValue({})
+  // AR-11 recompute defaults (no payments / no bonus spends / write ok).
+  paymentAggregate.mockResolvedValue({ _sum: { amountUsd: null } })
+  walletTxAggregate.mockResolvedValue({ _sum: { amount: null } })
+  companyUpdate.mockResolvedValue({})
 })
 afterEach(() => vi.clearAllMocks())
 

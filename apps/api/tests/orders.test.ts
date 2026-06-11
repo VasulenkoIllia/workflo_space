@@ -29,6 +29,9 @@ const activityCreate = vi.fn()
 const activityFindMany = vi.fn()
 const outboxCreate = vi.fn()
 const payoutFindUnique = vi.fn() // S5-04 time-log lock; default → null (unlocked)
+// AR-13: guarded transition (updateMany WHERE internalStatus=from) + re-read.
+const orderUpdateMany = vi.fn()
+const orderFindUniqueOrThrow = vi.fn()
 
 vi.mock('@workflo/db', () => {
   const prisma = {
@@ -86,7 +89,11 @@ vi.mock('@workflo/db', () => {
 function txImpl(arg: unknown) {
   if (typeof arg === 'function') {
     return (arg as (tx: unknown) => unknown)({
-      order: { update: orderUpdate },
+      order: {
+        update: orderUpdate,
+        updateMany: orderUpdateMany,
+        findUniqueOrThrow: orderFindUniqueOrThrow,
+      },
       activityLog: { create: activityCreate },
       outboxEvent: { create: outboxCreate },
     })
@@ -388,7 +395,8 @@ describe('PATCH /orders/:id/status', () => {
 
   it('executor runs a valid transition + mirrors clientStatus', async () => {
     orderFindUnique.mockResolvedValue(base)
-    orderUpdate.mockResolvedValue({
+    orderUpdateMany.mockResolvedValue({ count: 1 })
+    orderFindUniqueOrThrow.mockResolvedValue({
       id: 'order-1',
       internalStatus: 'review',
       clientStatus: 'pending_approval',
@@ -404,10 +412,29 @@ describe('PATCH /orders/:id/status', () => {
       payload: { status: 'review' },
     })
     expect(res.statusCode).toBe(200)
-    expect(orderUpdate.mock.calls[0][0].data.clientStatus).toBe('pending_approval')
+    expect(orderUpdateMany.mock.calls[0][0].data.clientStatus).toBe('pending_approval')
+    // AR-13: the write re-asserts the from-state inside WHERE (TOCTOU guard)
+    expect(orderUpdateMany.mock.calls[0][0].where.internalStatus).toBe('in_progress')
     // S2-13: same tx writes an activity row + enqueues a notify outbox event
     expect(activityCreate.mock.calls[0][0].data.action).toBe('status_changed')
     expect(outboxCreate.mock.calls[0][0].data.type).toBe('order.status_changed')
+    await app.close()
+  })
+
+  it('409 when the order moved concurrently (AR-13 TOCTOU guard, no activity/outbox)', async () => {
+    orderFindUnique.mockResolvedValue(base)
+    // Another transition won the race → guarded WHERE matches zero rows.
+    orderUpdateMany.mockResolvedValue({ count: 0 })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'review' },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(activityCreate).not.toHaveBeenCalled()
+    expect(outboxCreate).not.toHaveBeenCalled()
     await app.close()
   })
 
@@ -436,7 +463,7 @@ describe('PATCH /orders/:id/status', () => {
       payload: { status: 'done' },
     })
     expect(res.statusCode).toBe(409)
-    expect(orderUpdate).not.toHaveBeenCalled()
+    expect(orderUpdateMany).not.toHaveBeenCalled()
     await app.close()
   })
 
@@ -455,7 +482,8 @@ describe('PATCH /orders/:id/status', () => {
 
   it('allows a company owner to reopen done → revision', async () => {
     orderFindUnique.mockResolvedValue({ ...base, internalStatus: 'done' })
-    orderUpdate.mockResolvedValue({
+    orderUpdateMany.mockResolvedValue({ count: 1 })
+    orderFindUniqueOrThrow.mockResolvedValue({
       id: 'order-1',
       internalStatus: 'revision',
       clientStatus: 'in_progress',

@@ -106,10 +106,12 @@ async function recomputeMoneyBalance(
     }),
     // COALESCE(totalAmount, amount): a charge with a null post-discount total (legacy /
     // hand-made) still counts its `amount`, so `_sum.totalAmount` can't silently drop it.
+    // written_off is excluded (AR-12): a written-off charge is forgiven debt, not owed.
     tx.$queryRaw<Array<{ charged: Prisma.Decimal | null }>>`
       SELECT COALESCE(SUM(COALESCE("totalAmount", "amount")), 0) AS "charged"
       FROM "service_charges"
       WHERE "agencyId" = ${args.agencyId} AND "companyId" = ${args.companyId}
+        AND "status" != 'written_off'
     `,
     tx.walletTransaction.aggregate({
       where: {
@@ -130,11 +132,25 @@ async function recomputeMoneyBalance(
   return balance
 }
 
+/**
+ * AR-11: standalone money-account refresh for writers that change its inputs WITHOUT
+ * going through allocatePayment — payment confirm (no-order) and recurring charge
+ * generation. Takes ONLY the company lock; safe vs the payment→company order in
+ * allocatePayment because this path never acquires a payment lock afterwards.
+ */
+export async function refreshMoneyBalance(
+  tx: Prisma.TransactionClient,
+  args: { agencyId: string; companyId: string }
+): Promise<Prisma.Decimal> {
+  return recomputeMoneyBalance(tx, args)
+}
+
 interface LockedPayment {
   id: string
   agencyId: string
   companyId: string
   amount: Prisma.Decimal
+  currency: string
   status: string
 }
 
@@ -173,6 +189,7 @@ async function fifoTargets(
   tx: Prisma.TransactionClient,
   agencyId: string,
   companyId: string,
+  currency: string,
   remaining: Prisma.Decimal,
   excludeChargeIds: Set<string>
 ): Promise<{ chargeId: string; amount: Prisma.Decimal }[]> {
@@ -181,6 +198,9 @@ async function fifoTargets(
     where: {
       agencyId,
       companyId,
+      // AR-10: FIFO only settles same-currency charges — native amounts of different
+      // currencies must never net against each other 1:1.
+      currency,
       status: { notIn: [ChargeStatus.PAID, ChargeStatus.WRITTEN_OFF] },
     },
     select: { id: true, totalAmount: true, amount: true },
@@ -220,7 +240,7 @@ export async function allocatePayment(
 
   // 1. Lock the payment row — serializes concurrent allocations of THIS payment.
   const prows = await tx.$queryRaw<LockedPayment[]>`
-    SELECT "id", "agencyId", "companyId", "amount", "status"
+    SELECT "id", "agencyId", "companyId", "amount", "currency", "status"
     FROM "payments"
     WHERE "id" = ${args.paymentId}
     FOR UPDATE
@@ -266,6 +286,7 @@ export async function allocatePayment(
       tx,
       payment.agencyId,
       payment.companyId,
+      payment.currency,
       remaining,
       existingChargeIds
     )
@@ -292,12 +313,23 @@ export async function allocatePayment(
         companyId: true,
         totalAmount: true,
         amount: true,
+        currency: true,
         dueDate: true,
         paidAt: true,
       },
     })
     if (!charge || charge.agencyId !== payment.agencyId || charge.companyId !== payment.companyId) {
       throw new AppError(ApiErrorCode.NOT_FOUND, 'Нарахування не знайдено', 404)
+    }
+    // AR-10: native amounts settle 1:1 only within ONE currency — a UAH payment must
+    // never cover a USD charge at face value (the FX snapshot exists for reporting,
+    // not for settlement netting).
+    if (charge.currency !== payment.currency) {
+      throw new AppError(
+        ApiErrorCode.CONFLICT,
+        `Валюта платежу (${payment.currency}) не збігається з валютою нарахування (${charge.currency})`,
+        409
+      )
     }
 
     try {

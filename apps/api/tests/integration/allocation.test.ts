@@ -23,7 +23,12 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
 
   // ── seed helpers ────────────────────────────────────────────────────────────
   let chargeMonth = 0
-  async function createCharge(opts: { total: number; dueDate?: Date | null }) {
+  async function createCharge(opts: {
+    total: number
+    dueDate?: Date | null
+    currency?: string
+    status?: 'pending' | 'written_off'
+  }) {
     chargeMonth += 1
     const month = new Date(Date.UTC(2026, chargeMonth, 1)) // distinct month → @@unique([companyServiceId, month])
     return prisma.serviceCharge.create({
@@ -33,22 +38,28 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
         companyServiceId,
         amount: new Prisma.Decimal(opts.total),
         totalAmount: new Prisma.Decimal(opts.total),
-        currency: 'USD',
+        currency: opts.currency ?? 'USD',
         month,
         dueDate: opts.dueDate ?? null,
+        status: opts.status ?? 'pending',
       },
       select: { id: true },
     })
   }
 
-  async function createPayment(opts: { amount: number; amountUsd?: number; orderId?: string }) {
+  async function createPayment(opts: {
+    amount: number
+    amountUsd?: number
+    orderId?: string
+    currency?: string
+  }) {
     return prisma.payment.create({
       data: {
         agencyId,
         companyId,
         orderId: opts.orderId ?? null,
         amount: new Prisma.Decimal(opts.amount),
-        currency: 'USD',
+        currency: opts.currency ?? 'USD',
         amountUsd: new Prisma.Decimal(opts.amountUsd ?? opts.amount),
         rateUsed: new Prisma.Decimal(1),
         type: 'final',
@@ -280,5 +291,102 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
       .toFixed(2)
     expect(expected).toBe('-70.00')
     expect(await moneyBalance()).toBe(expected)
+  })
+
+  // ── AR-10 (audit 2026-06-11): currency guard — native amounts never net cross-currency ──
+
+  it('AR-10: explicit allocation rejects a currency mismatch (UAH payment vs USD charge) → 409', async () => {
+    const charge = await createCharge({ total: 100 }) // USD
+    const payment = await createPayment({ amount: 4150, amountUsd: 100, currency: 'UAH' })
+
+    await expect(allocate(payment.id, [{ chargeId: charge.id, amount: 100 }])).rejects.toThrow(
+      /Валюта платежу/
+    )
+    // Nothing settled, no allocation row.
+    expect(await prisma.paymentAllocation.count({ where: { paymentId: payment.id } })).toBe(0)
+  })
+
+  it('AR-10: FIFO only targets same-currency charges', async () => {
+    const uahCharge = await createCharge({
+      total: 4150,
+      currency: 'UAH',
+      dueDate: new Date('2026-01-01'),
+    })
+    const usdCharge = await createCharge({ total: 100, dueDate: new Date('2026-02-01') })
+    const payment = await createPayment({ amount: 100 }) // USD
+
+    const res = await allocate(payment.id) // FIFO — would hit the UAH charge first if unfiltered
+
+    expect(res.charges).toHaveLength(1)
+    expect(res.charges[0]?.chargeId).toBe(usdCharge.id)
+    expect((await chargeStatus(usdCharge.id))?.status).toBe('paid')
+    expect((await chargeStatus(uahCharge.id))?.status).toBe('pending')
+  })
+
+  // ── AR-12: written_off charges are forgiven debt, not owed ──
+
+  it('AR-12: written_off charge is excluded from moneyBalance', async () => {
+    await createCharge({ total: 100, status: 'written_off' })
+    const live = await createCharge({ total: 40 })
+    const payment = await createPayment({ amount: 50 })
+
+    await allocate(payment.id, [{ chargeId: live.id, amount: 40 }])
+
+    // 50 (payment) − 40 (live charge) = 10; the written-off 100 is NOT debt.
+    expect(await moneyBalance()).toBe('10.00')
+  })
+
+  // ── AR-11: moneyBalance refreshes on its OTHER writers (confirm / charge generation) ──
+
+  it('AR-11: confirming a no-order payment refreshes moneyBalance without an allocation step', async () => {
+    const { confirmManualPayment } = await import('../../src/services/payments.js')
+    await createCharge({ total: 30 })
+
+    await tenantTransaction(prisma, (tx) =>
+      confirmManualPayment(tx, {
+        agencyId,
+        companyId,
+        amount: 130,
+        currency: 'USD',
+        type: 'final',
+        confirmedBy: creatorId,
+        idempotencyKey: `ar11-${randomUUID()}`,
+      })
+    )
+
+    // 130 (confirmed no-order payment) − 30 (charge) = 100 — visible immediately,
+    // previously stale until the first allocatePayment call.
+    expect(await moneyBalance()).toBe('100.00')
+  })
+
+  it('AR-11: recurring charge generation refreshes moneyBalance for the affected company', async () => {
+    const { generateRecurringCharges } = await import('../../src/services/recurringCharges.js')
+    await prisma.service.update({ where: { id: serviceId }, data: { isRecurring: true } })
+    await prisma.companyService.update({
+      where: { id: companyServiceId },
+      data: { active: true, frequency: 'monthly', nextChargeAt: new Date('2026-06-01T00:00:00Z') },
+    })
+
+    const res = await tenantTransaction(prisma, (tx) =>
+      generateRecurringCharges(tx, { now: new Date('2026-06-15T00:00:00Z'), agencyId })
+    )
+
+    expect(res.created).toBeGreaterThan(0)
+    // No payments yet → balance = −Σ(generated charge totals), already refreshed.
+    const agg = await prisma.serviceCharge.aggregate({
+      where: { agencyId, companyId },
+      _sum: { totalAmount: true },
+    })
+    const expected = new Prisma.Decimal(0)
+      .minus(agg._sum.totalAmount ?? new Prisma.Decimal(0))
+      .toFixed(2)
+    expect(await moneyBalance()).toBe(expected)
+
+    // Reset the subscription so other tests are unaffected.
+    await prisma.companyService.update({
+      where: { id: companyServiceId },
+      data: { nextChargeAt: null },
+    })
+    await prisma.service.update({ where: { id: serviceId }, data: { isRecurring: false } })
   })
 })

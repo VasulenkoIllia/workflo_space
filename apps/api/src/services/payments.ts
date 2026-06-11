@@ -1,6 +1,7 @@
 import { Prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, type PaymentType } from '@workflo/types'
 import { ManualProvider, type PaymentProvider } from '@workflo/payments'
+import { refreshMoneyBalance } from './allocation.js'
 import { processReferralBonus } from './referral.js'
 
 /**
@@ -205,6 +206,13 @@ export async function confirmManualPayment(
     companyId: args.companyId,
     amountUsd,
   })
+
+  // 7. AR-11: a confirmed NO-ORDER payment is a moneyBalance input (Σ no-order
+  //    confirmed payments), so the cached balance must refresh in the same tx —
+  //    previously it only refreshed on allocation, leaving portal/admin reads stale.
+  if (!args.orderId) {
+    await refreshMoneyBalance(tx, { agencyId: args.agencyId, companyId: args.companyId })
+  }
 
   return {
     payment: {
