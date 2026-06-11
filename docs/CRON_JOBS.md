@@ -1,35 +1,60 @@
 # CRON JOBS — Заплановані задачі
+
 > Зведений список всіх автоматичних задач системи.
-> Версія: 1.0 | Оновлено: 12 квітня 2026
+> Версія: 1.1 | Оновлено: 11 червня 2026 (S5.5 AR-60 — звірка з реальністю)
 
 ---
 
-## Огляд
+## ⚠️ СТАН ФАКТУ (11.06.2026) vs план нижче
+
+Таблиця нижче — **квітневий ПЛАН**, не стан коду (аудит AR-60). Фактично:
+
+**Реально працює (всі — plain `setTimeout`/`setInterval` у `apps/api/src/cron/`, БЕЗ
+`node-cron`; стартують через `startWorkers()` — inline або worker-контейнер, ADR-006):**
+
+| Що                                          | Розклад                                                     | Файл                        |
+| ------------------------------------------- | ----------------------------------------------------------- | --------------------------- |
+| НБУ курс USD/UAH (≈C01)                     | щодня 06:10 UTC                                             | `cron/exchangeRate.ts`      |
+| Recurring charges (≈C02, Node а НЕ pg_cron) | щомісяця                                                    | `cron/recurringCharges.ts`  |
+| Loyalty tier recalc (≈C16, без escalation)  | щодня                                                       | `cron/loyaltyRecalc.ts`     |
+| Refresh-token sweep (S5.5 AR-31)            | щодня 03:40 UTC                                             | `cron/refreshTokenSweep.ts` |
+| Outbox drain (не cron — фоновий loop)       | кожні 5 c                                                   | `services/outboxWorker.ts`  |
+| Daily DB backup + offsite-обвʼязка (AR-51)  | щодня 03:00 — інсталюється `scripts/install-backup-cron.sh` | `scripts/backup.sh`         |
+
+**НЕ існує (план на майбутні спринти):** pg_cron-джоби (C02/C05/C06/C17 — extension
+увімкнено, джоби не створені) · `dueDateReminder`/`cleanupFiles`/`subscriptionExpiry`/
+`timerAutoStop`/`overdueEscalation`/`retentionPurge`/`heartbeatCheck` ·
+`disk-check.sh`/`uploads-backup.sh`. Створюючи будь-який — онови ЦЮ секцію.
+
+---
+
+## Огляд (план)
 
 Два типи cron в системі:
+
 - **pg_cron** (PostgreSQL extension) — для задач що напряму працюють з БД (підписки, очищення)
-- **Node.js cron** (`node-cron`) в `apps/api/src/cron/` — для задач з зовнішніми API (НБУ, Telegram)
+- **Node.js cron** в `apps/api/src/cron/` — для задач з зовнішніми API (НБУ, Telegram). As-built: plain-таймери, без `node-cron`.
 
 ---
 
 ## Всі задачі
 
-| ID | Назва | Тип | Розклад | Timezone | Файл |
-|---|---|---|---|---|---|
-| C01 | Оновлення курсу USD/UAH | Node.js | щодня 09:10 | Kyiv | `cron/exchangeRate.ts` |
-| C02 | Recurring charges (підписки) | pg_cron | 1-го числа 00:01 | UTC | `pg_cron SQL` |
-| C03 | Нагадування про дедлайни | Node.js | щодня 09:00 | Kyiv | `cron/dueDateReminder.ts` |
-| C04 | Очищення файлів (soft deleted) | Node.js | щодня 03:00 | UTC | `cron/cleanupFiles.ts` |
-| C05 | Очищення OTP токенів | pg_cron | щогодини | UTC | `pg_cron SQL` |
-| C06 | Expire запрошень (invites) | pg_cron | щодня 00:00 | UTC | `pg_cron SQL` |
-| C07 | Нагадування про закінчення підписки | Node.js | щодня 10:00 | Kyiv | `cron/subscriptionExpiry.ts` |
-| C08 | Моніторинг дискового простору | Bash | щодня 08:00 | UTC | `scripts/disk-check.sh` |
-| C13 | Backup uploads (rsync + GPG → Hetzner) | Bash | щодня 04:00 | UTC | `scripts/uploads-backup.sh` |
-| C15 | Auto-stop забутих таймерів (8h) | Node.js | кожні 5 хв | UTC | `cron/timerAutoStop.ts` |
-| C16 | Loyalty recalc + overdue escalation | Node.js | 02:30 + кожні 30хв | UTC | `cron/loyaltyRecalc.ts`, `cron/overdueEscalation.ts` |
-| C17 | Refresh revenue_monthly_mv | pg_cron | щодня 02:00 | UTC | `pg_cron SQL` |
-| C18 | Retention purge (anonymize + hard delete) | Node.js | щодня 03:00 | UTC | `cron/retentionPurge.ts` |
-| C19 | Cron heartbeat check (alerting) | Node.js | кожні 30 хв | UTC | `cron/heartbeatCheck.ts` |
+| ID  | Назва                                     | Тип     | Розклад            | Timezone | Файл                                                 |
+| --- | ----------------------------------------- | ------- | ------------------ | -------- | ---------------------------------------------------- |
+| C01 | Оновлення курсу USD/UAH                   | Node.js | щодня 09:10        | Kyiv     | `cron/exchangeRate.ts`                               |
+| C02 | Recurring charges (підписки)              | pg_cron | 1-го числа 00:01   | UTC      | `pg_cron SQL`                                        |
+| C03 | Нагадування про дедлайни                  | Node.js | щодня 09:00        | Kyiv     | `cron/dueDateReminder.ts`                            |
+| C04 | Очищення файлів (soft deleted)            | Node.js | щодня 03:00        | UTC      | `cron/cleanupFiles.ts`                               |
+| C05 | Очищення OTP токенів                      | pg_cron | щогодини           | UTC      | `pg_cron SQL`                                        |
+| C06 | Expire запрошень (invites)                | pg_cron | щодня 00:00        | UTC      | `pg_cron SQL`                                        |
+| C07 | Нагадування про закінчення підписки       | Node.js | щодня 10:00        | Kyiv     | `cron/subscriptionExpiry.ts`                         |
+| C08 | Моніторинг дискового простору             | Bash    | щодня 08:00        | UTC      | `scripts/disk-check.sh`                              |
+| C13 | Backup uploads (rsync + GPG → Hetzner)    | Bash    | щодня 04:00        | UTC      | `scripts/uploads-backup.sh`                          |
+| C15 | Auto-stop забутих таймерів (8h)           | Node.js | кожні 5 хв         | UTC      | `cron/timerAutoStop.ts`                              |
+| C16 | Loyalty recalc + overdue escalation       | Node.js | 02:30 + кожні 30хв | UTC      | `cron/loyaltyRecalc.ts`, `cron/overdueEscalation.ts` |
+| C17 | Refresh revenue_monthly_mv                | pg_cron | щодня 02:00        | UTC      | `pg_cron SQL`                                        |
+| C18 | Retention purge (anonymize + hard delete) | Node.js | щодня 03:00        | UTC      | `cron/retentionPurge.ts`                             |
+| C19 | Cron heartbeat check (alerting)           | Node.js | кожні 30 хв        | UTC      | `cron/heartbeatCheck.ts`                             |
 
 ---
 
@@ -40,26 +65,31 @@
 ```typescript
 // apps/api/src/cron/exchangeRate.ts
 // Щодня о 09:10 Kyiv (НБУ публікує курс о 09:00)
-cron.schedule('10 6 * * *', async () => {  // 06:10 UTC = 09:10 Kyiv
-  try {
-    const response = await fetch(
-      'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json'
-    )
-    const [data] = await response.json()
-    // data.rate — курс UAH за 1 USD
+cron.schedule(
+  '10 6 * * *',
+  async () => {
+    // 06:10 UTC = 09:10 Kyiv
+    try {
+      const response = await fetch(
+        'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json'
+      )
+      const [data] = await response.json()
+      // data.rate — курс UAH за 1 USD
 
-    await prisma.exchangeRate.upsert({
-      where: { currency: 'UAH' },
-      update: { rateToUsd: data.rate, updatedAt: new Date(), source: 'nbu_api' },
-      create: { currency: 'UAH', rateToUsd: data.rate, source: 'nbu_api' },
-    })
-    logger.info({ rate: data.rate }, 'Exchange rate updated')
-  } catch (error) {
-    // Fallback: залишаємо останній відомий курс
-    logger.warn({ err: error }, 'Exchange rate update failed — using last known rate')
-    // НЕ кидаємо помилку — сервіс продовжує працювати зі старим курсом
-  }
-}, { timezone: 'UTC' })
+      await prisma.exchangeRate.upsert({
+        where: { currency: 'UAH' },
+        update: { rateToUsd: data.rate, updatedAt: new Date(), source: 'nbu_api' },
+        create: { currency: 'UAH', rateToUsd: data.rate, source: 'nbu_api' },
+      })
+      logger.info({ rate: data.rate }, 'Exchange rate updated')
+    } catch (error) {
+      // Fallback: залишаємо останній відомий курс
+      logger.warn({ err: error }, 'Exchange rate update failed — using last known rate')
+      // НЕ кидаємо помилку — сервіс продовжує працювати зі старим курсом
+    }
+  },
+  { timezone: 'UTC' }
+)
 ```
 
 **Fallback:** якщо НБУ API недоступний — система продовжує працювати з останнім збереженим курсом. Якщо курс не оновлювався більше 3 днів — owner отримує Telegram сповіщення.
@@ -109,36 +139,41 @@ SELECT cron.schedule(
 ```typescript
 // apps/api/src/cron/dueDateReminder.ts
 // Щодня о 09:00 Kyiv
-cron.schedule('0 6 * * *', async () => {  // 06:00 UTC = 09:00 Kyiv
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
+cron.schedule(
+  '0 6 * * *',
+  async () => {
+    // 06:00 UTC = 09:00 Kyiv
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
 
-  const orders = await prisma.order.findMany({
-    where: {
-      deletedAt: null,
-      status: { notIn: ['done', 'cancelled'] },
-      dueDate: {
-        gte: new Date(),
-        lte: new Date(tomorrow.setHours(23, 59, 59)),
+    const orders = await prisma.order.findMany({
+      where: {
+        deletedAt: null,
+        status: { notIn: ['done', 'cancelled'] },
+        dueDate: {
+          gte: new Date(),
+          lte: new Date(tomorrow.setHours(23, 59, 59)),
+        },
       },
-    },
-    include: {
-      executors: { include: { user: true } },
-      company: true,
-    },
-  })
+      include: {
+        executors: { include: { user: true } },
+        company: true,
+      },
+    })
 
-  for (const order of orders) {
-    const isToday = order.dueDate!.toDateString() === new Date().toDateString()
-    const message = isToday
-      ? `⚠️ Дедлайн СЬОГОДНІ: "${order.title}"`
-      : `📅 Дедлайн ЗАВТРА: "${order.title}"`
+    for (const order of orders) {
+      const isToday = order.dueDate!.toDateString() === new Date().toDateString()
+      const message = isToday
+        ? `⚠️ Дедлайн СЬОГОДНІ: "${order.title}"`
+        : `📅 Дедлайн ЗАВТРА: "${order.title}"`
 
-    for (const executor of order.executors) {
-      await notify(executor.userId, 'order.due_soon', { orderId: order.id, message })
+      for (const executor of order.executors) {
+        await notify(executor.userId, 'order.due_soon', { orderId: order.id, message })
+      }
     }
-  }
-}, { timezone: 'UTC' })
+  },
+  { timezone: 'UTC' }
+)
 ```
 
 ---
@@ -150,7 +185,7 @@ cron.schedule('0 6 * * *', async () => {  // 06:00 UTC = 09:00 Kyiv
 // Щодня о 03:00 UTC
 cron.schedule('0 3 * * *', async () => {
   const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - 7)  // 7 днів після видалення
+  cutoff.setDate(cutoff.getDate() - 7) // 7 днів після видалення
 
   const files = await prisma.fileAttachment.findMany({
     where: {
@@ -216,31 +251,35 @@ SELECT cron.schedule(
 ```typescript
 // apps/api/src/cron/subscriptionExpiry.ts
 // Щодня о 10:00 Kyiv (07:00 UTC)
-cron.schedule('0 7 * * *', async () => {
-  // За 7 днів до закінчення
-  const in7Days = new Date()
-  in7Days.setDate(in7Days.getDate() + 7)
+cron.schedule(
+  '0 7 * * *',
+  async () => {
+    // За 7 днів до закінчення
+    const in7Days = new Date()
+    in7Days.setDate(in7Days.getDate() + 7)
 
-  const expiring = await prisma.companySubscription.findMany({
-    where: {
-      isActive: true,
-      nextChargeDate: {
-        gte: new Date(),
-        lte: in7Days,
+    const expiring = await prisma.companySubscription.findMany({
+      where: {
+        isActive: true,
+        nextChargeDate: {
+          gte: new Date(),
+          lte: in7Days,
+        },
       },
-    },
-    include: { company: { include: { members: { where: { role: 'owner' } } } }, service: true },
-  })
-
-  for (const sub of expiring) {
-    const companyOwner = sub.company.members[0]
-    if (!companyOwner) continue
-    await notify(companyOwner.profileId, 'subscription.expiring', {
-      serviceName: sub.service.name,
-      expiresAt: sub.nextChargeDate,
+      include: { company: { include: { members: { where: { role: 'owner' } } } }, service: true },
     })
-  }
-}, { timezone: 'UTC' })
+
+    for (const sub of expiring) {
+      const companyOwner = sub.company.members[0]
+      if (!companyOwner) continue
+      await notify(companyOwner.profileId, 'subscription.expiring', {
+        serviceName: sub.service.name,
+        expiresAt: sub.nextChargeDate,
+      })
+    }
+  },
+  { timezone: 'UTC' }
+)
 ```
 
 ---
@@ -286,7 +325,7 @@ SELECT cron.unschedule('monthly-subscriptions');
 ```typescript
 // apps/api/src/cron/index.ts — реєструємо всі cron jobs при старті API
 export async function initCronJobs() {
-  if (process.env.NODE_ENV === 'test') return  // не запускаємо в тестах
+  if (process.env.NODE_ENV === 'test') return // не запускаємо в тестах
 
   await import('./exchangeRate')
   await import('./dueDateReminder')
@@ -305,6 +344,7 @@ await initCronJobs()
 ## Моніторинг виконання
 
 Кожен cron job логує результат:
+
 ```
 info: Exchange rate updated { rate: 41.5 }
 info: Due date reminders sent { count: 3 }
@@ -353,6 +393,7 @@ fi
 ### C16 — Loyalty recalc + overdue escalation
 
 Два under-один-ID jobs:
+
 - **02:30 daily** — `loyaltyRecalc.ts`: перераховує tier кожної company за lifetime paid USD. Tier upgrade → `notify(event='loyalty.tier_upgraded')`. Tier ніколи не downgrade автоматично. Деталі — `10-loyalty.md`.
 - **кожні 30 хв** — `overdueEscalation.ts`: orders де `deadline < now()` і немає transition в done за 4 год → `notify(event='orders.overdue')` owner'у. Деталі — `07-notifications.md → Escalation`.
 

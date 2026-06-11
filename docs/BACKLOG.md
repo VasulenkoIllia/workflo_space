@@ -8,6 +8,25 @@
 
 ---
 
+## 🔍 Повний аудит 11.06.2026 ([`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md)) — відкладене з диспозицією
+
+> Виправлене — спринт **S5.5** (TRACKER, AR-01…AR-60). Нижче — свідомо відкладене.
+
+- [test] **FE-T1 фронтенд-тести: Playwright-смоук (~10 спек) + компонентні** (HIGH-цінність, рішення власника — пізніший прохід): portal login→orders→чат · workspace login→kanban→time-log · один payment-confirm. Тригер: перед SaaS-рефакторингом або після фронтенд-проходу S5-11/12. (created: 2026-06-11)
+- [saas] **SA-1 імперсонація для підтримки** («login as tenant»: super-admin → тенант, аудит-трейл + банер + TTL). Ніде не специфіковано; для SaaS-підтримки must. Тригер: E5 super-admin (SAAS.md Phase 1). (created: 2026-06-11)
+- [saas] **SA-2 імпорт даних при онбордингу тенанта** (CSV клієнтів/замовлень мінімум). Часто вирішує SaaS-конверсію більше за фічі. Тригер: E1 onboarding wizard. (created: 2026-06-11)
+- [saas] **SA-3 email-верифікація на signup + анти-абʼюз** (зараз email-verify у S9-03): для самостійного SaaS-signup потрібна з дня 1. Тригер: E1. (created: 2026-06-11)
+- [ops] **SA-4 email-доставність як продукт**: per-tenant DKIM/SPF, bounce/suppression (S12-05), розглянути керований SMTP (Postmark/SES) замість/поряд Mailcow до відправки від імені тенантів. Тригер: перший зовнішній тенант. (created: 2026-06-11)
+- [ops] **SA-5 рознесення серверів**: staging і/або Postgres з прод-хоста (зараз prod+staging+PG+Mailcow+бекапи на одному Hetzner); PgBouncer + 2 репліки API (закриє і zero-downtime деплой; повʼязано з SC-D1). Тригер: перед зовнішнім тенантом. (created: 2026-06-11)
+- [sec] **SA-6 2FA команди ДО credentials vault**: модуль 17 зберігає чужі секрети — послідовність S9-01 (TOTP) перед увімкненням 17. Фіксація порядку, не нова робота. (created: 2026-06-11)
+- [sec] **SA-7 платформ-адмін**: замінити string-рівність `ADMIN_EMAIL` на роль/таблицю + аудит. Тригер: E5 super-admin. (created: 2026-06-11)
+- [ci] **CI-D2 trivy-скан образів (fail on critical CVE) + GHCR retention** (delete-package-versions, last N). LOW-зусилля. (created: 2026-06-11)
+- [infra] **AR-50b true prod-prune образів api/landing/bot** (LOW поки): AR-50 виправив шарування (manifests→deps→src; verified docker build), але runtime досі несе devDeps+сорці — compose `migrate` ганяє prisma CLI (devDep @workflo/db) з api-образу. Потрібен dedicated migrate-stage/образ + `pnpm deploy --prod` з копією generated prisma client. Тригер: розмір/pull-time почне муляти. (created: 2026-06-11)
+- [ops] **OPS-D1 провіжининг моніторингу**: UptimeRobot/Netdata досі чекбокси; notify-on-failure крок у деплой-воркфлоу. <1 год кожне. (created: 2026-06-11)
+- [billing] **B-D1 overdue-маркування + dunning** (unpaid charge вічно pending) · **B-D2 refund/credit-note/clawback шлях** (enum `refunded` мертвий) · **B-D3 VAT-готовність**. Тригер: S14-03 payments go-live або перший конфліктний кейс. (created: 2026-06-11)
+- [arch] **P-D1 storage stream/presigned seam** (зараз Buffer-only, 100MB у памʼяті; S3-адаптер S10-06 його вимагатиме). (created: 2026-06-11)
+- [fe] **FE-D1 eslint react-hooks/jsx-a11y у трьох React-апках** · **FE-D2 Zod-помилки EN в UA-UI** (карта повідомлень або locale-aware errorMap). (created: 2026-06-11)
+
 ## ⚙️ CI/CD + DX (9.06.2026)
 
 - [ci] **CI-D1 affected-only Docker build** (LOW, ~1–1.5 хв на дрібних змінах): build-матриця staging/prod білдить ВСІ 5 образів (`landing/portal/workspace/api/bot`) щоразу, навіть якщо змінився лише `api`. Не баг — Docker layer-cache (`type=gha`) робить незмінні білди швидкими, матриця паралельна, незнижуваний пол ~3 хв (push GHCR → pull → migrate-контейнер → recreate → health `sleep`). Опт: фільтрувати матрицю за зміненими апками — `turbo run build --filter='...[HEAD^1]'` (visited-packages) або `dorny/paths-filter@v3` per-app → skip незмінні. Тригер: коли деплої почнуть муляти або зросте к-сть апок. (created: 2026-06-09)

@@ -1,8 +1,14 @@
 # WORKFLO.SPACE — Data Model (ERD)
 
 > Створено: 7 червня 2026 (аудит) · Канон схеми — `packages/db/prisma/schema.prisma`.
-> Це оглядова мапа **ядра tenant-графа** (не всі 39 моделей) — для онбордингу й
+> Це оглядова мапа **ядра tenant-графа** (не всі 46 моделей) — для онбордингу й
 > розуміння меж мультитенантності. Деталі полів — у схемі.
+>
+> **Дельта S5.5 (11.06.2026, AR-20/21/22):** `Referral` тепер несе власний
+> `agencyId` (NOT NULL, column-RLS замість referrer-join політики);
+> `ExecutorPayout` unique = `(agencyId, executorId, period)`; `Company.slug`
+> unique per-agency `(agencyId, slug)`. Діаграми нижче це відображають
+> концептуально; точні констрейнти — у схемі (канон).
 
 ## Tenant root + identity
 

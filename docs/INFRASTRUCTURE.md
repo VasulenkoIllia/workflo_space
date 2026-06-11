@@ -1439,6 +1439,22 @@ pnpm --filter db prisma generate       # генерує для macOS
 
 ## 11. BACKUP & RECOVERY
 
+> **⚠️ AS-BUILT (S5.5 AR-51, 11.06.2026) — канон тепер у коді, не в листингах нижче:**
+>
+> - Канонічний скрипт — **`scripts/backup.sh`** (репо): pg_dump через docker/direct,
+>   sanity-check розміру дампа, Telegram-алерти, **offsite-обвʼязка** (restic →
+>   Hetzner Storage Box або rclone; env-gated: `RESTIC_REPOSITORY`+`RESTIC_PASSWORD`
+>   або `RCLONE_REMOTE`). Без offsite-env скрипт ГОЛОСНО попереджає в лог+Telegram —
+>   локальний дамп на диску БД ≠ бекап.
+> - Cron інсталюється **автоматизацією**, не `crontab -e`: `sudo bash
+scripts/install-backup-cron.sh` → `/etc/cron.d/workflo-backup` (щодня 03:00).
+> - Pre-migrate бекап у деплої тепер **blocking** (AR-03): міграція не їде без
+>   перевіреного дампа (staging + production workflows).
+> - **Offsite-тест відкладено** (рішення власника 11.06): сховища ще нема; після
+>   появи Storage Box — заповнити env, ганяти `backup.sh` вручну, зробити
+>   restore-drill за §11.2. До того моменту RPO фактично 24h-local-only.
+> - Listing нижче — історичний (квітень); розбіжності → код канон.
+
 ### 11.1 infra/scripts/backup.sh
 
 ```bash

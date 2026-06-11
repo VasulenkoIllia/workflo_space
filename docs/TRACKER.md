@@ -16,12 +16,12 @@
 - **S2** Orders+Chat+Files API (CRUD, 9-станова машина, SSE-чат, файли, time-logs, activity) 🧪
 - **S3** Portal frontend: auth-екрани, /orders (список+деталь+SSE-чат+файли+activity), /settings, /team, /invite + дизайн-система `@workflo/ui` 🧪
 - **S4** Workspace frontend (role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients) + IP-whitelist 🧪
-- **S5 Billing+Wallet+Finance+Team — ✅ ЗАВЕРШЕНО (фінансове ядро, backend, гілка `dev`):** усі S5-01…S5-10 + міграція `s5_00_financial_core` + 4-вимірний аудит з ремедіацією. Деталі — нижче «S5 РОЗГОРНУТО» та [`S5_AUDIT.md`](S5_AUDIT.md). Гейт: type-check 21/21 · lint 13/13 · **test (api 343 unit + 57 gated integration на реальному PG16) + types 46** · build 13/13. **НЕ запушено** (чекає рішення власника) + **не протестовано вручну на staging** — план: [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md), оновлення сервера: [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md).
+- **S5 Billing+Wallet+Finance+Team — ✅ ЗАВЕРШЕНО (фінансове ядро, backend, гілка `dev`):** усі S5-01…S5-10 + міграція `s5_00_financial_core` + 4-вимірний аудит з ремедіацією. Деталі — нижче «S5 РОЗГОРНУТО» та [`S5_AUDIT.md`](S5_AUDIT.md). Гейт: type-check 21/21 · lint 13/13 · **test (api 343 unit + 57 gated integration на реальному PG16) + types 46** · build 13/13. **Запушено** (звірено 11.06: `origin/dev` синхронний; staging redeploy тригернуто `0ecefdb`); **не протестовано вручну на staging** — план: [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md), оновлення сервера: [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md).
 - **Аудит-ремедіація (S0-S4, 11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes · runtime-branding seam · exec-доки.
 
 **🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
 
-1. **Запушити S5** (6 комітів на `dev`) + **ручне тестування на staging** за [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md) (спершу звірити env/міграції за [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md)).
+1. **S5.5 Audit-ремедіація** (повний аудит 11.06 — [`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md)) — таблиця AR-задач нижче. ~~Запушити S5~~ ✅ зроблено; **ручне тестування на staging** за [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md) — після S5.5 (спершу звірити env/міграції за [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md)).
 2. **S6 Documents+Notifications+Bot** — зокрема **активувати відкладені S5-нотифікації** (outbox-події billing/wallet/loyalty: enqueue+handler; зараз ledger durable, бракує лише доставки) + IdempotencyKey TTL-sweep cron.
 3. **S7 Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
 
@@ -256,7 +256,7 @@
 
 ---
 
-## SPRINT 5 — Billing + Wallet + Finance + Team (ядро фінансів) — 🔄 У РОБОТІ (backend-first, test-first)
+## SPRINT 5 — Billing + Wallet + Finance + Team (ядро фінансів) — ✅ ЗАВЕРШЕНО (backend; деталі — «S5 РОЗГОРНУТО» вище)
 
 > Ціль: рахунки, платежі, гаманець (2 рахунки), P&L, команда, реферали, лояльність.
 > **План (канон): [`S5_PLAN.md`](S5_PLAN.md)** — dependency-ordered waves A→D, контракти, ідемпотентність, інваріанти, test-list (з understand-workflow). **Порядок:** S5-01 → міграція `s5_00_financial_core` → S5-03a(ExchangeRate) → S5-02(payments) → ledgers(05/07/06) → tail(08/09/04/10). Гроші=`Decimal`; concurrency=`SELECT…FOR UPDATE` (не Serializable); ідемпотентність=`IdempotencyKey` таблиця + unique-констрейнти.
@@ -266,13 +266,13 @@
 | S5-01 | packages/payments — PaymentProvider interface + ManualProvider + RaceGuard (single-flight) | [05-billing]  | ✅ 🧪  |
 | S5-02 | API — /billing/summary /charges + POST payments + advance + idempotency                    | [05-billing]  | ✅ 🧪  |
 | S5-03 | ExchangeRate НБУ cron + Services CRUD + recurring charges cron (CompanyService)            | [05-billing]  | ✅ 🧪  |
-| S5-04 | API — Team rates/earnings + ExecutorPayout + company members+permissions                   | [12-team]     | ⬜     |
+| S5-04 | API — Team rates/earnings + ExecutorPayout + company members+permissions                   | [12-team]     | ✅ 🧪  |
 | S5-05 | Wallet — WalletTransaction ledger + walletCredit/Debit (інваріант, FOR UPDATE)             | [25-wallet]   | ✅ 🧪  |
 | S5-06 | Wallet — referral accrual→credit + ReferralSettings (редаговані %)                         | [25/09]       | ✅ 🧪  |
 | S5-07 | Wallet — money-account: PaymentAllocation + moneyBalance + стани                           | [25-wallet]   | ✅ 🧪  |
-| S5-08 | Wallet — unified statement + spending (bonus/prepaid на invoice)                           | [25-wallet]   | ⬜     |
-| S5-09 | Loyalty — tier-recalc cron + discount-apply + LoyaltyTierHistory                           | [10-loyalty]  | ⬜     |
-| S5-10 | Finance — Expense model + CRUD + P&L (revenue−expenses, ЗП з ExecutorRate)                 | [22-finance]  | ⬜     |
+| S5-08 | Wallet — unified statement + spending (bonus/prepaid на invoice)                           | [25-wallet]   | ✅ 🧪  |
+| S5-09 | Loyalty — tier-recalc cron + discount-apply + LoyaltyTierHistory                           | [10-loyalty]  | ✅ 🧪  |
+| S5-10 | Finance — Expense model + CRUD + P&L (revenue−expenses, ЗП з ExecutorRate)                 | [22-finance]  | ✅ 🧪  |
 | S5-11 | Portal — /billing /wallet /referrals /loyalty                                              | [05/25/09/10] | ⬜     |
 | S5-12 | Workspace — /billing /payouts /services /team /finance /admin-wallet                       | [05/12/22/25] | ⬜     |
 | S5-13 | Deploy Sprint 5 → staging                                                                  | Infra         | 🚀     |
@@ -285,6 +285,44 @@
 > — **WAVE C ✅ (ledgers) — S5-05** bonus-гаманець: `walletCredit`/`walletDebit` (company-row `FOR UPDATE`, інваріант `bonusBalance == Σcredit − Σdebit ≥ 0`, debit-guard 409) + portal/admin wallet-endpoints. **S5-07** money-account: `allocatePayment` (payment-row `FOR UPDATE` → `Σalloc ≤ amount` else 409, `@@unique([paymentId, chargeId])`, FIFO-by-dueDate), derived charge-state (awaiting/partial/paid/overdue/overpaid; stored → nearest `ChargeStatus`), single-writer `recomputeMoneyBalance = Σ(no-order confirmed payments).amountUsd − Σ(charge.totalAmount)` (order-track виключений). **S5-06** referral-accrual → `walletCredit` (in-tx з payment-confirm, idempotent `ON CONFLICT(sourceType,sourceId)`, історичний `percent` immutable) + `ReferralSettings` GET/PATCH. Порядок виконання: 05 → 07 → 06 (06 та 07 склались чисто, спільних файлів немає, `confirmManualPayment` лишився цілим окрім no-op referral-хука).
 > — **Гейт (S5-07):** type-check 21/21 · lint 13/13 · build 13/13 · test (api 294 unit + **37 integration проти живого PG**, з них 9 нових allocation-інваріантів: FOR-UPDATE concurrency, over-allocation 409, FIFO, order-exclusion, recompute) · types 29 · payments 13 · notifications 64.
 > — **Далі (WAVE D — convergence tail):** S5-08 (unified statement + bonus-spend на invoice; залежить від 05+07), S5-09 (loyalty tier-recalc cron + discount-apply), S5-04 (team rates/earnings + ExecutorPayout — незалежний, можна паралельно), S5-10 (Expense + P&L).
+
+---
+
+## SPRINT 5.5 — Audit-ремедіація (повний аудит 11.06.2026) — ✅ ЗАВЕРШЕНО (код; staging-верифікація після пушу)
+
+> Джерело: [`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md) (10 областей, 30 агентів, 0 спростованих знахідок).
+> **Принципи виконання (рішення власника 11.06):** тільки `dev` · фронтенд-тести НЕ пишемо (окремий пізніший прохід; фронт верифікуємо type-check/lint/build) · функціональність S6+ НЕ додаємо (не «переганяти» фактичний код) · бекапи: код+автоматизація зараз, офсайт-тест після появи сховища · після правок — аудит змін, актуалізація доків, коміт+пуш, нагляд за CI/staging.
+
+| ID    | Задача                                                                                                           | Модуль    | Статус |
+| ----- | ---------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| AR-01 | ci.yml: `push: branches [dev, main]` — db-integration гейт (RLS + money-інваріанти) нарешті діє                  | Infra     | ✅     |
+| AR-02 | `concurrency:` group на staging/production воркфлоу (serialize деплої, без cancel-in-progress)                   | Infra     | ✅     |
+| AR-03 | Pre-migrate бекап **blocking** (prod обовʼязково; + перевірка ненульового розміру дампа)                         | Infra     | ✅     |
+| AR-04 | healthchecks на всі 5 app-сервісів + `compose up -d --wait` замість grep `compose ps`                            | Infra     | ✅     |
+| AR-05 | `.previous_deploy` писати лише після успішного verify (rollback не цілиться у зламаний тег)                      | Infra     | ✅     |
+| AR-10 | allocatePayment: валютний guard (payment.currency vs charge.currency → 409) + тест                               | [05/25]   | ✅     |
+| AR-11 | recomputeMoneyBalance з confirmManualPayment (no-order confirmed) + після recurring-cron + тест                  | [25]      | ✅     |
+| AR-12 | recompute: `written_off` виключити з боргу + тест                                                                | [25]      | ✅     |
+| AR-13 | Атомарний статус-перехід ордера (guard у WHERE; прибрати TOCTOU) + тест                                          | [02]      | ✅     |
+| AR-20 | ExecutorPayout `@@unique([agencyId, executorId, period])` + upsert-ключ у payout.ts                              | [db/12]   | ✅     |
+| AR-21 | Referral.agencyId NOT NULL + backfill + column-RLS + same-agency write-guard                                     | [db/09]   | ✅     |
+| AR-22 | Company.slug → per-agency unique `@@unique([agencyId, slug])` (звірити споживачів)                               | [db]      | ✅     |
+| AR-23 | tenantTransaction fail-closed guard: `RLS_ENFORCED=true` + ctx відсутній → throw (allowlist=system); інакше warn | [db/007]  | ✅     |
+| AR-24 | notifications tenant-aware DI (tenant-scoped executor) + agencyId у notify-input                                 | [07]      | ✅     |
+| AR-30 | Fastify `forceCloseConnections` + SSE graceful end + shutdown watchdog 10s + ідемпотентний shutdown              | [api]     | ✅     |
+| AR-31 | refresh-токени: sha256-хеш у БД (сумісна міграція) + sweep протермінованих/revoked                               | [01-auth] | ✅     |
+| AR-32 | outboxWorker: all-channels-failed → retryable error → backoff/DLQ; шанувати `retryAfter` (rate_limited)          | [07]      | ✅     |
+| AR-40 | portal api.ts `??`→`\|\|` (дрейф-баг: порожній build-arg бейкає `API_URL=''`)                                    | [portal]  | ✅     |
+| AR-41 | ErrorBoundary в обох SPA (root-level, дружній fallback)                                                          | [ui]      | ✅     |
+| AR-42 | `@workflo/app-core`: екстракція байт-ідентичного ядра (api/sse/format/queryClient/password/PSM/i18n-provider)    | [arch]    | ✅     |
+| AR-50 | api/landing/bot → multi-stage Dockerfile (маніфести→deps→src; явне рішення де живе prisma CLI для migrate)       | Infra     | ✅     |
+| AR-51 | backup.sh: offsite-обвʼязка (restic/rclone → Storage Box, env-gated, без env = skip+WARN) + cron-автоматизація   | Infra     | ✅     |
+| AR-52 | infra/traefik: синхронізувати з live (cf DNS-challenge через env), dashboard basicauth, включити в deploy-sync   | Infra     | ✅     |
+| AR-53 | staging `COOKIE_DOMAIN` host-only (staging-сесії не течуть у прод на спільному apex)                             | Infra     | ✅     |
+| AR-54 | Секрети: зафіксувати одне джерело правди (trim github-secrets.sh до реально вживаних + док)                      | Infra     | ✅     |
+| AR-60 | Doc-sync: TRACKER ✅ · CRON_JOBS ✅ · INFRASTRUCTURE ✅ · ERD-нотатка ✅ (схема = канон)                         | Docs      | ✅     |
+
+> **Свідомо НЕ в S5.5:** фронтенд-тести (Playwright/компонентні — пізніший прохід) · i18n Block 7b (лишається відкладеним) · RLS-активація (перед зовнішнім тенантом; AR-23 готує механіку, не вмикає) · overdue/dunning, refunds, VAT, online-провайдери (S14-03/фронтенд-прохід) · рознесення серверів/PgBouncer/репліки (перед зовнішнім тенантом) · MoR/pricing-рішення (власник). Прогалини поза модулями (імперсонація, імпорт даних тенанта, email-доставність, email-verify на signup) → BACKLOG з тригерами.
 
 ---
 
@@ -410,16 +448,17 @@
 
 ## ПРОГРЕС
 
-| Фаза                           | Спрінти      | Статус                                                                                 |
-| ------------------------------ | ------------ | -------------------------------------------------------------------------------------- |
-| Foundation                     | S0, S1, S1.5 | ✅ done                                                                                |
-| Tenancy + schema               | S1.6         | ✅ done                                                                                |
-| Orders/Chat/Files backend      | S2           | ✅ done                                                                                |
-| MVP ядро frontend              | S3-S4        | 🔄 S3 екрани ✅ (auth+orders+detail+settings+team+invite) · лишилось: responsive + E2E |
-| Billing/Wallet/Finance backend | S5           | ⬜ next                                                                                |
-| MVP доки+контент               | S6-S7        | ⬜                                                                                     |
-| MVP launch v0.1.0              | S8           | ⬜                                                                                     |
-| Повний продукт (фічі)          | S9-S14       | ⬜                                                                                     |
+| Фаза                           | Спрінти      | Статус                                                              |
+| ------------------------------ | ------------ | ------------------------------------------------------------------- |
+| Foundation                     | S0, S1, S1.5 | ✅ done                                                             |
+| Tenancy + schema               | S1.6         | ✅ done                                                             |
+| Orders/Chat/Files backend      | S2           | ✅ done                                                             |
+| MVP ядро frontend              | S3-S4        | ✅ закодовано + аудит (лишилось: responsive; E2E — пізніший прохід) |
+| Billing/Wallet/Finance backend | S5           | ✅ done (запушено; ручний staging-тест — після S5.5)                |
+| Audit-ремедіація               | S5.5         | 🔄 in progress (повний аудит 11.06)                                 |
+| MVP доки+контент               | S6-S7        | ⬜                                                                  |
+| MVP launch v0.1.0              | S8           | ⬜                                                                  |
+| Повний продукт (фічі)          | S9-S14       | ⬜                                                                  |
 
 > **MVP-межа:** S8 (v0.1.0, перший клієнт). **Повноцінний продукт:** через S14.
 > Деталі скоупу кожного модуля — `SPEC.md` + `modules/NN-*.md`.
