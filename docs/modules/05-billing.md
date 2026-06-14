@@ -824,7 +824,16 @@ Owner генерує сверку:
 
 ### КАНОНІЧНА модель recurring — `Service / CompanyService / ServiceCharge`
 
-**Рішення (R3):** `Service`/`CompanyService`/`ServiceCharge` — **єдине джерело істини** для recurring-доходу. Чернетку `company_billing_subscription` зі старої S1-alignment-секції **відкидаємо** (вона дублювала те саме). Debtors-звіт + P&L + portal billing читають `service_charges` — одне джерело, без розбіжностей.
+> ⚠️ **SUPERSEDED у S5.6 (рішення власника 12.06, `PROJECTS_SPEC.md`):** `CompanyService`
+> **замінюється моделлю `Project`** (фінмодель 2.0). Recurring-підписка = проєкт типу
+> `fixed_monthly_advance`. Абонплат у системі ще немає → чиста заміна без міграції (П6).
+> `Service`-каталог лишається як довідник. Нижче — як було ДО S5.6 (історичний контекст);
+> новий канон — `PROJECTS_SPEC.md` §2-3 + TRACKER P-1.
+
+**Рішення (R3, до S5.6):** `Service`/`CompanyService`/`ServiceCharge` — джерело істини для
+recurring-доходу. Чернетку `company_billing_subscription` зі старої S1-alignment-секції
+**відкидаємо** (вона дублювала те саме). Debtors-звіт + P&L + portal billing читають
+`service_charges` — одне джерело.
 
 ### Підтримка не-місячної частоти
 
