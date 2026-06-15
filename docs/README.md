@@ -62,7 +62,8 @@ turbo dev
 | [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                            |
 | [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                   |
 | [CRON_JOBS.md](CRON_JOBS.md)                         | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                                                             |
-| [TRACKER.md](TRACKER.md)                             | Трекер прогресу: блок **«СТАН ЗАРАЗ»** (готово/далі/відкладено) + спринти S0–S14                                                                       |
+| [TRACKER.md](TRACKER.md)                             | Трекер прогресу: блок **«СТАН ЗАРАЗ»** (готово/далі/відкладено) + спринти S0–S14 + **черга хардену модулів**                                           |
+| [MODULE_HARDENING.md](MODULE_HARDENING.md)           | 🔒 **Коли і як прицільно тестувати+полірувати готовий модуль:** 3-гейт тригер · DoD-чекліст · механіка проходу · 3 хвилі                               |
 | [README.md](README.md)                               | **Цей файл** — глобальний індекс                                                                                                                       |
 
 > **CHANGELOG.md** знаходиться в корені репо (`/CHANGELOG.md`) — не в docs/.
