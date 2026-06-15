@@ -54,8 +54,10 @@ turbo dev
 | [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) | Наскрізні API-стандарти: response-envelope, ApiErrorCode/AppError, Fastify error-handler, CORS, rate-limit, Zod, Pino, health, graceful shutdown       |
 | [FRONTEND_STANDARDS.md](FRONTEND_STANDARDS.md)       | Frontend стек, API client, Auth стан, UI компоненти, тести                                                                                             |
 | [UX_PAGES.md](UX_PAGES.md)                           | Інвентар роутів/сторінок Portal + Workspace (візуальна мова → DESIGN_SYSTEM.md)                                                                        |
+| [DESIGN_SPEC_FULL.md](DESIGN_SPEC_FULL.md)           | 🟢 **ЄДИНИЙ повний handoff дизайнеру** — один файл, усі 29 модулів (база+правки): IA · лендінг · інвентар екранів · що допрацювати                     |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)                 | **Дизайн ↔ код:** токени, інвентар усіх екранів, матриця покриття, workflow-гейт. Дивись СЮДИ перед будь-яким UI                                       |
-| [DESIGN_TODO.md](DESIGN_TODO.md)                     | **Список на допрацювання дизайну** (handoff дизайнеру). Що домалювати + цикл звірки                                                                    |
+| [DESIGN_TZ_2026-06.md](DESIGN_TZ_2026-06.md)         | Деталі нових/змінених екранів + IA + лендінг (джерело Частин I-II майстра)                                                                             |
+| [DESIGN_TODO.md](DESIGN_TODO.md)                     | MVP-handoff (база до проходу). Що домалювати + цикл звірки                                                                                             |
 | [design/](../design/)                                | Готовий хендофф з Claude Design (HTML/CSS/JS-прототип) — джерело правди для візуалу                                                                    |
 | [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                            |
 | [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                   |
