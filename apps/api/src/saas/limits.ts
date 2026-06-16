@@ -10,6 +10,8 @@
  * plan + `AgencyFeatureFlag`. Both stay called from the same sites.
  */
 
+import { type ModuleKey, getModule } from '@workflo/types'
+
 export type QuotaResource = 'orders' | 'seats' | 'storage' | 'integrations' | 'leads'
 
 /** Throw `AppError(403, 'quota_exceeded')` when the tenant is over its plan limit. No-op in Phase 0. */
@@ -26,6 +28,22 @@ export async function assertWithinQuota(
 export async function featureEnabled(_agencyId: string, _flag: string): Promise<boolean> {
   // Phase 0: on. Phase 1: per-agency AgencyFeatureFlag + plan tier.
   return Promise.resolve(true)
+}
+
+/**
+ * Module gate (MOD-1/MOD-2, ADR-008). Typed wrapper over `featureEnabled` keyed
+ * by the canonical `ModuleKey` registry — every NEW module (S5.6+) gates its
+ * routes + navigation through this from day one, so SaaS packaging later is a
+ * data flip (plan → modules), not a handler sweep.
+ *
+ * Phase 0: permissive (true), but `getModule` throws on an unknown key — a
+ * typo'd gate fails loudly in dev/test instead of silently allowing.
+ * Phase 1: resolve the agency's plan → enabled module set (resolveModules) and
+ * check membership; `AgencyFeatureFlag` overrides per-tenant.
+ */
+export async function moduleEnabled(agencyId: string, moduleKey: ModuleKey): Promise<boolean> {
+  getModule(moduleKey) // validate the key exists in the registry (drift guard)
+  return featureEnabled(agencyId, moduleKey)
 }
 
 /**
