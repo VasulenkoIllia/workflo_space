@@ -68,5 +68,26 @@ export async function provisionAgency(
     })
   }
 
+  // 20-Д (P-1б, LEGAL_ENTITY_SPEC): every agency starts with one default legal
+  // entity (Юр-1). Created intentionally incomplete (name/legalName only) — the
+  // owner fills taxId+iban+signerName to pass the isComplete document-gate (Юр-2).
+  // Idempotent: skip if the agency already has any legal entity.
+  const existingEntity = await db.legalEntity.findFirst({
+    where: { agencyId: agency.id },
+    select: { id: true },
+  })
+  if (!existingEntity) {
+    await db.legalEntity.create({
+      data: {
+        agencyId: agency.id,
+        name: input.name,
+        legalName: input.name,
+        legalType: 'fop',
+        isDefault: true,
+        isComplete: false,
+      },
+    })
+  }
+
   return { agencyId: agency.id }
 }

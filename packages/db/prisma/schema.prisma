@@ -631,23 +631,25 @@ model ActivityLog {
 }
 
 model Document {
-  id          String         @id @default(uuid())
-  agencyId    String
-  type        DocumentType
-  number      String
-  orderId     String?
-  order       Order?         @relation(fields: [orderId], references: [id])
-  companyId   String
-  company     Company        @relation(fields: [companyId], references: [id])
-  status      DocumentStatus @default(draft)
-  storedAs    String?
-  sentAt      DateTime?      @db.Timestamptz(3)
-  generatedAt DateTime       @default(now()) @db.Timestamptz(3)
-  createdById String
-  createdBy   Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
-  executorId  String?
-  executor    Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
-  agency      Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  id            String         @id @default(uuid())
+  agencyId      String
+  type          DocumentType
+  number        String
+  orderId       String?
+  order         Order?         @relation(fields: [orderId], references: [id])
+  companyId     String
+  company       Company        @relation(fields: [companyId], references: [id])
+  status        DocumentStatus @default(draft)
+  storedAs      String?
+  sentAt        DateTime?      @db.Timestamptz(3)
+  generatedAt   DateTime       @default(now()) @db.Timestamptz(3)
+  createdById   String
+  createdBy     Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  executorId    String?
+  executor      Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  legalEntityId String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
+  legalEntity   LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, type, number])
   @@index([agencyId])
@@ -656,6 +658,7 @@ model Document {
   @@index([type])
   @@index([createdById])
   @@index([executorId])
+  @@index([legalEntityId])
   @@map("documents")
 }
 
@@ -814,6 +817,7 @@ model Agency {
   executorPayouts    ExecutorPayout[]
   expenses           Expense[]
   referrals          Referral[] // AR-21 (S5.5)
+  legalEntities      LegalEntity[] // 20-Д (S5.6 P-1б)
 
   @@index([planId])
   @@map("agencies")
@@ -1165,6 +1169,40 @@ model IdempotencyKey {
   @@index([expiresAt])
   @@index([agencyId])
   @@map("idempotency_keys")
+}
+
+/// Юр-особа агенції (20-Д, S5.6 P-1б). Реквізити для документів і договорів.
+/// N на агенцію, ≥1 дефолтна (provisionAgency). Project.legalEntityId — у P-1.
+model LegalEntity {
+  id       String @id @default(uuid())
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  name         String // внутрішня назва («ФОП Іваненко», «ТОВ Workflo»)
+  legalType    String // 'fop' | 'tov' | 'individual' | 'foreign' (вільний — як Project.type, П8)
+  legalName    String // повна юр-назва для документів
+  taxId        String? // ЄДРПОУ / ІПН / РНОКПП
+  vatPayer     Boolean @default(false) // платник ПДВ (звʼязок 05-Ж VAT-поля)
+  vatId        String? // ІПН платника ПДВ
+  legalAddress String?
+  bankName     String?
+  iban         String?
+  signerName   String? // ПІБ, хто підписує
+  signerTitle  String? // посада («директор», «ФОП»)
+  stampUrl     String? // печатка/підпис (storage key)
+
+  isDefault  Boolean  @default(false) // дефолтна юр-особа агенції (Юр-3 каскад)
+  isComplete Boolean  @default(false) // обчислюється: legalName+taxId+iban+signerName (Юр-2 gate)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  documents Document[] // від якої юр-особи виставлено (Document.legalEntityId)
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@index([agencyId, isDefault])
+  @@map("legal_entities")
 }
 
 enum WalletTxnType {
