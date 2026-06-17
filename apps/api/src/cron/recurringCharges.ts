@@ -4,26 +4,25 @@ import { captureException } from '../observability/sentry.js'
 import { generateRecurringCharges } from '../services/recurringCharges.js'
 
 /**
- * Recurring-charge cron (S5-03b → S5.6 P-1 3b). Fires on the 1st of each month and
- * generates the project subscription charges due across ALL tenants (worker context
- * → RLS-permissive, sees every agency). Idempotent: the `(projectId, periodStart)`
- * unique constraint means a duplicate run on another replica creates no extra rows.
- * Lifecycle owned by `startWorkers()`; never started in tests.
+ * Recurring-charge cron (S5-03b → S5.6 P-2). Fires DAILY (00:05 UTC) and generates
+ * the project charges due across ALL tenants (worker context → RLS-permissive, sees
+ * every agency). The generator keys off `nextCycleAt <= now`, so a daily tick closes
+ * each project on its own `cycleDay` / weekly day exactly when due (a monthly tick
+ * would miss non-1st cycleDays and weekly cycles). Idempotent: the
+ * `(projectId, periodStart)` unique constraint means a duplicate run on another
+ * replica creates no extra rows. Lifecycle owned by `startWorkers()`; never in tests.
  *
- * Month lengths vary, so this self-reschedules after each fire rather than using a
- * fixed interval (mirrors the exchangeRate cron's lifecycle).
+ * Self-reschedules after each fire (mirrors the exchangeRate cron's lifecycle).
  */
 let timer: ReturnType<typeof setTimeout> | null = null
 let running = false
 
-/** ms from `now` until the next 1st-of-month at `hour:minute` UTC. */
-export function msUntilNextMonthStart(hour: number, minute: number, now: Date): number {
-  let candidate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, hour, minute, 0, 0))
-  if (candidate.getTime() <= now.getTime()) {
-    candidate = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, hour, minute, 0, 0)
-    )
-  }
+/** ms from `now` until the next daily run at `hour:minute` UTC. */
+export function msUntilNextDailyRun(hour: number, minute: number, now: Date): number {
+  const candidate = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute, 0, 0)
+  )
+  if (candidate.getTime() <= now.getTime()) candidate.setUTCDate(candidate.getUTCDate() + 1)
   return candidate.getTime() - now.getTime()
 }
 
@@ -46,7 +45,7 @@ async function runOnce(logger: FastifyBaseLogger): Promise<void> {
 }
 
 function schedule(logger: FastifyBaseLogger): void {
-  const delay = msUntilNextMonthStart(0, 5, new Date())
+  const delay = msUntilNextDailyRun(0, 5, new Date())
   timer = setTimeout(() => {
     timer = null
     void runOnce(logger).finally(() => schedule(logger))
@@ -57,7 +56,7 @@ function schedule(logger: FastifyBaseLogger): void {
 export function startRecurringChargesCron(logger: FastifyBaseLogger): void {
   if (timer) return
   schedule(logger)
-  logger.info('recurringCharges cron scheduled (1st of month, 00:05 UTC)')
+  logger.info('recurringCharges cron scheduled (daily, 00:05 UTC)')
 }
 
 export function stopRecurringChargesCron(): void {

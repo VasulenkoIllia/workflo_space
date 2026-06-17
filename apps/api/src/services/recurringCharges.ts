@@ -31,6 +31,11 @@ function addMonthUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
 }
 
+/** Shift `d` by `n` calendar days (UTC) — advances/rewinds a weekly anchor/period. */
+function addDaysUtc(d: Date, n: number): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n))
+}
+
 /** Last calendar day (UTC) of the month containing `d` — the cycle's periodEnd. */
 function endOfMonthDateUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
@@ -110,7 +115,7 @@ export async function generateRecurringCharges(
     where: {
       active: true,
       billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid'] },
-      billingCycle: 'monthly_day_n',
+      billingCycle: { in: ['monthly_day_n', 'weekly_day_x'] }, // manual → nextCycleAt null, not due
       nextCycleAt: { lte: opts.now },
       ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
     },
@@ -120,6 +125,7 @@ export async function generateRecurringCharges(
       companyId: true,
       currency: true,
       billingModel: true,
+      billingCycle: true,
       abonAmount: true,
       nextCycleAt: true,
       company: { select: { loyaltyTier: true, tierOverride: true } },
@@ -132,24 +138,34 @@ export async function generateRecurringCharges(
   for (const p of due) {
     if (!p.nextCycleAt) continue
     const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
+    const weekly = p.billingCycle === 'weekly_day_x'
+    const advance = weekly ? (d: Date) => addDaysUtc(d, 7) : addMonthUtc
     let cursor = p.nextCycleAt
     let guard = 0
     while (cursor <= opts.now && guard < MAX_CATCHUP_PERIODS) {
       // Period + base differ by model: fixed bills the UPCOMING month in advance;
-      // hourly_postpaid bills the month that just ENDED, by actual hours (P-2).
+      // hourly_postpaid bills the cycle that just ENDED, by actual hours. weekly_day_x
+      // applies to hourly billing (owner's «щопонеділка»); fixed stays monthly (P-2).
       let periodStart: Date
+      let periodEnd: Date
+      let dueDate: Date
       let base: Prisma.Decimal | null
       if (p.billingModel === 'fixed_monthly_advance') {
         periodStart = startOfMonthUtc(cursor)
+        periodEnd = endOfMonthDateUtc(periodStart)
+        dueDate = addMonthUtc(periodStart)
         base = p.abonAmount ?? null
       } else {
-        periodStart = firstOfPrevMonthUtc(cursor)
-        const revenue = await sumBillableRevenue(
-          tx,
-          p.id,
-          periodStart,
-          endOfMonthDateUtc(periodStart)
-        )
+        if (weekly) {
+          periodStart = addDaysUtc(cursor, -7) // the week that just closed
+          periodEnd = addDaysUtc(cursor, -1)
+          dueDate = addDaysUtc(cursor, 7)
+        } else {
+          periodStart = firstOfPrevMonthUtc(cursor)
+          periodEnd = endOfMonthDateUtc(periodStart)
+          dueDate = addMonthUtc(periodStart)
+        }
+        const revenue = await sumBillableRevenue(tx, p.id, periodStart, periodEnd)
         base = revenue.isZero() ? null : revenue // no billable work → no charge
       }
       if (base) {
@@ -166,12 +182,12 @@ export async function generateRecurringCharges(
           currency: p.currency,
           month: periodStart,
           periodStart,
-          periodEnd: endOfMonthDateUtc(periodStart),
+          periodEnd,
           status: 'pending',
-          dueDate: addMonthUtc(periodStart),
+          dueDate,
         })
       }
-      cursor = addMonthUtc(cursor)
+      cursor = advance(cursor)
       guard++
     }
     advances.push({ id: p.id, nextCycleAt: cursor })

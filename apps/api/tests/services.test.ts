@@ -309,13 +309,14 @@ describe('recurringCharges helpers (pure)', () => {
     expect(helpers.endOfMonthUtc('2026-12').toISOString()).toBe('2026-12-31T23:59:59.999Z')
   })
 
-  it('msUntilNextMonthStart is positive and lands on a 1st', () => {
+  it('msUntilNextDailyRun lands on the next 00:05 UTC tick', () => {
     const now = new Date('2026-06-17T12:00:00Z')
-    const ms = cron.msUntilNextMonthStart(0, 5, now)
+    const ms = cron.msUntilNextDailyRun(0, 5, now)
     expect(ms).toBeGreaterThan(0)
     const fireAt = new Date(now.getTime() + ms)
-    expect(fireAt.getUTCDate()).toBe(1)
-    expect(fireAt.getUTCMonth()).toBe(6) // July
+    expect(fireAt.getUTCDate()).toBe(18) // next day (today's 00:05 already passed)
+    expect(fireAt.getUTCHours()).toBe(0)
+    expect(fireAt.getUTCMinutes()).toBe(5)
   })
 
   it('computeChargeAmounts applies the tier discount', () => {
