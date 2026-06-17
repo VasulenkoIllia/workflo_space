@@ -128,6 +128,19 @@ export enum ChargeFrequency {
   ANNUAL = 'annual',
 }
 
+// ─── Projects (05-ПРОЕКТИ, фінмодель 2.0 — S5.6 P-1) ─────────────────────────
+export enum ProjectBillingModel {
+  FIXED_MONTHLY_ADVANCE = 'fixed_monthly_advance',
+  HOURLY_PREPAID = 'hourly_prepaid',
+  HOURLY_POSTPAID = 'hourly_postpaid',
+}
+
+export enum ProjectBillingCycle {
+  MONTHLY_DAY_N = 'monthly_day_n',
+  WEEKLY_DAY_X = 'weekly_day_x',
+  MANUAL = 'manual',
+}
+
 export enum PaymentType {
   ADVANCE = 'advance',
   FINAL = 'final',
