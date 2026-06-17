@@ -365,32 +365,40 @@ model CompanyService {
 }
 
 model ServiceCharge {
-  id               String         @id @default(uuid())
+  id               String          @id @default(uuid())
   agencyId         String
   companyId        String
-  company          Company        @relation(fields: [companyId], references: [id])
-  companyServiceId String
-  companyService   CompanyService @relation(fields: [companyServiceId], references: [id])
-  amount           Decimal        @db.Decimal(10, 2)
-  baseAmount       Decimal?       @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
-  discountPct      Decimal?       @db.Decimal(5, 2)
-  discountAmount   Decimal?       @db.Decimal(10, 2)
-  totalAmount      Decimal?       @db.Decimal(10, 2) // post-discount amount owed
-  currency         String         @default("USD")
-  uahRate          Decimal?       @db.Decimal(10, 4)
-  month            DateTime       @db.Date
-  status           ChargeStatus   @default(pending)
-  dueDate          DateTime?      @db.Timestamptz(3)
-  paidAt           DateTime?      @db.Timestamptz(3)
+  company          Company         @relation(fields: [companyId], references: [id])
+  // 05-ПРОЕКТИ (S5.6 P-1 3b): нарахування походить З ПРОЄКТУ. companyServiceId стає
+  // nullable (re-point) і буде видалений у 3b-2 разом із дропом CompanyService.
+  companyServiceId String?
+  companyService   CompanyService? @relation(fields: [companyServiceId], references: [id])
+  projectId        String? // нарахування циклу проєкту (manual-разові — без проєкту)
+  project          Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  periodStart      DateTime?       @db.Date // межі циклу (для weekly `month` недостатньо)
+  periodEnd        DateTime?       @db.Date
+  amount           Decimal         @db.Decimal(10, 2)
+  baseAmount       Decimal?        @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
+  discountPct      Decimal?        @db.Decimal(5, 2)
+  discountAmount   Decimal?        @db.Decimal(10, 2)
+  totalAmount      Decimal?        @db.Decimal(10, 2) // post-discount amount owed
+  currency         String          @default("USD")
+  uahRate          Decimal?        @db.Decimal(10, 4)
+  month            DateTime        @db.Date
+  status           ChargeStatus    @default(pending)
+  dueDate          DateTime?       @db.Timestamptz(3)
+  paidAt           DateTime?       @db.Timestamptz(3)
   notes            String?
-  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
-  agency           Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  agency           Agency          @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   allocations PaymentAllocation[]
 
   @@unique([companyServiceId, month])
+  @@unique([projectId, periodStart]) // ідемпотентність генерації per-цикл проєкту (П6)
   @@index([agencyId])
   @@index([companyId, month])
+  @@index([projectId])
   @@map("service_charges")
 }
 
@@ -1254,6 +1262,7 @@ model Project {
 
   executorRates ProjectExecutorRate[]
   orders        Order[]
+  charges       ServiceCharge[] // нарахування циклів (05-ПРОЕКТИ, P-1 3b)
 
   @@unique([companyId, name])
   @@index([agencyId])

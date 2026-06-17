@@ -48,9 +48,23 @@ run('cross-tenant isolation (RLS / workflo_app)', () => {
 
   beforeAll(async () => {
     owner = new PrismaClient({ datasources: { db: { url: OWNER_URL as string } } })
-    // Activate the RLS subject role (migration creates it NOLOGIN).
-    await owner.$executeRawUnsafe(`ALTER ROLE workflo_app WITH LOGIN PASSWORD '${APP_PASSWORD}'`)
+    // Construct the app client first (Prisma connects lazily) so afterAll can always
+    // disconnect even if role setup races a sibling integration file.
     app = new PrismaClient({ datasources: { db: { url: appUrlFrom(OWNER_URL as string) } } })
+    // Activate the RLS subject role (migration creates it NOLOGIN). Sibling files
+    // (legalEntity, project) ALTER the same role concurrently → tolerate
+    // "tuple concurrently updated" with a short retry (same password each time).
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await owner.$executeRawUnsafe(
+          `ALTER ROLE workflo_app WITH LOGIN PASSWORD '${APP_PASSWORD}'`
+        )
+        break
+      } catch (err) {
+        if (attempt === 2) throw err
+        await new Promise((r) => setTimeout(r, 100))
+      }
+    }
 
     // Seed two isolated tenants as owner (GUC unset → permissive even under FORCE RLS).
     await owner.profile.create({
@@ -95,13 +109,15 @@ run('cross-tenant isolation (RLS / workflo_app)', () => {
 
   afterAll(async () => {
     // Best-effort cleanup (owner bypasses RLS).
-    await owner.orderStage.deleteMany({ where: { orderId: { in: [orderA, orderB] } } })
-    await owner.orderComment.deleteMany({ where: { agencyId: { in: [A, B] } } })
-    await owner.order.deleteMany({ where: { agencyId: { in: [A, B] } } })
-    await owner.agency.deleteMany({ where: { id: { in: [A, B] } } })
-    await owner.profile.deleteMany({ where: { id: creatorId } })
-    await app.$disconnect()
-    await owner.$disconnect()
+    if (owner) {
+      await owner.orderStage.deleteMany({ where: { orderId: { in: [orderA, orderB] } } })
+      await owner.orderComment.deleteMany({ where: { agencyId: { in: [A, B] } } })
+      await owner.order.deleteMany({ where: { agencyId: { in: [A, B] } } })
+      await owner.agency.deleteMany({ where: { id: { in: [A, B] } } })
+      await owner.profile.deleteMany({ where: { id: creatorId } })
+    }
+    if (app) await app.$disconnect()
+    if (owner) await owner.$disconnect()
   })
 
   /** Run fn with the workflo_app session scoped to `agencyId` (session-level SET on the pinned connection). */
