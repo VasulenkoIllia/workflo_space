@@ -146,9 +146,28 @@ async function buildChargeRow(
     month: periodStart,
     periodStart,
     periodEnd,
+    kind: p.billingModel === 'fixed_monthly_advance' ? 'subscription' : 'hourly',
     status: 'pending',
     dueDate,
   }
+}
+
+/** Σ(hours) for a project's time in [periodStart, periodEnd] — drives the hybrid cap. */
+async function sumProjectHours(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<Prisma.Decimal> {
+  const rows = await tx.$queryRaw<Array<{ hours: Prisma.Decimal | string | null }>>`
+    SELECT COALESCE(SUM(t."hours"), 0) AS hours
+    FROM "time_logs" t
+    JOIN "orders" o ON o."id" = t."orderId"
+    WHERE o."projectId" = ${projectId}
+      AND t."date" >= ${periodStart}
+      AND t."date" <= ${periodEnd}
+  `
+  return new Prisma.Decimal(rows[0]?.hours ?? 0)
 }
 
 /**
@@ -211,6 +230,8 @@ export async function generateRecurringCharges(
       billingModel: true,
       billingCycle: true,
       abonAmount: true,
+      clientHourlyRate: true,
+      includedHoursCap: true,
       nextCycleAt: true,
       company: { select: { loyaltyTier: true, tierOverride: true } },
     },
@@ -248,6 +269,37 @@ export async function generateRecurringCharges(
       }
       const row = await buildChargeRow(tx, p, periodStart, periodEnd, dueDate, tier)
       if (row) rows.push(row)
+
+      // Hybrid overage (P-2d): a fixed project that includes N hours bills the hours
+      // OVER the cap for the JUST-CLOSED month at clientHourlyRate — a separate
+      // kind='overage' charge (coexists with the subscription advance for that period).
+      if (p.billingModel === 'fixed_monthly_advance' && p.includedHoursCap && p.clientHourlyRate) {
+        const ovStart = firstOfPrevMonthUtc(cursor)
+        const ovEnd = endOfMonthDateUtc(ovStart)
+        const overHours = (await sumProjectHours(tx, p.id, ovStart, ovEnd)).minus(
+          p.includedHoursCap
+        )
+        if (overHours.greaterThan(0)) {
+          const amounts = computeChargeAmounts(overHours.times(p.clientHourlyRate), tier)
+          rows.push({
+            agencyId: p.agencyId,
+            companyId: p.companyId,
+            projectId: p.id,
+            amount: amounts.totalAmount,
+            baseAmount: amounts.baseAmount,
+            discountPct: amounts.discountPct,
+            discountAmount: amounts.discountAmount,
+            totalAmount: amounts.totalAmount,
+            currency: p.currency,
+            month: ovStart,
+            periodStart: ovStart,
+            periodEnd: ovEnd,
+            kind: 'overage',
+            status: 'pending',
+            dueDate: addMonthUtc(ovStart),
+          })
+        }
+      }
       cursor = advance(cursor)
       guard++
     }

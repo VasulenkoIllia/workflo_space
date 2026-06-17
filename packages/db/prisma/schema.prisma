@@ -359,6 +359,7 @@ model ServiceCharge {
   project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   periodStart    DateTime?    @db.Date // межі циклу (для weekly `month` недостатньо)
   periodEnd      DateTime?    @db.Date
+  kind           String       @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
   amount         Decimal      @db.Decimal(10, 2)
   baseAmount     Decimal?     @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
   discountPct    Decimal?     @db.Decimal(5, 2)
@@ -376,7 +377,7 @@ model ServiceCharge {
 
   allocations PaymentAllocation[]
 
-  @@unique([projectId, periodStart]) // ідемпотентність генерації per-цикл проєкту (П6)
+  @@unique([projectId, periodStart, kind]) // ідемпотентність per-цикл; kind розрізняє абон+overage в одному періоді (P-2d)
   @@index([agencyId])
   @@index([companyId, month])
   @@index([projectId])
