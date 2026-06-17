@@ -9,10 +9,11 @@ import { refreshMoneyBalance } from './allocation.js'
  * to the same rows. The loyalty discount is applied here at creation time from the
  * project company's effective tier (the discount math lives in this single place).
  *
- * Scope: `fixed_monthly_advance` on a `monthly_day_n` cycle — the subscription
- * advance charge (abonAmount billed up-front each month). The hourly (prepaid/
- * postpaid) and weekly/manual cycle modes are the P-2 cycle-engine (PROJECTS_SPEC
- * §3) and are intentionally not generated here yet.
+ * Scope (P-2a) on a `monthly_day_n` cycle: `fixed_monthly_advance` — abonAmount
+ * billed up-front for the upcoming month; `hourly_postpaid` — Σ(hours ×
+ * clientRateSnapshot) for the month that just ended (no work → no charge). The
+ * `hourly_prepaid` reconcile, hybrid overage, and weekly/manual cycle modes are
+ * the remaining P-2 work (PROJECTS_SPEC §3).
  *
  * Runs inside the caller's transaction: the cron wraps all tenants (worker /
  * RLS-bypass); the manual `generate` endpoint scopes to one agency.
@@ -33,6 +34,33 @@ function addMonthUtc(d: Date): Date {
 /** Last calendar day (UTC) of the month containing `d` — the cycle's periodEnd. */
 function endOfMonthDateUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+}
+
+/** First instant (UTC) of the month BEFORE `d` — the period a postpaid close bills. */
+function firstOfPrevMonthUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1))
+}
+
+/**
+ * Σ(billable revenue) for a project's time in [periodStart, periodEnd] — the
+ * snapshotted client rate per hour (P-5) times hours. zeroBilled tasks carry a
+ * `clientRateSnapshot` of 0, so they contribute nothing (cost-only) automatically.
+ */
+async function sumBillableRevenue(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<Prisma.Decimal> {
+  const rows = await tx.$queryRaw<Array<{ revenue: Prisma.Decimal | string | null }>>`
+    SELECT COALESCE(SUM(t."hours" * t."clientRateSnapshot"), 0) AS revenue
+    FROM "time_logs" t
+    JOIN "orders" o ON o."id" = t."orderId"
+    WHERE o."projectId" = ${projectId}
+      AND t."date" >= ${periodStart}
+      AND t."date" <= ${periodEnd}
+  `
+  return new Prisma.Decimal(rows[0]?.revenue ?? 0)
 }
 
 export interface ChargeAmounts {
@@ -81,10 +109,9 @@ export async function generateRecurringCharges(
   const due = await tx.project.findMany({
     where: {
       active: true,
-      billingModel: 'fixed_monthly_advance',
+      billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid'] },
       billingCycle: 'monthly_day_n',
       nextCycleAt: { lte: opts.now },
-      abonAmount: { not: null },
       ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
     },
     select: {
@@ -92,6 +119,7 @@ export async function generateRecurringCharges(
       agencyId: true,
       companyId: true,
       currency: true,
+      billingModel: true,
       abonAmount: true,
       nextCycleAt: true,
       company: { select: { loyaltyTier: true, tierOverride: true } },
@@ -102,29 +130,47 @@ export async function generateRecurringCharges(
   const advances: Array<{ id: string; nextCycleAt: Date }> = []
 
   for (const p of due) {
-    if (!p.nextCycleAt || !p.abonAmount) continue
+    if (!p.nextCycleAt) continue
     const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
     let cursor = p.nextCycleAt
     let guard = 0
     while (cursor <= opts.now && guard < MAX_CATCHUP_PERIODS) {
-      const periodStart = startOfMonthUtc(cursor)
-      const amounts = computeChargeAmounts(p.abonAmount, tier)
-      rows.push({
-        agencyId: p.agencyId,
-        companyId: p.companyId,
-        projectId: p.id,
-        amount: amounts.totalAmount,
-        baseAmount: amounts.baseAmount,
-        discountPct: amounts.discountPct,
-        discountAmount: amounts.discountAmount,
-        totalAmount: amounts.totalAmount,
-        currency: p.currency,
-        month: periodStart,
-        periodStart,
-        periodEnd: endOfMonthDateUtc(periodStart),
-        status: 'pending',
-        dueDate: addMonthUtc(periodStart), // due by the end of the charge month
-      })
+      // Period + base differ by model: fixed bills the UPCOMING month in advance;
+      // hourly_postpaid bills the month that just ENDED, by actual hours (P-2).
+      let periodStart: Date
+      let base: Prisma.Decimal | null
+      if (p.billingModel === 'fixed_monthly_advance') {
+        periodStart = startOfMonthUtc(cursor)
+        base = p.abonAmount ?? null
+      } else {
+        periodStart = firstOfPrevMonthUtc(cursor)
+        const revenue = await sumBillableRevenue(
+          tx,
+          p.id,
+          periodStart,
+          endOfMonthDateUtc(periodStart)
+        )
+        base = revenue.isZero() ? null : revenue // no billable work → no charge
+      }
+      if (base) {
+        const amounts = computeChargeAmounts(base, tier)
+        rows.push({
+          agencyId: p.agencyId,
+          companyId: p.companyId,
+          projectId: p.id,
+          amount: amounts.totalAmount,
+          baseAmount: amounts.baseAmount,
+          discountPct: amounts.discountPct,
+          discountAmount: amounts.discountAmount,
+          totalAmount: amounts.totalAmount,
+          currency: p.currency,
+          month: periodStart,
+          periodStart,
+          periodEnd: endOfMonthDateUtc(periodStart),
+          status: 'pending',
+          dueDate: addMonthUtc(periodStart),
+        })
+      }
       cursor = addMonthUtc(cursor)
       guard++
     }
