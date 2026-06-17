@@ -10,7 +10,7 @@ import { endOfMonthUtc, generateRecurringCharges } from '../../services/recurrin
  * POST /workspace/billing/charges/generate — manual fallback for the recurring-charge
  * cron (S5-03b). Generates the charges due for a given month, scoped to the caller's
  * agency. Shares the exact generation logic with the cron, so a manual run produces
- * the same rows; the `(companyServiceId, month)` unique constraint keeps it idempotent.
+ * the same rows; the `(projectId, periodStart)` unique constraint keeps it idempotent.
  */
 const generateChargesRoute: FastifyPluginAsync = (fastify) => {
   fastify.post(

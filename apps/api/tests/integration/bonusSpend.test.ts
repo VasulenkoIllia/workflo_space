@@ -20,8 +20,7 @@ run('S5-08 bonus-spend (real PG)', () => {
   const agencyId = randomUUID()
   const companyId = randomUUID()
   const creatorId = randomUUID()
-  const serviceId = randomUUID()
-  const companyServiceId = randomUUID()
+  const projectId = randomUUID()
   const tag = randomUUID().slice(0, 8)
 
   function credit(amount: number) {
@@ -52,12 +51,13 @@ run('S5-08 bonus-spend (real PG)', () => {
       data: {
         agencyId,
         companyId,
-        companyServiceId,
+        projectId,
         amount: total,
         totalAmount: total,
         baseAmount: total,
         currency: 'USD',
         month: new Date('2026-06-01T00:00:00Z'),
+        periodStart: new Date('2026-06-01T00:00:00Z'),
         status: 'pending',
       },
       select: { id: true },
@@ -87,11 +87,17 @@ run('S5-08 bonus-spend (real PG)', () => {
     await prisma.company.create({
       data: { id: companyId, agencyId, name: 'BS Co', slug: `bs-${tag}` },
     })
-    await prisma.service.create({
-      data: { id: serviceId, agencyId, name: 'Svc', isActive: true, isRecurring: true },
-    })
-    await prisma.companyService.create({
-      data: { id: companyServiceId, companyId, serviceId, customPrice: 100, active: true },
+    await prisma.project.create({
+      data: {
+        id: projectId,
+        agencyId,
+        companyId,
+        name: 'BS Project',
+        billingModel: 'fixed_monthly_advance',
+        billingCycle: 'monthly_day_n',
+        cycleDay: 1,
+        abonAmount: 100,
+      },
     })
   })
 
@@ -100,8 +106,7 @@ run('S5-08 bonus-spend (real PG)', () => {
     await prisma.walletTransaction.deleteMany({ where: { agencyId } })
     await prisma.payment.deleteMany({ where: { agencyId } })
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
-    await prisma.companyService.deleteMany({ where: { id: companyServiceId } })
-    await prisma.service.deleteMany({ where: { id: serviceId } })
+    await prisma.project.deleteMany({ where: { agencyId } })
     await prisma.company.deleteMany({ where: { id: companyId } })
     await prisma.agency.deleteMany({ where: { id: agencyId } })
     await prisma.profile.deleteMany({ where: { id: creatorId } })

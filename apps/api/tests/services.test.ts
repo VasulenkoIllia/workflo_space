@@ -7,11 +7,8 @@ const serviceCreate = vi.fn()
 const serviceFindUnique = vi.fn()
 const serviceUpdate = vi.fn()
 const serviceDelete = vi.fn()
-const csFindUnique = vi.fn()
-const csCreate = vi.fn()
-const csUpdate = vi.fn()
-const csCount = vi.fn()
-const csFindMany = vi.fn()
+const projectFindMany = vi.fn()
+const projectUpdate = vi.fn()
 const companyFindUnique = vi.fn()
 const chargeCreateMany = vi.fn()
 const auditLogCreate = vi.fn()
@@ -44,13 +41,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
       update: serviceUpdate,
       delete: serviceDelete,
     },
-    companyService: {
-      findUnique: csFindUnique,
-      create: csCreate,
-      update: csUpdate,
-      count: csCount,
-      findMany: csFindMany,
-    },
+    project: { findMany: projectFindMany, update: projectUpdate },
     company: { findUnique: companyFindUnique, update: companyUpdate },
     serviceCharge: { createMany: chargeCreateMany },
     payment: { aggregate: paymentAggregate },
@@ -106,7 +97,6 @@ function svcRow(over: Record<string, unknown> = {}) {
     isRecurring: true,
     defaultPriceUsd: Dec('100.00'),
     createdAt: new Date('2026-06-08T00:00:00Z'),
-    _count: { companyAssigns: 0 },
     ...over,
   }
 }
@@ -122,6 +112,8 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 // ════════════════════════════════════════════════════════════════════════════
+// Service catalog stays a plain reference list (P-1 3b removed per-company
+// subscriptions; projects replace them — see projects.test / project.test).
 describe('services catalog', () => {
   it('executor lists agency services', async () => {
     serviceFindMany.mockResolvedValue([svcRow()])
@@ -188,24 +180,8 @@ describe('services catalog', () => {
     await app.close()
   })
 
-  it('PATCH price change blocked while active subscriptions exist (409)', async () => {
+  it('PATCH changes price (200 — no subscription guard anymore)', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    csCount.mockResolvedValue(2)
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/workspace/services/${SERVICE_ID}`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { defaultPriceUsd: 200 },
-    })
-    expect(res.statusCode).toBe(409)
-    expect(serviceUpdate).not.toHaveBeenCalled()
-    await app.close()
-  })
-
-  it('PATCH price change allowed when no active subscriptions (200)', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    csCount.mockResolvedValue(0)
     serviceUpdate.mockResolvedValue(svcRow({ defaultPriceUsd: Dec('200.00') }))
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
@@ -231,23 +207,8 @@ describe('services catalog', () => {
     await app.close()
   })
 
-  it('DELETE blocked while subscriptions exist (409)', async () => {
+  it('DELETE succeeds (200)', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    csCount.mockResolvedValue(1)
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'DELETE',
-      url: `/workspace/services/${SERVICE_ID}`,
-      headers: { authorization: `Bearer ${token}` },
-    })
-    expect(res.statusCode).toBe(409)
-    expect(serviceDelete).not.toHaveBeenCalled()
-    await app.close()
-  })
-
-  it('DELETE succeeds with no subscriptions (200)', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    csCount.mockResolvedValue(0)
     serviceDelete.mockResolvedValue({ id: SERVICE_ID })
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
@@ -259,120 +220,14 @@ describe('services catalog', () => {
     expect(serviceDelete).toHaveBeenCalled()
     await app.close()
   })
-})
 
-// ════════════════════════════════════════════════════════════════════════════
-describe('service assignments', () => {
-  const assignmentRow = {
-    id: 'cs-1',
-    companyId: COMPANY_ID,
-    serviceId: SERVICE_ID,
-    customPrice: undefined as unknown,
-    frequency: 'monthly',
-    active: true,
-    nextChargeAt: new Date('2026-07-01T00:00:00Z'),
-  }
-
-  it('assigns a company → 201, nextChargeAt = first of next month', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-1' })
-    csFindUnique.mockResolvedValue(null)
-    csCreate.mockResolvedValue({ ...assignmentRow, customPrice: Dec('50.00') })
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'POST',
-      url: `/workspace/services/${SERVICE_ID}/assign`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { companyId: COMPANY_ID, customPrice: 50 },
-    })
-    expect(res.statusCode).toBe(201)
-    const nextChargeAt: Date = csCreate.mock.calls[0][0].data.nextChargeAt
-    expect(nextChargeAt.getUTCDate()).toBe(1)
-    expect(nextChargeAt.getTime()).toBeGreaterThan(Date.now())
-    await app.close()
-  })
-
-  it('409 when already subscribed (active)', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-1' })
-    csFindUnique.mockResolvedValue({ id: 'cs-1', active: true })
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'POST',
-      url: `/workspace/services/${SERVICE_ID}/assign`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { companyId: COMPANY_ID, customPrice: 50 },
-    })
-    expect(res.statusCode).toBe(409)
-    await app.close()
-  })
-
-  it('reactivates a cancelled subscription (201, update path)', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-1' })
-    csFindUnique.mockResolvedValue({ id: 'cs-1', active: false })
-    csUpdate.mockResolvedValue({ ...assignmentRow, customPrice: Dec('60.00') })
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'POST',
-      url: `/workspace/services/${SERVICE_ID}/assign`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { companyId: COMPANY_ID, customPrice: 60 },
-    })
-    expect(res.statusCode).toBe(201)
-    expect(csUpdate.mock.calls[0][0].data.active).toBe(true)
-    expect(csCreate).not.toHaveBeenCalled()
-    await app.close()
-  })
-
-  it('404 when the company is in another tenant', async () => {
-    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
-    companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-OTHER' })
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'POST',
-      url: `/workspace/services/${SERVICE_ID}/assign`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { companyId: COMPANY_ID, customPrice: 50 },
-    })
-    expect(res.statusCode).toBe(404)
-    await app.close()
-  })
-
-  it('client cannot assign (403)', async () => {
-    const { app, token } = await authed(CLIENT)
-    const res = await app.inject({
-      method: 'POST',
-      url: `/workspace/services/${SERVICE_ID}/assign`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { companyId: COMPANY_ID, customPrice: 50 },
-    })
-    expect(res.statusCode).toBe(403)
-    await app.close()
-  })
-
-  it('unassign soft-cancels (active=false, nextChargeAt cleared)', async () => {
-    csFindUnique.mockResolvedValue({ id: 'cs-1', company: { agencyId: 'agency-1' } })
-    csUpdate.mockResolvedValue({})
+  it('DELETE 404 cross-tenant', async () => {
+    serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-OTHER' })
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'DELETE',
-      url: `/workspace/services/${SERVICE_ID}/companies/${COMPANY_ID}`,
+      url: `/workspace/services/${SERVICE_ID}`,
       headers: { authorization: `Bearer ${token}` },
-    })
-    expect(res.statusCode).toBe(200)
-    expect(csUpdate.mock.calls[0][0].data).toEqual({ active: false, nextChargeAt: null })
-    await app.close()
-  })
-
-  it('PATCH assignment 404 cross-tenant', async () => {
-    csFindUnique.mockResolvedValue({ id: 'cs-1', company: { agencyId: 'agency-OTHER' } })
-    const { app, token } = await authed(EXECUTOR)
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/workspace/services/${SERVICE_ID}/companies/${COMPANY_ID}`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { customPrice: 75 },
     })
     expect(res.statusCode).toBe(404)
     await app.close()
@@ -380,25 +235,22 @@ describe('service assignments', () => {
 })
 
 // ════════════════════════════════════════════════════════════════════════════
+// Charge generation now runs off fixed_monthly_advance projects (P-1 3b).
 describe('POST /workspace/billing/charges/generate', () => {
   it('executor generates for a month (200, created count, discount applied)', async () => {
-    csFindMany.mockResolvedValue([
+    projectFindMany.mockResolvedValue([
       {
-        id: 'cs-1',
-        customPrice: Dec('100.00'),
-        frequency: 'monthly',
-        nextChargeAt: new Date('2026-06-01T00:00:00Z'),
+        id: 'proj-1',
+        agencyId: 'agency-1',
         companyId: COMPANY_ID,
-        company: {
-          agencyId: 'agency-1',
-          currency: 'USD',
-          loyaltyTier: 'regular',
-          tierOverride: null,
-        },
+        currency: 'USD',
+        abonAmount: Dec('100.00'),
+        nextCycleAt: new Date('2026-06-01T00:00:00Z'),
+        company: { loyaltyTier: 'regular', tierOverride: null },
       },
     ])
     chargeCreateMany.mockResolvedValue({ count: 1 })
-    csUpdate.mockResolvedValue({})
+    projectUpdate.mockResolvedValue({})
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'POST',
@@ -408,12 +260,14 @@ describe('POST /workspace/billing/charges/generate', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ created: 1, due: 1 })
-    // REGULAR tier = 3% off 100 → total 97.00 owed.
+    // REGULAR tier = 3% off 100 → total 97.00 owed; charge carries projectId + periodStart.
     const row = chargeCreateMany.mock.calls[0][0].data[0]
+    expect(row.projectId).toBe('proj-1')
+    expect(row.periodStart.toISOString()).toBe('2026-06-01T00:00:00.000Z')
     expect(row.totalAmount.toFixed(2)).toBe('97.00')
     expect(row.amount.toFixed(2)).toBe('97.00')
     expect(row.discountAmount.toFixed(2)).toBe('3.00')
-    expect(csUpdate.mock.calls[0][0].data.nextChargeAt.getUTCMonth()).toBe(6) // advanced to July
+    expect(projectUpdate.mock.calls[0][0].data.nextCycleAt.getUTCMonth()).toBe(6) // advanced to July
     await app.close()
   })
 
@@ -447,13 +301,6 @@ describe('recurringCharges helpers (pure)', () => {
   it('startOfMonthUtc normalizes to the 1st 00:00 UTC', () => {
     const r = helpers.startOfMonthUtc(new Date('2026-06-17T12:34:00Z'))
     expect(r.toISOString()).toBe('2026-06-01T00:00:00.000Z')
-  })
-
-  it('addFrequency advances by the right number of months', () => {
-    const base = new Date('2026-06-01T00:00:00Z')
-    expect(helpers.addFrequency(base, 'monthly').toISOString()).toBe('2026-07-01T00:00:00.000Z')
-    expect(helpers.addFrequency(base, 'quarterly').toISOString()).toBe('2026-09-01T00:00:00.000Z')
-    expect(helpers.addFrequency(base, 'annual').toISOString()).toBe('2027-06-01T00:00:00.000Z')
   })
 
   it('endOfMonthUtc returns the last instant of the month', () => {

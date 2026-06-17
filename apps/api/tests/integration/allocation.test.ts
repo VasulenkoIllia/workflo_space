@@ -17,8 +17,7 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
   const agencyId = randomUUID()
   const companyId = randomUUID()
   const creatorId = randomUUID()
-  const serviceId = randomUUID()
-  const companyServiceId = randomUUID()
+  const projectId = randomUUID()
   const tag = randomUUID().slice(0, 8)
 
   // ── seed helpers ────────────────────────────────────────────────────────────
@@ -30,16 +29,17 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
     status?: 'pending' | 'written_off'
   }) {
     chargeMonth += 1
-    const month = new Date(Date.UTC(2026, chargeMonth, 1)) // distinct month → @@unique([companyServiceId, month])
+    const month = new Date(Date.UTC(2026, chargeMonth, 1)) // distinct period → @@unique([projectId, periodStart])
     return prisma.serviceCharge.create({
       data: {
         agencyId,
         companyId,
-        companyServiceId,
+        projectId,
         amount: new Prisma.Decimal(opts.total),
         totalAmount: new Prisma.Decimal(opts.total),
         currency: opts.currency ?? 'USD',
         month,
+        periodStart: month,
         dueDate: opts.dueDate ?? null,
         status: opts.status ?? 'pending',
       },
@@ -101,9 +101,17 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
     await prisma.company.create({
       data: { id: companyId, agencyId, name: 'AL Co', slug: `al-${tag}` },
     })
-    await prisma.service.create({ data: { id: serviceId, agencyId, name: 'AL Service' } })
-    await prisma.companyService.create({
-      data: { id: companyServiceId, companyId, serviceId, customPrice: new Prisma.Decimal(100) },
+    await prisma.project.create({
+      data: {
+        id: projectId,
+        agencyId,
+        companyId,
+        name: 'AL Project',
+        billingModel: 'fixed_monthly_advance',
+        billingCycle: 'monthly_day_n',
+        cycleDay: 1,
+        abonAmount: new Prisma.Decimal(100),
+      },
     })
   })
 
@@ -112,8 +120,7 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
     await prisma.payment.deleteMany({ where: { agencyId } })
     await prisma.order.deleteMany({ where: { agencyId } })
-    await prisma.companyService.deleteMany({ where: { companyId } })
-    await prisma.service.deleteMany({ where: { id: serviceId } })
+    await prisma.project.deleteMany({ where: { agencyId } })
     await prisma.company.deleteMany({ where: { id: companyId } })
     await prisma.agency.deleteMany({ where: { id: agencyId } })
     await prisma.profile.deleteMany({ where: { id: creatorId } })
@@ -361,10 +368,9 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
 
   it('AR-11: recurring charge generation refreshes moneyBalance for the affected company', async () => {
     const { generateRecurringCharges } = await import('../../src/services/recurringCharges.js')
-    await prisma.service.update({ where: { id: serviceId }, data: { isRecurring: true } })
-    await prisma.companyService.update({
-      where: { id: companyServiceId },
-      data: { active: true, frequency: 'monthly', nextChargeAt: new Date('2026-06-01T00:00:00Z') },
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { nextCycleAt: new Date('2026-06-01T00:00:00Z') },
     })
 
     const res = await tenantTransaction(prisma, (tx) =>
@@ -382,11 +388,7 @@ run('S5-07 money-account — allocation + moneyBalance (real PG)', () => {
       .toFixed(2)
     expect(await moneyBalance()).toBe(expected)
 
-    // Reset the subscription so other tests are unaffected.
-    await prisma.companyService.update({
-      where: { id: companyServiceId },
-      data: { nextChargeAt: null },
-    })
-    await prisma.service.update({ where: { id: serviceId }, data: { isRecurring: false } })
+    // Reset the project anchor so other tests are unaffected.
+    await prisma.project.update({ where: { id: projectId }, data: { nextCycleAt: null } })
   })
 })

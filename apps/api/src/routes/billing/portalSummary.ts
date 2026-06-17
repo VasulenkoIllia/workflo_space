@@ -30,7 +30,7 @@ const portalSummaryRoute: FastifyPluginAsync = (fastify) => {
       }
 
       const data = await withTenant(async (tx) => {
-        const [company, paidAgg, debtRows, services, settings, rate] = await Promise.all([
+        const [company, paidAgg, debtRows, projects, settings, rate] = await Promise.all([
           tx.company.findUnique({
             where: { id: companyId },
             select: {
@@ -60,14 +60,17 @@ const portalSummaryRoute: FastifyPluginAsync = (fastify) => {
               AND o."totalAmount" IS NOT NULL
               AND o."deletedAt" IS NULL
           `,
-          tx.companyService.findMany({
+          tx.project.findMany({
             where: { companyId, active: true },
             select: {
               id: true,
-              customPrice: true,
-              frequency: true,
-              nextChargeAt: true,
-              service: { select: { id: true, name: true } },
+              name: true,
+              billingModel: true,
+              abonAmount: true,
+              clientHourlyRate: true,
+              currency: true,
+              billingCycle: true,
+              nextCycleAt: true,
             },
           }),
           tx.paymentSettings.findUnique({
@@ -83,7 +86,7 @@ const portalSummaryRoute: FastifyPluginAsync = (fastify) => {
           }),
           tx.exchangeRate.findUnique({ where: { agencyId }, select: { usdToUah: true } }),
         ])
-        return { company, paidAgg, debtRows, services, settings, rate }
+        return { company, paidAgg, debtRows, projects, settings, rate }
       })
 
       if (!data.company || data.company.agencyId !== agencyId) {
@@ -104,13 +107,14 @@ const portalSummaryRoute: FastifyPluginAsync = (fastify) => {
           discountPercent: LOYALTY_DISCOUNT_PCT[tier],
           bonusBalance: data.company.bonusBalance.toFixed(2),
           moneyBalance: data.company.moneyBalance.toFixed(2),
-          services: data.services.map((s) => ({
-            id: s.id,
-            serviceId: s.service.id,
-            name: s.service.name,
-            price: s.customPrice.toFixed(2),
-            frequency: s.frequency,
-            nextChargeAt: s.nextChargeAt,
+          projects: data.projects.map((p) => ({
+            id: p.id,
+            name: p.name,
+            billingModel: p.billingModel,
+            amount: (p.abonAmount ?? p.clientHourlyRate)?.toFixed(2) ?? null,
+            currency: p.currency,
+            billingCycle: p.billingCycle,
+            nextCycleAt: p.nextCycleAt,
           })),
           paymentSettings: data.settings,
         },

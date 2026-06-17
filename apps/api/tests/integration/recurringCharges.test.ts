@@ -4,38 +4,37 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { generateRecurringCharges } from '../../src/services/recurringCharges.js'
 
 /**
- * Recurring-charge generation against REAL Postgres (S5-03b). The guarantee a mock
- * cannot prove: `(companyServiceId, month)` uniqueness makes generation idempotent —
- * the cron, a manual replay, and a double-run all converge to the SAME rows, and a
- * stale `nextChargeAt` is caught up one period at a time. Gated on RUN_DB_TESTS=1.
+ * Recurring project-charge generation against REAL Postgres (S5.6 P-1 3b). The
+ * guarantee a mock cannot prove: `(projectId, periodStart)` uniqueness makes
+ * generation idempotent — the cron, a manual replay, and a double-run all converge
+ * to the SAME rows, and a stale `nextCycleAt` is caught up one period at a time.
+ * Scope: fixed_monthly_advance / monthly_day_n. Gated on RUN_DB_TESTS=1.
  */
 const ENABLED = process.env.RUN_DB_TESTS === '1' && !!process.env.DATABASE_URL
 const run = ENABLED ? describe : describe.skip
 
-run('S5-03b recurring charges — idempotent generation (real PG)', () => {
+run('recurring project charges — idempotent generation (real PG)', () => {
   const agencyId = randomUUID()
   const companyId = randomUUID()
   const creatorId = randomUUID()
-  const serviceId = randomUUID()
   const tag = randomUUID().slice(0, 8)
 
-  async function seedSubscription(opts: {
-    nextChargeAt: Date
-    frequency?: 'monthly' | 'quarterly' | 'annual'
-    customPrice?: number
-  }): Promise<string> {
-    const cs = await prisma.companyService.create({
+  async function seedProject(opts: { nextCycleAt: Date; abonAmount?: number }): Promise<string> {
+    const p = await prisma.project.create({
       data: {
+        agencyId,
         companyId,
-        serviceId,
-        customPrice: opts.customPrice ?? 100,
+        name: `Retainer-${randomUUID().slice(0, 8)}`,
+        billingModel: 'fixed_monthly_advance',
+        billingCycle: 'monthly_day_n',
+        cycleDay: 1,
+        abonAmount: opts.abonAmount ?? 100,
         active: true,
-        frequency: opts.frequency ?? 'monthly',
-        nextChargeAt: opts.nextChargeAt,
+        nextCycleAt: opts.nextCycleAt,
       },
       select: { id: true },
     })
-    return cs.id
+    return p.id
   }
 
   function generate(now: Date) {
@@ -50,15 +49,11 @@ run('S5-03b recurring charges — idempotent generation (real PG)', () => {
     await prisma.company.create({
       data: { id: companyId, agencyId, name: 'RC Co', slug: `rc-${tag}`, loyaltyTier: 'regular' },
     })
-    await prisma.service.create({
-      data: { id: serviceId, agencyId, name: 'Retainer', isActive: true, isRecurring: true },
-    })
   })
 
   afterAll(async () => {
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
-    await prisma.companyService.deleteMany({ where: { serviceId } })
-    await prisma.service.deleteMany({ where: { id: serviceId } })
+    await prisma.project.deleteMany({ where: { agencyId } })
     await prisma.company.deleteMany({ where: { id: companyId } })
     await prisma.agency.deleteMany({ where: { id: agencyId } })
     await prisma.profile.deleteMany({ where: { id: creatorId } })
@@ -67,11 +62,11 @@ run('S5-03b recurring charges — idempotent generation (real PG)', () => {
 
   beforeEach(async () => {
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
-    await prisma.companyService.deleteMany({ where: { serviceId } })
+    await prisma.project.deleteMany({ where: { agencyId } })
   })
 
-  it('generates one charge and advances nextChargeAt; re-run is a no-op (idempotent)', async () => {
-    const csId = await seedSubscription({ nextChargeAt: new Date('2026-06-01T00:00:00Z') })
+  it('generates one charge and advances nextCycleAt; re-run is a no-op (idempotent)', async () => {
+    const projectId = await seedProject({ nextCycleAt: new Date('2026-06-01T00:00:00Z') })
     const now = new Date('2026-06-15T00:00:00Z')
 
     const first = await generate(now)
@@ -80,67 +75,56 @@ run('S5-03b recurring charges — idempotent generation (real PG)', () => {
     const second = await generate(now)
     expect(second.created).toBe(0) // already advanced past `now` → nothing due
 
-    const charges = await prisma.serviceCharge.findMany({ where: { companyServiceId: csId } })
+    const charges = await prisma.serviceCharge.findMany({ where: { projectId } })
     expect(charges).toHaveLength(1)
     // REGULAR tier = 3% off 100 → 97.00 owed.
     expect(charges[0].totalAmount?.toFixed(2)).toBe('97.00')
     expect(charges[0].amount.toFixed(2)).toBe('97.00')
     expect(charges[0].month.toISOString().slice(0, 10)).toBe('2026-06-01')
+    expect(charges[0].periodStart?.toISOString().slice(0, 10)).toBe('2026-06-01')
 
-    const cs = await prisma.companyService.findUnique({ where: { id: csId } })
-    expect(cs?.nextChargeAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z')
+    const p = await prisma.project.findUnique({ where: { id: projectId } })
+    expect(p?.nextCycleAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z')
   })
 
-  it('idempotent under a duplicated month even if nextChargeAt is reset (ON CONFLICT)', async () => {
-    const csId = await seedSubscription({ nextChargeAt: new Date('2026-06-01T00:00:00Z') })
+  it('idempotent under a duplicated period even if nextCycleAt is reset (ON CONFLICT)', async () => {
+    const projectId = await seedProject({ nextCycleAt: new Date('2026-06-01T00:00:00Z') })
     await generate(new Date('2026-06-15T00:00:00Z'))
 
-    // Force the anchor back as if a retry re-ran the same month — the unique constraint guards it.
-    await prisma.companyService.update({
-      where: { id: csId },
-      data: { nextChargeAt: new Date('2026-06-01T00:00:00Z') },
+    // Force the anchor back as if a retry re-ran the same period — the unique constraint guards it.
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { nextCycleAt: new Date('2026-06-01T00:00:00Z') },
     })
     const again = await generate(new Date('2026-06-15T00:00:00Z'))
     expect(again.created).toBe(0) // skipDuplicates → no second June row
 
-    const count = await prisma.serviceCharge.count({ where: { companyServiceId: csId } })
+    const count = await prisma.serviceCharge.count({ where: { projectId } })
     expect(count).toBe(1)
   })
 
   it('catches up multiple missed monthly periods in one run', async () => {
-    const csId = await seedSubscription({ nextChargeAt: new Date('2026-04-01T00:00:00Z') })
+    const projectId = await seedProject({ nextCycleAt: new Date('2026-04-01T00:00:00Z') })
     const res = await generate(new Date('2026-06-15T00:00:00Z'))
     expect(res.created).toBe(3) // Apr, May, Jun
 
     const charges = await prisma.serviceCharge.findMany({
-      where: { companyServiceId: csId },
-      orderBy: { month: 'asc' },
-      select: { month: true },
+      where: { projectId },
+      orderBy: { periodStart: 'asc' },
+      select: { periodStart: true },
     })
-    expect(charges.map((c) => c.month.toISOString().slice(0, 7))).toEqual([
+    expect(charges.map((c) => c.periodStart?.toISOString().slice(0, 7))).toEqual([
       '2026-04',
       '2026-05',
       '2026-06',
     ])
-    const cs = await prisma.companyService.findUnique({ where: { id: csId } })
-    expect(cs?.nextChargeAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z')
+    const p = await prisma.project.findUnique({ where: { id: projectId } })
+    expect(p?.nextCycleAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z')
   })
 
-  it('quarterly subscription bills once per quarter', async () => {
-    const csId = await seedSubscription({
-      nextChargeAt: new Date('2026-01-01T00:00:00Z'),
-      frequency: 'quarterly',
-    })
-    const res = await generate(new Date('2026-06-15T00:00:00Z'))
-    expect(res.created).toBe(2) // Jan + Apr (Jul is in the future)
-
-    const cs = await prisma.companyService.findUnique({ where: { id: csId } })
-    expect(cs?.nextChargeAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z')
-  })
-
-  it('skips inactive subscriptions and inactive services', async () => {
-    const csId = await seedSubscription({ nextChargeAt: new Date('2026-06-01T00:00:00Z') })
-    await prisma.companyService.update({ where: { id: csId }, data: { active: false } })
+  it('skips inactive projects', async () => {
+    const projectId = await seedProject({ nextCycleAt: new Date('2026-06-01T00:00:00Z') })
+    await prisma.project.update({ where: { id: projectId }, data: { active: false } })
     const res = await generate(new Date('2026-06-15T00:00:00Z'))
     expect(res.created).toBe(0)
     expect(res.due).toBe(0)

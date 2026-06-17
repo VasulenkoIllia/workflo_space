@@ -12,7 +12,7 @@ const orderUpdate = vi.fn()
 const exchangeRateFindUnique = vi.fn()
 const idempotencyUpdate = vi.fn()
 const serviceChargeFindMany = vi.fn()
-const companyServiceFindMany = vi.fn()
+const projectFindMany = vi.fn()
 const paymentSettingsFindUnique = vi.fn()
 const paymentSettingsUpsert = vi.fn()
 const auditLogCreate = vi.fn()
@@ -63,7 +63,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     exchangeRate: { findUnique: exchangeRateFindUnique },
     idempotencyKey: { update: idempotencyUpdate },
     serviceCharge: { findMany: serviceChargeFindMany },
-    companyService: { findMany: companyServiceFindMany },
+    project: { findMany: projectFindMany },
     paymentSettings: { findUnique: paymentSettingsFindUnique, upsert: paymentSettingsUpsert },
     auditLog: { create: auditLogCreate },
     $queryRaw: queryRaw,
@@ -513,7 +513,7 @@ describe('GET /portal/billing/summary', () => {
     })
     paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('1200.00') } })
     portalDebtRows = [{ debt: Dec('300.00') }]
-    companyServiceFindMany.mockResolvedValue([])
+    projectFindMany.mockResolvedValue([])
     paymentSettingsFindUnique.mockResolvedValue({
       bankName: 'PrivatBank',
       iban: 'UA123',

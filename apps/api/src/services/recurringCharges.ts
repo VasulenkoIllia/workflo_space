@@ -3,28 +3,36 @@ import { LOYALTY_DISCOUNT_PCT, type LoyaltyTier } from '@workflo/types'
 import { refreshMoneyBalance } from './allocation.js'
 
 /**
- * Recurring service-charge generation (S5-03b). One charge per
- * `(companyServiceId, month)` — the `@@unique` constraint makes generation
+ * Recurring project-charge generation (05-ПРОЕКТИ, S5.6 P-1 3b). One charge per
+ * `(projectId, periodStart)` — the `@@unique` constraint makes generation
  * idempotent, so the monthly cron, a manual replay, and a double-run all converge
  * to the same rows. The loyalty discount is applied here at creation time from the
- * company's effective tier (S5-09 later adds the tier-recalc cron + per-invoice
- * override; the discount math is this single place).
+ * project company's effective tier (the discount math lives in this single place).
+ *
+ * Scope: `fixed_monthly_advance` on a `monthly_day_n` cycle — the subscription
+ * advance charge (abonAmount billed up-front each month). The hourly (prepaid/
+ * postpaid) and weekly/manual cycle modes are the P-2 cycle-engine (PROJECTS_SPEC
+ * §3) and are intentionally not generated here yet.
  *
  * Runs inside the caller's transaction: the cron wraps all tenants (worker /
  * RLS-bypass); the manual `generate` endpoint scopes to one agency.
  */
 
-const MAX_CATCHUP_PERIODS = 24 // backstop so a stale nextChargeAt can't spin forever
+const MAX_CATCHUP_PERIODS = 24 // backstop so a stale nextCycleAt can't spin forever
 
-/** First instant (UTC) of the month containing `d`. The canonical `ServiceCharge.month` value. */
+/** First instant (UTC) of the month containing `d`. The canonical period anchor. */
 export function startOfMonthUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
 }
 
-/** Advance a first-of-month anchor by one billing period. */
-export function addFrequency(d: Date, frequency: string): Date {
-  const months = frequency === 'annual' ? 12 : frequency === 'quarterly' ? 3 : 1
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1))
+/** First instant (UTC) of the month after `d` — advances a monthly anchor by one cycle. */
+function addMonthUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+}
+
+/** Last calendar day (UTC) of the month containing `d` — the cycle's periodEnd. */
+function endOfMonthDateUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
 }
 
 export interface ChargeAmounts {
@@ -47,7 +55,7 @@ export function computeChargeAmounts(base: Prisma.Decimal, tier: LoyaltyTier): C
 }
 
 export interface GenerateOptions {
-  /** Charge every subscription whose `nextChargeAt` is at or before this instant. */
+  /** Charge every project whose `nextCycleAt` is at or before this instant. */
   now: Date
   /** Scope to one tenant (the manual endpoint); omit for the cross-tenant cron. */
   agencyId?: string
@@ -56,68 +64,71 @@ export interface GenerateOptions {
 export interface GenerateResult {
   /** Newly-inserted charge rows (existing ones are skipped by the unique constraint). */
   created: number
-  /** Subscriptions found due this run. */
+  /** Projects found due this run. */
   due: number
 }
 
 /**
- * Generate the charges owed up to `opts.now` and advance each subscription's
- * `nextChargeAt`. Idempotent: re-running creates no duplicates (skipDuplicates →
- * `ON CONFLICT DO NOTHING`), and a subscription already advanced past `now` is not
+ * Generate the charges owed up to `opts.now` and advance each project's
+ * `nextCycleAt`. Idempotent: re-running creates no duplicates (skipDuplicates →
+ * `ON CONFLICT DO NOTHING`), and a project already advanced past `now` is not
  * re-billed.
  */
 export async function generateRecurringCharges(
   tx: Prisma.TransactionClient,
   opts: GenerateOptions
 ): Promise<GenerateResult> {
-  const due = await tx.companyService.findMany({
+  const due = await tx.project.findMany({
     where: {
       active: true,
-      nextChargeAt: { lte: opts.now },
-      service: { is: { isActive: true, isRecurring: true } },
-      ...(opts.agencyId ? { company: { is: { agencyId: opts.agencyId } } } : {}),
+      billingModel: 'fixed_monthly_advance',
+      billingCycle: 'monthly_day_n',
+      nextCycleAt: { lte: opts.now },
+      abonAmount: { not: null },
+      ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
     },
     select: {
       id: true,
-      customPrice: true,
-      frequency: true,
-      nextChargeAt: true,
+      agencyId: true,
       companyId: true,
-      company: {
-        select: { agencyId: true, currency: true, loyaltyTier: true, tierOverride: true },
-      },
+      currency: true,
+      abonAmount: true,
+      nextCycleAt: true,
+      company: { select: { loyaltyTier: true, tierOverride: true } },
     },
   })
 
   const rows: Prisma.ServiceChargeCreateManyInput[] = []
-  const advances: Array<{ id: string; nextChargeAt: Date }> = []
+  const advances: Array<{ id: string; nextCycleAt: Date }> = []
 
-  for (const cs of due) {
-    if (!cs.nextChargeAt) continue
-    const tier = (cs.company.tierOverride ?? cs.company.loyaltyTier) as LoyaltyTier
-    let cursor = cs.nextChargeAt
+  for (const p of due) {
+    if (!p.nextCycleAt || !p.abonAmount) continue
+    const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
+    let cursor = p.nextCycleAt
     let guard = 0
     while (cursor <= opts.now && guard < MAX_CATCHUP_PERIODS) {
-      const month = startOfMonthUtc(cursor)
-      const amounts = computeChargeAmounts(cs.customPrice, tier)
+      const periodStart = startOfMonthUtc(cursor)
+      const amounts = computeChargeAmounts(p.abonAmount, tier)
       rows.push({
-        agencyId: cs.company.agencyId,
-        companyId: cs.companyId,
-        companyServiceId: cs.id,
+        agencyId: p.agencyId,
+        companyId: p.companyId,
+        projectId: p.id,
         amount: amounts.totalAmount,
         baseAmount: amounts.baseAmount,
         discountPct: amounts.discountPct,
         discountAmount: amounts.discountAmount,
         totalAmount: amounts.totalAmount,
-        currency: cs.company.currency,
-        month,
+        currency: p.currency,
+        month: periodStart,
+        periodStart,
+        periodEnd: endOfMonthDateUtc(periodStart),
         status: 'pending',
-        dueDate: addFrequency(month, 'monthly'), // due by the end of the charge month
+        dueDate: addMonthUtc(periodStart), // due by the end of the charge month
       })
-      cursor = addFrequency(cursor, cs.frequency)
+      cursor = addMonthUtc(cursor)
       guard++
     }
-    advances.push({ id: cs.id, nextChargeAt: cursor })
+    advances.push({ id: p.id, nextCycleAt: cursor })
   }
 
   let created = 0
@@ -126,7 +137,7 @@ export async function generateRecurringCharges(
     created = res.count
   }
   for (const a of advances) {
-    await tx.companyService.update({ where: { id: a.id }, data: { nextChargeAt: a.nextChargeAt } })
+    await tx.project.update({ where: { id: a.id }, data: { nextCycleAt: a.nextCycleAt } })
   }
 
   // AR-11: new charges change Σ(charge.totalAmount) — refresh each affected company's

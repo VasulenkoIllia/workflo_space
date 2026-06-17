@@ -13,7 +13,6 @@ interface ServiceRow {
   isRecurring: boolean
   defaultPriceUsd: Prisma.Decimal | null
   createdAt: Date
-  _count: { companyAssigns: number }
 }
 
 function toDto(s: ServiceRow) {
@@ -24,7 +23,6 @@ function toDto(s: ServiceRow) {
     isActive: s.isActive,
     isRecurring: s.isRecurring,
     defaultPriceUsd: s.defaultPriceUsd ? s.defaultPriceUsd.toFixed(2) : null,
-    assignmentCount: s._count.companyAssigns,
     createdAt: s.createdAt,
   }
 }
@@ -37,7 +35,6 @@ const SERVICE_SELECT = {
   isRecurring: true,
   defaultPriceUsd: true,
   createdAt: true,
-  _count: { select: { companyAssigns: true } },
 } satisfies Prisma.ServiceSelect
 
 /** Workspace-only catalog management. Internal team manages the agency's services. */
@@ -120,19 +117,6 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
         if (!existing || existing.agencyId !== agencyId) {
           throw new AppError(ApiErrorCode.NOT_FOUND, 'Послугу не знайдено', 404)
         }
-        // A price change must not silently re-price live subscriptions — block while any are active.
-        if (input.defaultPriceUsd !== undefined) {
-          const active = await tx.companyService.count({
-            where: { serviceId: existing.id, active: true },
-          })
-          if (active > 0) {
-            throw new AppError(
-              ApiErrorCode.CONFLICT,
-              'Не можна змінити ціну, поки є активні підписки на цю послугу',
-              409
-            )
-          }
-        }
         return tx.service.update({
           where: { id: existing.id },
           data: {
@@ -177,15 +161,6 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
         })
         if (!existing || existing.agencyId !== agencyId) {
           throw new AppError(ApiErrorCode.NOT_FOUND, 'Послугу не знайдено', 404)
-        }
-        // Subscriptions (and their charge history) reference this service — refuse to orphan them.
-        const assigned = await tx.companyService.count({ where: { serviceId: existing.id } })
-        if (assigned > 0) {
-          throw new AppError(
-            ApiErrorCode.CONFLICT,
-            'Не можна видалити послугу з підписками — спершу відпишіть компанії',
-            409
-          )
         }
         await tx.service.delete({ where: { id: existing.id } })
       })

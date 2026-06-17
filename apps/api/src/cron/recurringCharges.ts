@@ -4,11 +4,11 @@ import { captureException } from '../observability/sentry.js'
 import { generateRecurringCharges } from '../services/recurringCharges.js'
 
 /**
- * Recurring-charge cron (S5-03b). Fires on the 1st of each month and generates
- * the subscription charges due across ALL tenants (worker context → RLS-permissive,
- * sees every agency). Idempotent: the `(companyServiceId, month)` unique constraint
- * means a duplicate run on another replica creates no extra rows. Lifecycle owned
- * by `startWorkers()`; never started in tests.
+ * Recurring-charge cron (S5-03b → S5.6 P-1 3b). Fires on the 1st of each month and
+ * generates the project subscription charges due across ALL tenants (worker context
+ * → RLS-permissive, sees every agency). Idempotent: the `(projectId, periodStart)`
+ * unique constraint means a duplicate run on another replica creates no extra rows.
+ * Lifecycle owned by `startWorkers()`; never started in tests.
  *
  * Month lengths vary, so this self-reschedules after each fire rather than using a
  * fixed interval (mirrors the exchangeRate cron's lifecycle).
