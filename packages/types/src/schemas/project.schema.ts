@@ -109,6 +109,18 @@ export const createProjectSchema = z
   .superRefine((d, ctx) => checkCoherence(d, ctx))
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 
+/** POST /workspace/projects/:id/close-cycle — manual cycle close for an explicit period. */
+export const closeCycleSchema = z
+  .object({
+    periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Очікується YYYY-MM-DD'),
+    periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Очікується YYYY-MM-DD'),
+  })
+  .refine((d) => d.periodEnd >= d.periodStart, {
+    message: 'periodEnd має бути ≥ periodStart',
+    path: ['periodEnd'],
+  })
+export type CloseCycleInput = z.infer<typeof closeCycleSchema>
+
 /** PATCH /workspace/projects/:id — partial; `companyId`/`billingModel` are immutable here. */
 export const updateProjectSchema = z
   .object({ ...baseShape, active: z.boolean().optional() })

@@ -1,8 +1,9 @@
-import { type Prisma, withTenant } from '@workflo/db'
+import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
   ProjectBillingCycle,
+  closeCycleSchema,
   createProjectSchema,
   defaultContractRequired,
   updateProjectSchema,
@@ -12,6 +13,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { closeProjectCycle } from '../../services/recurringCharges.js'
 
 /**
  * Financial projects CRUD (05-ПРОЕКТИ, S5.6 P-1). Workspace-only, tenant-scoped,
@@ -304,6 +306,53 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
         result: 'allowed',
       })
       return reply.send({ success: true, data: { deleted: true } })
+    }
+  )
+
+  // ── Manual cycle close (P-2c, manual billingCycle) ──────────────────────────
+  fastify.post<{ Params: { id: string } }>(
+    '/workspace/projects/:id/close-cycle',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = closeCycleSchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      assertInternal(user)
+      await assertModule(agencyId)
+
+      const result = await tenantTransaction(prisma, async (tx) => {
+        const project = await tx.project.findFirst({
+          where: { id: request.params.id, agencyId },
+          select: { id: true, billingCycle: true, active: true },
+        })
+        if (!project) {
+          throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
+        }
+        if (project.billingCycle !== 'manual') {
+          throw new AppError(
+            ApiErrorCode.CONFLICT,
+            'Ручне закриття доступне лише для проєктів із циклом «вручну»',
+            409
+          )
+        }
+        return closeProjectCycle(tx, {
+          agencyId,
+          projectId: project.id,
+          periodStart: new Date(input.periodStart),
+          periodEnd: new Date(input.periodEnd),
+        })
+      })
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'project.cycle_closed',
+        resourceType: 'project',
+        resourceId: request.params.id,
+        result: 'allowed',
+        metadata: { ...input, created: result.created },
+      })
+      return reply.send({ success: true, data: result })
     }
   )
 

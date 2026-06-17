@@ -101,6 +101,90 @@ export interface GenerateResult {
   due: number
 }
 
+/** The project fields a charge is built from (auto cron + manual close share this). */
+interface ChargeableProject {
+  id: string
+  agencyId: string
+  companyId: string
+  currency: string
+  billingModel: string
+  abonAmount: Prisma.Decimal | null
+}
+
+/**
+ * Build one charge row for a project's [periodStart, periodEnd], or null to skip:
+ * fixed → abonAmount; hourly_postpaid → Σ(billable hours). Loyalty discount applied.
+ * Shared by the auto cron loop and the manual «close cycle» endpoint.
+ */
+async function buildChargeRow(
+  tx: Prisma.TransactionClient,
+  p: ChargeableProject,
+  periodStart: Date,
+  periodEnd: Date,
+  dueDate: Date,
+  tier: LoyaltyTier
+): Promise<Prisma.ServiceChargeCreateManyInput | null> {
+  let base: Prisma.Decimal | null
+  if (p.billingModel === 'fixed_monthly_advance') {
+    base = p.abonAmount ?? null
+  } else {
+    const revenue = await sumBillableRevenue(tx, p.id, periodStart, periodEnd)
+    base = revenue.isZero() ? null : revenue // no billable work → no charge
+  }
+  if (!base) return null
+  const amounts = computeChargeAmounts(base, tier)
+  return {
+    agencyId: p.agencyId,
+    companyId: p.companyId,
+    projectId: p.id,
+    amount: amounts.totalAmount,
+    baseAmount: amounts.baseAmount,
+    discountPct: amounts.discountPct,
+    discountAmount: amounts.discountAmount,
+    totalAmount: amounts.totalAmount,
+    currency: p.currency,
+    month: periodStart,
+    periodStart,
+    periodEnd,
+    status: 'pending',
+    dueDate,
+  }
+}
+
+/**
+ * Manually close ONE project's cycle for an explicit [periodStart, periodEnd]
+ * (manual billingCycle — owner clicks «Закрити цикл»). Same charge logic as the
+ * cron; idempotent via `@@unique([projectId, periodStart])`; refreshes moneyBalance.
+ * Caller validates ownership + that the cycle is `manual`.
+ */
+export async function closeProjectCycle(
+  tx: Prisma.TransactionClient,
+  opts: { agencyId: string; projectId: string; periodStart: Date; periodEnd: Date }
+): Promise<GenerateResult> {
+  const p = await tx.project.findFirst({
+    where: { id: opts.projectId, agencyId: opts.agencyId },
+    select: {
+      id: true,
+      agencyId: true,
+      companyId: true,
+      currency: true,
+      billingModel: true,
+      abonAmount: true,
+      company: { select: { loyaltyTier: true, tierOverride: true } },
+    },
+  })
+  if (!p) return { created: 0, due: 0 }
+  const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
+  // dueDate = period end for now (P-4 will derive it from paymentTermsDays).
+  const row = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, opts.periodEnd, tier)
+  if (!row) return { created: 0, due: 1 }
+  const res = await tx.serviceCharge.createMany({ data: [row], skipDuplicates: true })
+  if (res.count > 0) {
+    await refreshMoneyBalance(tx, { agencyId: opts.agencyId, companyId: p.companyId })
+  }
+  return { created: res.count, due: 1 }
+}
+
 /**
  * Generate the charges owed up to `opts.now` and advance each project's
  * `nextCycleAt`. Idempotent: re-running creates no duplicates (skipDuplicates →
@@ -143,50 +227,27 @@ export async function generateRecurringCharges(
     let cursor = p.nextCycleAt
     let guard = 0
     while (cursor <= opts.now && guard < MAX_CATCHUP_PERIODS) {
-      // Period + base differ by model: fixed bills the UPCOMING month in advance;
+      // Period differs by model/cycle: fixed bills the UPCOMING month in advance;
       // hourly_postpaid bills the cycle that just ENDED, by actual hours. weekly_day_x
       // applies to hourly billing (owner's «щопонеділка»); fixed stays monthly (P-2).
       let periodStart: Date
       let periodEnd: Date
       let dueDate: Date
-      let base: Prisma.Decimal | null
       if (p.billingModel === 'fixed_monthly_advance') {
         periodStart = startOfMonthUtc(cursor)
         periodEnd = endOfMonthDateUtc(periodStart)
         dueDate = addMonthUtc(periodStart)
-        base = p.abonAmount ?? null
+      } else if (weekly) {
+        periodStart = addDaysUtc(cursor, -7) // the week that just closed
+        periodEnd = addDaysUtc(cursor, -1)
+        dueDate = addDaysUtc(cursor, 7)
       } else {
-        if (weekly) {
-          periodStart = addDaysUtc(cursor, -7) // the week that just closed
-          periodEnd = addDaysUtc(cursor, -1)
-          dueDate = addDaysUtc(cursor, 7)
-        } else {
-          periodStart = firstOfPrevMonthUtc(cursor)
-          periodEnd = endOfMonthDateUtc(periodStart)
-          dueDate = addMonthUtc(periodStart)
-        }
-        const revenue = await sumBillableRevenue(tx, p.id, periodStart, periodEnd)
-        base = revenue.isZero() ? null : revenue // no billable work → no charge
+        periodStart = firstOfPrevMonthUtc(cursor)
+        periodEnd = endOfMonthDateUtc(periodStart)
+        dueDate = addMonthUtc(periodStart)
       }
-      if (base) {
-        const amounts = computeChargeAmounts(base, tier)
-        rows.push({
-          agencyId: p.agencyId,
-          companyId: p.companyId,
-          projectId: p.id,
-          amount: amounts.totalAmount,
-          baseAmount: amounts.baseAmount,
-          discountPct: amounts.discountPct,
-          discountAmount: amounts.discountAmount,
-          totalAmount: amounts.totalAmount,
-          currency: p.currency,
-          month: periodStart,
-          periodStart,
-          periodEnd,
-          status: 'pending',
-          dueDate,
-        })
-      }
+      const row = await buildChargeRow(tx, p, periodStart, periodEnd, dueDate, tier)
+      if (row) rows.push(row)
       cursor = advance(cursor)
       guard++
     }
