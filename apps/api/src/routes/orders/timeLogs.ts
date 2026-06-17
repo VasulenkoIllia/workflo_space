@@ -3,6 +3,7 @@ import { ApiErrorCode, AppError, createTimeLogSchema, updateTimeLogSchema } from
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
 import { isPeriodLocked, periodOf } from '../../services/payout.js'
+import { resolveTimeLogRates } from '../../services/rateResolution.js'
 import { requireTeamOrder } from './access.js'
 
 /**
@@ -105,19 +106,33 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       // A new entry in a period that's already been paid out would desync the payroll.
       await assertNotLocked(agencyId, request.user.sub, new Date(input.date))
 
-      const row = await withTenant((tx) =>
-        tx.timeLog.create({
+      const date = new Date(input.date)
+      const row = await withTenant(async (tx) => {
+        // П5/П7: snapshot the resolved client + cost rates at log time so margin
+        // history is stable when rates later change (PROJECTS_SPEC §2.3).
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          select: { projectId: true, zeroBilled: true, hourlyRate: true },
+        })
+        const rates = order
+          ? await resolveTimeLogRates(tx, { agencyId, order, executorId: request.user.sub, date })
+          : { clientRate: null, costRate: null, costCurrency: null, costRateUsd: null }
+        return tx.timeLog.create({
           data: {
             agency: { connect: { id: agencyId } },
             order: { connect: { id: orderId } },
             executor: { connect: { id: request.user.sub } },
             hours: input.hours,
-            date: new Date(input.date),
+            date,
             comment: input.comment ?? null,
+            clientRateSnapshot: rates.clientRate,
+            costRateSnapshot: rates.costRate,
+            costCurrency: rates.costCurrency,
+            costRateUsd: rates.costRateUsd,
           },
           select: TIMELOG_SELECT,
         })
-      )
+      })
 
       writeAuditAsync(request.log, {
         actorId: request.user.sub,

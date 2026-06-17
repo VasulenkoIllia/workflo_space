@@ -307,17 +307,23 @@ model InternalTask {
 }
 
 model TimeLog {
-  id         String   @id @default(uuid())
-  agencyId   String
-  orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  executorId String
-  executor   Profile  @relation(fields: [executorId], references: [id])
-  hours      Decimal  @db.Decimal(5, 2)
-  comment    String?
-  date       DateTime @db.Date
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  id                 String   @id @default(uuid())
+  agencyId           String
+  orderId            String
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  executorId         String
+  executor           Profile  @relation(fields: [executorId], references: [id])
+  hours              Decimal  @db.Decimal(5, 2)
+  comment            String?
+  date               DateTime @db.Date
+  // П5/П7 (P-5): снапшот резолвнутих ставок у МОМЕНТ логування — стабільна історія
+  // маржі при зміні ставок. costRateUsd — собівартість години в USD за курсом на дату.
+  clientRateSnapshot Decimal? @db.Decimal(10, 2) // дохід/год (Project.clientHourlyRate; 0 для zeroBilled)
+  costRateSnapshot   Decimal? @db.Decimal(10, 2) // собівартість/год (каскад §2.3)
+  costCurrency       String? // валюта costRateSnapshot
+  costRateUsd        Decimal? @db.Decimal(10, 2) // собівартість/год у USD (курс на дату, П7)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  agency             Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId])
@@ -442,7 +448,9 @@ model ExecutorRate {
   executorId        String
   executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
   monthlySalary     Decimal?  @db.Decimal(10, 2)
-  currency          String    @default("USD") // currency of monthlySalary — needed for P&L (module 22)
+  hourlyRate        Decimal?  @db.Decimal(10, 2) // 12-КОМПЕНСАЦІЇ (P-5): БАЗОВА собівартість години (fallback каскаду §2.3)
+  zeroCostDefault   Boolean   @default(false) // 22 (P-5): глобальна «нульова собівартість» (owner/партнери); каскад tier 3
+  currency          String    @default("USD") // currency of monthlySalary/hourlyRate — needed for P&L (module 22)
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
   effectiveFrom     DateTime  @default(now()) @db.Timestamptz(3) // rate validity window for historical P&L
   effectiveUntil    DateTime? @db.Timestamptz(3)

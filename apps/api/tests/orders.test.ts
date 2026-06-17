@@ -33,7 +33,8 @@ const payoutFindUnique = vi.fn() // S5-04 time-log lock; default → null (unloc
 const orderUpdateMany = vi.fn()
 const orderFindUniqueOrThrow = vi.fn()
 
-vi.mock('@workflo/db', () => {
+vi.mock('@workflo/db', async (importOriginal) => {
+  const actual = (await importOriginal()) as { Prisma: unknown }
   const prisma = {
     order: {
       create: orderCreate,
@@ -66,6 +67,11 @@ vi.mock('@workflo/db', () => {
       delete: timeLogDelete,
     },
     activityLog: { create: activityCreate, findMany: activityFindMany },
+    // P-5 rate snapshot on time-log create — default to «no rate set» (tier 5).
+    project: { findUnique: () => Promise.resolve(null) },
+    projectExecutorRate: { findUnique: () => Promise.resolve(null) },
+    executorRate: { findFirst: () => Promise.resolve(null) },
+    exchangeRate: { findUnique: () => Promise.resolve(null) },
     // S5-04 time-log lock: defaults to null (unlocked); overridden per-test.
     executorPayout: { findUnique: payoutFindUnique },
     outboxEvent: { create: outboxCreate },
@@ -80,7 +86,7 @@ vi.mock('@workflo/db', () => {
     // Reads/single writes are wrapped in withTenant() (RLS seam); run the callback
     // against the same mocked client so the route's tx.* calls hit these mocks.
     withTenant: (fn: (tx: unknown) => unknown) => fn(prisma),
-    Prisma: {},
+    Prisma: actual.Prisma,
   }
 })
 
