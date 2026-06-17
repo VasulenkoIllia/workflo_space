@@ -56,6 +56,7 @@ function checkCoherence(
     billingCycle?: ProjectBillingCycle
     abonAmount?: number | null
     clientHourlyRate?: number | null
+    includedHoursCap?: number | null
     cycleDay?: number | null
     cycleWeekday?: number | null
   },
@@ -77,6 +78,16 @@ function checkCoherence(
       code: z.ZodIssueCode.custom,
       path: ['clientHourlyRate'],
       message: 'Погодинна модель потребує clientHourlyRate',
+    })
+  }
+  // Hybrid project (PROJECTS_SPEC §4.1): a fixed subscription that includes N hours
+  // (includedHoursCap) bills the overage hourly — so it needs an overage rate. The
+  // overage-charge GENERATION is the P-2 cycle-engine; the config is validated here.
+  if (d.includedHoursCap != null && d.includedHoursCap > 0 && d.clientHourlyRate == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['clientHourlyRate'],
+      message: 'Ліміт годин (includedHoursCap) потребує clientHourlyRate для білінгу понад ліміт',
     })
   }
   if (d.billingCycle === ProjectBillingCycle.WEEKLY_DAY_X && d.cycleWeekday == null) {

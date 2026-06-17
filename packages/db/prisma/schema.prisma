@@ -1229,7 +1229,7 @@ model Project {
   requiresApproval Boolean? // 02-А; null → дефолт компанії
   advanceGatePct   Decimal? @db.Decimal(5, 2) // 02-В; для hourly_prepaid (і fixed — аванс 100%)
 
-  includedHoursCap Decimal? @db.Decimal(8, 2) // П1: поле закладаємо; enforce — ФАЗА 2
+  includedHoursCap Decimal? @db.Decimal(8, 2) // ГІБРИД: абонплата покриває N год; понад ліміт → clientHourlyRate. Генерація overage — P-2 cycle-engine
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(3)

@@ -50,6 +50,28 @@ describe('createProjectSchema coherence (§5)', () => {
     ).toThrow()
   })
 
+  it('hybrid (fixed + includedHoursCap) is valid with an overage rate, invalid without', () => {
+    // fixed base $500 covering 20 hours, overage at $30/h → valid hybrid config.
+    expect(
+      createProjectSchema.parse({
+        ...base,
+        billingModel: ProjectBillingModel.FIXED_MONTHLY_ADVANCE,
+        abonAmount: 500,
+        includedHoursCap: 20,
+        clientHourlyRate: 30,
+      }).includedHoursCap
+    ).toBe(20)
+    // cap without an overage rate → can't bill the excess → rejected.
+    expect(() =>
+      createProjectSchema.parse({
+        ...base,
+        billingModel: ProjectBillingModel.FIXED_MONTHLY_ADVANCE,
+        abonAmount: 500,
+        includedHoursCap: 20,
+      })
+    ).toThrow()
+  })
+
   it('defaults currency to USD and uppercases input', () => {
     const p = createProjectSchema.parse({
       ...base,
