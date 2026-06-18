@@ -9,6 +9,7 @@ import securityHeadersPlugin from './plugins/securityHeaders.js'
 import adminRoutes from './routes/admin/index.js'
 import authRoutes from './routes/auth/index.js'
 import billingRoutes from './routes/billing/index.js'
+import companyRoutes from './routes/company/index.js'
 import fileRoutes from './routes/files/index.js'
 import financeRoutes from './routes/finance/index.js'
 import healthRoute from './routes/health.js'
@@ -92,6 +93,7 @@ export function buildApp() {
   app.register(orderRoutes)
   app.register(fileRoutes)
   app.register(billingRoutes)
+  app.register(companyRoutes)
   app.register(serviceRoutes)
   app.register(walletRoutes)
   app.register(referralRoutes)

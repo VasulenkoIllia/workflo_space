@@ -125,6 +125,24 @@ model Company {
   // to Profile (project convention: no back-relation on Profile). Drives the referral
   // bonus = net-income(client) × % accrued onto that employee's payout (PROJECTS_SPEC §4.2).
   referredByEmployeeId String?
+  // 06-Б (P-3): the CLIENT's own legal requisites — the document "to" party (invoices/
+  // acts). The client fills these in Portal; the agency reads them at generation time.
+  // `legalIsComplete` (Юр-2 analog) gates S6 document generation, not work. One set per
+  // client (single legal entity); multi-entity-per-client is out of scope. Mirrors the
+  // agency-side LegalEntity (20-Д) field-for-field.
+  legalType            String? // 'fop'|'tov'|'individual'|'foreign' (free, П8)
+  legalName            String? // повна юр-назва для документів
+  taxId                String? // ЄДРПОУ/ІПН/РНОКПП
+  vatPayer             Boolean      @default(false)
+  vatId                String?
+  legalAddress         String?
+  bankName             String?
+  iban                 String?
+  signerName           String?
+  signerTitle          String?
+  documentEmail        String? // primary recipient for invoice/act PDFs (06-Г)
+  documentEmailCc      String? // optional бухгалтерія CC
+  legalIsComplete      Boolean      @default(false) // legalName+taxId+iban+signerName
   createdAt            DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
 
