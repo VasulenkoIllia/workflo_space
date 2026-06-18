@@ -10,7 +10,7 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant, isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { walletCredit, walletDebit } from '../../services/wallet.js'
 import { WALLET_TXN_SELECT, walletTxnDto } from './portalWallet.js'
@@ -30,7 +30,7 @@ const adminWalletRoute: FastifyPluginAsync = (fastify) => {
       const query = walletCompaniesQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
 
@@ -82,7 +82,7 @@ const adminWalletRoute: FastifyPluginAsync = (fastify) => {
       const query = walletTxnQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
 

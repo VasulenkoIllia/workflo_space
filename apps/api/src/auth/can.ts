@@ -1,4 +1,9 @@
-import { type AccessClaims, type CompanyPermissions, isInternalTeam } from './tokens.js'
+import {
+  type AccessClaims,
+  type CompanyPermissions,
+  isAgencyManager,
+  isInternalTeam,
+} from './tokens.js'
 
 /**
  * RBAC shim (ADR-002). Centralizes all authz decisions behind a single
@@ -50,6 +55,26 @@ export interface ResourceContext {
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 
+/**
+ * Actions an agency `manager` (20-А, MOD-4) may NOT do: finance, agency/company
+ * settings, team administration, ownership, credentials, and money confirmation. A
+ * manager sees orders/chats/clients and acts on them, but the books and the knobs stay
+ * with the owner. Owner/executor are unaffected by this set (only `manager` is denied).
+ */
+const MANAGER_BLOCKED: ReadonlySet<Action> = new Set<Action>([
+  'finance.read',
+  'finance.write',
+  'admin.access',
+  'company.update_settings',
+  'company.remove_member',
+  'company.transfer_ownership',
+  'credentials.read',
+  'credentials.update',
+  'executor.invite',
+  'executor.deactivate',
+  'payment.confirm',
+])
+
 function membershipRole(
   user: AccessClaims,
   companyId: string | undefined
@@ -93,6 +118,16 @@ export function can(user: AccessClaims, action: Action, resource: ResourceContex
   // ── Tenant isolation (ADR-004): cross-tenant access is denied before any
   //    feature-level rule. Closes agency-to-agency IDOR by default. ──
   if (resource.agencyId && !sameTenant(user, resource.agencyId)) {
+    return false
+  }
+
+  // ── Agency manager (20-А, MOD-4): denied the finance/settings/team-admin set,
+  //    even though they are internal staff. Falls back to the session agency when the
+  //    action carries no resource agencyId (e.g. executor.invite). Owner/executor skip. ──
+  if (
+    MANAGER_BLOCKED.has(action) &&
+    isAgencyManager(user, resource.agencyId ?? user.activeAgencyId ?? undefined)
+  ) {
     return false
   }
 

@@ -912,6 +912,7 @@ model AgencyMember {
 
 enum AgencyMemberRole {
   owner
+  manager // 20-А (MOD-4): orders/chats/clients — так; finance/settings — ні
   executor
 }
 

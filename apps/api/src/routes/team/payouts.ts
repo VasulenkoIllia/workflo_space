@@ -2,7 +2,7 @@ import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, generatePayoutSchema, payoutQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { PAYOUT_SELECT, generatePayout, payoutDto } from '../../services/payout.js'
 
@@ -67,7 +67,8 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
       const query = payoutQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      // Payouts are finance data — internal team, but NOT a manager (20-А: finance НІ).
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const rows = await withTenant((tx) =>

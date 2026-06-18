@@ -2,7 +2,7 @@ import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, generateChargesSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { endOfMonthUtc, generateRecurringCharges } from '../../services/recurringCharges.js'
 
@@ -20,7 +20,7 @@ const generateChargesRoute: FastifyPluginAsync = (fastify) => {
       const input = generateChargesSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
 

@@ -8,7 +8,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { applyChargeDiscount } from '../../services/chargeDiscount.js'
 
@@ -83,7 +83,7 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
       const query = billingListQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
 

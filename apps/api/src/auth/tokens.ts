@@ -50,9 +50,13 @@ export function coercePermissions(json: unknown): CompanyPermissions | undefined
  * (ADR-004). Clients are NOT agency members; their tenant is derived from their
  * active company's agencyId. Drives the can() tenant-guard.
  */
+/** Agency team role (20-А, MOD-4). `manager` sits between owner and executor: it sees
+ *  orders/chats/clients but NOT finance/settings (enforced in `can()`). */
+export type AgencyRole = 'owner' | 'manager' | 'executor'
+
 export interface AgencyMembership {
   agencyId: string
-  role: 'owner' | 'executor'
+  role: AgencyRole
 }
 
 /**
@@ -79,6 +83,23 @@ export interface AccessClaims {
  */
 export function isInternalTeam(user: Pick<AccessClaims, 'agencyMemberships'>): boolean {
   return (user.agencyMemberships?.length ?? 0) > 0
+}
+
+/** The user's team role in a specific agency (20-А, MOD-4), or null if not a member. */
+export function agencyRole(
+  user: Pick<AccessClaims, 'agencyMemberships'>,
+  agencyId: string | undefined
+): AgencyRole | null {
+  if (!agencyId) return null
+  return user.agencyMemberships?.find((m) => m.agencyId === agencyId)?.role ?? null
+}
+
+/** True iff the user is a `manager` (not owner/executor) of the given agency (MOD-4). */
+export function isAgencyManager(
+  user: Pick<AccessClaims, 'agencyMemberships'>,
+  agencyId: string | undefined
+): boolean {
+  return agencyRole(user, agencyId) === 'manager'
 }
 
 export function buildAccessClaims(params: {

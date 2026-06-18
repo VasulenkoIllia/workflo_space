@@ -2,7 +2,7 @@ import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, updateReferralSettingsSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { resolveReferralConfig } from '../../services/referral.js'
 
@@ -18,7 +18,7 @@ const referralSettingsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const config = await withTenant((tx) => resolveReferralConfig(tx, agencyId))
