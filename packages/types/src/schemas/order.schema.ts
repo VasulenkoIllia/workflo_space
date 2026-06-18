@@ -26,6 +26,24 @@ export const createOrderSchema = z.object({
   stages: z.array(orderStageInputSchema).max(20).optional(),
 })
 
+/**
+ * POST /workspace/orders (P-7) — the internal team creates a task FOR a chosen client,
+ * without a client request. `companyId` is explicit (not the session). `zeroBilled` is
+ * the team's call (included in a subscription vs billable). The client sees it in their
+ * portal order list (filtered by company, not type). Defaults to `internal_task`.
+ */
+export const createWorkspaceOrderSchema = z.object({
+  companyId: z.string().uuid(),
+  title: z.string().min(3).max(255),
+  description: z.string().max(10_000).optional(),
+  type: z.nativeEnum(OrderType).default(OrderType.INTERNAL_TASK),
+  priority: z.nativeEnum(OrderPriority).default(OrderPriority.MEDIUM),
+  projectId: z.string().uuid().nullish(),
+  zeroBilled: z.boolean().default(false),
+  dueDate: dueDateSchema.optional(),
+})
+export type CreateWorkspaceOrderInput = z.infer<typeof createWorkspaceOrderSchema>
+
 /** GET /orders query — comma-separated status/priority, pagination, sort. */
 export const listOrdersQuerySchema = z.object({
   status: z.string().max(200).optional(),

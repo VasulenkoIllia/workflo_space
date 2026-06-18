@@ -4,6 +4,7 @@ import assignOrderRoute from './assignOrder.js'
 import commentsRoute from './comments.js'
 import commentsStreamRoute from './commentsStream.js'
 import createOrderRoute from './createOrder.js'
+import createWorkspaceOrderRoute from './createWorkspaceOrder.js'
 import deleteOrderRoute from './deleteOrder.js'
 import getOrderRoute from './getOrder.js'
 import internalTasksRoute from './internalTasks.js'
@@ -15,6 +16,7 @@ import updateOrderRoute from './updateOrder.js'
 /** Orders route group (`/orders/*`). Each sub-route declares its own full path. */
 const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(createOrderRoute)
+  await fastify.register(createWorkspaceOrderRoute)
   await fastify.register(listOrdersRoute)
   await fastify.register(getOrderRoute)
   await fastify.register(transitionOrderStatusRoute)
