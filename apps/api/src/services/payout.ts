@@ -1,4 +1,5 @@
 import { Prisma } from '@workflo/db'
+import { computeEmployeeReferralBonus } from './referral.js'
 
 /**
  * Executor payout calculation + lifecycle (S5-04, module 12). One `ExecutorPayout`
@@ -6,13 +7,15 @@ import { Prisma } from '@workflo/db'
  * refreshes a DRAFT but never clobbers an `approved`/`paid` row. Status is monotonic
  * draft → approved → paid, and an approved/paid period locks its time logs.
  *
- * `total = baseSalary + hourlyEarned + commissionAmount`.
+ * `total = baseSalary + hourlyEarned + commissionAmount + referralBonusAmount`.
  *  - baseSalary = the ExecutorRate active in the period (`monthlySalary`);
  *  - billableHours = Σ TimeLog.hours in the period (recorded);
  *  - hourlyEarned = 0 — ExecutorRate carries no hourly rate yet (a flagged future
  *    column); billableHours is tracked so it can light up without a recalc;
  *  - commissionAmount = commissionPercent × Σ confirmed revenue (amountUsd) on orders
  *    assigned to the executor in the period.
+ *  - referralBonusAmount = employee-referral % × Σ net income of clients this executor
+ *    brought (P-9b, §4.2) — recomputed with the draft, like every other component.
  */
 
 export interface PeriodBounds {
@@ -76,6 +79,7 @@ export interface PayoutDto {
   billableHours: string
   hourlyEarned: string
   commissionAmount: string
+  referralBonusAmount: string
   total: string
   currency: string
   status: string
@@ -91,6 +95,7 @@ interface PayoutRow {
   billableHours: Prisma.Decimal
   hourlyEarned: Prisma.Decimal
   commissionAmount: Prisma.Decimal
+  referralBonusAmount: Prisma.Decimal
   total: Prisma.Decimal
   currency: string
   status: string
@@ -106,6 +111,7 @@ export const PAYOUT_SELECT = {
   billableHours: true,
   hourlyEarned: true,
   commissionAmount: true,
+  referralBonusAmount: true,
   total: true,
   currency: true,
   status: true,
@@ -122,6 +128,7 @@ export function payoutDto(p: PayoutRow): PayoutDto {
     billableHours: p.billableHours.toFixed(2),
     hourlyEarned: p.hourlyEarned.toFixed(2),
     commissionAmount: p.commissionAmount.toFixed(2),
+    referralBonusAmount: p.referralBonusAmount.toFixed(2),
     total: p.total.toFixed(2),
     currency: p.currency,
     status: p.status,
@@ -183,7 +190,14 @@ export async function generatePayout(
   const hourlyEarned = new Prisma.Decimal(0)
   const commissionBase = commAgg._sum.amountUsd ?? new Prisma.Decimal(0)
   const commissionAmount = commissionBase.times(commissionPct).div(100).toDecimalPlaces(2)
-  const total = baseSalary.plus(hourlyEarned).plus(commissionAmount)
+  // Employee-referral bonus over the SAME period window (P-9b, §4.2).
+  const referralBonusAmount = await computeEmployeeReferralBonus(tx, {
+    agencyId: args.agencyId,
+    executorId: args.executorId,
+    from: bounds.start,
+    to: bounds.end,
+  })
+  const total = baseSalary.plus(hourlyEarned).plus(commissionAmount).plus(referralBonusAmount)
 
   const payout = await tx.executorPayout.upsert({
     where: {
@@ -201,11 +215,20 @@ export async function generatePayout(
       billableHours,
       hourlyEarned,
       commissionAmount,
+      referralBonusAmount,
       total,
       currency,
       status: 'draft',
     },
-    update: { baseSalary, billableHours, hourlyEarned, commissionAmount, total, currency },
+    update: {
+      baseSalary,
+      billableHours,
+      hourlyEarned,
+      commissionAmount,
+      referralBonusAmount,
+      total,
+      currency,
+    },
     select: PAYOUT_SELECT,
   })
   return payoutDto(payout)

@@ -102,24 +102,28 @@ model PasswordResetToken {
 }
 
 model Company {
-  id           String       @id @default(uuid())
-  agencyId     String
-  name         String
+  id                   String       @id @default(uuid())
+  agencyId             String
+  name                 String
   // AR-22 (audit 2026-06-11): per-agency unique (@@unique below) — two tenants may both
   // have an "acme" client. referralCode stays globally unique (uuid; agency-less lookup).
-  slug         String
-  language     Language     @default(uk)
-  currency     String       @default("USD")
-  notes        String?
-  loyaltyTier  LoyaltyTier  @default(new)
-  tierOverride LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
-  totalSpent   Decimal      @default(0) @db.Decimal(12, 2)
-  bonusBalance Decimal      @default(0) @db.Decimal(12, 2)
-  moneyBalance Decimal      @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
-  referralCode String       @unique @default(uuid())
-  referredById String?
-  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+  slug                 String
+  language             Language     @default(uk)
+  currency             String       @default("USD")
+  notes                String?
+  loyaltyTier          LoyaltyTier  @default(new)
+  tierOverride         LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
+  totalSpent           Decimal      @default(0) @db.Decimal(12, 2)
+  bonusBalance         Decimal      @default(0) @db.Decimal(12, 2)
+  moneyBalance         Decimal      @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
+  referralCode         String       @unique @default(uuid())
+  referredById         String? // company-referral (module 09): another Company that referred this one
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): the EMPLOYEE who brought this client. Plain-String FK
+  // to Profile (project convention: no back-relation on Profile). Drives the referral
+  // bonus = net-income(client) × % accrued onto that employee's payout (PROJECTS_SPEC §4.2).
+  referredByEmployeeId String?
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
 
   members            CompanyMember[]
   orders             Order[]
@@ -136,6 +140,7 @@ model Company {
 
   @@unique([agencyId, slug])
   @@index([agencyId])
+  @@index([referredByEmployeeId]) // P-9b: payout generation looks up an employee's referred clients
   @@map("companies")
 }
 
@@ -1071,13 +1076,16 @@ model PaymentAllocation {
 
 /// Per-agency referral % tiers (module 09/25). Editable; `tiers` = JSON tier table.
 model ReferralSettings {
-  id        String   @id @default(uuid())
-  agencyId  String   @unique
-  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  enabled   Boolean  @default(true)
-  tiers     Json     @default("[]")
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
-  updatedBy String?
+  id                      String   @id @default(uuid())
+  agencyId                String   @unique
+  agency                  Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  enabled                 Boolean  @default(true)
+  tiers                   Json     @default("[]") // company-referral tiers (module 09)
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b, PROJECTS_SPEC §4.2): single flat % of a referred
+  // client's net income paid to the employee who brought them (П4: one % per client).
+  employeeReferralPercent Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+  updatedBy               String?
 
   @@map("referral_settings")
 }
@@ -1102,22 +1110,25 @@ model LoyaltyTierHistory {
 /// Per-executor, per-period payroll settlement (module 12). One row per
 /// (executor, period) → idempotent generation; status draft→approved→paid.
 model ExecutorPayout {
-  id               String       @id @default(uuid())
-  agencyId         String
-  agency           Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
-  executorId       String
-  period           String // 'YYYY-MM'
-  baseSalary       Decimal      @default(0) @db.Decimal(10, 2)
-  billableHours    Decimal      @default(0) @db.Decimal(8, 2)
-  hourlyEarned     Decimal      @default(0) @db.Decimal(10, 2)
-  commissionAmount Decimal      @default(0) @db.Decimal(10, 2)
-  total            Decimal      @default(0) @db.Decimal(10, 2)
-  currency         String       @default("USD")
-  status           PayoutStatus @default(draft)
-  approvedBy       String?
-  paidAt           DateTime?    @db.Timestamptz(3)
-  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  id                  String       @id @default(uuid())
+  agencyId            String
+  agency              Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  executorId          String
+  period              String // 'YYYY-MM'
+  baseSalary          Decimal      @default(0) @db.Decimal(10, 2)
+  billableHours       Decimal      @default(0) @db.Decimal(8, 2)
+  hourlyEarned        Decimal      @default(0) @db.Decimal(10, 2)
+  commissionAmount    Decimal      @default(0) @db.Decimal(10, 2)
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): % of net income from clients this executor referred
+  // (PROJECTS_SPEC §4.2) — a separate payout line, recomputed with the rest of a draft.
+  referralBonusAmount Decimal      @default(0) @db.Decimal(10, 2)
+  total               Decimal      @default(0) @db.Decimal(10, 2)
+  currency            String       @default("USD")
+  status              PayoutStatus @default(draft)
+  approvedBy          String?
+  paidAt              DateTime?    @db.Timestamptz(3)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
 
   // AR-20 (audit 2026-06-11): tenant-scoped — a multi-agency staffer needs a payout
   // per agency for the same period (the global key collided with a row the other

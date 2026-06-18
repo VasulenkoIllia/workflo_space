@@ -7,6 +7,7 @@ import {
   getReferralPercent,
   referralTierSchema,
 } from '@workflo/types'
+import { computeClientNetIncomeUsd } from './margin.js'
 import { walletCredit } from './wallet.js'
 
 /**
@@ -45,14 +46,17 @@ export function parseReferralTiers(raw: unknown): ReferralTier[] {
 export interface ReferralConfig {
   enabled: boolean
   tiers: ReferralTier[]
+  /** Employee-referral % of a referred client's net income (P-9b, §4.2). Opt-in: default 0. */
+  employeeReferralPercent: number
 }
 
 /**
- * Resolve an agency's referral program config. No settings row → the program is
- * ON with default tiers (out-of-box); a row governs `enabled` + custom tiers.
+ * Resolve an agency's referral program config. No settings row → company-referral is
+ * ON with default tiers (out-of-box) and employee-referral is OFF (0%); a row governs
+ * `enabled`, custom tiers, and the employee-referral percent.
  *
- * NOTE: read in-tx (no cache) for correctness — a tier edit takes effect on the
- * next payment with no staleness window. A 5-min cache is a future optimization.
+ * NOTE: read in-tx (no cache) for correctness — an edit takes effect on the next
+ * payment/payout with no staleness window. A 5-min cache is a future optimization.
  */
 export async function resolveReferralConfig(
   tx: Prisma.TransactionClient,
@@ -60,10 +64,52 @@ export async function resolveReferralConfig(
 ): Promise<ReferralConfig> {
   const settings = await tx.referralSettings.findUnique({
     where: { agencyId },
-    select: { enabled: true, tiers: true },
+    select: { enabled: true, tiers: true, employeeReferralPercent: true },
   })
-  if (!settings) return { enabled: true, tiers: DEFAULT_REFERRAL_TIERS }
-  return { enabled: settings.enabled, tiers: parseReferralTiers(settings.tiers) }
+  if (!settings) return { enabled: true, tiers: DEFAULT_REFERRAL_TIERS, employeeReferralPercent: 0 }
+  return {
+    enabled: settings.enabled,
+    tiers: parseReferralTiers(settings.tiers),
+    employeeReferralPercent: Number(settings.employeeReferralPercent),
+  }
+}
+
+/**
+ * Employee-referral bonus (P-9b, PROJECTS_SPEC §4.2). The employee who brought a client
+ * (`Company.referredByEmployeeId`) earns a flat percent of the NET income (Σ project
+ * margin) those clients produced in `[from, to]`. П4: one % per client, aggregated over
+ * the whole client. Recomputed as part of the payout draft (no separate ledger), so it
+ * tracks margin/rate/setting edits until the payout is approved. A client running at a
+ * loss contributes nothing (clamped per-client — never a negative bonus).
+ */
+export async function computeEmployeeReferralBonus(
+  tx: Prisma.TransactionClient,
+  args: { agencyId: string; executorId: string; from: Date; to: Date }
+): Promise<Prisma.Decimal> {
+  const settings = await tx.referralSettings.findUnique({
+    where: { agencyId: args.agencyId },
+    select: { employeeReferralPercent: true },
+  })
+  const percent = new Prisma.Decimal(settings?.employeeReferralPercent ?? 0)
+  if (!percent.greaterThan(0)) return new Prisma.Decimal(0)
+
+  const clients = await tx.company.findMany({
+    where: { agencyId: args.agencyId, referredByEmployeeId: args.executorId },
+    select: { id: true },
+  })
+  if (clients.length === 0) return new Prisma.Decimal(0)
+
+  let netTotal = new Prisma.Decimal(0)
+  for (const c of clients) {
+    const net = await computeClientNetIncomeUsd(tx, {
+      agencyId: args.agencyId,
+      companyId: c.id,
+      from: args.from,
+      to: args.to,
+    })
+    if (net.greaterThan(0)) netTotal = netTotal.plus(net) // a loss-making client adds nothing
+  }
+  return netTotal.times(percent).div(100).toDecimalPlaces(2)
 }
 
 /**

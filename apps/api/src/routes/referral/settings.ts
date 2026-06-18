@@ -49,14 +49,18 @@ const referralSettingsRoute: FastifyPluginAsync = (fastify) => {
             agencyId,
             enabled: input.enabled ?? true,
             tiers: tiersJson ?? [],
+            employeeReferralPercent: input.employeeReferralPercent ?? 0,
             updatedBy: user.sub,
           },
           update: {
             ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
             ...(tiersJson !== undefined ? { tiers: tiersJson } : {}),
+            ...(input.employeeReferralPercent !== undefined
+              ? { employeeReferralPercent: input.employeeReferralPercent }
+              : {}),
             updatedBy: user.sub,
           },
-          select: { enabled: true, tiers: true },
+          select: { enabled: true, tiers: true, employeeReferralPercent: true },
         })
       )
 

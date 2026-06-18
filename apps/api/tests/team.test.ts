@@ -15,6 +15,8 @@ const payoutUpdate = vi.fn()
 const timeLogAggregate = vi.fn()
 const paymentAggregate = vi.fn()
 const auditLogCreate = vi.fn()
+const referralSettingsFindUnique = vi.fn() // P-9b: employee-referral % lookup in generatePayout
+const companyFindMany = vi.fn() // P-9b: an employee's referred clients
 
 let Dec: (v: string | number) => unknown
 
@@ -41,6 +43,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     timeLog: { aggregate: timeLogAggregate },
     payment: { aggregate: paymentAggregate },
     auditLog: { create: auditLogCreate },
+    referralSettings: { findUnique: referralSettingsFindUnique },
+    company: { findMany: companyFindMany },
   }
   return {
     prisma,
@@ -58,6 +62,8 @@ const mockTx = {
   executorRate: { findFirst: rateFindFirst },
   timeLog: { aggregate: timeLogAggregate },
   payment: { aggregate: paymentAggregate },
+  referralSettings: { findUnique: referralSettingsFindUnique },
+  company: { findMany: companyFindMany },
 }
 
 const EXECUTOR = {
@@ -99,6 +105,8 @@ function authed(claims: unknown) {
 beforeEach(() => {
   vi.clearAllMocks()
   auditLogCreate.mockResolvedValue({})
+  referralSettingsFindUnique.mockResolvedValue(null) // P-9b: no settings → 0% → no bonus
+  companyFindMany.mockResolvedValue([])
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -145,6 +153,7 @@ describe('generatePayout (service)', () => {
       billableHours: Dec('0.00'),
       hourlyEarned: Dec('0.00'),
       commissionAmount: Dec('0.00'),
+      referralBonusAmount: Dec('0.00'),
       total: Dec('1000.00'),
       currency: 'USD',
       status: 'approved',
@@ -274,6 +283,7 @@ describe('payout workflow', () => {
       billableHours: Dec('0.00'),
       hourlyEarned: Dec('0.00'),
       commissionAmount: Dec('0.00'),
+      referralBonusAmount: Dec('0.00'),
       total: Dec('1000.00'),
       currency: 'USD',
       status: 'draft',
