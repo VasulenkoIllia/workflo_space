@@ -14,11 +14,15 @@ const priceAmount = z
   .max(1_000_000_000)
   .refine(hasTwoFractionDigits, 'Price must have at most 2 decimal places')
 
+/** Hours a service «takes» (P-6) — seeds an estimate line's budget. ≥ 0, max 2dp. */
+const hoursAmount = z.number().finite().nonnegative().max(100_000)
+
 /** POST /workspace/services — create a catalog service. */
 export const createServiceSchema = z.object({
   name: z.string().min(2).max(200),
   description: z.string().max(2000).optional(),
   defaultPriceUsd: priceAmount.optional(),
+  estimatedHours: hoursAmount.nullish(), // P-6: default hour-budget for estimate lines
   isRecurring: z.boolean().default(true),
 })
 export type CreateServiceInput = z.infer<typeof createServiceSchema>
@@ -29,6 +33,7 @@ export const updateServiceSchema = z
     name: z.string().min(2).max(200).optional(),
     description: z.string().max(2000).nullish(),
     defaultPriceUsd: priceAmount.nullish(),
+    estimatedHours: hoursAmount.nullish(),
     isActive: z.boolean().optional(),
     isRecurring: z.boolean().optional(),
   })

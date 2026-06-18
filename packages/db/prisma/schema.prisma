@@ -220,6 +220,7 @@ model Order {
   timeLogs      TimeLog[]
   files         OrderFile[]
   internalTasks InternalTask[]
+  estimateLine  EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
   activityLogs  ActivityLog[]
   chatReads     OrderChatRead[]
   payments      Payment[]
@@ -366,13 +367,44 @@ model Service {
   isActive        Boolean  @default(true)
   isRecurring     Boolean  @default(true) // recurring-subscription service vs one-off (module 05)
   defaultPriceUsd Decimal? @db.Decimal(10, 2) // catalog default price (reference; estimates — P-6)
+  estimatedHours  Decimal? @db.Decimal(8, 2) // P-6 (17.06): hours this service «takes» — seeds an EstimateLine budget
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
 
-  agency Agency? @relation(fields: [agencyId], references: [id])
+  agency        Agency?        @relation(fields: [agencyId], references: [id])
+  estimateLines EstimateLine[] // P-6: estimate positions referencing this catalog service
 
   @@index([agencyId])
   @@map("services")
+}
+
+/// Estimate line / project budget position (05-ПРОЕКТИ 02-Б, P-6). A service × hours
+/// on a Project's estimate; each line auto-spawns a zeroBilled kanban task (В12) where
+/// the work is logged (hours → margin cost). Σ(hours) reconciles against
+/// `Project.includedHoursCap` (soft indicator; overage billing is the P-2 cycle-engine).
+model EstimateLine {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId String? // catalog reference; null = free-text line
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  name      String // denormalized label — stable in documents even if the service is renamed
+  hours     Decimal  @db.Decimal(8, 2) // budgeted hours (the position's «time»)
+  amount    Decimal? @db.Decimal(10, 2) // optional line price in the project currency (null/0 = zero-billed)
+  // The zeroBilled task auto-created from this line. Deleting the line leaves the task
+  // (real logged work); SetNull keeps the task if the line goes away.
+  orderId   String?  @unique
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  position  Int      @default(0) // display order in the estimate
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId]) // FK scan
+  @@index([projectId, position]) // getEstimate: filter by project + ORDER BY position
+  @@index([serviceId]) // FK scan (service delete → SetNull)
+  @@map("estimate_lines")
 }
 
 model ServiceCharge {
@@ -856,6 +888,7 @@ model Agency {
   referrals            Referral[] // AR-21 (S5.5)
   legalEntities        LegalEntity[] // 20-Д (S5.6 P-1б)
   projects             Project[] // 05-ПРОЕКТИ (S5.6 P-1)
+  estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
 
   @@index([planId])
@@ -1291,6 +1324,7 @@ model Project {
   executorRates ProjectExecutorRate[]
   orders        Order[]
   charges       ServiceCharge[] // нарахування циклів (05-ПРОЕКТИ, P-1 3b)
+  estimateLines EstimateLine[] // P-6: кошторис-позиції проєкту
 
   @@unique([companyId, name])
   @@index([agencyId])

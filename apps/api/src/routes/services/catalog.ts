@@ -12,6 +12,7 @@ interface ServiceRow {
   isActive: boolean
   isRecurring: boolean
   defaultPriceUsd: Prisma.Decimal | null
+  estimatedHours: Prisma.Decimal | null
   createdAt: Date
 }
 
@@ -23,6 +24,7 @@ function toDto(s: ServiceRow) {
     isActive: s.isActive,
     isRecurring: s.isRecurring,
     defaultPriceUsd: s.defaultPriceUsd ? s.defaultPriceUsd.toFixed(2) : null,
+    estimatedHours: s.estimatedHours ? s.estimatedHours.toFixed(2) : null,
     createdAt: s.createdAt,
   }
 }
@@ -34,6 +36,7 @@ const SERVICE_SELECT = {
   isActive: true,
   isRecurring: true,
   defaultPriceUsd: true,
+  estimatedHours: true,
   createdAt: true,
 } satisfies Prisma.ServiceSelect
 
@@ -81,6 +84,7 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
             name: input.name,
             description: input.description ?? null,
             defaultPriceUsd: input.defaultPriceUsd ?? null,
+            estimatedHours: input.estimatedHours ?? null,
             isRecurring: input.isRecurring,
           },
           select: SERVICE_SELECT,
@@ -125,6 +129,7 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
             ...(input.defaultPriceUsd !== undefined
               ? { defaultPriceUsd: input.defaultPriceUsd }
               : {}),
+            ...(input.estimatedHours !== undefined ? { estimatedHours: input.estimatedHours } : {}),
             ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
             ...(input.isRecurring !== undefined ? { isRecurring: input.isRecurring } : {}),
           },
