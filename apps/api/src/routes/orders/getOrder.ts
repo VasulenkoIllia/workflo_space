@@ -45,6 +45,10 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             deletedAt: true,
             onHoldReason: true,
             cancelledReason: true,
+            requiresApproval: true,
+            approvalStatus: true,
+            approvalDecidedAt: true,
+            approvalComment: true,
             createdAt: true,
             updatedAt: true,
             company: { select: { id: true, name: true } },
@@ -77,6 +81,11 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
         stages: order.stages,
+        // 02-А: the portal renders the approval block + audit row from these.
+        requiresApproval: order.requiresApproval,
+        approvalStatus: order.approvalStatus,
+        approvalDecidedAt: order.approvalDecidedAt,
+        approvalComment: order.approvalComment,
       }
 
       if (!isInternal) {

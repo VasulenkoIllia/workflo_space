@@ -41,6 +41,8 @@ export const createWorkspaceOrderSchema = z.object({
   projectId: z.string().uuid().nullish(),
   zeroBilled: z.boolean().default(false),
   dueDate: dueDateSchema.optional(),
+  // 02-А: explicit override; when omitted, resolved from the project default (else false).
+  requiresApproval: z.boolean().optional(),
 })
 export type CreateWorkspaceOrderInput = z.infer<typeof createWorkspaceOrderSchema>
 
@@ -82,6 +84,29 @@ export const updateOrderSchema = z
   .refine((d) => Object.keys(d).length > 0, {
     message: 'Потрібно вказати хоча б одне поле для оновлення',
   })
+
+/**
+ * POST /workspace/orders/:id/submit-approval (02-А) — the team submits the estimate for the
+ * client to approve. Optional note shown to the client alongside the estimate block.
+ */
+export const submitOrderApprovalSchema = z.object({
+  note: z.string().max(2000).optional(),
+})
+
+/**
+ * POST /portal/orders/:id/approval (02-А) — the client (company owner) decides on the
+ * estimate. Rejection MUST carry a reason; approval may carry an optional note.
+ */
+export const decideOrderApprovalSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    comment: z.string().max(2000).optional(),
+  })
+  .refine((d) => d.decision !== 'reject' || (d.comment != null && d.comment.trim().length > 0), {
+    message: 'Вкажіть причину відхилення',
+    path: ['comment'],
+  })
+export type DecideOrderApprovalInput = z.infer<typeof decideOrderApprovalSchema>
 
 /** PATCH /orders/:id/assign — assign an executor (null = unassign). */
 export const assignOrderSchema = z.object({

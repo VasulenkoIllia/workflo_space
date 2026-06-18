@@ -4,6 +4,7 @@ import {
   AppError,
   canTransitionOrder,
   INTERNAL_TO_CLIENT_STATUS,
+  OrderClientStatus,
   OrderInternalStatus,
   transitionOrderStatusSchema,
 } from '@workflo/types'
@@ -35,6 +36,8 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             agencyId: true,
             companyId: true,
             internalStatus: true,
+            requiresApproval: true,
+            approvalStatus: true,
             deletedAt: true,
           },
         })
@@ -56,6 +59,21 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
+      // 02-А: when the order requires estimate approval, work cannot start until the
+      // client has approved. approvalStatus is monotonic (only the client moves it to
+      // approved/rejected, never back), so the snapshot check is race-free for this gate.
+      if (
+        to === OrderInternalStatus.IN_PROGRESS &&
+        order.requiresApproval &&
+        order.approvalStatus !== 'approved'
+      ) {
+        throw new AppError(
+          ApiErrorCode.CONFLICT,
+          'Оцінку ще не погоджено клієнтом — старт роботи заблоковано',
+          409
+        )
+      }
+
       const isInternal = isInternalTeam(user)
       const isReopen = from === OrderInternalStatus.DONE && to === OrderInternalStatus.REVISION
       const isCompanyOwner =
@@ -67,6 +85,16 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       const data: Prisma.OrderUpdateManyMutationInput = {
         internalStatus: to,
         clientStatus: INTERNAL_TO_CLIENT_STATUS[to],
+      }
+      // 02-А: while the client's estimate decision is still pending, keep the order visibly
+      // «pending_approval» to the client even as the team shuffles internal pre-work states
+      // (estimating ↔ clarification both map to in_progress) — don't lose that the client owes
+      // a decision. Terminal maps (cancelled) pass through untouched.
+      if (
+        order.approvalStatus === 'pending' &&
+        data.clientStatus === OrderClientStatus.IN_PROGRESS
+      ) {
+        data.clientStatus = OrderClientStatus.PENDING_APPROVAL
       }
       if (to === OrderInternalStatus.ON_HOLD) data.onHoldReason = input.comment ?? null
       if (to === OrderInternalStatus.CANCELLED) data.cancelledReason = input.comment ?? null

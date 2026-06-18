@@ -5,10 +5,12 @@ import commentsRoute from './comments.js'
 import commentsStreamRoute from './commentsStream.js'
 import createOrderRoute from './createOrder.js'
 import createWorkspaceOrderRoute from './createWorkspaceOrder.js'
+import decideOrderApprovalRoute from './decideOrderApproval.js'
 import deleteOrderRoute from './deleteOrder.js'
 import getOrderRoute from './getOrder.js'
 import internalTasksRoute from './internalTasks.js'
 import listOrdersRoute from './listOrders.js'
+import submitOrderApprovalRoute from './submitOrderApproval.js'
 import timeLogsRoute from './timeLogs.js'
 import transitionOrderStatusRoute from './transitionOrderStatus.js'
 import updateOrderRoute from './updateOrder.js'
@@ -20,6 +22,8 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(listOrdersRoute)
   await fastify.register(getOrderRoute)
   await fastify.register(transitionOrderStatusRoute)
+  await fastify.register(submitOrderApprovalRoute)
+  await fastify.register(decideOrderApprovalRoute)
   await fastify.register(updateOrderRoute)
   await fastify.register(deleteOrderRoute)
   await fastify.register(assignOrderRoute)

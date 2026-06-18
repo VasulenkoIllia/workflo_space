@@ -10,8 +10,9 @@ import { writeAuditAsync } from '../../services/audit.js'
  * POST /workspace/orders (P-7) — the internal team (owner/executor) creates a task FOR a
  * client, without a client request (proactive work). `companyId` is explicit; the client
  * sees the task in their portal order list (filtered by company, not type). `zeroBilled`
- * is the team's choice (covered by a subscription, or separately billable). No client
- * approval is required — that gate (requiresApproval) is for client-initiated estimates.
+ * is the team's choice (covered by a subscription, or separately billable). 02-А approval
+ * is off by default here, but the team may opt in (`requiresApproval`) or inherit the
+ * linked project's default — the gate then blocks → in_progress until the client approves.
  */
 const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
   fastify.post(
@@ -35,16 +36,20 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
         if (!company) {
           throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
         }
-        // If linked to a project, it must belong to the SAME company.
+        // If linked to a project, it must belong to the SAME company. Its requiresApproval
+        // is the 02-А default when the request doesn't override it explicitly.
+        let projectRequiresApproval: boolean | null = null
         if (input.projectId) {
           const project = await tx.project.findFirst({
             where: { id: input.projectId, agencyId, companyId: input.companyId },
-            select: { id: true },
+            select: { id: true, requiresApproval: true },
           })
           if (!project) {
             throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
           }
+          projectRequiresApproval = project.requiresApproval
         }
+        const requiresApproval = input.requiresApproval ?? projectRequiresApproval ?? false
         return tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
@@ -56,6 +61,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             type: input.type,
             priority: input.priority,
             zeroBilled: input.zeroBilled,
+            requiresApproval,
             internalStatus: 'new',
             clientStatus: 'in_progress',
             deadline: input.dueDate ? new Date(input.dueDate) : null,
@@ -68,6 +74,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             zeroBilled: true,
             projectId: true,
             priority: true,
+            requiresApproval: true,
             internalStatus: true,
             clientStatus: true,
             deadline: true,

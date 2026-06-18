@@ -28,6 +28,7 @@ model Profile {
   companyMembership     CompanyMember[]
   ordersAssigned        Order[]               @relation("OrderAssignee")
   ordersCreated         Order[]               @relation("OrderCreatedBy")
+  ordersApprovalDecided Order[]               @relation("OrderApprovalDecidedBy")
   internalTasksAssigned InternalTask[]        @relation("InternalTaskAssignee")
   comments              OrderComment[]
   timeLogs              TimeLog[]
@@ -183,37 +184,46 @@ model CompanyMember {
 }
 
 model Order {
-  id              String              @id @default(uuid())
-  agencyId        String
-  title           String
-  description     String?
-  type            OrderType           @default(client_order)
-  priority        OrderPriority       @default(medium)
-  companyId       String?
-  company         Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  assigneeId      String?
-  assignee        Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
-  createdById     String
-  createdBy       Profile             @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  internalStatus  OrderInternalStatus @default(new)
-  clientStatus    OrderClientStatus   @default(in_progress)
-  billingType     BillingType         @default(fixed)
-  fixedPrice      Decimal?            @db.Decimal(10, 2)
-  hourlyRate      Decimal?            @db.Decimal(10, 2)
-  estimatedHours  Decimal?            @db.Decimal(8, 2)
-  totalAmount     Decimal?            @db.Decimal(10, 2)
-  currency        String              @default("USD")
-  deadline        DateTime?           @db.Timestamptz(3)
-  paidAt          DateTime?           @db.Timestamptz(3)
-  deletedAt       DateTime?           @db.Timestamptz(3)
-  onHoldReason    String?
-  cancelledReason String?
+  id                  String               @id @default(uuid())
+  agencyId            String
+  title               String
+  description         String?
+  type                OrderType            @default(client_order)
+  priority            OrderPriority        @default(medium)
+  companyId           String?
+  company             Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assigneeId          String?
+  assignee            Profile?             @relation("OrderAssignee", fields: [assigneeId], references: [id])
+  createdById         String
+  createdBy           Profile              @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  internalStatus      OrderInternalStatus  @default(new)
+  clientStatus        OrderClientStatus    @default(in_progress)
+  billingType         BillingType          @default(fixed)
+  fixedPrice          Decimal?             @db.Decimal(10, 2)
+  hourlyRate          Decimal?             @db.Decimal(10, 2)
+  estimatedHours      Decimal?             @db.Decimal(8, 2)
+  totalAmount         Decimal?             @db.Decimal(10, 2)
+  currency            String               @default("USD")
+  deadline            DateTime?            @db.Timestamptz(3)
+  paidAt              DateTime?            @db.Timestamptz(3)
+  deletedAt           DateTime?            @db.Timestamptz(3)
+  onHoldReason        String?
+  cancelledReason     String?
+  // 02-А (S5.6 P-7): опційне погодження оцінки клієнтом. requiresApproval — snapshot ефективного
+  // прапорця на момент створення (дефолт проєкту/компанії); approvalStatus null = не подано/не
+  // потрібно; гейтить перехід → in_progress, поки клієнт не «Погодити». decidedBy/At + comment = audit.
+  requiresApproval    Boolean              @default(false)
+  approvalStatus      OrderApprovalStatus?
+  approvalDecidedAt   DateTime?            @db.Timestamptz(3)
+  approvalDecidedById String?
+  approvalDecidedBy   Profile?             @relation("OrderApprovalDecidedBy", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
+  approvalComment     String? // коментар клієнта при відхиленні (або примітка при погодженні)
   // 05-ПРОЕКТИ (S5.6 P-1): опційна привʼязка до фін-проєкту (legacy-замовлення без проєкту валідні)
-  projectId       String?
-  project         Project?            @relation(fields: [projectId], references: [id])
-  zeroBilled      Boolean             @default(false) // В12: задача в абонплаті — НЕ білиться, але час → собівартість
-  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  projectId           String?
+  project             Project?             @relation(fields: [projectId], references: [id])
+  zeroBilled          Boolean              @default(false) // В12: задача в абонплаті — НЕ білиться, але час → собівартість
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
   stages        OrderStage[]
   comments      OrderComment[]
@@ -1017,6 +1027,14 @@ enum OrderClientStatus {
   pending_approval
   completed
   cancelled
+}
+
+// 02-А (S5.6 P-7): стан погодження оцінки клієнтом. Окремий від clientStatus, бо стосується
+// САМЕ оцінки (estimating → in_progress), а не приймання готової роботи (review → pending_approval).
+enum OrderApprovalStatus {
+  pending // команда подала оцінку, чекаємо рішення клієнта
+  approved // клієнт погодив — команда може стартувати
+  rejected // клієнт відхилив (з коментарем) — повертається команді
 }
 
 enum BillingType {

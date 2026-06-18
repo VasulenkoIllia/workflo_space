@@ -74,6 +74,17 @@ export enum OrderClientStatus {
   CANCELLED = 'cancelled',
 }
 
+/**
+ * 02-А — estimate-approval state (optional, gated by Order.requiresApproval).
+ * Distinct from OrderClientStatus: this tracks the CLIENT's decision on the estimate
+ * (estimating → in_progress), not acceptance of finished work (review → pending_approval).
+ */
+export enum OrderApprovalStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
+
 export enum StageStatus {
   PENDING = 'pending',
   IN_PROGRESS = 'in_progress',

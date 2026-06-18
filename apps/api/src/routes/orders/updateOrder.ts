@@ -27,6 +27,7 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
             agencyId: true,
             companyId: true,
             internalStatus: true,
+            approvalStatus: true,
             deletedAt: true,
           },
         })
@@ -37,6 +38,26 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
       const isInternal = isInternalTeam(user)
       if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
         throw notFound()
+      }
+
+      // 02-А: the estimate the client is approving (or already approved) must equal what gets
+      // billed. Lock the billing fields once an approval is pending/approved — to revise the
+      // figure the team must let the client decide (a rejection reopens editing). Snapshot is
+      // safe: only the client moves approvalStatus, and never back to pending after a decision.
+      const editsBilling =
+        input.billingType !== undefined ||
+        input.fixedPrice !== undefined ||
+        input.hourlyRate !== undefined ||
+        input.estimatedHours !== undefined
+      if (
+        editsBilling &&
+        (order.approvalStatus === 'pending' || order.approvalStatus === 'approved')
+      ) {
+        throw new AppError(
+          ApiErrorCode.CONFLICT,
+          'Оцінку на погодженні не можна змінювати — дочекайтеся рішення клієнта',
+          409
+        )
       }
 
       if (!isInternal) {
