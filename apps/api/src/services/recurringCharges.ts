@@ -9,11 +9,12 @@ import { refreshMoneyBalance } from './allocation.js'
  * to the same rows. The loyalty discount is applied here at creation time from the
  * project company's effective tier (the discount math lives in this single place).
  *
- * Scope (P-2a) on a `monthly_day_n` cycle: `fixed_monthly_advance` — abonAmount
- * billed up-front for the upcoming month; `hourly_postpaid` — Σ(hours ×
- * clientRateSnapshot) for the month that just ended (no work → no charge). The
- * `hourly_prepaid` reconcile, hybrid overage, and weekly/manual cycle modes are
- * the remaining P-2 work (PROJECTS_SPEC §3).
+ * Scope (P-2a/b/d): `fixed_monthly_advance` — abonAmount up-front for the upcoming
+ * month (+ hybrid overage: hours over includedHoursCap × clientHourlyRate for the
+ * just-closed month, kind='overage'); `hourly_postpaid` — Σ(hours × clientRateSnapshot)
+ * for the cycle that just ended. Cycles: monthly_day_n + weekly_day_x (manual close
+ * → closeProjectCycle). `hourly_prepaid` (advance + reconcile) is P-7 (needs the
+ * 02-В advance gate). See PROJECTS_SPEC §3.
  *
  * Runs inside the caller's transaction: the cron wraps all tenants (worker /
  * RLS-bypass); the manual `generate` endpoint scopes to one agency.
