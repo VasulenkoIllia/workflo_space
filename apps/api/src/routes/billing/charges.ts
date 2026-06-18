@@ -1,9 +1,16 @@
-import { type Prisma, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, billingListQuerySchema } from '@workflo/types'
+import { Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
+import {
+  ApiErrorCode,
+  AppError,
+  applyChargeDiscountSchema,
+  billingListQuerySchema,
+} from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
-import { requireActiveAgency } from '../../auth/tenant.js'
+import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+import { writeAuditAsync } from '../../services/audit.js'
+import { applyChargeDiscount } from '../../services/chargeDiscount.js'
 
 interface ChargeRow {
   id: string
@@ -12,6 +19,8 @@ interface ChargeRow {
   baseAmount: Prisma.Decimal | null
   discountPct: Prisma.Decimal | null
   discountAmount: Prisma.Decimal | null
+  manualDiscountPct: Prisma.Decimal | null
+  manualDiscountAmount: Prisma.Decimal | null
   totalAmount: Prisma.Decimal | null
   currency: string
   month: Date
@@ -27,6 +36,8 @@ const CHARGE_SELECT = {
   baseAmount: true,
   discountPct: true,
   discountAmount: true,
+  manualDiscountPct: true,
+  manualDiscountAmount: true,
   totalAmount: true,
   currency: true,
   month: true,
@@ -43,6 +54,8 @@ function toDto(c: ChargeRow) {
     baseAmount: c.baseAmount ? c.baseAmount.toFixed(2) : null,
     discountPct: c.discountPct ? c.discountPct.toString() : null,
     discountAmount: c.discountAmount ? c.discountAmount.toFixed(2) : null,
+    manualDiscountPct: c.manualDiscountPct ? c.manualDiscountPct.toString() : null,
+    manualDiscountAmount: c.manualDiscountAmount ? c.manualDiscountAmount.toFixed(2) : null,
     totalAmount: c.totalAmount ? c.totalAmount.toFixed(2) : null,
     currency: c.currency,
     month: c.month.toISOString().slice(0, 7),
@@ -124,6 +137,41 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
       )
 
       return reply.send({ success: true, data: { charges: rows.map(toDto) } })
+    }
+  )
+
+  // ── Apply a one-time manual discount (P-10, 05-З) — owner-only ─────────────────
+  fastify.post<{ Params: { id: string } }>(
+    '/workspace/billing/charges/:id/discount',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = applyChargeDiscountSchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isAgencyOwner(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції може надавати знижки', 403)
+      }
+
+      const pct = input.discountPct != null ? new Prisma.Decimal(input.discountPct) : null
+      const amount = input.discountAmount != null ? new Prisma.Decimal(input.discountAmount) : null
+      const charge = await tenantTransaction(prisma, (tx) =>
+        applyChargeDiscount(tx, { agencyId, chargeId: request.params.id, pct, amount })
+      )
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'charge.discount_applied',
+        resourceType: 'service_charge',
+        resourceId: request.params.id,
+        result: 'allowed',
+        metadata: {
+          discountPct: input.discountPct,
+          discountAmount: input.discountAmount,
+          reason: input.reason,
+        },
+      })
+      return reply.send({ success: true, data: { charge: toDto(charge) } })
     }
   )
 

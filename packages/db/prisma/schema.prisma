@@ -358,30 +358,35 @@ model Service {
 }
 
 model ServiceCharge {
-  id             String       @id @default(uuid())
-  agencyId       String
-  companyId      String
-  company        Company      @relation(fields: [companyId], references: [id])
+  id                   String       @id @default(uuid())
+  agencyId             String
+  companyId            String
+  company              Company      @relation(fields: [companyId], references: [id])
   // 05-ПРОЕКТИ (S5.6 P-1 3b): нарахування походить З ПРОЄКТУ (CompanyService видалено).
-  projectId      String? // нарахування циклу проєкту (manual-разові — без проєкту)
-  project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  periodStart    DateTime?    @db.Date // межі циклу (для weekly `month` недостатньо)
-  periodEnd      DateTime?    @db.Date
-  kind           String       @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
-  amount         Decimal      @db.Decimal(10, 2)
-  baseAmount     Decimal?     @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
-  discountPct    Decimal?     @db.Decimal(5, 2)
-  discountAmount Decimal?     @db.Decimal(10, 2)
-  totalAmount    Decimal?     @db.Decimal(10, 2) // post-discount amount owed
-  currency       String       @default("USD")
-  uahRate        Decimal?     @db.Decimal(10, 4)
-  month          DateTime     @db.Date
-  status         ChargeStatus @default(pending)
-  dueDate        DateTime?    @db.Timestamptz(3)
-  paidAt         DateTime?    @db.Timestamptz(3)
-  notes          String?
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  agency         Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  projectId            String? // нарахування циклу проєкту (manual-разові — без проєкту)
+  project              Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  periodStart          DateTime?    @db.Date // межі циклу (для weekly `month` недостатньо)
+  periodEnd            DateTime?    @db.Date
+  kind                 String       @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
+  amount               Decimal      @db.Decimal(10, 2)
+  baseAmount           Decimal?     @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
+  discountPct          Decimal?     @db.Decimal(5, 2) // auto loyalty-tier discount
+  discountAmount       Decimal?     @db.Decimal(10, 2)
+  // 05-З (P-10): one-time MANUAL discount applied ON TOP of loyalty (owner-granted on a
+  // specific charge). Either/both a % of the post-loyalty net and/or a flat amount;
+  // `manualDiscountAmount` is the resolved absolute reduction folded into `totalAmount`.
+  manualDiscountPct    Decimal?     @db.Decimal(5, 2)
+  manualDiscountAmount Decimal?     @db.Decimal(10, 2)
+  totalAmount          Decimal?     @db.Decimal(10, 2) // post-discount amount owed (loyalty + manual)
+  currency             String       @default("USD")
+  uahRate              Decimal?     @db.Decimal(10, 4)
+  month                DateTime     @db.Date
+  status               ChargeStatus @default(pending)
+  dueDate              DateTime?    @db.Timestamptz(3)
+  paidAt               DateTime?    @db.Timestamptz(3)
+  notes                String?
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  agency               Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   allocations PaymentAllocation[]
 

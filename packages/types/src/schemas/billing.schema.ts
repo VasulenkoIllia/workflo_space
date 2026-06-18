@@ -51,6 +51,23 @@ export const createPaymentSchema = z.object({
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
 
 /**
+ * Body for `POST /workspace/billing/charges/:id/discount` (P-10, 05-З) — a one-time
+ * manual discount ON TOP of loyalty. A percent of the post-loyalty net and/or a flat
+ * amount; at least one is required. Send `discountPct: 0` (or amount 0) to clear it.
+ */
+export const applyChargeDiscountSchema = z
+  .object({
+    discountPct: z.number().finite().min(0).max(100).optional(),
+    discountAmount: z.number().finite().min(0).max(1_000_000_000).optional(),
+    reason: z.string().max(500).optional(),
+  })
+  .strict()
+  .refine((d) => d.discountPct !== undefined || d.discountAmount !== undefined, {
+    message: 'Потрібно вказати відсоток та/або суму знижки',
+  })
+export type ApplyChargeDiscountInput = z.infer<typeof applyChargeDiscountSchema>
+
+/**
  * Body for `POST /workspace/billing/payments/:id/allocate` (S5-07). Either hand an
  * explicit list of `{chargeId, amount}` pairs, or omit `allocations` entirely to
  * auto-allocate the payment's unallocated remainder across the company's outstanding
