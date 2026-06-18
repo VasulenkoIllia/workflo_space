@@ -247,7 +247,9 @@ describe('POST /workspace/billing/charges/generate', () => {
         billingModel: 'fixed_monthly_advance',
         abonAmount: Dec('100.00'),
         nextCycleAt: new Date('2026-06-01T00:00:00Z'),
-        company: { loyaltyTier: 'regular', tierOverride: null },
+        paymentTermsDays: null, // P-4 cascade tiers (null → legacy dueDate)
+        company: { loyaltyTier: 'regular', tierOverride: null, paymentTermsDays: null },
+        agency: { paymentSettings: null },
       },
     ])
     chargeCreateMany.mockResolvedValue({ count: 1 })

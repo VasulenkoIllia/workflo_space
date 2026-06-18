@@ -18,6 +18,11 @@ import { refreshMoneyBalance } from './allocation.js'
  *
  * Runs inside the caller's transaction: the cron wraps all tenants (worker /
  * RLS-bypass); the manual `generate` endpoint scopes to one agency.
+ *
+ * dueDate (P-4): derived from the resolved net payment terms (project → company →
+ * agency cascade, `resolveTermsDays`) added to the issue anchor (periodStart for the
+ * advance subscription, periodEnd for postpaid/overage). Unconfigured projects keep
+ * the legacy per-model dueDate.
  */
 
 const MAX_CATCHUP_PERIODS = 24 // backstop so a stale nextCycleAt can't spin forever
@@ -46,6 +51,48 @@ function endOfMonthDateUtc(d: Date): Date {
 function firstOfPrevMonthUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1))
 }
+
+/** The cascade fields a charge's dueDate is derived from (P-4). */
+interface TermsContext {
+  paymentTermsDays: number | null
+  company: { paymentTermsDays: number | null }
+  agency: { paymentSettings: { paymentTermsDays: number | null } | null }
+}
+
+/**
+ * Net payment terms (days) for a project, cascading project → company → agency default
+ * (05-Г / В10, PROJECTS_SPEC §5). null at every tier → null: the charge keeps its
+ * billing-model default dueDate (no behavior change for unconfigured projects).
+ */
+function resolveTermsDays(p: TermsContext): number | null {
+  return (
+    p.paymentTermsDays ??
+    p.company.paymentTermsDays ??
+    p.agency.paymentSettings?.paymentTermsDays ??
+    null
+  )
+}
+
+/**
+ * dueDate = issue anchor + net terms (05-Г: «paymentTermsDays від дати виставлення»).
+ * Advance charges issue at periodStart, postpaid/overage at periodEnd. When terms are
+ * unresolved (null) the caller's legacy per-model dueDate stands — keeps existing
+ * unconfigured projects untouched.
+ */
+function dueDateFromTerms(anchor: Date, termsDays: number | null, legacy: Date): Date {
+  return termsDays != null ? addDaysUtc(anchor, termsDays) : legacy
+}
+
+/**
+ * The cascade-tier (P-4) + loyalty fields BOTH charge producers select from a project.
+ * Shared so the two `select`s can never drift apart — add a tier here once and both
+ * `closeProjectCycle` and `generateRecurringCharges` pick it up.
+ */
+const TERMS_TIER_SELECT = {
+  paymentTermsDays: true,
+  company: { select: { loyaltyTier: true, tierOverride: true, paymentTermsDays: true } },
+  agency: { select: { paymentSettings: { select: { paymentTermsDays: true } } } },
+} satisfies Prisma.ProjectSelect
 
 /**
  * Σ(billable revenue) for a project's time in [periodStart, periodEnd] — the
@@ -190,13 +237,15 @@ export async function closeProjectCycle(
       currency: true,
       billingModel: true,
       abonAmount: true,
-      company: { select: { loyaltyTier: true, tierOverride: true } },
+      ...TERMS_TIER_SELECT,
     },
   })
   if (!p) return { created: 0, due: 0 }
   const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
-  // dueDate = period end for now (P-4 will derive it from paymentTermsDays).
-  const row = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, opts.periodEnd, tier)
+  // P-4: manual close bills a completed period → issue anchor = periodEnd + net terms
+  // (legacy default was periodEnd, i.e. terms = 0).
+  const dueDate = dueDateFromTerms(opts.periodEnd, resolveTermsDays(p), opts.periodEnd)
+  const row = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, dueDate, tier)
   if (!row) return { created: 0, due: 1 }
   const res = await tx.serviceCharge.createMany({ data: [row], skipDuplicates: true })
   if (res.count > 0) {
@@ -234,7 +283,7 @@ export async function generateRecurringCharges(
       clientHourlyRate: true,
       includedHoursCap: true,
       nextCycleAt: true,
-      company: { select: { loyaltyTier: true, tierOverride: true } },
+      ...TERMS_TIER_SELECT,
     },
   })
 
@@ -244,6 +293,7 @@ export async function generateRecurringCharges(
   for (const p of due) {
     if (!p.nextCycleAt) continue
     const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
+    const termsDays = resolveTermsDays(p) // P-4: cascade once per project
     const weekly = p.billingCycle === 'weekly_day_x'
     const advance = weekly ? (d: Date) => addDaysUtc(d, 7) : addMonthUtc
     let cursor = p.nextCycleAt
@@ -252,21 +302,23 @@ export async function generateRecurringCharges(
       // Period differs by model/cycle: fixed bills the UPCOMING month in advance;
       // hourly_postpaid bills the cycle that just ENDED, by actual hours. weekly_day_x
       // applies to hourly billing (owner's «щопонеділка»); fixed stays monthly (P-2).
+      // dueDate (P-4): issue anchor + net terms — advance issues at periodStart, postpaid
+      // at periodEnd; null terms keeps the legacy per-model default.
       let periodStart: Date
       let periodEnd: Date
       let dueDate: Date
       if (p.billingModel === 'fixed_monthly_advance') {
         periodStart = startOfMonthUtc(cursor)
         periodEnd = endOfMonthDateUtc(periodStart)
-        dueDate = addMonthUtc(periodStart)
+        dueDate = dueDateFromTerms(periodStart, termsDays, addMonthUtc(periodStart))
       } else if (weekly) {
         periodStart = addDaysUtc(cursor, -7) // the week that just closed
         periodEnd = addDaysUtc(cursor, -1)
-        dueDate = addDaysUtc(cursor, 7)
+        dueDate = dueDateFromTerms(periodEnd, termsDays, addDaysUtc(cursor, 7))
       } else {
         periodStart = firstOfPrevMonthUtc(cursor)
         periodEnd = endOfMonthDateUtc(periodStart)
-        dueDate = addMonthUtc(periodStart)
+        dueDate = dueDateFromTerms(periodEnd, termsDays, addMonthUtc(periodStart))
       }
       const row = await buildChargeRow(tx, p, periodStart, periodEnd, dueDate, tier)
       if (row) rows.push(row)
@@ -297,7 +349,8 @@ export async function generateRecurringCharges(
             periodEnd: ovEnd,
             kind: 'overage',
             status: 'pending',
-            dueDate: addMonthUtc(ovStart),
+            // overage is postpaid (past usage) → anchor = ovEnd + net terms (P-4)
+            dueDate: dueDateFromTerms(ovEnd, termsDays, addMonthUtc(ovStart)),
           })
         }
       }

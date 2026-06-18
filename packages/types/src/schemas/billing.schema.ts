@@ -83,6 +83,8 @@ export const updatePaymentSettingsSchema = z
     cryptoUsdt: z.string().max(200).nullish(),
     notes: z.string().max(1000).nullish(),
     invoiceCurrency: billingCurrency.optional(),
+    // 05-Г / В10 (P-4): agency-wide default net payment terms (days), cascade tier 3.
+    paymentTermsDays: z.number().int().min(0).max(365).nullish(),
   })
   .strict()
 export type UpdatePaymentSettingsInput = z.infer<typeof updatePaymentSettingsSchema>

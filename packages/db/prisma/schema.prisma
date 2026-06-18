@@ -111,6 +111,9 @@ model Company {
   language             Language     @default(uk)
   currency             String       @default("USD")
   notes                String?
+  // 05-Г / В10 (P-4): default net payment terms (days) for this client's projects —
+  // cascade tier 2 (Project.paymentTermsDays → THIS → agency PaymentSettings). null → next tier.
+  paymentTermsDays     Int?
   loyaltyTier          LoyaltyTier  @default(new)
   tierOverride         LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
   totalSpent           Decimal      @default(0) @db.Decimal(12, 2)
@@ -434,16 +437,19 @@ model Payment {
 }
 
 model PaymentSettings {
-  id              String   @id @default(cuid())
-  agencyId        String   @unique
-  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  bankName        String?
-  iban            String?
-  accountName     String?
-  cryptoUsdt      String?
-  notes           String?
-  invoiceCurrency String   @default("UAH")
-  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  id               String   @id @default(cuid())
+  agencyId         String   @unique
+  agency           Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  bankName         String?
+  iban             String?
+  accountName      String?
+  cryptoUsdt       String?
+  notes            String?
+  invoiceCurrency  String   @default("UAH")
+  // 05-Г / В10 (P-4): agency-wide default net payment terms (days) — cascade tier 3
+  // (Project → Company → THIS). null → charge keeps its billing-model default dueDate.
+  paymentTermsDays Int?
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("payment_settings")
 }

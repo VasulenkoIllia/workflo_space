@@ -6,7 +6,21 @@ import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
+// Internal (owner/team) view — includes the agency-wide default net terms (P-4 tier 3).
 const SETTINGS_SELECT = {
+  bankName: true,
+  iban: true,
+  accountName: true,
+  cryptoUsdt: true,
+  notes: true,
+  invoiceCurrency: true,
+  paymentTermsDays: true,
+} as const
+
+// Client view — only the «куди платити» details. The agency-wide default term is an
+// internal policy knob (other clients inherit it too) and is NOT client-facing; a
+// client's effective term already surfaces as each charge's dueDate.
+const CLIENT_SETTINGS_SELECT = {
   bankName: true,
   iban: true,
   accountName: true,
@@ -89,7 +103,7 @@ const paymentSettingsRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до білінгу', 403)
       }
       const settings = await withTenant((tx) =>
-        tx.paymentSettings.findUnique({ where: { agencyId }, select: SETTINGS_SELECT })
+        tx.paymentSettings.findUnique({ where: { agencyId }, select: CLIENT_SETTINGS_SELECT })
       )
       return reply.send({ success: true, data: { settings } })
     }
