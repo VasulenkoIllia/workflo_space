@@ -40,6 +40,7 @@ const baseShape = {
   paymentTermsDays: z.number().int().min(0).max(365).nullish(),
   legalEntityId: z.string().uuid().nullish(),
   contractRequired: z.boolean().optional(),
+  contractDocumentId: z.string().uuid().nullish(), // П3 (P-7): link the signed contract → unblocks generation
   requiresApproval: z.boolean().nullish(),
   advanceGatePct: pct.nullish(),
   includedHoursCap: amount.nullish(),

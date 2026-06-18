@@ -35,7 +35,12 @@ const generateChargesRoute: FastifyPluginAsync = (fastify) => {
         resourceType: 'service_charge',
         resourceId: input.month,
         result: 'allowed',
-        metadata: { month: input.month, created: result.created, due: result.due },
+        metadata: {
+          month: input.month,
+          created: result.created,
+          due: result.due,
+          gated: result.gated,
+        },
       })
       return reply.send({ success: true, data: result })
     }

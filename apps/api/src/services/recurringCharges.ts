@@ -1,5 +1,5 @@
 import { Prisma } from '@workflo/db'
-import { LOYALTY_DISCOUNT_PCT, type LoyaltyTier } from '@workflo/types'
+import { ApiErrorCode, AppError, LOYALTY_DISCOUNT_PCT, type LoyaltyTier } from '@workflo/types'
 import { refreshMoneyBalance } from './allocation.js'
 
 /**
@@ -147,6 +147,8 @@ export interface GenerateResult {
   created: number
   /** Projects found due this run. */
   due: number
+  /** Projects due but HELD by the П3 contract-gate (charges blocked until contract). */
+  gated: number
 }
 
 /** The project fields a charge is built from (auto cron + manual close share this). */
@@ -237,21 +239,32 @@ export async function closeProjectCycle(
       currency: true,
       billingModel: true,
       abonAmount: true,
+      contractRequired: true,
+      contractDocumentId: true,
       ...TERMS_TIER_SELECT,
     },
   })
-  if (!p) return { created: 0, due: 0 }
+  if (!p) return { created: 0, due: 0, gated: 0 }
+  // П3 contract-gate: a project that requires a contract but has none attached can be
+  // worked on, but invoice/act generation is blocked until the signed contract is linked.
+  if (p.contractRequired && !p.contractDocumentId) {
+    throw new AppError(
+      ApiErrorCode.CONFLICT,
+      'Генерація заблокована: прив’яжіть підписаний договір до проєкту',
+      409
+    )
+  }
   const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
   // P-4: manual close bills a completed period → issue anchor = periodEnd + net terms
   // (legacy default was periodEnd, i.e. terms = 0).
   const dueDate = dueDateFromTerms(opts.periodEnd, resolveTermsDays(p), opts.periodEnd)
   const row = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, dueDate, tier)
-  if (!row) return { created: 0, due: 1 }
+  if (!row) return { created: 0, due: 1, gated: 0 }
   const res = await tx.serviceCharge.createMany({ data: [row], skipDuplicates: true })
   if (res.count > 0) {
     await refreshMoneyBalance(tx, { agencyId: opts.agencyId, companyId: p.companyId })
   }
-  return { created: res.count, due: 1 }
+  return { created: res.count, due: 1, gated: 0 }
 }
 
 /**
@@ -264,28 +277,40 @@ export async function generateRecurringCharges(
   tx: Prisma.TransactionClient,
   opts: GenerateOptions
 ): Promise<GenerateResult> {
-  const due = await tx.project.findMany({
-    where: {
-      active: true,
-      billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid'] },
-      billingCycle: { in: ['monthly_day_n', 'weekly_day_x'] }, // manual → nextCycleAt null, not due
-      nextCycleAt: { lte: opts.now },
-      ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
-    },
-    select: {
-      id: true,
-      agencyId: true,
-      companyId: true,
-      currency: true,
-      billingModel: true,
-      billingCycle: true,
-      abonAmount: true,
-      clientHourlyRate: true,
-      includedHoursCap: true,
-      nextCycleAt: true,
-      ...TERMS_TIER_SELECT,
-    },
-  })
+  // П3 contract-gate: a project requiring a contract with none attached is HELD — its
+  // `nextCycleAt` is not advanced, so once the signed contract is linked the missed cycles
+  // catch up (bounded by MAX_CATCHUP_PERIODS). Same predicate counts the held projects.
+  const contractGate = { contractRequired: true, contractDocumentId: null }
+  const dueWhere = {
+    active: true,
+    billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid'] },
+    billingCycle: { in: ['monthly_day_n', 'weekly_day_x'] }, // manual → nextCycleAt null, not due
+    nextCycleAt: { lte: opts.now },
+    ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
+  } satisfies Prisma.ProjectWhereInput
+
+  const [due, gated] = await Promise.all([
+    tx.project.findMany({
+      where: {
+        ...dueWhere,
+        NOT: contractGate, // exclude held projects from generation
+      },
+      select: {
+        id: true,
+        agencyId: true,
+        companyId: true,
+        currency: true,
+        billingModel: true,
+        billingCycle: true,
+        abonAmount: true,
+        clientHourlyRate: true,
+        includedHoursCap: true,
+        nextCycleAt: true,
+        ...TERMS_TIER_SELECT,
+      },
+    }),
+    tx.project.count({ where: { ...dueWhere, ...contractGate } }),
+  ])
 
   const rows: Prisma.ServiceChargeCreateManyInput[] = []
   const advances: Array<{ id: string; nextCycleAt: Date }> = []
@@ -382,7 +407,7 @@ export async function generateRecurringCharges(
     }
   }
 
-  return { created, due: due.length }
+  return { created, due: due.length, gated }
 }
 
 /** Parse a `YYYY-MM` to the last instant of that month (UTC) — the `now` a manual generate uses. */

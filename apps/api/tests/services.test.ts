@@ -9,6 +9,7 @@ const serviceUpdate = vi.fn()
 const serviceDelete = vi.fn()
 const projectFindMany = vi.fn()
 const projectUpdate = vi.fn()
+const projectCount = vi.fn() // P-7: contract-gate held-projects count
 const companyFindUnique = vi.fn()
 const chargeCreateMany = vi.fn()
 const auditLogCreate = vi.fn()
@@ -41,7 +42,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
       update: serviceUpdate,
       delete: serviceDelete,
     },
-    project: { findMany: projectFindMany, update: projectUpdate },
+    project: { findMany: projectFindMany, update: projectUpdate, count: projectCount },
     company: { findUnique: companyFindUnique, update: companyUpdate },
     serviceCharge: { createMany: chargeCreateMany },
     payment: { aggregate: paymentAggregate },
@@ -254,6 +255,7 @@ describe('POST /workspace/billing/charges/generate', () => {
     ])
     chargeCreateMany.mockResolvedValue({ count: 1 })
     projectUpdate.mockResolvedValue({})
+    projectCount.mockResolvedValue(0) // no contract-gated projects
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'POST',
@@ -262,7 +264,7 @@ describe('POST /workspace/billing/charges/generate', () => {
       payload: { month: '2026-06' },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toEqual({ created: 1, due: 1 })
+    expect(res.json().data).toEqual({ created: 1, due: 1, gated: 0 })
     // REGULAR tier = 3% off 100 → total 97.00 owed; charge carries projectId + periodStart.
     const row = chargeCreateMany.mock.calls[0][0].data[0]
     expect(row.projectId).toBe('proj-1')

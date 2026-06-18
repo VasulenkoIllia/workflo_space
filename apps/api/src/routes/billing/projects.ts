@@ -204,7 +204,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const project = await withTenant(async (tx) => {
         const existing = await tx.project.findUnique({
           where: { id: request.params.id },
-          select: { id: true, agencyId: true, billingCycle: true },
+          select: { id: true, agencyId: true, companyId: true, billingCycle: true },
         })
         if (!existing || existing.agencyId !== agencyId) {
           throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
@@ -216,6 +216,20 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
           })
           if (!le || le.agencyId !== agencyId) {
             throw new AppError(ApiErrorCode.NOT_FOUND, 'Юр-особу не знайдено', 404)
+          }
+        }
+        // П3 (P-7): linking a contract must reference a real `contract` Document of THIS
+        // tenant + company — otherwise any UUID would unblock the charge gate.
+        if (input.contractDocumentId) {
+          const doc = await tx.document.findUnique({
+            where: { id: input.contractDocumentId },
+            select: { agencyId: true, companyId: true, type: true },
+          })
+          if (!doc || doc.agencyId !== agencyId || doc.companyId !== existing.companyId) {
+            throw new AppError(ApiErrorCode.NOT_FOUND, 'Договір не знайдено', 404)
+          }
+          if (doc.type !== 'contract') {
+            throw new AppError(ApiErrorCode.CONFLICT, 'Документ не є договором', 409)
           }
         }
         const nextCycle = (input.billingCycle ?? existing.billingCycle) as ProjectBillingCycle
@@ -240,6 +254,9 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
             ...(input.legalEntityId !== undefined ? { legalEntityId: input.legalEntityId } : {}),
             ...(input.contractRequired !== undefined
               ? { contractRequired: input.contractRequired }
+              : {}),
+            ...(input.contractDocumentId !== undefined
+              ? { contractDocumentId: input.contractDocumentId }
               : {}),
             ...(input.requiresApproval !== undefined
               ? { requiresApproval: input.requiresApproval }
