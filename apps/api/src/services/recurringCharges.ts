@@ -220,6 +220,131 @@ async function sumProjectHours(
   return new Prisma.Decimal(rows[0]?.hours ?? 0)
 }
 
+/** Σ(EstimateLine.hours) for a project — the budgeted hours an advance is sized from (P-7). */
+async function sumEstimateHours(
+  tx: Prisma.TransactionClient,
+  projectId: string
+): Promise<Prisma.Decimal> {
+  const agg = await tx.estimateLine.aggregate({ where: { projectId }, _sum: { hours: true } })
+  return agg._sum.hours ?? new Prisma.Decimal(0)
+}
+
+/** The project fields a prepaid cycle is built from. */
+interface PrepaidProject {
+  id: string
+  agencyId: string
+  companyId: string
+  currency: string
+  clientHourlyRate: Prisma.Decimal | null
+  advanceGatePct: Prisma.Decimal | null
+}
+
+interface Period {
+  start: Date
+  end: Date
+  due: Date
+}
+
+/**
+ * hourly_prepaid (P-7, 02-В) — the charges one cycle boundary produces:
+ *  1. ADVANCE for the upcoming period (`curr`): Σ(estimate hours) × clientHourlyRate ×
+ *     advanceGatePct% (loyalty-discounted), kind='prepaid_advance'.
+ *  2. RECONCILE the just-closed period (`prev`): actual Σ(hours × clientRateSnapshot)
+ *     (loyalty-discounted) − the advance already charged for it → a positive
+ *     kind='prepaid_reconciliation' top-up (client under-paid) or a NEGATIVE
+ *     kind='prepaid_credit' (client over-paid; a negative line that lifts moneyBalance and
+ *     is auto-skipped by FIFO settlement since its outstanding is ≤ 0). The advance amount
+ *     is read back from the stored prev-period `prepaid_advance` charge so reconciliation is
+ *     exact. Idempotent via @@unique(projectId, periodStart, kind).
+ */
+async function buildPrepaidCharges(
+  tx: Prisma.TransactionClient,
+  p: PrepaidProject,
+  curr: Period,
+  prev: Period,
+  tier: LoyaltyTier,
+  // Charges already built THIS run but NOT yet inserted — a multi-period catch-up
+  // reconciles period N against an advance charged in an EARLIER iteration of the same
+  // run, which only lives here until the final createMany. Search it before the DB.
+  runRows: Prisma.ServiceChargeCreateManyInput[]
+): Promise<Prisma.ServiceChargeCreateManyInput[]> {
+  const out: Prisma.ServiceChargeCreateManyInput[] = []
+  const base = {
+    agencyId: p.agencyId,
+    companyId: p.companyId,
+    projectId: p.id,
+    currency: p.currency,
+    status: 'pending' as const,
+  }
+  const rate = p.clientHourlyRate ?? new Prisma.Decimal(0)
+  const pct = p.advanceGatePct ?? new Prisma.Decimal(0)
+
+  // 1. Advance for the upcoming period (only when a rate + gate% are configured).
+  if (rate.greaterThan(0) && pct.greaterThan(0)) {
+    const estHours = await sumEstimateHours(tx, p.id)
+    const advanceBase = estHours.times(rate).times(pct).div(100).toDecimalPlaces(2)
+    if (advanceBase.greaterThan(0)) {
+      const a = computeChargeAmounts(advanceBase, tier)
+      out.push({
+        ...base,
+        amount: a.totalAmount,
+        baseAmount: a.baseAmount,
+        discountPct: a.discountPct,
+        discountAmount: a.discountAmount,
+        totalAmount: a.totalAmount,
+        month: curr.start,
+        periodStart: curr.start,
+        periodEnd: curr.end,
+        kind: 'prepaid_advance',
+        dueDate: curr.due,
+      })
+    }
+  }
+
+  // 2. Reconcile the just-closed period against the advance charged for it. During a
+  // multi-period catch-up the prev-period advance was built earlier in THIS run and is
+  // not in the DB yet — search runRows first so reconciliation reads the real advance
+  // instead of falling back to 0 (which would double-bill the whole period).
+  const actual = await sumBillableRevenue(tx, p.id, prev.start, prev.end)
+  const inRun = runRows.find(
+    (r) =>
+      r.kind === 'prepaid_advance' &&
+      r.projectId === p.id &&
+      r.periodStart instanceof Date &&
+      r.periodStart.getTime() === prev.start.getTime()
+  )
+  let advancePaid = new Prisma.Decimal(0)
+  if (inRun) {
+    // This row was built earlier in the same run; its money fields are Prisma.Decimal.
+    advancePaid = new Prisma.Decimal((inRun.totalAmount ?? inRun.amount) as Prisma.Decimal.Value)
+  } else {
+    const prior = await tx.serviceCharge.findFirst({
+      where: { projectId: p.id, periodStart: prev.start, kind: 'prepaid_advance' },
+      select: { totalAmount: true, amount: true },
+    })
+    if (prior) advancePaid = new Prisma.Decimal(prior.totalAmount ?? prior.amount)
+  }
+  const actualOwed = computeChargeAmounts(actual, tier).totalAmount
+  const diff = actualOwed.minus(advancePaid).toDecimalPlaces(2)
+  if (!diff.isZero()) {
+    const credit = diff.lessThan(0)
+    out.push({
+      ...base,
+      amount: diff,
+      baseAmount: diff,
+      discountPct: new Prisma.Decimal(0),
+      discountAmount: new Prisma.Decimal(0),
+      totalAmount: diff,
+      month: prev.start,
+      periodStart: prev.start,
+      periodEnd: prev.end,
+      kind: credit ? 'prepaid_credit' : 'prepaid_reconciliation',
+      dueDate: prev.due,
+    })
+  }
+  return out
+}
+
 /**
  * Manually close ONE project's cycle for an explicit [periodStart, periodEnd]
  * (manual billingCycle — owner clicks «Закрити цикл»). Same charge logic as the
@@ -283,7 +408,7 @@ export async function generateRecurringCharges(
   const contractGate = { contractRequired: true, contractDocumentId: null }
   const dueWhere = {
     active: true,
-    billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid'] },
+    billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid', 'hourly_prepaid'] },
     billingCycle: { in: ['monthly_day_n', 'weekly_day_x'] }, // manual → nextCycleAt null, not due
     nextCycleAt: { lte: opts.now },
     ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
@@ -305,6 +430,7 @@ export async function generateRecurringCharges(
         abonAmount: true,
         clientHourlyRate: true,
         includedHoursCap: true,
+        advanceGatePct: true,
         nextCycleAt: true,
         ...TERMS_TIER_SELECT,
       },
@@ -324,6 +450,36 @@ export async function generateRecurringCharges(
     let cursor = p.nextCycleAt
     let guard = 0
     while (cursor <= opts.now && guard < MAX_CATCHUP_PERIODS) {
+      // hourly_prepaid (P-7): advance for the upcoming period + reconcile the just-closed
+      // one. Distinct two-charge shape, so it bypasses the single buildChargeRow path.
+      if (p.billingModel === 'hourly_prepaid') {
+        const cStart = weekly ? cursor : startOfMonthUtc(cursor)
+        const cEnd = weekly ? addDaysUtc(cursor, 6) : endOfMonthDateUtc(cStart)
+        const pStart = weekly ? addDaysUtc(cursor, -7) : firstOfPrevMonthUtc(cursor)
+        const pEnd = weekly ? addDaysUtc(cursor, -1) : endOfMonthDateUtc(pStart)
+        const curr = {
+          start: cStart,
+          end: cEnd,
+          due: dueDateFromTerms(
+            cStart,
+            termsDays,
+            weekly ? addDaysUtc(cursor, 7) : addMonthUtc(cStart)
+          ),
+        }
+        const prev = {
+          start: pStart,
+          end: pEnd,
+          due: dueDateFromTerms(
+            pEnd,
+            termsDays,
+            weekly ? addDaysUtc(cursor, 7) : addMonthUtc(pStart)
+          ),
+        }
+        rows.push(...(await buildPrepaidCharges(tx, p, curr, prev, tier, rows)))
+        cursor = advance(cursor)
+        guard++
+        continue
+      }
       // Period differs by model/cycle: fixed bills the UPCOMING month in advance;
       // hourly_postpaid bills the cycle that just ENDED, by actual hours. weekly_day_x
       // applies to hourly billing (owner's «щопонеділка»); fixed stays monthly (P-2).

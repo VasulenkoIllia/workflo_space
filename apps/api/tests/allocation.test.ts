@@ -56,6 +56,11 @@ describe('deriveChargeState — derivation matrix', () => {
   it('zero-amount charge → awaiting (never paid/overpaid on a 0 total)', () => {
     expect(deriveChargeState(D(0), D(0), null, NOW)).toBe('awaiting')
   })
+
+  it('negative-total credit → paid (never overdue, even past dueDate)', () => {
+    // prepaid_credit (over-payment) carries a negative total; it owes nothing.
+    expect(deriveChargeState(D(0), D(-30), PAST, NOW)).toBe('paid')
+  })
 })
 
 describe('allocatePayment — early guards (fake tx)', () => {

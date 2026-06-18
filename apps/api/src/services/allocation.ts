@@ -33,6 +33,10 @@ export function deriveChargeState(
   dueDate: Date | null,
   now: Date
 ): ChargeDerivedState {
+  // A negative-total line is a credit (e.g. prepaid over-payment, kind='prepaid_credit')
+  // that lifts the client's balance — nothing is owed, so never let its passing dueDate
+  // flip it to 'overdue'. It is settled by construction. (A zero total stays 'awaiting'.)
+  if (total.lessThan(0)) return 'paid'
   if (total.greaterThan(0) && allocated.greaterThanOrEqualTo(total)) {
     return allocated.greaterThan(total) ? 'overpaid' : 'paid'
   }
