@@ -1,4 +1,5 @@
 import { Prisma } from '@workflo/db'
+import { type FxRates, toUsd } from './currency.js'
 
 /**
  * Margin engine v1 (S5.6 P-9, PROJECTS_SPEC §4.1 — 22-Д cost allocation lifted into
@@ -19,17 +20,6 @@ import { Prisma } from '@workflo/db'
  * Visibility (§4.3): margin/cost is agency-admin-only (owner) — enforced at the route.
  * Executors never see client rates or margin.
  */
-
-/** USD-normalize a native amount (mirrors `pnl.ts`: USD pass-through, UAH via stored FX). */
-function toUsd(
-  amount: Prisma.Decimal,
-  currency: string,
-  usdToUah: Prisma.Decimal | null
-): Prisma.Decimal {
-  if (currency === 'USD') return amount
-  if (currency === 'UAH' && usdToUah && usdToUah.greaterThan(0)) return amount.div(usdToUah)
-  return amount // unknown currency / missing rate → counted as-is (documented, as in pnl.ts)
-}
 
 export interface ExecutorCost {
   executorId: string
@@ -102,22 +92,19 @@ interface MarginScope {
 }
 
 /** The agency's stored USD→UAH rate (or null) — the single FX basis for revenue normalization. */
-async function getUsdToUah(
-  tx: Prisma.TransactionClient,
-  agencyId: string
-): Promise<Prisma.Decimal | null> {
+async function getFxRates(tx: Prisma.TransactionClient, agencyId: string): Promise<FxRates> {
   const rate = await tx.exchangeRate.findUnique({
     where: { agencyId },
-    select: { usdToUah: true },
+    select: { usdToUah: true, eurToUah: true },
   })
-  return rate?.usdToUah ?? null
+  return { usdToUah: rate?.usdToUah ?? null, eurToUah: rate?.eurToUah ?? null }
 }
 
 /** Compute one project's margin (Decimal-precise). Returns null if the project is not in the tenant. */
 async function projectMarginRaw(
   tx: Prisma.TransactionClient,
   scope: MarginScope,
-  usdToUah: Prisma.Decimal | null
+  rates: FxRates
 ): Promise<ProjectMarginRaw | null> {
   const project = await tx.project.findFirst({
     where: { id: scope.projectId, agencyId: scope.agencyId },
@@ -147,8 +134,8 @@ async function projectMarginRaw(
   const revenueNative =
     revenueAgg._sum.totalAmount ?? revenueAgg._sum.amount ?? new Prisma.Decimal(0)
   const paidNative = paidAgg._sum.amount ?? new Prisma.Decimal(0)
-  const revenueUsd = toUsd(revenueNative, project.currency, usdToUah)
-  const paidUsd = toUsd(paidNative, project.currency, usdToUah)
+  const revenueUsd = toUsd(revenueNative, project.currency, rates)
+  const paidUsd = toUsd(paidNative, project.currency, rates)
 
   // Cost = Σ hours × costRateUsd, grouped by executor (a product-sum Prisma's groupBy can't
   // express, so raw SQL). costRateUsd is already a per-date USD snapshot (П7) — no FX here.
@@ -193,8 +180,8 @@ export async function computeProjectMargin(
   tx: Prisma.TransactionClient,
   args: MarginScope
 ): Promise<ProjectMargin | null> {
-  const usdToUah = await getUsdToUah(tx, args.agencyId)
-  const raw = await projectMarginRaw(tx, args, usdToUah)
+  const rates = await getFxRates(tx, args.agencyId)
+  const raw = await projectMarginRaw(tx, args, rates)
   return raw ? projectMarginDto(raw) : null
 }
 
@@ -221,7 +208,7 @@ interface ClientScope {
 async function clientProjectMarginsRaw(
   tx: Prisma.TransactionClient,
   scope: ClientScope,
-  usdToUah: Prisma.Decimal | null
+  rates: FxRates
 ): Promise<ProjectMarginRaw[]> {
   const projects = await tx.project.findMany({
     where: { agencyId: scope.agencyId, companyId: scope.companyId },
@@ -236,7 +223,7 @@ async function clientProjectMarginsRaw(
       projectMarginRaw(
         tx,
         { agencyId: scope.agencyId, projectId: p.id, from: scope.from, to: scope.to },
-        usdToUah
+        rates
       )
     )
   )
@@ -258,8 +245,8 @@ export async function computeClientMargin(
   })
   if (!company) return null
 
-  const usdToUah = await getUsdToUah(tx, scope.agencyId)
-  const raws = await clientProjectMarginsRaw(tx, scope, usdToUah)
+  const rates = await getFxRates(tx, scope.agencyId)
+  const raws = await clientProjectMarginsRaw(tx, scope, rates)
 
   let revenueUsd = new Prisma.Decimal(0)
   let costUsd = new Prisma.Decimal(0)
@@ -295,8 +282,8 @@ export async function computeClientNetIncomeUsd(
   tx: Prisma.TransactionClient,
   scope: ClientScope
 ): Promise<Prisma.Decimal> {
-  const usdToUah = await getUsdToUah(tx, scope.agencyId)
-  const raws = await clientProjectMarginsRaw(tx, scope, usdToUah)
+  const rates = await getFxRates(tx, scope.agencyId)
+  const raws = await clientProjectMarginsRaw(tx, scope, rates)
   let net = new Prisma.Decimal(0)
   for (const r of raws) net = net.plus(r.marginUsd)
   return net

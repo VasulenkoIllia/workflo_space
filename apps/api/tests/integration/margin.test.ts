@@ -254,4 +254,18 @@ run('margin engine (real PG)', () => {
     expect(m?.marginUsd).toBe('20.00')
     await prisma.project.update({ where: { id: projectId }, data: { currency: 'USD' } })
   })
+
+  it('EUR project revenue is normalized to USD via eurToUah ÷ usdToUah (P-8)', async () => {
+    await prisma.exchangeRate.create({
+      data: { agencyId, usdToUah: new Prisma.Decimal(40), eurToUah: new Prisma.Decimal(44) },
+    })
+    await seedCharge({ totalAmount: 100, currency: 'EUR' }) // 100 × 44 / 40 = $110
+    await logHours({ hours: 1, costRateUsd: 10 })
+    await prisma.project.update({ where: { id: projectId }, data: { currency: 'EUR' } })
+    const m = await projectMargin()
+    expect(m?.revenueUsd).toBe('110.00')
+    expect(m?.costUsd).toBe('10.00')
+    expect(m?.marginUsd).toBe('100.00')
+    await prisma.project.update({ where: { id: projectId }, data: { currency: 'USD' } })
+  })
 })

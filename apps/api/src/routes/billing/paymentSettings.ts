@@ -6,7 +6,8 @@ import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
-// Internal (owner/team) view — includes the agency-wide default net terms (P-4 tier 3).
+// Internal (owner/team) view — includes the agency-wide default net terms (P-4 tier 3)
+// and the declared bonus-wallet currency (P-8).
 const SETTINGS_SELECT = {
   bankName: true,
   iban: true,
@@ -15,6 +16,7 @@ const SETTINGS_SELECT = {
   notes: true,
   invoiceCurrency: true,
   paymentTermsDays: true,
+  bonusCurrency: true,
 } as const
 
 // Client view — only the «куди платити» details. The agency-wide default term is an

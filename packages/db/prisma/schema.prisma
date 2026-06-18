@@ -449,6 +449,10 @@ model PaymentSettings {
   // 05-Г / В10 (P-4): agency-wide default net payment terms (days) — cascade tier 3
   // (Project → Company → THIS). null → charge keeps its billing-model default dueDate.
   paymentTermsDays Int?
+  // 05-Е (P-8): currency the bonus wallet is denominated in. The ledger operates in USD
+  // today (Company.bonusBalance); this is the declared setting — multi-currency wallet
+  // enforcement is future.
+  bonusCurrency    String   @default("USD")
   updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("payment_settings")

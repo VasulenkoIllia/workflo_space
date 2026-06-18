@@ -1,4 +1,5 @@
 import { Prisma, withTenant } from '@workflo/db'
+import { type FxRates, toUsd } from './currency.js'
 
 /**
  * Profit & Loss (S5-10, module 22). `netProfit = revenue − expenses` over a date
@@ -59,16 +60,6 @@ function monthlyRunRate(amount: Prisma.Decimal, frequency: string | null): Prism
   return amount // monthly (or unspecified)
 }
 
-function toUsd(
-  amount: Prisma.Decimal,
-  currency: string,
-  usdToUah: Prisma.Decimal | null
-): Prisma.Decimal {
-  if (currency === 'USD') return amount
-  if (currency === 'UAH' && usdToUah && usdToUah.greaterThan(0)) return amount.div(usdToUah)
-  return amount // unknown currency / missing rate → counted as-is (documented)
-}
-
 export interface PnlLine {
   category: string
   amountUsd: string
@@ -122,13 +113,16 @@ export async function computePnl(args: {
       }),
       tx.exchangeRate.findUnique({
         where: { agencyId: args.agencyId },
-        select: { usdToUah: true },
+        select: { usdToUah: true, eurToUah: true },
       }),
     ])
     return { revenueAgg, expenses, rates, rate }
   })
 
-  const usdToUah = data.rate?.usdToUah ?? null
+  const rates: FxRates = {
+    usdToUah: data.rate?.usdToUah ?? null,
+    eurToUah: data.rate?.eurToUah ?? null,
+  }
   const revenueUsd = data.revenueAgg._sum.amountUsd ?? new Prisma.Decimal(0)
 
   const byCategory = new Map<string, Prisma.Decimal>()
@@ -142,11 +136,11 @@ export async function computePnl(args: {
     const amount = new Prisma.Decimal(e.amount)
     if (e.type === 'one_time') {
       if (e.startDate.getTime() >= from.getTime() && e.startDate.getTime() <= to.getTime()) {
-        add(e.category, toUsd(amount, e.currency, usdToUah))
+        add(e.category, toUsd(amount, e.currency, rates))
       }
       continue
     }
-    const monthly = toUsd(monthlyRunRate(amount, e.frequency), e.currency, usdToUah)
+    const monthly = toUsd(monthlyRunRate(amount, e.frequency), e.currency, rates)
     for (const ym of months) {
       if (activeIn(e.startDate, e.endDate, ym)) add(e.category, monthly)
     }
@@ -156,7 +150,7 @@ export async function computePnl(args: {
   let salaryUsd = new Prisma.Decimal(0)
   for (const r of data.rates) {
     if (!r.monthlySalary) continue
-    const monthly = toUsd(new Prisma.Decimal(r.monthlySalary), r.currency, usdToUah)
+    const monthly = toUsd(new Prisma.Decimal(r.monthlySalary), r.currency, rates)
     for (const ym of months) {
       if (activeIn(r.effectiveFrom, r.effectiveUntil, ym)) salaryUsd = salaryUsd.plus(monthly)
     }

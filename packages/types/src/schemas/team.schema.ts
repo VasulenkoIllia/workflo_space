@@ -23,7 +23,7 @@ export const createExecutorRateSchema = z
   .object({
     monthlySalary: money.nullish(),
     commissionPercent: z.number().finite().min(0).max(100).optional(),
-    currency: z.enum(['USD', 'UAH']).optional(),
+    currency: z.enum(['USD', 'UAH', 'EUR']).optional(),
     hireDate: z
       .string()
       .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/)

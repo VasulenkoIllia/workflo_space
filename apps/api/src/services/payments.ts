@@ -32,7 +32,7 @@ export interface ConfirmManualPaymentArgs {
   companyId: string
   orderId?: string | null
   amount: number
-  currency: 'USD' | 'UAH'
+  currency: 'USD' | 'UAH' | 'EUR'
   type: PaymentType
   paymentMethod?: string | null
   paymentReference?: string | null
@@ -74,33 +74,48 @@ interface LockedOrder {
 
 /**
  * Snapshot the native amount to USD (the reporting base). USD-native is identity
- * (`rateUsed = 1`); UAH divides by the agency's stored UAH-per-USD rate. A missing
- * rate for a non-USD payment is a hard stop (422) rather than a silent NULL that
- * would drop the payment from loyalty lifetime + P&L revenue.
+ * (`rateUsed = 1`); UAH divides by the agency's stored UAH-per-USD rate; EUR (P-8) goes
+ * EUR→UAH→USD, snapshotting the EUR-per-USD rate (same native-per-USD convention as UAH,
+ * so `amountUsd = amount / rateUsed`). A missing rate for a non-USD payment is a hard stop
+ * (422) rather than a silent NULL that would drop it from loyalty lifetime + P&L revenue.
  */
 async function snapshotUsd(
   tx: Prisma.TransactionClient,
   agencyId: string,
   amount: Prisma.Decimal,
-  currency: 'USD' | 'UAH'
+  currency: 'USD' | 'UAH' | 'EUR'
 ): Promise<{ amountUsd: Prisma.Decimal; rateUsed: Prisma.Decimal }> {
   if (currency === 'USD') {
     return { amountUsd: amount, rateUsed: new Prisma.Decimal(1) }
   }
   const rate = await tx.exchangeRate.findUnique({
     where: { agencyId },
-    select: { usdToUah: true },
+    select: { usdToUah: true, eurToUah: true },
   })
   if (!rate || rate.usdToUah.lessThanOrEqualTo(0)) {
     throw new AppError(
       ApiErrorCode.VALIDATION_ERROR,
-      'Курс валют недоступний — синхронізуйте курс перед записом платежу в гривні',
+      'Курс валют недоступний — синхронізуйте курс перед записом платежу в іноземній валюті',
       422
     )
   }
-  // rateUsed = UAH-per-USD divisor (matches "1 for USD-native"); amountUsd = amount / rateUsed.
-  const amountUsd = amount.div(rate.usdToUah).toDecimalPlaces(2)
-  return { amountUsd, rateUsed: rate.usdToUah }
+  if (currency === 'UAH') {
+    // rateUsed = UAH-per-USD divisor (matches "1 for USD-native"); amountUsd = amount / rateUsed.
+    const amountUsd = amount.div(rate.usdToUah).toDecimalPlaces(2)
+    return { amountUsd, rateUsed: rate.usdToUah }
+  }
+  // EUR: rateUsed = EUR-per-USD = usdToUah / eurToUah; amountUsd = amount / rateUsed
+  // (= amount × eurToUah / usdToUah). Same direction as UAH so replay stays consistent.
+  if (!rate.eurToUah || rate.eurToUah.lessThanOrEqualTo(0)) {
+    throw new AppError(
+      ApiErrorCode.VALIDATION_ERROR,
+      'Курс EUR недоступний — синхронізуйте курс перед записом платежу в євро',
+      422
+    )
+  }
+  const eurPerUsd = rate.usdToUah.div(rate.eurToUah)
+  const amountUsd = amount.div(eurPerUsd).toDecimalPlaces(2)
+  return { amountUsd, rateUsed: eurPerUsd }
 }
 
 export async function confirmManualPayment(

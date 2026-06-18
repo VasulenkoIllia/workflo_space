@@ -31,7 +31,7 @@ run('S5-02 payments — idempotency + concurrency (real PG)', () => {
     key: string
     orderId?: string
     amount: number
-    currency?: 'USD' | 'UAH'
+    currency?: 'USD' | 'UAH' | 'EUR'
   }) {
     const requestHash = hashRequest({ companyId, ...opts })
     return tenantTransaction(prisma, (tx) =>
@@ -199,5 +199,27 @@ run('S5-02 payments — idempotency + concurrency (real PG)', () => {
       orderBy: { confirmedAt: 'desc' },
     })
     expect(stored?.amountUsd?.toFixed(2)).toBe('100.00')
+  })
+
+  it('EUR payment snapshots USD via eurToUah ÷ usdToUah (P-8)', async () => {
+    await prisma.exchangeRate.upsert({
+      where: { agencyId },
+      create: { agencyId, usdToUah: 40, eurToUah: 44, updatedBy: 'test' },
+      update: { usdToUah: 40, eurToUah: 44 },
+    })
+    const res = await confirm({ key: `eur-${randomUUID()}`, amount: 100, currency: 'EUR' })
+    const body = res.body as { payment: { amountUsd: string } }
+    expect(body.payment.amountUsd).toBe('110.00') // 100 × 44 / 40
+  })
+
+  it('EUR payment with no eurToUah rate → 422 (no silent NULL amountUsd)', async () => {
+    await prisma.exchangeRate.upsert({
+      where: { agencyId },
+      create: { agencyId, usdToUah: 40, eurToUah: null, updatedBy: 'test' },
+      update: { usdToUah: 40, eurToUah: null },
+    })
+    await expect(
+      confirm({ key: `eur-miss-${randomUUID()}`, amount: 100, currency: 'EUR' })
+    ).rejects.toThrow(/EUR|євро|Курс/)
   })
 })

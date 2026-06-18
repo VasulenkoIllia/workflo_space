@@ -19,8 +19,13 @@ export const moneyAmount = z
   .max(1_000_000_000)
   .refine(hasTwoFractionDigits, 'Amount must have at most 2 decimal places')
 
-/** Currencies the manual billing path can snapshot to USD (base). EUR/other → add an FX leg first. */
-export const billingCurrency = z.enum(['USD', 'UAH'])
+/**
+ * Currencies the billing path can snapshot to USD (base). USD = identity; UAH via the
+ * agency's usdToUah; EUR (P-8) via EUR→UAH→USD using eurToUah ÷ usdToUah. USDT is a
+ * payment METHOD, not a currency.
+ */
+export const billingCurrency = z.enum(['USD', 'UAH', 'EUR'])
+export type BillingCurrency = z.infer<typeof billingCurrency>
 
 /** Legacy single-field confirm (kept for back-compat); the full create is `createPaymentSchema`. */
 export const confirmPaymentSchema = z.object({
@@ -85,6 +90,9 @@ export const updatePaymentSettingsSchema = z
     invoiceCurrency: billingCurrency.optional(),
     // 05-Г / В10 (P-4): agency-wide default net payment terms (days), cascade tier 3.
     paymentTermsDays: z.number().int().min(0).max(365).nullish(),
+    // 05-Е (P-8): currency the bonus wallet is denominated in (ledger is USD today;
+    // this is the declared setting — multi-currency wallet enforcement is future).
+    bonusCurrency: billingCurrency.optional(),
   })
   .strict()
 export type UpdatePaymentSettingsInput = z.infer<typeof updatePaymentSettingsSchema>
