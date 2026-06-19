@@ -1,9 +1,10 @@
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, createWorkspaceOrderSchema } from '@workflo/types'
+import { ApiErrorCode, ApprovalMode, AppError, createWorkspaceOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { assertWithinQuota } from '../../saas/limits.js'
+import { resolveApprovalMode } from '../../services/approvalPolicy.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -27,29 +28,58 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       await assertWithinQuota(agencyId, 'orders')
 
+      // P-11: agency-tier floor of the approval cascade (non-null).
+      const agency = await withTenant((tx) =>
+        tx.agency.findUniqueOrThrow({
+          where: { id: agencyId },
+          select: { defaultApprovalMode: true },
+        })
+      )
+
       const order = await withTenant(async (tx) => {
-        // The target company must be in this tenant.
+        // The target company must be in this tenant. Its approvalMode is a cascade tier.
         const company = await tx.company.findFirst({
           where: { id: input.companyId, agencyId },
-          select: { id: true },
+          select: { id: true, approvalMode: true, invoiceApprover: true },
         })
         if (!company) {
           throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
         }
-        // If linked to a project, it must belong to the SAME company. Its requiresApproval
-        // is the 02-А default when the request doesn't override it explicitly.
-        let projectRequiresApproval: boolean | null = null
+        // If linked to a project, it must belong to the SAME company. Its approvalMode (or the
+        // legacy requiresApproval boolean) is the next cascade tier below an explicit override.
+        let projectPolicy: {
+          approvalMode: ApprovalMode | null
+          requiresApproval: boolean | null
+        } | null = null
         if (input.projectId) {
           const project = await tx.project.findFirst({
             where: { id: input.projectId, agencyId, companyId: input.companyId },
-            select: { id: true, requiresApproval: true },
+            select: { id: true, approvalMode: true, requiresApproval: true },
           })
           if (!project) {
             throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
           }
-          projectRequiresApproval = project.requiresApproval
+          projectPolicy = {
+            approvalMode: project.approvalMode as ApprovalMode | null,
+            requiresApproval: project.requiresApproval,
+          }
         }
-        const requiresApproval = input.requiresApproval ?? projectRequiresApproval ?? false
+        // P-11 cascade: explicit override (incl. legacy requiresApproval) → project → company →
+        // agency floor. requiresApproval stays = (mode == upfront) so the live 02-А gate is unchanged.
+        const orderOverride =
+          input.approvalMode ??
+          (input.requiresApproval === true
+            ? ApprovalMode.UPFRONT
+            : input.requiresApproval === false
+              ? ApprovalMode.NONE
+              : undefined)
+        const approvalMode = resolveApprovalMode({
+          orderOverride,
+          project: projectPolicy,
+          company: { approvalMode: company.approvalMode as ApprovalMode | null },
+          agencyDefault: agency.defaultApprovalMode as ApprovalMode,
+        })
+        const requiresApproval = approvalMode === ApprovalMode.UPFRONT
         return tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
@@ -61,6 +91,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             type: input.type,
             priority: input.priority,
             zeroBilled: input.zeroBilled,
+            approvalMode,
             requiresApproval,
             internalStatus: 'new',
             clientStatus: 'in_progress',
@@ -74,6 +105,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             zeroBilled: true,
             projectId: true,
             priority: true,
+            approvalMode: true,
             requiresApproval: true,
             internalStatus: true,
             clientStatus: true,

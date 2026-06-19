@@ -25,30 +25,31 @@ model Profile {
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
-  companyMembership     CompanyMember[]
-  ordersAssigned        Order[]               @relation("OrderAssignee")
-  ordersCreated         Order[]               @relation("OrderCreatedBy")
-  ordersApprovalDecided Order[]               @relation("OrderApprovalDecidedBy")
-  internalTasksAssigned InternalTask[]        @relation("InternalTaskAssignee")
-  comments              OrderComment[]
-  timeLogs              TimeLog[]
-  notificationSettings  NotificationSettings?
-  refreshTokens         RefreshToken[]
-  invitesSent           Invite[]              @relation("InvitedBy")
-  executorRates         ExecutorRate[]
-  blogPosts             BlogPost[]
-  uploadedFiles         OrderFile[]
-  notifications         Notification[]
-  activityLogsAsActor   ActivityLog[]
-  paymentsConfirmed     Payment[]             @relation("PaymentConfirmedBy")
-  otpTokens             OtpToken[]
-  documentsCreated      Document[]            @relation("DocumentCreatedBy")
-  documentsForExecutor  Document[]            @relation("DocumentExecutor")
-  auditLogsAsActor      AuditLog[]
-  agenciesOwned         Agency[]              @relation("AgencyOwner")
-  agencyMemberships     AgencyMember[]
-  orderChatReads        OrderChatRead[]
-  projectExecutorRates  ProjectExecutorRate[] // 12-А (S5.6 P-1)
+  companyMembership      CompanyMember[]
+  ordersAssigned         Order[]               @relation("OrderAssignee")
+  ordersCreated          Order[]               @relation("OrderCreatedBy")
+  ordersApprovalDecided  Order[]               @relation("OrderApprovalDecidedBy")
+  chargesApprovalDecided ServiceCharge[]       @relation("ChargeApprovalDecidedBy")
+  internalTasksAssigned  InternalTask[]        @relation("InternalTaskAssignee")
+  comments               OrderComment[]
+  timeLogs               TimeLog[]
+  notificationSettings   NotificationSettings?
+  refreshTokens          RefreshToken[]
+  invitesSent            Invite[]              @relation("InvitedBy")
+  executorRates          ExecutorRate[]
+  blogPosts              BlogPost[]
+  uploadedFiles          OrderFile[]
+  notifications          Notification[]
+  activityLogsAsActor    ActivityLog[]
+  paymentsConfirmed      Payment[]             @relation("PaymentConfirmedBy")
+  otpTokens              OtpToken[]
+  documentsCreated       Document[]            @relation("DocumentCreatedBy")
+  documentsForExecutor   Document[]            @relation("DocumentExecutor")
+  auditLogsAsActor       AuditLog[]
+  agenciesOwned          Agency[]              @relation("AgencyOwner")
+  agencyMemberships      AgencyMember[]
+  orderChatReads         OrderChatRead[]
+  projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
 
   @@index([role])
   @@map("profiles")
@@ -103,24 +104,28 @@ model PasswordResetToken {
 }
 
 model Company {
-  id                   String       @id @default(uuid())
+  id                   String           @id @default(uuid())
   agencyId             String
   name                 String
   // AR-22 (audit 2026-06-11): per-agency unique (@@unique below) — two tenants may both
   // have an "acme" client. referralCode stays globally unique (uuid; agency-less lookup).
   slug                 String
-  language             Language     @default(uk)
-  currency             String       @default("USD")
+  language             Language         @default(uk)
+  currency             String           @default("USD")
   notes                String?
   // 05-Г / В10 (P-4): default net payment terms (days) for this client's projects —
   // cascade tier 2 (Project.paymentTermsDays → THIS → agency PaymentSettings). null → next tier.
   paymentTermsDays     Int?
-  loyaltyTier          LoyaltyTier  @default(new)
+  // P-11 (PROJECTS_SPEC §8): per-client cost-approval defaults — the knob the owner sets
+  // once per client. null → inherit the agency floor. Project may override further.
+  approvalMode         ApprovalMode?
+  invoiceApprover      InvoiceApprover?
+  loyaltyTier          LoyaltyTier      @default(new)
   tierOverride         LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
-  totalSpent           Decimal      @default(0) @db.Decimal(12, 2)
-  bonusBalance         Decimal      @default(0) @db.Decimal(12, 2)
-  moneyBalance         Decimal      @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
-  referralCode         String       @unique @default(uuid())
+  totalSpent           Decimal          @default(0) @db.Decimal(12, 2)
+  bonusBalance         Decimal          @default(0) @db.Decimal(12, 2)
+  moneyBalance         Decimal          @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
+  referralCode         String           @unique @default(uuid())
   referredById         String? // company-referral (module 09): another Company that referred this one
   // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): the EMPLOYEE who brought this client. Plain-String FK
   // to Profile (project convention: no back-relation on Profile). Drives the referral
@@ -134,7 +139,7 @@ model Company {
   legalType            String? // 'fop'|'tov'|'individual'|'foreign' (free, П8)
   legalName            String? // повна юр-назва для документів
   taxId                String? // ЄДРПОУ/ІПН/РНОКПП
-  vatPayer             Boolean      @default(false)
+  vatPayer             Boolean          @default(false)
   vatId                String?
   legalAddress         String?
   bankName             String?
@@ -143,9 +148,9 @@ model Company {
   signerTitle          String?
   documentEmail        String? // primary recipient for invoice/act PDFs (06-Г)
   documentEmailCc      String? // optional бухгалтерія CC
-  legalIsComplete      Boolean      @default(false) // legalName+taxId+iban+signerName
-  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
+  legalIsComplete      Boolean          @default(false) // legalName+taxId+iban+signerName
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @db.Timestamptz(3)
 
   members            CompanyMember[]
   orders             Order[]
@@ -218,6 +223,12 @@ model Order {
   approvalDecidedById String?
   approvalDecidedBy   Profile?             @relation("OrderApprovalDecidedBy", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
   approvalComment     String? // коментар клієнта при відхиленні (або примітка при погодженні)
+  // P-11 (PROJECTS_SPEC §8): resolved cost-approval mode snapshot at creation (immutable).
+  // requiresApproval above stays = (approvalMode == upfront) for the existing 02-А gate.
+  // approvedAmount = counter-offer (client OK'd a LOWER sum than quoted); the difference is
+  // recorded as a concession (P-10 manualDiscount) so quoted vs final-billed are both visible.
+  approvalMode        ApprovalMode         @default(none)
+  approvedAmount      Decimal?             @db.Decimal(10, 2)
   // 05-ПРОЕКТИ (S5.6 P-1): опційна привʼязка до фін-проєкту (legacy-замовлення без проєкту валідні)
   projectId           String?
   project             Project?             @relation(fields: [projectId], references: [id])
@@ -418,35 +429,45 @@ model EstimateLine {
 }
 
 model ServiceCharge {
-  id                   String       @id @default(uuid())
+  id                   String               @id @default(uuid())
   agencyId             String
   companyId            String
-  company              Company      @relation(fields: [companyId], references: [id])
+  company              Company              @relation(fields: [companyId], references: [id])
   // 05-ПРОЕКТИ (S5.6 P-1 3b): нарахування походить З ПРОЄКТУ (CompanyService видалено).
   projectId            String? // нарахування циклу проєкту (manual-разові — без проєкту)
-  project              Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  periodStart          DateTime?    @db.Date // межі циклу (для weekly `month` недостатньо)
-  periodEnd            DateTime?    @db.Date
-  kind                 String       @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
-  amount               Decimal      @db.Decimal(10, 2)
-  baseAmount           Decimal?     @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
-  discountPct          Decimal?     @db.Decimal(5, 2) // auto loyalty-tier discount
-  discountAmount       Decimal?     @db.Decimal(10, 2)
+  project              Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  periodStart          DateTime?            @db.Date // межі циклу (для weekly `month` недостатньо)
+  periodEnd            DateTime?            @db.Date
+  kind                 String               @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
+  amount               Decimal              @db.Decimal(10, 2)
+  baseAmount           Decimal?             @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
+  discountPct          Decimal?             @db.Decimal(5, 2) // auto loyalty-tier discount
+  discountAmount       Decimal?             @db.Decimal(10, 2)
   // 05-З (P-10): one-time MANUAL discount applied ON TOP of loyalty (owner-granted on a
   // specific charge). Either/both a % of the post-loyalty net and/or a flat amount;
   // `manualDiscountAmount` is the resolved absolute reduction folded into `totalAmount`.
-  manualDiscountPct    Decimal?     @db.Decimal(5, 2)
-  manualDiscountAmount Decimal?     @db.Decimal(10, 2)
-  totalAmount          Decimal?     @db.Decimal(10, 2) // post-discount amount owed (loyalty + manual)
-  currency             String       @default("USD")
-  uahRate              Decimal?     @db.Decimal(10, 4)
-  month                DateTime     @db.Date
-  status               ChargeStatus @default(pending)
-  dueDate              DateTime?    @db.Timestamptz(3)
-  paidAt               DateTime?    @db.Timestamptz(3)
+  manualDiscountPct    Decimal?             @db.Decimal(5, 2)
+  manualDiscountAmount Decimal?             @db.Decimal(10, 2)
+  totalAmount          Decimal?             @db.Decimal(10, 2) // post-discount amount owed (loyalty + manual)
+  currency             String               @default("USD")
+  uahRate              Decimal?             @db.Decimal(10, 4)
+  month                DateTime             @db.Date
+  status               ChargeStatus         @default(pending)
+  dueDate              DateTime?            @db.Timestamptz(3)
+  paidAt               DateTime?            @db.Timestamptz(3)
+  // P-11 (PROJECTS_SPEC §8) — on_actuals invoice-approval gate. approvalStatus null = no gate
+  // (counts as owed immediately, today's behavior); pending = draft, EXCLUDED from moneyBalance
+  // / FIFO / revenue until released; approved = live; rejected = held, team revises. approvedAmount
+  // = counter-offer (released at a lower sum than billed; difference folded via manualDiscount).
+  approvalStatus       OrderApprovalStatus?
+  approvalDecidedAt    DateTime?            @db.Timestamptz(3)
+  approvalDecidedById  String?
+  approvalDecidedBy    Profile?             @relation("ChargeApprovalDecidedBy", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
+  approvalComment      String?
+  approvedAmount       Decimal?             @db.Decimal(10, 2)
   notes                String?
-  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
-  agency               Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  agency               Agency               @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   allocations PaymentAllocation[]
 
@@ -867,6 +888,11 @@ model Agency {
   suspendedAt        DateTime?                @db.Timestamptz(3)
   limits             Json?
 
+  // P-11 (PROJECTS_SPEC §8): agency-tier floor of the cost-approval cascade (non-null so
+  // the cascade always terminates). Company/Project may override; null at those tiers inherits.
+  defaultApprovalMode    ApprovalMode    @default(none)
+  defaultInvoiceApprover InvoiceApprover @default(client)
+
   members          AgencyMember[]
   companies        Company[]
   orders           Order[]
@@ -1035,6 +1061,22 @@ enum OrderApprovalStatus {
   pending // команда подала оцінку, чекаємо рішення клієнта
   approved // клієнт погодив — команда може стартувати
   rejected // клієнт відхилив (з коментарем) — повертається команді
+}
+
+// P-11 (PROJECTS_SPEC §8): режим погодження вартості — один вибір на каскаді
+// Agency→Company→Project→Order. upfront=02-А (гейт перед стартом, вже є);
+// on_actuals=Гейт-2 (погодження ФАКТичної суми перед випуском рахунку); none=без погодження.
+enum ApprovalMode {
+  none
+  upfront
+  on_actuals
+}
+
+// P-11: хто погоджує суму у режимі on_actuals — клієнт (портал, як 02-А) або
+// внутрішня команда (self-review власника/фінансиста перед відправкою рахунку).
+enum InvoiceApprover {
+  client
+  internal
 }
 
 enum BillingType {
@@ -1331,8 +1373,12 @@ model Project {
   contractRequired   Boolean @default(false) // дефолт залежить від billingModel (PROJECTS_SPEC §5)
   contractDocumentId String? // Document(type=contract) / завантажений підписаний
 
-  requiresApproval Boolean? // 02-А; null → дефолт компанії
-  advanceGatePct   Decimal? @db.Decimal(5, 2) // 02-В; для hourly_prepaid (і fixed — аванс 100%)
+  requiresApproval Boolean? // 02-А (legacy, P-11 deprecates → approvalMode); null → дефолт компанії
+  advanceGatePct   Decimal?         @db.Decimal(5, 2) // 02-В; для hourly_prepaid (і fixed — аванс 100%)
+  // P-11 (PROJECTS_SPEC §8): per-project cost-approval override (null → inherit company → agency).
+  // approvalMode supersedes the legacy requiresApproval boolean (upfront ≡ requiresApproval=true).
+  approvalMode     ApprovalMode?
+  invoiceApprover  InvoiceApprover?
 
   includedHoursCap Decimal? @db.Decimal(8, 2) // ГІБРИД: абонплата покриває N год; понад ліміт → clientHourlyRate. Генерація overage — P-2 cycle-engine
 

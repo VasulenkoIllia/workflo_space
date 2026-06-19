@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  ApprovalMode,
   BillingType,
   InternalTaskStatus,
   OrderInternalStatus,
@@ -41,8 +42,10 @@ export const createWorkspaceOrderSchema = z.object({
   projectId: z.string().uuid().nullish(),
   zeroBilled: z.boolean().default(false),
   dueDate: dueDateSchema.optional(),
-  // 02-А: explicit override; when omitted, resolved from the project default (else false).
+  // 02-А (legacy): explicit on/off override; when omitted, resolved from the cascade.
   requiresApproval: z.boolean().optional(),
+  // P-11: explicit cost-approval mode override (none/upfront/on_actuals); wins over the cascade.
+  approvalMode: z.nativeEnum(ApprovalMode).optional(),
 })
 export type CreateWorkspaceOrderInput = z.infer<typeof createWorkspaceOrderSchema>
 

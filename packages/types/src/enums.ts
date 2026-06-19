@@ -85,6 +85,24 @@ export enum OrderApprovalStatus {
   REJECTED = 'rejected',
 }
 
+/**
+ * P-11 (PROJECTS_SPEC §8) — cost-approval mode, one choice cascading
+ * Agency → Company → Project → Order. `upfront` = approve estimate before work (02-А,
+ * gates → in_progress); `on_actuals` = approve the actual amount before invoicing (Gate-2,
+ * a charge stays draft/out-of-balance until released); `none` = no approval.
+ */
+export enum ApprovalMode {
+  NONE = 'none',
+  UPFRONT = 'upfront',
+  ON_ACTUALS = 'on_actuals',
+}
+
+/** P-11 — who signs off the amount in `on_actuals`: the client (portal) or internal team. */
+export enum InvoiceApprover {
+  CLIENT = 'client',
+  INTERNAL = 'internal',
+}
+
 export enum StageStatus {
   PENDING = 'pending',
   IN_PROGRESS = 'in_progress',

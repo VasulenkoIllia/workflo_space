@@ -6,6 +6,7 @@ const companyFindFirst = vi.fn()
 const projectFindFirst = vi.fn()
 const orderCreate = vi.fn()
 const auditLogCreate = vi.fn()
+const agencyFindUniqueOrThrow = vi.fn()
 
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as object
@@ -14,6 +15,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     project: { findFirst: projectFindFirst },
     order: { create: orderCreate },
     auditLog: { create: auditLogCreate },
+    agency: { findUniqueOrThrow: agencyFindUniqueOrThrow },
   }
   return {
     ...actual,
@@ -63,6 +65,7 @@ function post(token: string, app: Awaited<ReturnType<typeof authed>>['app'], bod
 beforeEach(() => {
   vi.clearAllMocks()
   auditLogCreate.mockResolvedValue({})
+  agencyFindUniqueOrThrow.mockResolvedValue({ defaultApprovalMode: 'none' }) // P-11 cascade floor
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -125,6 +128,62 @@ describe('POST /workspace/orders — internal team creates a task for a client (
     })
     expect(res.statusCode).toBe(404)
     expect(orderCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  // P-11: cost-approval mode resolved from the cascade and snapshotted onto the order.
+  it('inherits company approvalMode=upfront → order.approvalMode=upfront + requiresApproval=true', async () => {
+    companyFindFirst.mockResolvedValue({
+      id: COMPANY,
+      approvalMode: 'upfront',
+      invoiceApprover: null,
+    })
+    orderCreate.mockResolvedValue({ id: 'o', approvalMode: 'upfront', requiresApproval: true })
+    const { app, token } = await authed(OWNER)
+    const res = await post(token, app, { companyId: COMPANY, title: 'Завдання' })
+    expect(res.statusCode).toBe(201)
+    const data = orderCreate.mock.calls[0][0].data
+    expect(data.approvalMode).toBe('upfront')
+    expect(data.requiresApproval).toBe(true) // upfront ⇒ legacy gate stays armed
+    await app.close()
+  })
+
+  it('project approvalMode=on_actuals overrides company; requiresApproval stays false', async () => {
+    companyFindFirst.mockResolvedValue({
+      id: COMPANY,
+      approvalMode: 'upfront',
+      invoiceApprover: null,
+    })
+    projectFindFirst.mockResolvedValue({
+      id: 'p',
+      approvalMode: 'on_actuals',
+      requiresApproval: null,
+    })
+    orderCreate.mockResolvedValue({ id: 'o', approvalMode: 'on_actuals', requiresApproval: false })
+    const { app, token } = await authed(OWNER)
+    const res = await post(token, app, {
+      companyId: COMPANY,
+      title: 'Завдання',
+      projectId: '22222222-2222-4222-8222-222222222222',
+    })
+    expect(res.statusCode).toBe(201)
+    const data = orderCreate.mock.calls[0][0].data
+    expect(data.approvalMode).toBe('on_actuals')
+    expect(data.requiresApproval).toBe(false) // on_actuals does NOT gate work-start
+    await app.close()
+  })
+
+  it('explicit approvalMode override wins over the cascade', async () => {
+    companyFindFirst.mockResolvedValue({ id: COMPANY, approvalMode: 'none', invoiceApprover: null })
+    orderCreate.mockResolvedValue({ id: 'o', approvalMode: 'upfront', requiresApproval: true })
+    const { app, token } = await authed(OWNER)
+    const res = await post(token, app, {
+      companyId: COMPANY,
+      title: 'Завдання',
+      approvalMode: 'upfront',
+    })
+    expect(res.statusCode).toBe(201)
+    expect(orderCreate.mock.calls[0][0].data.approvalMode).toBe('upfront')
     await app.close()
   })
 })
