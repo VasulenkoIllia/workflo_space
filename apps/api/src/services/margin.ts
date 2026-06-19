@@ -1,4 +1,5 @@
 import { Prisma } from '@workflo/db'
+import { LIVE_CHARGE_APPROVAL } from './allocation.js'
 import { type FxRates, toUsd } from './currency.js'
 
 /**
@@ -119,6 +120,8 @@ async function projectMarginRaw(
         agencyId: scope.agencyId,
         projectId: scope.projectId,
         month: { gte: scope.from, lte: scope.to },
+        // P-11: a draft (pending/rejected) charge is not accrued revenue yet.
+        ...LIVE_CHARGE_APPROVAL,
       },
       _sum: { totalAmount: true, amount: true },
     }),

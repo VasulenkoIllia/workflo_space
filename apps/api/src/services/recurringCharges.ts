@@ -1,6 +1,37 @@
 import { Prisma } from '@workflo/db'
-import { ApiErrorCode, AppError, LOYALTY_DISCOUNT_PCT, type LoyaltyTier } from '@workflo/types'
+import {
+  ApiErrorCode,
+  ApprovalMode,
+  AppError,
+  LOYALTY_DISCOUNT_PCT,
+  type LoyaltyTier,
+} from '@workflo/types'
 import { refreshMoneyBalance } from './allocation.js'
+import { resolveApprovalMode } from './approvalPolicy.js'
+
+/**
+ * P-11: does this project's effective cost-approval mode make issued charges `on_actuals`
+ * drafts? If so they are stamped `approvalStatus='pending'` and stay out of moneyBalance/
+ * revenue/FIFO until the client (or internal team) releases them. Accepts the loosely-typed
+ * (Prisma-enum) project row so both charge producers can call it without enum-cast noise.
+ */
+function resolveChargeOnActuals(p: {
+  approvalMode: string | null
+  requiresApproval: boolean | null
+  company: { approvalMode: string | null }
+  agency: { defaultApprovalMode: string }
+}): boolean {
+  return (
+    resolveApprovalMode({
+      project: {
+        approvalMode: p.approvalMode as ApprovalMode | null,
+        requiresApproval: p.requiresApproval,
+      },
+      company: { approvalMode: p.company.approvalMode as ApprovalMode | null },
+      agencyDefault: p.agency.defaultApprovalMode as ApprovalMode,
+    }) === ApprovalMode.ON_ACTUALS
+  )
+}
 
 /**
  * Recurring project-charge generation (05-ПРОЕКТИ, S5.6 P-1 3b). One charge per
@@ -90,8 +121,19 @@ function dueDateFromTerms(anchor: Date, termsDays: number | null, legacy: Date):
  */
 const TERMS_TIER_SELECT = {
   paymentTermsDays: true,
-  company: { select: { loyaltyTier: true, tierOverride: true, paymentTermsDays: true } },
-  agency: { select: { paymentSettings: { select: { paymentTermsDays: true } } } },
+  // P-11: cost-approval cascade tiers (project → company → agency floor). on_actuals → the
+  // issued charge is born `pending` (draft, out of moneyBalance until released).
+  approvalMode: true,
+  requiresApproval: true,
+  company: {
+    select: { loyaltyTier: true, tierOverride: true, paymentTermsDays: true, approvalMode: true },
+  },
+  agency: {
+    select: {
+      paymentSettings: { select: { paymentTermsDays: true } },
+      defaultApprovalMode: true,
+    },
+  },
 } satisfies Prisma.ProjectSelect
 
 /**
@@ -383,8 +425,11 @@ export async function closeProjectCycle(
   // P-4: manual close bills a completed period → issue anchor = periodEnd + net terms
   // (legacy default was periodEnd, i.e. terms = 0).
   const dueDate = dueDateFromTerms(opts.periodEnd, resolveTermsDays(p), opts.periodEnd)
-  const row = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, dueDate, tier)
-  if (!row) return { created: 0, due: 1, gated: 0 }
+  const built = await buildChargeRow(tx, p, opts.periodStart, opts.periodEnd, dueDate, tier)
+  if (!built) return { created: 0, due: 1, gated: 0 }
+  // P-11: on_actuals → the manually-closed charge is born a draft, out of moneyBalance
+  // until the client/team releases it.
+  const row = resolveChargeOnActuals(p) ? { ...built, approvalStatus: 'pending' as const } : built
   const res = await tx.serviceCharge.createMany({ data: [row], skipDuplicates: true })
   if (res.count > 0) {
     await refreshMoneyBalance(tx, { agencyId: opts.agencyId, companyId: p.companyId })
@@ -445,6 +490,13 @@ export async function generateRecurringCharges(
     if (!p.nextCycleAt) continue
     const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
     const termsDays = resolveTermsDays(p) // P-4: cascade once per project
+    // P-11: resolve the cost-approval mode once per project; on_actuals charges issue as
+    // `pending` drafts (out of moneyBalance/revenue/FIFO until released).
+    const onActuals = resolveChargeOnActuals(p)
+    // A credit (prepaid_credit, negative) BENEFITS the client — never gate it behind approval,
+    // else the client's balance would be under-credited while the credit sits in draft.
+    const stamp = (r: Prisma.ServiceChargeCreateManyInput): Prisma.ServiceChargeCreateManyInput =>
+      onActuals && r.kind !== 'prepaid_credit' ? { ...r, approvalStatus: 'pending' } : r
     const weekly = p.billingCycle === 'weekly_day_x'
     const advance = weekly ? (d: Date) => addDaysUtc(d, 7) : addMonthUtc
     let cursor = p.nextCycleAt
@@ -475,7 +527,7 @@ export async function generateRecurringCharges(
             weekly ? addDaysUtc(cursor, 7) : addMonthUtc(pStart)
           ),
         }
-        rows.push(...(await buildPrepaidCharges(tx, p, curr, prev, tier, rows)))
+        rows.push(...(await buildPrepaidCharges(tx, p, curr, prev, tier, rows)).map(stamp))
         cursor = advance(cursor)
         guard++
         continue
@@ -502,7 +554,7 @@ export async function generateRecurringCharges(
         dueDate = dueDateFromTerms(periodEnd, termsDays, addMonthUtc(periodStart))
       }
       const row = await buildChargeRow(tx, p, periodStart, periodEnd, dueDate, tier)
-      if (row) rows.push(row)
+      if (row) rows.push(stamp(row))
 
       // Hybrid overage (P-2d): a fixed project that includes N hours bills the hours
       // OVER the cap for the JUST-CLOSED month at clientHourlyRate — a separate
@@ -515,24 +567,26 @@ export async function generateRecurringCharges(
         )
         if (overHours.greaterThan(0)) {
           const amounts = computeChargeAmounts(overHours.times(p.clientHourlyRate), tier)
-          rows.push({
-            agencyId: p.agencyId,
-            companyId: p.companyId,
-            projectId: p.id,
-            amount: amounts.totalAmount,
-            baseAmount: amounts.baseAmount,
-            discountPct: amounts.discountPct,
-            discountAmount: amounts.discountAmount,
-            totalAmount: amounts.totalAmount,
-            currency: p.currency,
-            month: ovStart,
-            periodStart: ovStart,
-            periodEnd: ovEnd,
-            kind: 'overage',
-            status: 'pending',
-            // overage is postpaid (past usage) → anchor = ovEnd + net terms (P-4)
-            dueDate: dueDateFromTerms(ovEnd, termsDays, addMonthUtc(ovStart)),
-          })
+          rows.push(
+            stamp({
+              agencyId: p.agencyId,
+              companyId: p.companyId,
+              projectId: p.id,
+              amount: amounts.totalAmount,
+              baseAmount: amounts.baseAmount,
+              discountPct: amounts.discountPct,
+              discountAmount: amounts.discountAmount,
+              totalAmount: amounts.totalAmount,
+              currency: p.currency,
+              month: ovStart,
+              periodStart: ovStart,
+              periodEnd: ovEnd,
+              kind: 'overage',
+              status: 'pending',
+              // overage is postpaid (past usage) → anchor = ovEnd + net terms (P-4)
+              dueDate: dueDateFromTerms(ovEnd, termsDays, addMonthUtc(ovStart)),
+            })
+          )
         }
       }
       cursor = advance(cursor)

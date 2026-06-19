@@ -74,10 +74,19 @@ export async function spendBonusOnCharge(
       totalAmount: true,
       amount: true,
       currency: true,
+      approvalStatus: true,
     },
   })
   if (!charge || charge.agencyId !== args.agencyId || charge.companyId !== args.companyId) {
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Нарахування не знайдено', 404)
+  }
+  // P-11: a draft (pending/rejected on_actuals) charge isn't billable yet — block bonus spend.
+  if (charge.approvalStatus === 'pending' || charge.approvalStatus === 'rejected') {
+    throw new AppError(
+      ApiErrorCode.CONFLICT,
+      'Не можна оплатити бонусами нарахування, що очікує погодження',
+      409
+    )
   }
   // The bonus wallet is USD; settling a non-USD charge would need an FX leg (out of scope).
   if (charge.currency !== 'USD') {

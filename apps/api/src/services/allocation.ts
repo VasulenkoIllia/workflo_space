@@ -2,6 +2,17 @@ import { Prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, ChargeStatus, type ChargeDerivedState } from '@workflo/types'
 
 /**
+ * P-11 (PROJECTS_SPEC §8) — a charge is financially LIVE (counts toward moneyBalance, FIFO
+ * settlement, and accrual revenue) only when its on_actuals invoice-approval is settled:
+ * `approvalStatus` null (no gate — today's default) or `approved` (released). `pending`/
+ * `rejected` are drafts — inert until the client/team releases them. Shared so every money
+ * sum applies the SAME rule (a single missed site would leak a draft into a balance).
+ */
+export const LIVE_CHARGE_APPROVAL = {
+  OR: [{ approvalStatus: null }, { approvalStatus: 'approved' }],
+} satisfies Prisma.ServiceChargeWhereInput
+
+/**
  * Money-account allocation primitives (S5-07, module 25). A confirmed payment is
  * allocated to one or more `ServiceCharge`s; each charge's display state is derived
  * from Σ(allocations) vs `totalAmount`; `Company.moneyBalance` is a single-writer
@@ -111,11 +122,15 @@ async function recomputeMoneyBalance(
     // COALESCE(totalAmount, amount): a charge with a null post-discount total (legacy /
     // hand-made) still counts its `amount`, so `_sum.totalAmount` can't silently drop it.
     // written_off is excluded (AR-12): a written-off charge is forgiven debt, not owed.
+    // P-11: an on_actuals charge awaiting (pending) or refused (rejected) approval is a DRAFT —
+    // financially inert until released. null (no gate) / approved both count. The IS NULL branch
+    // is essential: `<> ALL(...)` would drop legacy NULL rows under SQL three-valued logic.
     tx.$queryRaw<Array<{ charged: Prisma.Decimal | null }>>`
       SELECT COALESCE(SUM(COALESCE("totalAmount", "amount")), 0) AS "charged"
       FROM "service_charges"
       WHERE "agencyId" = ${args.agencyId} AND "companyId" = ${args.companyId}
         AND "status" != 'written_off'
+        AND ("approvalStatus" IS NULL OR "approvalStatus" = 'approved')
     `,
     tx.walletTransaction.aggregate({
       where: {
@@ -206,6 +221,8 @@ async function fifoTargets(
       // currencies must never net against each other 1:1.
       currency,
       status: { notIn: [ChargeStatus.PAID, ChargeStatus.WRITTEN_OFF] },
+      // P-11: never allocate a payment to a draft (pending/rejected) charge.
+      ...LIVE_CHARGE_APPROVAL,
     },
     select: { id: true, totalAmount: true, amount: true },
     orderBy: [{ dueDate: 'asc' }, { month: 'asc' }, { id: 'asc' }],
@@ -320,10 +337,20 @@ export async function allocatePayment(
         currency: true,
         dueDate: true,
         paidAt: true,
+        approvalStatus: true,
       },
     })
     if (!charge || charge.agencyId !== payment.agencyId || charge.companyId !== payment.companyId) {
       throw new AppError(ApiErrorCode.NOT_FOUND, 'Нарахування не знайдено', 404)
+    }
+    // P-11: FIFO already filters drafts; the EXPLICIT path reaches here, so reject a draft
+    // (pending/rejected on_actuals) target — it isn't real money owed and can't be settled.
+    if (charge.approvalStatus === 'pending' || charge.approvalStatus === 'rejected') {
+      throw new AppError(
+        ApiErrorCode.CONFLICT,
+        'Не можна розподілити оплату на нарахування, що очікує погодження',
+        409
+      )
     }
     // AR-10: native amounts settle 1:1 only within ONE currency — a UAH payment must
     // never cover a USD charge at face value (the FX snapshot exists for reporting,

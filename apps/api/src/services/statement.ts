@@ -1,5 +1,6 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
+import { LIVE_CHARGE_APPROVAL } from './allocation.js'
 
 /**
  * Unified financial statement (S5-08, module 25): a read-only, date-sorted merge of
@@ -53,7 +54,9 @@ export async function buildStatement(args: BuildStatementArgs): Promise<Statemen
     const base = { agencyId: args.agencyId, companyId: args.companyId }
     const [charges, payments, bonuses] = await Promise.all([
       tx.serviceCharge.findMany({
-        where: { ...base, ...(window ? { createdAt: window } : {}) },
+        // P-11: the statement is the financial ledger — exclude draft (pending/rejected)
+        // on_actuals charges, consistent with the balance which already omits them.
+        where: { ...base, ...LIVE_CHARGE_APPROVAL, ...(window ? { createdAt: window } : {}) },
         select: {
           id: true,
           totalAmount: true,
