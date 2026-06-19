@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import allocatePaymentRoute from './allocatePayment.js'
+import chargeApprovalRoutes from './chargeApproval.js'
 import chargesRoute from './charges.js'
 import createPaymentRoute from './createPayment.js'
 import estimatesRoute from './estimates.js'
@@ -25,6 +26,7 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(paymentSettingsRoute)
   await fastify.register(projectsRoute)
   await fastify.register(estimatesRoute)
+  await fastify.register(chargeApprovalRoutes)
 }
 
 export default billingRoutes

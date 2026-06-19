@@ -42,6 +42,8 @@ const PROJECT_SELECT = {
   requiresApproval: true,
   advanceGatePct: true,
   includedHoursCap: true,
+  approvalMode: true,
+  invoiceApprover: true,
   active: true,
   createdAt: true,
 } satisfies Prisma.ProjectSelect
@@ -172,6 +174,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
             requiresApproval: input.requiresApproval ?? null,
             advanceGatePct: input.advanceGatePct ?? null,
             includedHoursCap: input.includedHoursCap ?? null,
+            approvalMode: input.approvalMode ?? null,
+            invoiceApprover: input.invoiceApprover ?? null,
           },
           select: PROJECT_SELECT,
         })
@@ -264,6 +268,10 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
             ...(input.advanceGatePct !== undefined ? { advanceGatePct: input.advanceGatePct } : {}),
             ...(input.includedHoursCap !== undefined
               ? { includedHoursCap: input.includedHoursCap }
+              : {}),
+            ...(input.approvalMode !== undefined ? { approvalMode: input.approvalMode } : {}),
+            ...(input.invoiceApprover !== undefined
+              ? { invoiceApprover: input.invoiceApprover }
               : {}),
             ...(input.active !== undefined ? { active: input.active } : {}),
           },

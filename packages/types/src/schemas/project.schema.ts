@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { ProjectBillingCycle, ProjectBillingModel } from '../enums.js'
+import {
+  ApprovalMode,
+  InvoiceApprover,
+  ProjectBillingCycle,
+  ProjectBillingModel,
+} from '../enums.js'
 
 /**
  * Financial projects (05-ПРОЕКТИ, PROJECTS_SPEC §2/§5 — S5.6 P-1). A project is a
@@ -44,6 +49,10 @@ const baseShape = {
   requiresApproval: z.boolean().nullish(),
   advanceGatePct: pct.nullish(),
   includedHoursCap: amount.nullish(),
+  // P-11 (PROJECTS_SPEC §8): per-project cost-approval mode + invoice approver (null → inherit
+  // company → agency). approvalMode supersedes requiresApproval (upfront ≡ requiresApproval).
+  approvalMode: z.nativeEnum(ApprovalMode).nullish(),
+  invoiceApprover: z.nativeEnum(InvoiceApprover).nullish(),
 }
 
 /**

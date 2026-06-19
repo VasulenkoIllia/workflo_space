@@ -111,6 +111,33 @@ export const decideOrderApprovalSchema = z
   })
 export type DecideOrderApprovalInput = z.infer<typeof decideOrderApprovalSchema>
 
+/**
+ * POST /workspace|portal/billing/charges/:id/approval (P-11, on_actuals) — release or refuse
+ * a draft charge. `approvedAmount` is the optional counter-offer: approve at a LOWER figure
+ * than billed (the difference is recorded as a concession). Rejection MUST carry a reason.
+ */
+export const decideChargeApprovalSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    comment: z.string().max(2000).optional(),
+    approvedAmount: z
+      .number()
+      .finite()
+      .positive()
+      .max(1_000_000_000)
+      .refine((v) => Number(v.toFixed(2)) === v, 'Сума: ≤2 десяткових знаки')
+      .optional(),
+  })
+  .refine((d) => d.decision !== 'reject' || (d.comment != null && d.comment.trim().length > 0), {
+    message: 'Вкажіть причину відхилення',
+    path: ['comment'],
+  })
+  .refine((d) => d.decision !== 'reject' || d.approvedAmount == null, {
+    message: 'approvedAmount застосовний лише при погодженні',
+    path: ['approvedAmount'],
+  })
+export type DecideChargeApprovalInput = z.infer<typeof decideChargeApprovalSchema>
+
 /** PATCH /orders/:id/assign — assign an executor (null = unassign). */
 export const assignOrderSchema = z.object({
   assigneeId: z.string().uuid().nullable(),
