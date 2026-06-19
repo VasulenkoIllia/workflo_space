@@ -53,6 +53,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 
 const { buildApp } = await import('../src/app.js')
+// The vi.mock above re-exports the real Prisma, so this resolves to the genuine Decimal.
+const { Prisma } = await import('@workflo/db')
 
 const AGENCY = 'agency-1'
 const COMPANY = '11111111-1111-4111-8111-111111111111'
@@ -455,6 +457,65 @@ describe('PATCH /orders/:id — 02-А billing-edit lock', () => {
     })
     const { app, token } = await authed(TEAM)
     const res = await patch(app, token, '/orders/order-1', { title: 'Новий' })
+    expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+})
+
+describe('PATCH /orders/:id/status — 02-В advance gate (hourly_prepaid + moneyBalance)', () => {
+  const base = {
+    id: 'order-1',
+    agencyId: AGENCY,
+    companyId: COMPANY,
+    internalStatus: 'estimating',
+    requiresApproval: false,
+    approvalStatus: null,
+    deletedAt: null,
+  }
+  const started = {
+    id: 'order-1',
+    internalStatus: 'in_progress',
+    clientStatus: 'in_progress',
+    onHoldReason: null,
+    cancelledReason: null,
+    updatedAt: new Date(),
+  }
+
+  it('409 blocks → in_progress when a prepaid client still owes (balance < 0)', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      project: { billingModel: 'hourly_prepaid' },
+      company: { moneyBalance: new Prisma.Decimal(-150) }, // advance unpaid
+    })
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(409)
+    expect(orderUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('allows → in_progress once the advance is paid (balance ≥ 0)', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      project: { billingModel: 'hourly_prepaid' },
+      company: { moneyBalance: new Prisma.Decimal(0) },
+    })
+    orderFindUniqueOrThrow.mockResolvedValue(started)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('does not gate non-prepaid projects even when the client owes', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      project: { billingModel: 'hourly_postpaid' },
+      company: { moneyBalance: new Prisma.Decimal(-150) },
+    })
+    orderFindUniqueOrThrow.mockResolvedValue(started)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
     expect(res.statusCode).toBe(200)
     await app.close()
   })

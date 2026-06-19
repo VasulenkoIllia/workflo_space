@@ -39,6 +39,10 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             requiresApproval: true,
             approvalStatus: true,
             deletedAt: true,
+            // 02-В advance gate (hourly_prepaid only): needs the project's model + the
+            // client's money-account balance.
+            project: { select: { billingModel: true } },
+            company: { select: { moneyBalance: true } },
           },
         })
       )
@@ -70,6 +74,23 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(
           ApiErrorCode.CONFLICT,
           'Оцінку ще не погоджено клієнтом — старт роботи заблоковано',
+          409
+        )
+      }
+
+      // 02-В advance gate (owner decision: hourly_prepaid only, moneyBalance discipline):
+      // a prepaid project bills the advance at cycle start, which drives moneyBalance
+      // negative; work on its orders can't start while the client still owes (balance < 0),
+      // i.e. the advance is unpaid. Once the advance lands the balance returns to ≥ 0 and the
+      // order may start — exactly the «чекаємо аванс» behavior, with no extra schema.
+      if (
+        to === OrderInternalStatus.IN_PROGRESS &&
+        order.project?.billingModel === 'hourly_prepaid' &&
+        order.company?.moneyBalance.lessThan(0)
+      ) {
+        throw new AppError(
+          ApiErrorCode.CONFLICT,
+          'Очікується аванс — у клієнта непогашений борг, старт роботи заблоковано',
           409
         )
       }
