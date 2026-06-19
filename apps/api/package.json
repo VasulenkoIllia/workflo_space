@@ -10,7 +10,8 @@
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "demo:billing": "tsx scripts/billing-demo.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^10.0.1",
