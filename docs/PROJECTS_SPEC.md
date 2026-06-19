@@ -414,6 +414,54 @@ model ExecutorPayout {
 
 ---
 
+## 8. Погодження вартості — 3 режими + counter-offer (рішення власника 2026-06-19)
+
+> Розширює В11 (02-А/02-В). Виявлено в обговоренні: погодження «оцінки перед стартом»
+> (02-А, вже збудовано) НЕ покриває другий реальний сценарій — погодження **фактичної
+> суми перед виставленням рахунку**. Власник сформулював потребу як **вибір із 3 режимів**.
+
+### 8.1. `approvalMode` — один перемикач, каскад `Agency → Company → Project → Order`
+
+| Режим        | Зміст                                                           | Гейт                                                                               | Стан            |
+| ------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------- |
+| `none`       | робота + рахунок без погоджень (поточна поведінка)              | —                                                                                  | дефолт          |
+| `upfront`    | клієнт погоджує **оцінку до старту** роботи                     | блок `→ in_progress`, поки не approved                                             | ✅ 02-А (є)     |
+| `on_actuals` | працюємо по факту → погоджуємо **фінальну суму перед рахунком** | нарахування народжується `draft`, **не входить у moneyBalance**, доки не погоджено | 🔜 новий Гейт-2 |
+
+Резолюція: `effective = firstNonNull(order, project, company, agency, 'none')`, снапшот на
+момент створення замовлення / випуску нарахування (immutable далі — як `requiresApproval` нині).
+Під капотом — дві ортогональні машини (pre-work + pre-invoice), власнику показуємо **один вибір**.
+
+### 8.2. Approver рахунку — налаштовується (`invoiceApprover`)
+
+- `client` — клієнт-owner / делегат з `can_approve_estimates` погоджує у порталі (як 02-А);
+- `internal` — власник/фінансист сам переглядає й випускає `draft`-нарахування (self-review перед відправкою).
+
+Та сама стан-машина (`OrderApprovalStatus` pending→approved|rejected), різний гейт прав.
+
+### 8.3. Counter-offer — наскрізний для `upfront` і `on_actuals`
+
+Рішення погодження несе **`approvedAmount`**. Якщо погоджено меншу суму `Y` за оцінку `X`:
+`Y` стає виставленою сумою, різниця `X − Y` фіксується як поступка (переюз P-10
+`manualDiscountAmount`) з аудитом (хто/коли/коментар). Так на замовленні видно **три числа**:
+**очікувано** (оцінка `X`) → **фінально виставлено** (`Y`) → **реально сплачено** (аллокації).
+Ефективність (виставлено − собівартість) уже рахує маржа-движок P-9.
+
+### 8.4. Реалізаційний ескіз (мінімальний, без нових таблиць)
+
+- `ServiceCharge` +`approvalStatus`/`approvalDecidedAt`/`approvalDecidedById`/`approvalComment`
+  (дзеркало 02-А полів Order) + `approvedAmount?`; `moneyBalance = Σ платежі − Σ charges WHERE
+approvalStatus IS NULL OR approved` (draft/rejected — фінансово інертні; backfill NULL → zero-risk).
+- `approvalMode` enum (`none|upfront|on_actuals`) на Agency/Company/Project (+Order override),
+  `invoiceApprover` enum (`client|internal`); deprecate `Project.requiresApproval` → expand/contract.
+- Гейт-2: у `buildChargeRow`/`closeProjectCycle`/prepaid/overage — стампити `approvalStatus`;
+  блок генерації документа для `draft` (як контракт-гейт 409); роути `POST .../charges/:id/approval`
+  (portal + workspace). Counter-offer вливається в `applyChargeDiscount`.
+
+**Статус:** 🟡 ЗАФІКСОВАНО, чекає підтвердження → задача S5.6 **P-11** (або S6-передумова).
+
+---
+
 _✅ Затверджено власником 2026-06-12 (П1-П8, С1-С3 — `OPEN_QUESTIONS_2026-06.md`).
 Готово до розбивки на задачі спринта **S5.6 «Фінансова модель 2.0»** (TRACKER, P-0…P-10).
 Передумова: окрема міні-спека `LegalEntity` (20-Д) до/разом із P-3. ТЗ дизайнеру —
