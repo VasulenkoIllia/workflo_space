@@ -272,6 +272,49 @@ describe('POST /portal/orders/:id/approval (02-А)', () => {
     await app.close()
   })
 
+  it('counter-offer: owner approves at a lower agreed sum than the quote', async () => {
+    orderFindFirst.mockResolvedValue({
+      ...PENDING,
+      fixedPrice: new Prisma.Decimal(500),
+      hourlyRate: null,
+      estimatedHours: null,
+    })
+    orderFindUniqueOrThrow.mockResolvedValue({
+      id: 'order-1',
+      approvalStatus: 'approved',
+      approvalDecidedAt: new Date(),
+      approvalComment: null,
+      approvedAmount: '400.00',
+      clientStatus: 'in_progress',
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(CLIENT_OWNER)
+    const res = await post(app, token, '/portal/orders/order-1/approval', {
+      decision: 'approve',
+      approvedAmount: 400,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(orderUpdateMany.mock.calls[0][0].data.approvedAmount.toString()).toBe('400')
+    await app.close()
+  })
+
+  it('400 when the counter-offer exceeds the quote', async () => {
+    orderFindFirst.mockResolvedValue({
+      ...PENDING,
+      fixedPrice: new Prisma.Decimal(500),
+      hourlyRate: null,
+      estimatedHours: null,
+    })
+    const { app, token } = await authed(CLIENT_OWNER)
+    const res = await post(app, token, '/portal/orders/order-1/approval', {
+      decision: 'approve',
+      approvedAmount: 600,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(orderUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('403 for a non-owner company member', async () => {
     orderFindFirst.mockResolvedValue(PENDING)
     const { app, token } = await authed(CLIENT_MEMBER)

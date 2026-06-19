@@ -458,7 +458,23 @@ approvalStatus IS NULL OR approved` (draft/rejected — фінансово ін�
   блок генерації документа для `draft` (як контракт-гейт 409); роути `POST .../charges/:id/approval`
   (portal + workspace). Counter-offer вливається в `applyChargeDiscount`.
 
-**Статус:** 🟡 ЗАФІКСОВАНО, чекає підтвердження → задача S5.6 **P-11** (або S6-передумова).
+**Статус:** ✅ **РЕАЛІЗОВАНО** (S5.6 P-11, коміти `13fd118`/`fa8a96f`/`f5b3901`+order-CO):
+
+- **P-11a** — каскад `approvalMode`/`invoiceApprover` (Agency→Company→Project→Order), резолвер,
+  снапшот на замовленні (міграція `20260626_p11_approval_mode`); back-compat із `requiresApproval`.
+- **P-11b** — `on_actuals` charge-гейт: нарахування `pending`=draft, спільний `LIVE_CHARGE_APPROVAL`
+  виключає draft з moneyBalance/FIFO/revenue/statement; prepaid_credit не гейтиться; гарди на
+  allocation+bonus (не оплатити draft).
+- **P-11c** — release-роути `POST /workspace/billing/charges/:id/approval` (internal, owner/executor,
+  manager-blocked) + `POST /portal/charges/:id/approval` (client-owner/делегат, scoped to charge.company);
+  канал визначає `invoiceApprover`; counter-offer (`approvedAmount`≤виставлено → знижує totalAmount);
+  Project-config (approvalMode/invoiceApprover у create/update).
+- **P-11d** — upfront counter-offer у `POST /portal/orders/:id/approval` (`approvedAmount`≤оцінка).
+
+**Відкладено (follow-up, не блокує):** Company-рівневий config-роут (зараз через Project + agency-default;
+«set once per client» UI потребує окремого `/workspace/clients/:id/billing-settings`); грейс-`dueDate`
+для пізно-погодженого on_actuals charge (коли C07-dunning з'явиться); order-upfront `approvedAmount` —
+поки аудит-запис (білінг проєкт-центричний, не з order.fixedPrice).
 
 ---
 

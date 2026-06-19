@@ -104,10 +104,22 @@ export const decideOrderApprovalSchema = z
   .object({
     decision: z.enum(['approve', 'reject']),
     comment: z.string().max(2000).optional(),
+    // P-11 counter-offer (upfront): approve the estimate at a LOWER agreed sum than quoted.
+    approvedAmount: z
+      .number()
+      .finite()
+      .positive()
+      .max(1_000_000_000)
+      .refine((v) => Number(v.toFixed(2)) === v, 'Сума: ≤2 десяткових знаки')
+      .optional(),
   })
   .refine((d) => d.decision !== 'reject' || (d.comment != null && d.comment.trim().length > 0), {
     message: 'Вкажіть причину відхилення',
     path: ['comment'],
+  })
+  .refine((d) => d.decision !== 'reject' || d.approvedAmount == null, {
+    message: 'approvedAmount застосовний лише при погодженні',
+    path: ['approvedAmount'],
   })
 export type DecideOrderApprovalInput = z.infer<typeof decideOrderApprovalSchema>
 
