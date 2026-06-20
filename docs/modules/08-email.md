@@ -43,7 +43,7 @@ notify(event, recipients, payload)
 
 ### 1.1. Заплановані шаблони (за дизайном r2 — `DESIGN_SYSTEM.md §5.6`)
 
-Дизайн повернув **15 HTML-мокапів** ([`design/project/email-templates.jsx`](../../design/project/email-templates.jsx)). 4 з них реалізовані вище; **11 — заплановані** для S3+ (frontend integration phase). Кожен має готовий мокап у фірмовому стилі (лайм/stone/Geist) — імплементація = пере-вираження мокапу через `render*`-примітиви + reuse `renderLayout()`.
+Дизайн повернув **15 HTML-мокапів** ([`design-v2/project/email-templates.jsx`](../../design-v2/project/email-templates.jsx)). 4 з них реалізовані вище; **11 — заплановані** для S3+ (frontend integration phase). Кожен має готовий мокап у фірмовому стилі (лайм/stone/Geist) — імплементація = пере-вираження мокапу через `render*`-примітиви + reuse `renderLayout()`.
 
 **Transactional (5):**
 
@@ -84,7 +84,7 @@ notify(event, recipients, payload)
 
 > **Total:** 15 у дизайні · 4 ✅ у коді · **11 todo** + inline-CSS існуючих 4 треба пере-перевірити проти токенів §3 (DESIGN_SYSTEM) — фактично виконано через `render.ts` primitives.
 >
-> **Імплементація:** для кожного нового шаблону — нова TS-функція + рядок у матриці модуля 07 (`docs/modules/07-notifications.md §матриця`). HTML-структура + inline-CSS береться з відповідного компонента у [`email-templates.jsx`](../../design/project/email-templates.jsx) і перевиражається через `renderLayout`/`renderButton`/`renderHeading`/`renderParagraph`/`renderMuted` для XSS-безпеки.
+> **Імплементація:** для кожного нового шаблону — нова TS-функція + рядок у матриці модуля 07 (`docs/modules/07-notifications.md §матриця`). HTML-структура + inline-CSS береться з відповідного компонента у [`email-templates.jsx`](../../design-v2/project/email-templates.jsx) і перевиражається через `renderLayout`/`renderButton`/`renderHeading`/`renderParagraph`/`renderMuted` для XSS-безпеки.
 
 ---
 

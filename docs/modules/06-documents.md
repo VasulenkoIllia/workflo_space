@@ -9,9 +9,11 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **documents-eu** — 8 екранів EU/юр-комплекту (інвойс, credit-note, SoW/SoA/Agreement/Act, публічна pay-сторінка): [`workspace-documents-eu.jsx`](../../design-v2/project/workspace-documents-eu.jsx). ⚠️ **Бекенд-блокер (звірено 2026-06-20):** `Document`/`DocumentCounter` моделі є (читаються з billing/legal-entities), але **route генерації/видачі немає** + PDF-движок `packages/templates` `generatePdf()` досі stub. W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
-Модуль генерації PDF-документів: рахунки (invoice), акти виконаних робіт, акти звірки, специфікації, договори + credit-note (CRN, з r4). Всі документи генеруються через **HTML → Puppeteer → PDF** у пакеті `packages/templates` (toolkit `DocBrand`/`DocParties`/`DocSigs`/`DocFoot`, реюз HTML/CSS-мокапів з `design/project/documents-screens.jsx` 1:1). Зберігаються як PDF-файли через `StorageAdapter`.
+Модуль генерації PDF-документів: рахунки (invoice), акти виконаних робіт, акти звірки, специфікації, договори + credit-note (CRN, з r4). Всі документи генеруються через **HTML → Puppeteer → PDF** у пакеті `packages/templates` (toolkit `DocBrand`/`DocParties`/`DocSigs`/`DocFoot`, реюз HTML/CSS-мокапів з `design-v2/project/documents-screens.jsx` + новий `workspace-documents-eu.jsx` 1:1). Зберігаються як PDF-файли через `StorageAdapter`.
 
 > Движок зафіксовано 2026-05-29 (`DESIGN_SYSTEM.md §5.5 + §8 row 4`). Старіші згадки `@react-pdf/renderer` нижче — застаріли; код-приклади треба переписати під Puppeteer (TODO).
 

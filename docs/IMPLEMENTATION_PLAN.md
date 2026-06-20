@@ -7,6 +7,8 @@
 
 > ⚠️ **СТАТУС (doc-sync 1.06): «Engineering Standards & Historical Plan».** Секції **§4 (endpoints), §5 (DB-схема), §6 (фазовий план), §10 (seed)** — застаріли й обрізані до вказівників (канон: `modules/NN-*.md` · `SPEC.md` · `packages/db/prisma/schema.prisma` · `TRACKER.md` · `seed.ts`). Живі тут: **§3** (tsconfig/eslint), **§7** (turbo), **§8** (migration-ops), **§11** (онбординг/UX). Наскрізні API-стандарти винесено в **`ENGINEERING_STANDARDS.md`** (колишній §9).
 
+> 🔄 **design-v2 (2026-06-20):** новий дизайн-бандл [`design-v2/`](../design-v2/) розширив скоуп (fin-model 2.0, 360°-картки, board, order-chat, EU-docs, hubs, рольова IA). Готовність дизайн✅ × бекенд + бекенд-гапи (clients-CRUD `CompanyService` викинуто P-1e · Document-route · board-columns · notify-feed) — у [`DESIGN_SYSTEM.md §5.13`](DESIGN_SYSTEM.md) і `TRACKER.md` (блок «DESIGN-V2 ДОСТАВЛЕНО»).
+
 ## ЗМІСТ
 
 1. [Закриті рішення](#1-закриті-рішення)

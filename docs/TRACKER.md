@@ -32,6 +32,15 @@
 > **Можна вже зараз** (Хвиля 1, щойно дизайн модуля стане РЕЮЗ): **07 Notifications · 13 Settings · 16 Search**.
 > **Хвиля 2** (05/02/06/12/22/25/09/19/28) розблоковується **після P-1 (`Project`) у `dev`** — раніше fin-coupled не чіпаємо.
 
+### 📐 DESIGN-V2 ДОСТАВЛЕНО (2026-06-20) — дизайн-гейт оновлено
+
+Дизайнер повернув новий бандл [`design-v2/`](../design-v2/) (імпорт через Claude Design MCP), що реалізує спеку 29 модулів ([`DESIGN_TZ_2026-06.md`](DESIGN_TZ_2026-06.md)). Повна матриця готовності **дизайн✅ × бекенд** (звірено grep'ом) — [`DESIGN_SYSTEM.md §5.13`](DESIGN_SYSTEM.md). Ключове для плану:
+
+- **W0 — НОВА фронт-задача (раніше не було в TRACKER):** рольовий **hub-shell** + порт дизайн-CSS у `@workflo/ui` + примітиви (Drawer / Table / Tabs / Kanban-card / Chat-composer). design-v2 переустроїв IA: **7 хабів** (`workspace-hubs.jsx`), рольова нав `o/m/x` (`ia-roles.css` · `navVisibleForRole()`), словник **`superadmin/lead → owner/manager/executor`**. ⚠️ **Існуючий S3/S4 shell будувався ДО design-v2 → потребує звірки/реворку під нову хаб-IA та рольовий словник.**
+- **W1 — готово кодити одразу (дизайн✅ + бекенд✅):** `margin` · `orders-v2` · `service-catalog` · `order-chat`(core) · `fin-projects`(core) · `board`(фікс-колонки `InternalTask`) · `project360`(ready-таби) · `reports`(P&L).
+- **W2 — блок-бекенд → за планом S6–S13.** 🚦 **Рішення власника (2026-06-20): clients-CRUD + Document-route НЕ підтягуємо наперед.** Модулі: `client360` (clients CRUD — `CompanyService` викинуто в P-1e) · `documents-eu` (Document route + PDF-движок) · `portal-secrets`(vault) · `support` · `calendar` · `testimonials` · `case-editor` · `notify`-feed (модель є, read/mark-read API нема).
+- **Дизайн-гапи** (дрібні, не блокери) → [`DESIGN_TODO.md §0`](DESIGN_TODO.md).
+
 ### S5 РОЗГОРНУТО (10 тасків, усі ✅ + verified на реальному PG)
 
 | Таск     | Що                                                                                          |

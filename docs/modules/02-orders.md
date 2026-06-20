@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено 3 повʼязані модулі — усі 🟢 **бекенд готовий** (звірено): **orders-v2** (крос-ордер реєстр, 9 статусів збігаються з `OrderInternalStatus`), **board** (kanban на `InternalTask` CRUD `/orders/:id/tasks`; фікс-колонки готові, кастомні — gap), **order-chat** (SSE-чат `orders/comments.ts`+`commentsStream.ts`). Файли: [`workspace-orders-v2.jsx`](../../design-v2/project/workspace-orders-v2.jsx), `workspace-board*.jsx`, `order-chat.jsx`. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Центральний модуль системи. Замовлення (`orders`) — основна бізнес-одиниця: клієнт створює запит → команда виконує роботу → виставляється рахунок → закривається актом. Є два різних «погляди» на замовлення: внутрішній (workspace, 9 статусів) та клієнтський (portal, 4 статуси).
