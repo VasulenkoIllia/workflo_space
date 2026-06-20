@@ -10,6 +10,7 @@ import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
 import { SettingsPage } from '@/routes/settings/SettingsPage'
 import { TeamPage } from '@/routes/team/TeamPage'
+import { BillingPage } from '@/routes/billing/BillingPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -31,7 +32,7 @@ export default function App() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/new" element={<Placeholder title="Нове замовлення" />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
-        <Route path="/billing" element={<Placeholder title="Фінанси" />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route path="/wallet" element={<Placeholder title="Гаманець" />} />
         <Route path="/documents" element={<Placeholder title="Документи" />} />
         <Route path="/loyalty" element={<Placeholder title="Лояльність" />} />
