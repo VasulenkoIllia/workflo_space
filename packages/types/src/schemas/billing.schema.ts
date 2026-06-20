@@ -91,6 +91,8 @@ export const monthString = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected
 export const billingListQuerySchema = z.object({
   companyId: z.string().uuid().optional(),
   month: monthString.optional(),
+  // P-11 (UI): filter charges by approval state — e.g. the «чекають погодження» queue.
+  approvalStatus: z.enum(['pending', 'approved', 'rejected']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })

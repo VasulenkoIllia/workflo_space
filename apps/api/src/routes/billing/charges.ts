@@ -27,11 +27,21 @@ interface ChargeRow {
   status: string
   dueDate: Date | null
   paidAt: Date | null
+  // P-11 list-only fields (the discount path doesn't select them → omitted from that response).
+  // approvalStatus null = no gate / live; pending = draft (not in balance).
+  projectId?: string | null
+  kind?: string
+  approvalStatus?: string | null
+  approvedAmount?: Prisma.Decimal | null
+  approvalDecidedAt?: Date | null
+  approvalComment?: string | null
 }
 
 const CHARGE_SELECT = {
   id: true,
   companyId: true,
+  projectId: true,
+  kind: true,
   amount: true,
   baseAmount: true,
   discountPct: true,
@@ -42,6 +52,10 @@ const CHARGE_SELECT = {
   currency: true,
   month: true,
   status: true,
+  approvalStatus: true,
+  approvedAmount: true,
+  approvalDecidedAt: true,
+  approvalComment: true,
   dueDate: true,
   paidAt: true,
 } satisfies Prisma.ServiceChargeSelect
@@ -60,6 +74,13 @@ function toDto(c: ChargeRow) {
     currency: c.currency,
     month: c.month.toISOString().slice(0, 7),
     status: c.status,
+    // P-11 approval fields the billing/approval UI renders (null on the discount response).
+    projectId: c.projectId ?? null,
+    kind: c.kind ?? null,
+    approvalStatus: c.approvalStatus ?? null,
+    approvedAmount: c.approvedAmount ? c.approvedAmount.toFixed(2) : null,
+    approvalDecidedAt: c.approvalDecidedAt ?? null,
+    approvalComment: c.approvalComment ?? null,
     dueDate: c.dueDate,
     paidAt: c.paidAt,
   }
@@ -91,6 +112,7 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
         agencyId,
         ...(query.companyId ? { companyId: query.companyId } : {}),
         ...(query.month ? { month: monthFilter(query.month) } : {}),
+        ...(query.approvalStatus ? { approvalStatus: query.approvalStatus } : {}),
       }
       const rows = await withTenant((tx) =>
         tx.serviceCharge.findMany({
@@ -125,6 +147,7 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
         agencyId,
         companyId,
         ...(query.month ? { month: monthFilter(query.month) } : {}),
+        ...(query.approvalStatus ? { approvalStatus: query.approvalStatus } : {}),
       }
       const rows = await withTenant((tx) =>
         tx.serviceCharge.findMany({
