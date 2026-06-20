@@ -2,6 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import { api, getAccessToken, setAccessToken } from '@/lib/api'
 
+/**
+ * Agency (team) role — the CANON the workspace gates on. Mirrors the backend
+ * `AgencyRole` (apps/api/src/auth/tokens.ts, enforced in can.ts). `manager` sits
+ * between owner and executor: operational access without finance/settings.
+ */
+export type AgencyRole = 'owner' | 'manager' | 'executor'
+
 export interface AuthCompany {
   id: string
   name: string | null
@@ -13,6 +20,7 @@ export interface AuthProfile {
   id: string
   email: string
   displayName: string
+  /** UI hint only — NEVER gate on this. Workspace gates on `agencyRole`. */
   role: 'owner' | 'executor' | 'client'
   language?: string
   theme?: string
@@ -23,13 +31,20 @@ export interface AuthState {
   profile: AuthProfile
   activeCompanyId?: string | null
   companies: AuthCompany[]
+  // Agency/team axis (from /auth/me) — canon for workspace role gating.
+  activeAgencyId?: string | null
+  agencyRole?: AgencyRole | null
+  agencyMemberships?: { agencyId: string; role: AgencyRole }[]
 }
 
 interface AuthContextValue {
   user: AuthState | null
   loading: boolean
-  /** Convenience role flags (workspace = internal team: owner | executor). */
+  /** Active agency (team) role — canon for gating. Null if not agency staff. */
+  role: AgencyRole | null
+  /** Convenience role flags derived from `agencyRole` (owner | manager | executor). */
   isOwner: boolean
+  isManager: boolean
   isExecutor: boolean
   isInternal: boolean
   login: (email: string, password: string) => Promise<void>
@@ -90,14 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const role = user?.profile.role
+  // Gate on the AGENCY role (canon), not profile.role (a UI hint). isInternal = is agency staff.
+  const role = user?.agencyRole ?? null
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
+      role,
       isOwner: role === 'owner',
+      isManager: role === 'manager',
       isExecutor: role === 'executor',
-      isInternal: role === 'owner' || role === 'executor',
+      isInternal: role != null,
       login,
       logout,
       reload,

@@ -39,6 +39,12 @@ export default function App() {
         <Route path="/team" element={<TeamPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
         <Route path="/settings" element={<SettingsPage />} />
+        {/* design-v2 PORTAL_NAV destinations — Placeholder until their feature wave */}
+        <Route path="/inbox" element={<Placeholder title="Інбокс" />} />
+        <Route path="/projects" element={<Placeholder title="Проєкти" />} />
+        <Route path="/company" element={<Placeholder title="Моя компанія" />} />
+        <Route path="/secrets" element={<Placeholder title="Секрети" />} />
+        <Route path="/settings/integrations" element={<Placeholder title="Інтеграції" />} />
         <Route path="/" element={<Navigate to="/orders" replace />} />
       </Route>
 

@@ -16,10 +16,10 @@ import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { Placeholder } from '@/routes/Placeholder'
 import { useAuth } from '@/contexts/AuthContext'
 
-/** Home is role-aware: owner → overview dashboard, executor → personal task board. */
+/** Home is role-aware: owner/manager → operational overview, executor → personal task board. */
 function Home() {
-  const { isOwner } = useAuth()
-  return isOwner ? <OwnerDashboard /> : <DashboardPage />
+  const { isOwner, isManager } = useAuth()
+  return isOwner || isManager ? <OwnerDashboard /> : <DashboardPage />
 }
 
 export default function App() {
@@ -46,7 +46,7 @@ export default function App() {
         <Route
           path="/orders"
           element={
-            <RoleRoute allow={['owner']}>
+            <RoleRoute allow={['owner', 'manager']}>
               <OrdersPage />
             </RoleRoute>
           }
@@ -54,7 +54,7 @@ export default function App() {
         <Route
           path="/clients"
           element={
-            <RoleRoute allow={['owner']}>
+            <RoleRoute allow={['owner', 'manager']}>
               <ClientsPage />
             </RoleRoute>
           }
@@ -62,7 +62,7 @@ export default function App() {
         <Route
           path="/clients/:id"
           element={
-            <RoleRoute allow={['owner']}>
+            <RoleRoute allow={['owner', 'manager']}>
               <ClientDetailPage />
             </RoleRoute>
           }
@@ -70,7 +70,7 @@ export default function App() {
         <Route
           path="/team"
           element={
-            <RoleRoute allow={['owner']}>
+            <RoleRoute allow={['owner', 'manager']}>
               <TeamPage />
             </RoleRoute>
           }

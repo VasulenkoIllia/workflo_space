@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Button } from '@workflo/ui'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, type AgencyRole } from '@/contexts/AuthContext'
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -27,7 +27,7 @@ function Centered({ children }: { children: ReactNode }) {
 
 /**
  * Gate for the whole workspace: must be authenticated AND part of the internal
- * team (owner | executor). Clients belong in the portal, not the workspace.
+ * team (agency role owner | manager | executor). Clients belong in the portal.
  */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading, isInternal, logout } = useAuth()
@@ -56,20 +56,12 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-/** Restrict a route to specific roles (e.g. owner-only). Others bounce to home. */
-export function RoleRoute({
-  allow,
-  children,
-}: {
-  allow: Array<'owner' | 'executor'>
-  children: ReactNode
-}) {
-  const { user, loading } = useAuth()
+/** Restrict a route to specific agency roles (e.g. owner+manager). Others bounce to home. */
+export function RoleRoute({ allow, children }: { allow: AgencyRole[]; children: ReactNode }) {
+  const { role, loading } = useAuth()
   // Defensive: usually nested under <ProtectedRoute> (which holds until resolved),
   // but guard `loading` so a standalone use never flashes a wrong redirect.
   if (loading) return <Centered>// завантаження…</Centered>
-  const role = user?.profile.role
-  if (role !== 'owner' && role !== 'executor') return <Navigate to="/" replace />
-  if (!allow.includes(role)) return <Navigate to="/" replace />
+  if (!role || !allow.includes(role)) return <Navigate to="/" replace />
   return <>{children}</>
 }

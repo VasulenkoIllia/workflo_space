@@ -1,6 +1,7 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { loadAgencyMemberships } from '../../auth/memberships.js'
 
 /**
  * GET /auth/me — return the current authenticated user.
@@ -42,6 +43,17 @@ const meRoute: FastifyPluginAsync = (fastify) => {
     const stillMember = memberRows.some((m) => m.companyId === tokenActive)
     const activeCompanyId = stillMember ? tokenActive : (memberRows[0]?.companyId ?? null)
 
+    // Agency (team) tenant + role (ADR-004 / MOD-4). `agencyRole` (owner|manager|executor)
+    // is the CANON the workspace gates on — `profile.role` is only a UI hint (modules/01-auth.md).
+    // activeAgencyId honours the token's choice if still a current membership, else first.
+    const agencyMemberships = await loadAgencyMemberships(prisma, profileId)
+    const tokenActiveAgency = request.user.activeAgencyId
+    const stillAgencyMember = agencyMemberships.some((m) => m.agencyId === tokenActiveAgency)
+    const activeAgencyId = stillAgencyMember
+      ? tokenActiveAgency
+      : (agencyMemberships[0]?.agencyId ?? null)
+    const agencyRole = agencyMemberships.find((m) => m.agencyId === activeAgencyId)?.role ?? null
+
     return reply.status(200).send({
       success: true,
       data: {
@@ -61,6 +73,10 @@ const meRoute: FastifyPluginAsync = (fastify) => {
           slug: m.company?.slug ?? null,
           role: m.role,
         })),
+        // Agency/team axis — canon for workspace role gating.
+        activeAgencyId,
+        agencyRole,
+        agencyMemberships,
       },
     })
   })

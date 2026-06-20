@@ -2,22 +2,21 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, Sidebar, Topbar, Icon } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
-import { navForRole, activeNavId } from '@/config/nav'
+import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
 
 const ROLE_LABEL: Record<string, string> = {
   owner: 'власник',
+  manager: 'менеджер',
   executor: 'виконавець',
-  client: 'клієнт',
 }
 
 export function AppLayout() {
-  const { user, isOwner, logout } = useAuth()
+  const { user, role, isOwner, logout } = useAuth()
   const { locale, setLocale } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const role = user?.profile.role
-  const nav = navForRole(role === 'owner' ? 'owner' : 'executor')
+  const nav = navVisibleForRole(WORKSPACE_NAV, role)
   const name = user?.profile.displayName ?? '—'
   const initials = name.trim().slice(0, 2).toUpperCase()
 

@@ -4,11 +4,13 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const profileFindUnique = vi.fn()
 const companyMemberFindMany = vi.fn()
+const agencyMemberFindMany = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
     profile: { findUnique: profileFindUnique },
     companyMember: { findMany: companyMemberFindMany },
+    agencyMember: { findMany: agencyMemberFindMany },
   },
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
@@ -43,6 +45,7 @@ describe('GET /auth/me', () => {
     companyMemberFindMany.mockResolvedValue([
       { companyId: 'company-1', role: 'owner', company: { name: 'Acme', slug: 'acme' } },
     ])
+    agencyMemberFindMany.mockResolvedValue([]) // a client has no agency membership
 
     const app = buildApp()
     await app.ready()
@@ -59,6 +62,41 @@ describe('GET /auth/me', () => {
     expect(body.data.profile.displayName).toBe('Test User')
     expect(body.data.activeCompanyId).toBe('company-1')
     expect(body.data.companies).toHaveLength(1)
+    // agency axis: a client is not agency staff → no role
+    expect(body.data.agencyRole).toBeNull()
+    expect(body.data.activeAgencyId).toBeNull()
+    expect(body.data.agencyMemberships).toHaveLength(0)
+    await app.close()
+  })
+
+  it('returns the agency role (owner|manager|executor) for a team member', async () => {
+    profileFindUnique.mockResolvedValue({
+      id: 'profile-1',
+      email: 'staff@e.com',
+      name: 'Manager',
+      role: 'executor', // profile.role is only a UI hint
+      language: 'uk',
+      theme: 'system',
+      isActive: true,
+      avatarUrl: null,
+    })
+    companyMemberFindMany.mockResolvedValue([])
+    agencyMemberFindMany.mockResolvedValue([{ agencyId: 'agency-1', role: 'manager' }])
+
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS) // no activeAgencyId in token → falls back to first membership
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.agencyRole).toBe('manager') // canon, not profile.role
+    expect(body.data.activeAgencyId).toBe('agency-1')
+    expect(body.data.agencyMemberships).toEqual([{ agencyId: 'agency-1', role: 'manager' }])
     await app.close()
   })
 
@@ -76,6 +114,7 @@ describe('GET /auth/me', () => {
     companyMemberFindMany.mockResolvedValue([
       { companyId: 'company-9', role: 'owner', company: { name: 'X', slug: 'x' } },
     ])
+    agencyMemberFindMany.mockResolvedValue([])
     const app = buildApp()
     await app.ready()
     const token = app.jwt.sign(CLAIMS) // activeCompanyId=company-1 (no longer a member)

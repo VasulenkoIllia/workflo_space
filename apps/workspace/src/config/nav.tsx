@@ -1,27 +1,68 @@
 import { Icon, type SidebarNavEntry } from '@workflo/ui'
+import type { AgencyRole } from '@/contexts/AuthContext'
 
-type WorkspaceRole = 'owner' | 'executor'
+/** Role char used in nav `roles` tags (design-v2 ia-roles): o=owner, m=manager, x=executor. */
+const ROLE_CHAR: Record<AgencyRole, string> = { owner: 'o', manager: 'm', executor: 'x' }
 
-/** Owner sidebar — full agency cockpit (orders, clients, team). */
-export const OWNER_NAV: SidebarNavEntry[] = [
-  { id: 'dashboard', label: 'Огляд', icon: <Icon name="home" />, href: '/' },
-  { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders' },
-  { id: 'clients', label: 'Клієнти', icon: <Icon name="building" />, href: '/clients' },
-  { group: 'Команда' },
-  { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team' },
-  { id: 'settings', label: 'Налаштування', icon: <Icon name="settings" />, href: '/settings' },
+/** A workspace nav entry may carry an optional `roles` tag (a subset of 'omx'). */
+type WsNavEntry = SidebarNavEntry & { roles?: string }
+
+/**
+ * Single role-tagged workspace nav (design-v2 WORKSPACE_NAV shape — see
+ * `DESIGN_SYSTEM.md §5.13.1` + `FRONTEND_STANDARDS` «Рольова навігація»). Items and group
+ * headers carry a `roles` tag (o/m/x); `navVisibleForRole` filters by the active AgencyRole
+ * and prunes empty group headers. Only screens that exist today are listed — the full design
+ * nav (board, projects, leads, billing hub, …) lands with its Wave-1 screens.
+ *
+ * NOTE: design tags `orders`/`clients` as part of the operational set. `orders` is 'omx' in
+ * the design (executor sees their own); kept 'om' here until the executor-scoped orders screen
+ * exists (executor currently uses the personal dashboard).
+ */
+export const WORKSPACE_NAV: WsNavEntry[] = [
+  { id: 'dashboard', label: 'Дашборд', icon: <Icon name="home" />, href: '/', roles: 'omx' },
+
+  { group: 'Робота', roles: 'om' },
+  { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },
+
+  { group: 'Клієнти', roles: 'om' },
+  {
+    id: 'clients',
+    label: 'Клієнти',
+    icon: <Icon name="building" />,
+    href: '/clients',
+    roles: 'om',
+  },
+
+  { group: 'Команда', roles: 'om' },
+  { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'om' },
+
+  { group: 'Акаунт', roles: 'omx' },
+  { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile', roles: 'omx' },
+  {
+    id: 'settings',
+    label: 'Налаштування',
+    icon: <Icon name="settings" />,
+    href: '/settings',
+    roles: 'omx',
+  },
 ]
 
-/** Executor sidebar — personal task board + profile. */
-export const EXECUTOR_NAV: SidebarNavEntry[] = [
-  { id: 'dashboard', label: 'Мої задачі', icon: <Icon name="kanban" />, href: '/' },
-  { group: 'Акаунт' },
-  { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile' },
-  { id: 'settings', label: 'Налаштування', icon: <Icon name="settings" />, href: '/settings' },
-]
-
-export function navForRole(role: WorkspaceRole | undefined): SidebarNavEntry[] {
-  return role === 'owner' ? OWNER_NAV : EXECUTOR_NAV
+/**
+ * Filter the nav for an agency role (ports design-v2 `navVisibleForRole`): keep entries with
+ * no `roles` tag or whose tag includes the role char, then drop group headers left with no
+ * following item. Filtered app-side so the shared `@workflo/ui` Sidebar stays presentational.
+ */
+export function navVisibleForRole(
+  items: WsNavEntry[],
+  role: AgencyRole | null | undefined
+): SidebarNavEntry[] {
+  const rc = role ? ROLE_CHAR[role] : 'o'
+  const kept = items.filter((it) => !it.roles || it.roles.includes(rc))
+  return kept.filter((it, i) => {
+    if (!('group' in it)) return true
+    const nx = kept[i + 1]
+    return !!nx && !('group' in nx)
+  })
 }
 
 /** Resolve the active nav id from the current pathname (matches first path segment). */
