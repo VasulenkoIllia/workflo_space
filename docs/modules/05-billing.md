@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **service-catalog** — бібліотека білабельних послуг (категорії, kind work/resource/fixed, cost/bill, recurring, makesTask): [`workspace-svccatalog.jsx`](../../design-v2/project/workspace-svccatalog.jsx) + data. 🟢 **бекенд готовий** (звірено): `services/catalog.ts` повний CRUD + `Service`/`ServiceCharge` моделі. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Модуль відповідає за повний фінансовий цикл платформи:

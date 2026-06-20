@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **portal-secrets** — клієнтський перегляд/шеринг доступів (3 екрани: список ресурсів, reveal з 2FA, журнал доступу): [`portal-secrets.jsx`](../../design-v2/project/portal-secrets.jsx). 🔴 **бекенд greenfield** (звірено): моделі/route сейфа ще нема (цей модуль — S5+). W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Сейф для зберігання чутливих даних клієнта (CRM логіни, API keys, FTP-доступи, банкінг credentials etc) **прив'язаний до картки компанії**. Шифрування envelope: AES-256-GCM з master KEK у env + per-record DEK у БД.

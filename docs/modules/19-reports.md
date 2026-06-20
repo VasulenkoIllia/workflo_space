@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **reports-v1** + cash-flow forecast — revenue/margin by-client/project, debtors, utilization, new-clients: [`workspace-reports-v1.jsx`](../../design-v2/project/workspace-reports-v1.jsx) + data. 🟡 **частково** (звірено): P&L `finance/reports.ts` є ✅; решта звітів — нема aggregation API. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Звіти для owner агенції. **3 канонічних звіти** у MVP-обсязі:

@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **margin** (breakdown by client/project/executor + FX-снапшот) та **fin-projects** (фінмодель 2.0): [`workspace-margin.jsx`](../../design-v2/project/workspace-margin.jsx), [`workspace-finprojects.jsx`](../../design-v2/project/workspace-finprojects.jsx) + data. 🟢 **core бекенд є** (звірено): `finance/margin.ts` (`computeProjectMargin/ClientMargin`) + `billing/projects.ts` CRUD. Gap: TeamCompensation/ContractTemplate бекенди. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Модуль обліку **витрат** і розрахунку **прибутковості** (P&L — Profit & Loss).

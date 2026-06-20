@@ -8,6 +8,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **case-editor** — CMS кейсів (секції Контекст/Задача/Рішення/Результат, before/after метрики, SEO-чеклист): [`workspace-case-editor.jsx`](../../design-v2/project/workspace-case-editor.jsx). 🔴 **бекенд greenfield** (звірено): моделі/route кейсів нема (`BlogPost` є — частковий overlap). W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## 0. Огляд
 
 Блог на лендингу (`workflo.space/blog`) для SEO + демонстрації експертизи. Статті пишуться/AI-генеруються через workspace, рендеряться на лендингу через **Next.js ISR**. Модель **білінгва per-row**: один пост містить і `uk`, і `en` контент.

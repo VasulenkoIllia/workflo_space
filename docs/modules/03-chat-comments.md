@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **order-chat** — 9 екранів чату замовлення з медіа (зображення/аудіо/відео/файли, lightbox, pinned-повідомлення): [`order-chat.jsx`](../../design-v2/project/order-chat.jsx). 🟢 **core бекенд є** (звірено): `orders/comments.ts` (GET/POST + read) + `orders/commentsStream.ts` (SSE) + `OrderComment` модель. Медіа/lightbox — нове. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Модуль коментарів дозволяє спілкуватися між командою та клієнтом у контексті конкретного замовлення. Коментарі прив'язані до `orderId`. Реальний час забезпечується через **SSE (Server-Sent Events)** з використанням PostgreSQL `LISTEN/NOTIFY`.

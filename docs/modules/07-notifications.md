@@ -9,6 +9,8 @@
 
 ---
 
+> 🔄 **design-v2 (2026-06-20):** доставлено **notification center** — 10 екранів (стрічка нотифікацій, loyalty-tiers, announcements, digest config, wait-thresholds): [`workspace-notify.jsx`](../../design-v2/project/workspace-notify.jsx) + data. 🟡 **частково** (звірено): `Notification` модель + write-path є, але **read-feed/mark-read API нема**; announcements — greenfield. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
 ## Огляд
 
 Централізований сервіс нотифікацій з **матричною архітектурою**: 7 категорій × 6 каналів × 27 events. Все надсилається через єдину функцію `notify()` з `@workflo/notifications`. MVP підтримує **email + telegram + in_app**; sms / push / webhook зареєстровані в `CHANNELS` registry але `enabled: false` (готові до S7+).
