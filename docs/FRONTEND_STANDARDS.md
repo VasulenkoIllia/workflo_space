@@ -329,6 +329,24 @@ export function ProtectedRoute() {
 }
 ```
 
+### Рольова навігація та route-gating (canon)
+
+Канон ролей — `packages/types` `tokens.ts` + `apps/api/src/auth/can.ts`: **команда агенції** `owner | manager | executor` (`AgencyRole`; `manager` має enforced `MANAGER_BLOCKED`-набір), **членство в компанії** `owner | member` + 5 snake_case permission-флагів. `AccessClaims.role` (`owner|executor|client`) — **лише UI-підказка**; staff-vs-client = `isInternalTeam()`. Старий `superadmin/lead` — не використовувати.
+
+**Workspace nav** — один `WORKSPACE_NAV` з per-item/per-group тегом `roles: 'omx'` (o=owner, m=manager, x=executor), фільтрований `navVisibleForRole(items, role)`: лишаємо item якщо `!roles || roles.includes(roleChar)`, потім прибираємо порожні group-заголовки. **Фільтруємо app-side** (перед передачею в `<Sidebar>`), щоб `@workflo/ui` лишався presentational. Portal nav — без рольового фільтра (там company-switcher).
+
+**Route-gating дзеркалить nav** (прихований пункт == заблокований route): `RoleRoute allow={[...]}` виводиться з тих самих `roles`-тегів — де дизайн дає `m`, додаємо `manager` до allow-list.
+
+```typescript
+function RoleRoute({ allow }: { allow: AgencyRole[] }) {
+  const { role } = useAuth() // role: AgencyRole
+  if (!allow.includes(role)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+```
+
+**Хаби** — кілька екранів під одним nav-пунктом через під-таб-бар (`.wfp-subtabs`); канонічний склад хабів — `DESIGN_SYSTEM.md §5.13.1`.
+
 ### Auto-refresh access token
 
 Access token живе 15 хвилин. Замість перехоплення 401 — можна додатково refresh за 1 хв до expire:

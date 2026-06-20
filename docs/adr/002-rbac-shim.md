@@ -87,6 +87,10 @@ export type Action =
   | 'credentials.update'
   | 'admin.access'
 
+// ⚠️ SUPERSEDED — застарілий блок (до Amendment 1.06.2026, нижче). Канон — packages/types tokens.ts:
+//   • AccessClaims.role = 'owner' | 'executor' | 'client' — ЛИШЕ UI-підказка (staff-vs-client = isInternalTeam()).
+//   • Команда агенції (AgencyRole): owner | manager | executor (manager має MANAGER_BLOCKED у can.ts).
+//   • Членство в компанії (Membership): owner | member (БЕЗ accountant/viewer) + 5 snake_case CompanyPermissions.
 export interface AuthContext {
   userId: string
   email: string

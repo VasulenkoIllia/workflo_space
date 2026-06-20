@@ -6,3 +6,6 @@
 @import './product.css';
 @import './polish.css';
 @import './components.css';
+@import './ia-roles.css';
+/* responsive overrides — MUST load last so @container rules win over component CSS */
+@import './product-responsive.css';

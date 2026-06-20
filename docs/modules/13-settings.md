@@ -178,12 +178,13 @@ multipart/form-data, max 5MB → StorageAdapter → company.logoUrl
 ### CompanyMemberPermissions
 
 ```typescript
+// Канон — packages/types tokens.ts (snake_case, рівно 5 ключів). Старі camelCase-набори — видалено.
 interface CompanyMemberPermissions {
-  canCreateOrders: boolean // default: true
-  canViewBilling: boolean // default: false
-  canViewDocuments: boolean // default: true
-  canViewAllOrders: boolean // default: false (тільки свої)
-  canInviteMembers: boolean // default: false
+  can_create_tasks: boolean // default: true
+  can_view_all_tasks: boolean // default: false (інакше — лише свої)
+  can_view_billing: boolean // default: false
+  can_approve_estimates: boolean // default: false
+  can_invite_members: boolean // default: false
 }
 ```
 

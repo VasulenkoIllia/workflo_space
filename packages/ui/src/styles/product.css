@@ -193,6 +193,25 @@
 .wfp-sb-user-name { font-size: 13px; font-weight: 500; }
 .wfp-sb-user-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--wf-fg-muted); }
 
+/* Portal service-project compact cards */
+.wfsp-card {
+  display: flex; flex-direction: column; gap: 7px;
+  text-align: left; cursor: pointer; font: inherit;
+  background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 12px;
+  padding: 14px 15px; transition: border-color .12s ease, box-shadow .12s ease, transform .08s ease;
+}
+.wfsp-card:hover { border-color: color-mix(in oklab, var(--wf-accent) 40%, var(--wf-border)); box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--wf-fg) 28%, transparent); transform: translateY(-1px); }
+.wfsp-card-top { display: flex; align-items: center; justify-content: space-between; }
+.wfsp-card-name { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.wfsp-card-code { font-size: 10.5px; color: var(--wf-fg-subtle); }
+.wfsp-card-price { display: flex; align-items: baseline; gap: 7px; padding-top: 9px; margin-top: 2px; border-top: 1px solid var(--wf-border); }
+.wfsp-card-price-v { font-family: 'JetBrains Mono', monospace; font-size: 21px; font-weight: 700; }
+.wfsp-card-price-s { font-size: 11px; color: var(--wf-fg-muted); }
+.wfsp-card-foot { margin-top: 4px; }
+.wfsp-kv { display: flex; flex-direction: column; gap: 2px; padding: 7px 0; border-bottom: 1px solid var(--wf-border); }
+.wfsp-kv-k { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-fg-muted); }
+.wfsp-kv-v { font-size: 13px; font-weight: 500; }
+
 /* Main column */
 .wfp-main {
   display: flex;
@@ -2949,6 +2968,13 @@
 .wfp-audit-detail { color: var(--wf-fg-secondary); }
 .wfp-audit-ip { color: var(--wf-fg-subtle); font-size: 10.5px; text-align: right; }
 
+/* audit before→after change column (20-В) */
+.wfp-audit-row--v2 { grid-template-columns: 140px 100px 84px 140px 1fr 130px; }
+.wfp-audit-change { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.wfp-audit-field { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 7%, transparent); padding: 1px 6px; border-radius: 4px; }
+.wfp-audit-from { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--wf-destructive) 60%, transparent); }
+.wfp-audit-to { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg); font-weight: 600; background: color-mix(in oklab, var(--wf-accent) 14%, transparent); padding: 1px 6px; border-radius: 4px; }
+
 /* ─── Admin: Departments + Roles + Permissions ─── */
 .wfp-dept-card {
   border: 1px solid var(--wf-border);
@@ -3043,6 +3069,17 @@
 }
 .wfp-dept-member-role--lead { color: var(--wf-warning); background: color-mix(in oklab, var(--wf-warning) 12%, transparent); }
 .wfp-dept-member-role--superadmin { color: var(--wf-accent); background: color-mix(in oklab, var(--wf-accent) 12%, transparent); }
+.wfp-dept-member-role--manager { color: var(--wf-warning); background: color-mix(in oklab, var(--wf-warning) 12%, transparent); }
+.wfp-dept-member-role--owner { color: var(--wf-accent); background: color-mix(in oklab, var(--wf-accent) 12%, transparent); }
+
+/* department lead + reporting line (subordination) */
+.wfp-dept-lead { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11.5px; color: var(--wf-fg-secondary); }
+.wfp-dept-lead strong { color: var(--wf-fg); font-weight: 600; }
+.wfp-dept-lead-none { color: var(--wf-fg-muted); }
+.wfp-dept-lead-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-accent); background: color-mix(in oklab, var(--wf-accent) 14%, transparent); padding: 1px 5px; border-radius: 4px; }
+.wfp-team-row-title { margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 400; color: var(--wf-fg-muted); }
+.wfp-reports-to { color: var(--wf-fg-muted); }
+.wfp-reports-to--top { color: var(--wf-accent); }
 
 /* Permissions matrix table */
 .wfp-perm-table {
@@ -3065,6 +3102,8 @@
 .wfp-perm-table th:first-child { text-align: left; }
 .wfp-perm-table th--superadmin { color: var(--wf-accent); }
 .wfp-perm-table th--lead       { color: var(--wf-warning); }
+.wfp-perm-table th--owner      { color: var(--wf-accent); }
+.wfp-perm-table th--manager    { color: var(--wf-warning); }
 .wfp-perm-table th--executor   { color: var(--wf-fg-secondary); }
 .wfp-perm-table .wfp-perm-area {
   font-family: 'JetBrains Mono', monospace;
@@ -3160,6 +3199,8 @@
 }
 .wfp-role-pill--superadmin { background: color-mix(in oklab, var(--wf-accent) 14%, transparent); color: var(--wf-fg); border: 1px solid color-mix(in oklab, var(--wf-accent) 30%, transparent); }
 .wfp-role-pill--lead       { background: color-mix(in oklab, var(--wf-warning) 14%, transparent); color: var(--wf-warning); border: 1px solid color-mix(in oklab, var(--wf-warning) 30%, transparent); }
+.wfp-role-pill--owner      { background: color-mix(in oklab, var(--wf-accent) 14%, transparent); color: var(--wf-fg); border: 1px solid color-mix(in oklab, var(--wf-accent) 30%, transparent); }
+.wfp-role-pill--manager    { background: color-mix(in oklab, var(--wf-warning) 14%, transparent); color: var(--wf-warning); border: 1px solid color-mix(in oklab, var(--wf-warning) 30%, transparent); }
 .wfp-role-pill--executor   { background: color-mix(in oklab, var(--wf-fg) 5%, transparent); color: var(--wf-fg-secondary); border: 1px solid var(--wf-border); }
 .wfp-role-pill--viewer     { color: var(--wf-fg-muted); border: 1px dashed var(--wf-border-strong); }
 

@@ -92,7 +92,7 @@ pnpm --filter @workflo/ui build-storybook
 **Фаза A+B ✅ — ядро готове** (кожен компонент = wrapper + Storybook-story + тест; **30 тестів**):
 
 - **Примітиви:** `Button` · `Input` · `Badge` · `StatusDot` · `Card` · `EmptyState` · `Skeleton` · `Avatar` (+`AvatarStack`) · `Modal` · `Tabs`.
-- **Shell:** `Icon` · `Sidebar` (config-driven) · `Topbar` · `AppShell` (термінал-вікно, aesA/B) · `AuthShell` (+`AuthHeader`/`AuthStatus`).
+- **Shell:** `Icon` · `Sidebar` (config-driven; nav-пункти можуть нести `roles`-тег `omx` — фільтрація **app-side** через `navVisibleForRole`, `@workflo/ui` лишається presentational; див. `FRONTEND_STANDARDS` «Рольова навігація») · `Topbar` · `AppShell` (термінал-вікно, aesA/B) · `AuthShell` (+`AuthHeader`/`AuthStatus`).
 - **Foundation:** токени (light/dark + 6 accent-пресетів) · `ThemeProvider` · `useTheme`/`useMediaQuery`/`useDebounce` · Storybook (a11y, autodocs, Foundations, тулбар theme/accent/aesthetic).
 
 **Фаза C 🔄 — екрани Portal (reuse).** C1 ✅: wiring (`apps/portal/src/lib/api.ts` Bearer+401-refresh, `lib/sse.ts` fetch-SSE, `queryClient`, `AuthContext`, `ProtectedRoute`, router, i18n) + робочий `/login`. Далі: register/forgot/reset → `/orders` → `/orders/:id` (чат-SSE + файли + activity).

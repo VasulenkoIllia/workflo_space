@@ -60,7 +60,7 @@
 2. Перевіряємо `bcrypt.compare(password, passwordHash)`.
 3. Якщо `is_active = false` → помилка 403 "Акаунт деактивовано".
 4. Створюємо запис у `refresh_tokens` (UUID токен, `expiresAt = now + 30 днів`).
-5. Підписуємо JWT access token — канонічні claims `{ sub, activeCompanyId?, memberships[], activeAgencyId?, agencyMemberships[], tokenVersion }` (НЕ `{userId, role, companyId}`); `exp = now + 15 хвилин`. (2FA: якщо увімкнено — спершу `require2fa`-крок, див. Аудит-фіналізація C.)
+5. Підписуємо JWT access token — канонічні claims (`tokens.ts` `AccessClaims`) `{ sub, role, email, activeCompanyId?, memberships[], activeAgencyId?, agencyMemberships[] }`; `exp = now + 15 хвилин`. `role` (`owner|executor|client`) — **лише UI-підказка**, авторизація derive з `memberships`/`agencyMemberships` + `isInternalTeam()`, НЕ з `role`/`companyId`. (2FA: якщо увімкнено — спершу `require2fa`-крок, див. Аудит-фіналізація C.)
 6. Повертаємо `{ accessToken }` у body + `Set-Cookie: refreshToken=...`.
 
 ### Refresh Token Rotation (`POST /auth/refresh`)
