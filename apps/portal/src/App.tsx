@@ -13,6 +13,7 @@ import { TeamPage } from '@/routes/team/TeamPage'
 import { BillingPage } from '@/routes/billing/BillingPage'
 import { WalletPage } from '@/routes/wallet/WalletPage'
 import { LoyaltyPage } from '@/routes/loyalty/LoyaltyPage'
+import { ReferralsPage } from '@/routes/referrals/ReferralsPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -38,7 +39,7 @@ export default function App() {
         <Route path="/wallet" element={<WalletPage />} />
         <Route path="/documents" element={<Placeholder title="Документи" />} />
         <Route path="/loyalty" element={<LoyaltyPage />} />
-        <Route path="/referrals" element={<Placeholder title="Реферали" />} />
+        <Route path="/referrals" element={<ReferralsPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
         <Route path="/settings" element={<SettingsPage />} />

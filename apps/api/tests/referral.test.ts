@@ -5,11 +5,15 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 const referralSettingsFindUnique = vi.fn()
 const referralSettingsUpsert = vi.fn()
 const auditLogCreate = vi.fn()
+const companyFindUnique = vi.fn()
+const referralFindMany = vi.fn()
 
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   const prisma = {
     referralSettings: { findUnique: referralSettingsFindUnique, upsert: referralSettingsUpsert },
+    company: { findUnique: companyFindUnique },
+    referral: { findMany: referralFindMany },
     auditLog: { create: auditLogCreate },
   }
   return {
@@ -23,6 +27,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
 const { getReferralPercent, DEFAULT_REFERRAL_TIERS } = await import('@workflo/types')
 const { parseReferralTiers } = await import('../src/services/referral.js')
 const { buildApp } = await import('../src/app.js')
+// Real Prisma via the mocked module (re-exports actual.Prisma) — after mock vars are initialized.
+const { Prisma } = await import('@workflo/db')
 
 const EXECUTOR = {
   sub: 'exec-1',
@@ -191,6 +197,73 @@ describe('PATCH /admin/referral/settings', () => {
       payload: {},
     })
     expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('GET /portal/referral (S5-11 client overview)', () => {
+  it('client sees code + enabled + summed earnings + referred companies', async () => {
+    companyFindUnique.mockResolvedValue({
+      id: 'company-1',
+      agencyId: 'agency-1',
+      referralCode: 'ref-abc',
+    })
+    referralSettingsFindUnique.mockResolvedValue({ enabled: true, tiers: [] })
+    referralFindMany.mockResolvedValue([
+      {
+        id: 'r1',
+        totalEarned: new Prisma.Decimal('50.00'),
+        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+        referred: { name: 'Acme' },
+      },
+      {
+        id: 'r2',
+        totalEarned: new Prisma.Decimal('25.50'),
+        createdAt: new Date('2026-04-01T00:00:00.000Z'),
+        referred: { name: 'Beta' },
+      },
+    ])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/referral',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.referralCode).toBe('ref-abc')
+    expect(data.enabled).toBe(true)
+    expect(data.totalEarned).toBe('75.50')
+    expect(data.referrals).toHaveLength(2)
+    expect(data.referrals[0].name).toBe('Acme')
+    expect(data.referrals[0].totalEarned).toBe('50.00')
+    // company.findUnique is pinned to the caller's active company
+    expect(companyFindUnique.mock.calls[0][0].where.id).toBe('company-1')
+    await app.close()
+  })
+
+  it('404 when the active company is not in the tenant', async () => {
+    companyFindUnique.mockResolvedValue(null)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/referral',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('400 when the caller has no active company (e.g. internal team)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/referral',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(companyFindUnique).not.toHaveBeenCalled()
     await app.close()
   })
 })
