@@ -12,6 +12,7 @@ export * from './components/Tabs.js'
 
 // Shell
 export * from './components/Icon.js'
+export * from './components/CommandPalette.js'
 export * from './components/Sidebar.js'
 export * from './components/Topbar.js'
 export * from './components/AppShell.js'

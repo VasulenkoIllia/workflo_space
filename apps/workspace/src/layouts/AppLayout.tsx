@@ -1,5 +1,15 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AppShell, Sidebar, Topbar, Icon, useTheme, type ThemeMode } from '@workflo/ui'
+import {
+  AppShell,
+  CommandPalette,
+  Sidebar,
+  Topbar,
+  Icon,
+  useTheme,
+  type CommandItem,
+  type ThemeMode,
+} from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -28,6 +38,35 @@ export function AppLayout() {
   }
 
   const nav = navVisibleForRole(WORKSPACE_NAV, role)
+
+  // ── ⌘K command palette ──────────────────────────────────────────────────
+  const [cmdkOpen, setCmdkOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCmdkOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const commands = useMemo<CommandItem[]>(() => {
+    const items: CommandItem[] = []
+    for (const e of nav) {
+      if ('id' in e && e.href) {
+        const href = e.href
+        items.push({
+          id: e.id,
+          group: 'екрани',
+          label: typeof e.label === 'string' ? e.label : e.id,
+          icon: e.icon,
+          run: () => navigate(href),
+        })
+      }
+    }
+    return items
+  }, [nav, navigate])
   const name = user?.profile.displayName ?? '—'
   const initials = name.trim().slice(0, 2).toUpperCase()
 
@@ -81,7 +120,7 @@ export function AppLayout() {
       topbar={
         <Topbar
           avatar={initials}
-          onSearch={() => {}}
+          onSearch={() => setCmdkOpen(true)}
           onBell={() => {}}
           actions={
             <>
@@ -114,6 +153,12 @@ export function AppLayout() {
       }
     >
       <Outlet />
+      <CommandPalette
+        open={cmdkOpen}
+        onClose={() => setCmdkOpen(false)}
+        commands={commands}
+        placeholder="Перейти до екрана…"
+      />
     </AppShell>
   )
 }
