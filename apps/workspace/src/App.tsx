@@ -15,6 +15,10 @@ import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
 import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { BillingPage } from '@/routes/billing/BillingPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
+import { FinancePage } from '@/routes/finance/FinancePage'
+import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
+import { ServicesPage } from '@/routes/services/ServicesPage'
+import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
 import { Placeholder } from '@/routes/Placeholder'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -91,6 +95,38 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <ProjectsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <RoleRoute allow={['owner']}>
+              <FinancePage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/payouts"
+          element={
+            <RoleRoute allow={['owner']}>
+              <PayoutsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/services"
+          element={
+            <RoleRoute allow={['owner']}>
+              <ServicesPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/admin-wallet"
+          element={
+            <RoleRoute allow={['owner']}>
+              <AdminWalletPage />
             </RoleRoute>
           }
         />

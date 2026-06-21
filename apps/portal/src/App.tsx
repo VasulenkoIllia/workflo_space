@@ -11,6 +11,8 @@ import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
 import { SettingsPage } from '@/routes/settings/SettingsPage'
 import { TeamPage } from '@/routes/team/TeamPage'
 import { BillingPage } from '@/routes/billing/BillingPage'
+import { WalletPage } from '@/routes/wallet/WalletPage'
+import { LoyaltyPage } from '@/routes/loyalty/LoyaltyPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -33,9 +35,9 @@ export default function App() {
         <Route path="/orders/new" element={<Placeholder title="Нове замовлення" />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/billing" element={<BillingPage />} />
-        <Route path="/wallet" element={<Placeholder title="Гаманець" />} />
+        <Route path="/wallet" element={<WalletPage />} />
         <Route path="/documents" element={<Placeholder title="Документи" />} />
-        <Route path="/loyalty" element={<Placeholder title="Лояльність" />} />
+        <Route path="/loyalty" element={<LoyaltyPage />} />
         <Route path="/referrals" element={<Placeholder title="Реферали" />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />

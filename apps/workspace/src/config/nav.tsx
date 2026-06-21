@@ -34,12 +34,34 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   },
 
   { group: 'Фінанси', roles: 'o' },
-  { id: 'billing', label: 'Фінанси', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },
+  { id: 'billing', label: 'Рахунки', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },
   {
     id: 'projects',
     label: 'Фін-проєкти',
     icon: <Icon name="list" />,
     href: '/projects',
+    roles: 'o',
+  },
+  {
+    id: 'finance',
+    label: 'P&L і витрати',
+    icon: <Icon name="file" />,
+    href: '/finance',
+    roles: 'o',
+  },
+  { id: 'payouts', label: 'Виплати', icon: <Icon name="users" />, href: '/payouts', roles: 'o' },
+  {
+    id: 'services',
+    label: 'Каталог послуг',
+    icon: <Icon name="star" />,
+    href: '/services',
+    roles: 'o',
+  },
+  {
+    id: 'admin-wallet',
+    label: 'Бонусні гаманці',
+    icon: <Icon name="coins" />,
+    href: '/admin-wallet',
     roles: 'o',
   },
 
