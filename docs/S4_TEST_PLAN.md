@@ -82,12 +82,14 @@ SPA звертається до API **cross-origin** за абсолютним `
 ```bash
 # на сервері, у каталозі /var/www/srv/workflo/staging:
 export TAG=$(cat .last_deploy)
+export API_TAG=$TAG LANDING_TAG=$TAG PORTAL_TAG=$TAG WORKSPACE_TAG=$TAG BOT_TAG=$TAG
 docker compose --project-name workflo-staging --env-file .env -f docker-compose.staging.yml \
-  run --rm -e API_TAG=$TAG api pnpm --filter @workflo/db seed
+  run --rm api pnpm --filter @workflo/db seed
 ```
 
-> ⚠️ `API_TAG=$(cat .last_deploy)` обовʼязково — інакше compose візьме плейсхолдер `sha-initial`
-> (образу нема в GHCR → `not found`). `-e SEED_OWNER_PASSWORD='…'` — опційно, свій пароль власника.
+> ⚠️ Теги треба **`export`-нути в shell** (compose інтерполює `${API_TAG}` у полі `image:` з
+> shell-env/.env на парсингу). НЕ через `-e API_TAG=…` — то env усередині контейнера, не compose-змінна,
+> тому образ лишиться `sha-initial` (`not found`). Свій пароль власника — опційно `-e SEED_OWNER_PASSWORD='…'`.
 
 Дефолтні акаунти: `owner@workflo.space / Admin123!`, `executor@workflo.space / Exec123!`, `client@example.com / Client123!`.
 
