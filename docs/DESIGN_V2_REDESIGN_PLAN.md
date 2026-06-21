@@ -29,10 +29,11 @@ Net-new React-компоненти над уже-портованим CSS:
 
 - [x] **F1 Cmd-K палітра** ✅ (`a07eb12`) — `packages/ui/CommandPalette` + ⌘K у обох AppLayout +
       реєстр з nav + keyboard-nav. Бонус: theme-toggle у portal-топбар.
-- [ ] **F2 Sidebar footer role-menu** (workspace) — user-card `.wfp-sb-user--menu` → меню owner/manager/
-      executor (+описи) + «Дивитись як клієнт». Зараз — голий logout-кнопка.
-- [ ] **F3 View-as banner** — sticky warning-банер над топбаром (read-only прев'ю ролі) + `AppShell`
-      props `viewAs/onExitViewAs`. CSS `.wfp-viewas*` готовий.
+- [x] **F2 Sidebar footer user-menu** (workspace) ✅ — `components/SidebarUserMenu` (`.wfp-sb-user--menu` + `.wfp-sb-rolemenu` попап зі scrim): Профіль / Налаштування(owner) / Вийти. БЕЗ role-switch
+      (hard RBAC server-side). Заміна голого logout-кнопки.
+- [~] **F3 View-as banner** — ⏸️ **ВІДКЛАДЕНО**: погано лягає на hard-RBAC (роль із JWT, не клієнтський
+  override; справжня імперсонація = SaaS SA-1, не зараз). Косметичний прев'ю-режим низькоцінний для
+  тесту + плутає (роути все одно enforced server-side). Повернутись із SA-1/SaaS.
 - [ ] **F4 Bell dropdown** — ⚠️ нотифікації backend-blocked → відкласти або порожній стан.
 - [ ] **F5 Company switcher (portal)** — footer `.wfp-sb-company` → popover компаній. (1 компанія в тесті → low.)
 - [ ] **F6 Mobile drawer** — `sbOpen`+scrim+burger у `AppShell`/`Topbar` (responsive).

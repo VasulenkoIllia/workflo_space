@@ -10,6 +10,7 @@ import {
   type CommandItem,
   type ThemeMode,
 } from '@workflo/ui'
+import { SidebarUserMenu } from '@/components/SidebarUserMenu'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -71,34 +72,32 @@ export function AppLayout() {
   const initials = name.trim().slice(0, 2).toUpperCase()
 
   const footer = (
-    <div className="wfp-sb-foot">
-      <button
-        type="button"
-        className="wfp-sb-company"
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          background: 'none',
-          border: 0,
-          cursor: 'pointer',
-        }}
-        onClick={() => void logout()}
-        title="Вийти"
-      >
-        <div className="wfp-sb-company-avatar">{initials.slice(0, 1)}</div>
-        <div className="wfp-sb-company-meta">
-          <div className="wfp-sb-company-name">{name}</div>
-          <div className="wfp-sb-company-role">
-            <span>{ROLE_LABEL[role ?? ''] ?? role}</span>
-            <span>·</span>
-            <span className="wfp-sb-company-role-tier">вийти</span>
-          </div>
-        </div>
-        <span className="wfp-sb-company-chev">
-          <Icon name="chevron" size={14} />
-        </span>
-      </button>
-    </div>
+    <SidebarUserMenu
+      name={name}
+      roleLabel={ROLE_LABEL[role ?? ''] ?? role ?? ''}
+      items={[
+        {
+          label: 'Профіль',
+          icon: <Icon name="users" size={13} />,
+          onClick: () => navigate('/profile'),
+        },
+        ...(isOwner
+          ? [
+              {
+                label: 'Налаштування',
+                icon: <Icon name="settings" size={13} />,
+                onClick: () => navigate('/settings'),
+              },
+            ]
+          : []),
+        {
+          label: 'Вийти',
+          icon: <Icon name="close" size={13} />,
+          onClick: () => void logout(),
+          danger: true,
+        },
+      ]}
+    />
   )
 
   return (
