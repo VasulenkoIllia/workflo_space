@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 export type ExpenseType = 'recurring' | 'one_time'
@@ -59,6 +59,46 @@ export function usePnl(from: string, to: string, enabled = true) {
     queryFn: () => api.get<Pnl>(`/workspace/reports/pnl?from=${from}&to=${to}`),
     enabled: enabled && from !== '' && to !== '',
   })
+}
+
+export interface MonthlyPnlPoint {
+  month: string // YYYY-MM
+  from: string
+  to: string
+  data: Pnl | undefined
+}
+
+/** The last `n` whole months (oldest→newest); current month bounded to today. */
+function monthsBack(n: number): { month: string; from: string; to: string }[] {
+  const now = new Date()
+  const out: { month: string; from: string; to: string }[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const last = i === 0 ? now : new Date(y, m + 1, 0)
+    out.push({
+      month: `${y}-${String(m + 1).padStart(2, '0')}`,
+      from: isoDay(new Date(y, m, 1)),
+      to: isoDay(last),
+    })
+  }
+  return out
+}
+
+/** P&L for each of the last `n` months — drives the trend chart + monthly P&L table. Shares the
+ * `usePnl` cache key so the current-month point is deduped with the overview query. */
+export function useMonthlyPnl(n = 6, enabled = true) {
+  const months = monthsBack(n)
+  const results = useQueries({
+    queries: months.map((m) => ({
+      queryKey: ['ws-finance', 'pnl', m.from, m.to],
+      queryFn: () => api.get<Pnl>(`/workspace/reports/pnl?from=${m.from}&to=${m.to}`),
+      enabled,
+    })),
+  })
+  const points: MonthlyPnlPoint[] = months.map((m, i) => ({ ...m, data: results[i]?.data }))
+  return { points, isLoading: results.some((r) => r.isLoading) }
 }
 
 export function useExpenses() {

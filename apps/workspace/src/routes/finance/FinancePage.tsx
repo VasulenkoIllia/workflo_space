@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
+import { Donut, type DonutSegment } from '@/components/Donut'
+import { LineChart } from '@/components/LineChart'
 import { Select } from '@/components/Select'
+import { catColor, catLabel, EXPENSE_CAT } from '@/lib/expenseCategories'
 import { formatDate, formatMoney } from '@/lib/format'
 import {
   isoDay,
   num,
   useArchiveExpense,
   useExpenses,
+  useMonthlyPnl,
   usePnl,
   useSaveExpense,
   type Expense,
@@ -16,22 +20,30 @@ import {
   type ExpenseType,
 } from '@/lib/finance'
 
-const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
-  infrastructure: 'Інфраструктура',
-  software: 'ПЗ / підписки',
-  salary: 'Зарплата',
-  contractor: 'Підрядники',
-  rent: 'Оренда',
-  tax: 'Податки',
-  marketing: 'Маркетинг',
-  other: 'Інше',
-}
 const TYPE_LABEL: Record<ExpenseType, string> = { recurring: 'Регулярна', one_time: 'Разова' }
 const FREQ_LABEL: Record<string, string> = {
   monthly: 'Щомісяця',
   quarterly: 'Щокварталу',
   annual: 'Щороку',
   one_time: 'Одноразово',
+}
+const MONTH_ABBR = [
+  'січ',
+  'лют',
+  'бер',
+  'кві',
+  'тра',
+  'чер',
+  'лип',
+  'сер',
+  'вер',
+  'жов',
+  'лис',
+  'гру',
+]
+function monthLabel(ym: string): string {
+  const m = Number(ym.split('-')[1])
+  return MONTH_ABBR[m - 1] ?? ym
 }
 
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
@@ -46,6 +58,27 @@ function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }
     </div>
   )
 }
+
+const dateField = (label: string, value: string, onChange: (v: string) => void) => (
+  <label style={{ display: 'grid', gap: 4 }}>
+    <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+      {label}
+    </span>
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        background: 'var(--wf-surface)',
+        color: 'var(--wf-fg)',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        padding: '8px 10px',
+        fontSize: 14,
+      }}
+    />
+  </label>
+)
 
 function ExpenseModal({ expense, onClose }: { expense: Expense | null; onClose: () => void }) {
   const save = useSaveExpense()
@@ -108,7 +141,10 @@ function ExpenseModal({ expense, onClose }: { expense: Expense | null; onClose: 
             label="Категорія"
             value={category}
             onChange={(v) => setCategory(v as ExpenseCategory)}
-            options={Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label }))}
+            options={Object.entries(EXPENSE_CAT).map(([value, meta]) => ({
+              value,
+              label: meta.label,
+            }))}
           />
         </div>
         <Input label="Постачальник" value={vendor} onChange={(e) => setVendor(e.target.value)} />
@@ -139,42 +175,8 @@ function ExpenseModal({ expense, onClose }: { expense: Expense | null; onClose: 
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 4 }}>
-            <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
-              ПОЧАТОК
-            </span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              style={{
-                background: 'var(--wf-surface)',
-                color: 'var(--wf-fg)',
-                border: '1px solid var(--wf-border)',
-                borderRadius: 'var(--wf-radius)',
-                padding: '8px 10px',
-                fontSize: 14,
-              }}
-            />
-          </label>
-          <label style={{ display: 'grid', gap: 4 }}>
-            <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
-              КІНЕЦЬ (опц.)
-            </span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{
-                background: 'var(--wf-surface)',
-                color: 'var(--wf-fg)',
-                border: '1px solid var(--wf-border)',
-                borderRadius: 'var(--wf-radius)',
-                padding: '8px 10px',
-                fontSize: 14,
-              }}
-            />
-          </label>
+          {dateField('ПОЧАТОК', startDate, setStartDate)}
+          {dateField('КІНЕЦЬ (опц.)', endDate, setEndDate)}
         </div>
         {save.isError && (
           <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
@@ -187,13 +189,14 @@ function ExpenseModal({ expense, onClose }: { expense: Expense | null; onClose: 
 }
 
 export function FinancePage() {
-  const [range] = useState(() => {
-    const now = new Date()
-    return { from: `${now.getFullYear()}-01-01`, to: isoDay(now) }
-  })
-  const [from, setFrom] = useState(range.from)
-  const [to, setTo] = useState(range.to)
-  const pnl = usePnl(from, to)
+  const [tab, setTab] = useState<'overview' | 'expenses' | 'pnl'>('overview')
+  const monthStart = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  }, [])
+  const today = useMemo(() => isoDay(new Date()), [])
+  const pnl = usePnl(monthStart, today)
+  const monthly = useMonthlyPnl(6)
   const expenses = useExpenses()
   const archive = useArchiveExpense()
   const [editing, setEditing] = useState<Expense | null>(null)
@@ -204,153 +207,260 @@ export function FinancePage() {
     [expenses.data]
   )
 
-  const dateInput = (value: string, onChange: (v: string) => void) => (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        background: 'var(--wf-surface)',
-        color: 'var(--wf-fg)',
-        border: '1px solid var(--wf-border)',
-        borderRadius: 'var(--wf-radius)',
-        padding: '6px 8px',
-        fontSize: 13,
-      }}
-    />
-  )
+  const p = pnl.data
+  const donutSegs: DonutSegment[] = (p?.byCategory ?? [])
+    .map((c) => ({
+      label: catLabel(c.category),
+      value: num(c.amountUsd) ?? 0,
+      color: catColor(c.category),
+    }))
+    .filter((s) => s.value > 0)
+  const totalExp = donutSegs.reduce((s, x) => s + x.value, 0)
+
+  const labels = monthly.points.map((pt) => monthLabel(pt.month))
+  const series = [
+    {
+      label: 'дохід',
+      color: 'var(--wf-accent)',
+      values: monthly.points.map((pt) => num(pt.data?.revenueUsd) ?? 0),
+    },
+    {
+      label: 'витрати',
+      color: '#F87171',
+      values: monthly.points.map((pt) => num(pt.data?.expensesUsd) ?? 0),
+    },
+    {
+      label: 'чистий',
+      color: '#38BDF8',
+      values: monthly.points.map((pt) => num(pt.data?.netProfitUsd) ?? 0),
+    },
+  ]
 
   return (
     <div>
+      <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
       <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          marginBottom: 18,
-        }}
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
       >
-        <div>
-          <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
-          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-            // P&L і витрати агенції
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {dateInput(from, setFrom)}
-          <span style={{ color: 'var(--wf-fg-muted)' }}>—</span>
-          {dateInput(to, setTo)}
-        </div>
+        // P&L, витрати та тренд агенції
       </div>
 
-      {pnl.isLoading ? (
-        <Skeleton style={{ height: 90 }} />
-      ) : pnl.isError || !pnl.data ? (
-        <EmptyState title="Не вдалося порахувати P&L" description="Перевірте діапазон дат." />
-      ) : (
-        <>
-          <div className="wfp-stats" style={{ marginBottom: 10 }}>
-            <Stat k="дохід" v={formatMoney(num(pnl.data.revenueUsd))} tone="accent" />
-            <Stat k="витрати" v={formatMoney(num(pnl.data.expensesUsd))} />
-            <Stat k="зарплата" v={formatMoney(num(pnl.data.salaryUsd))} />
-            <Stat
-              k={`чистий · ${pnl.data.marginPct}%`}
-              v={formatMoney(num(pnl.data.netProfitUsd))}
-              tone={(num(pnl.data.netProfitUsd) ?? 0) < 0 ? 'warn' : 'accent'}
-            />
-          </div>
-          {pnl.data.byCategory.length > 0 && (
-            <div
-              className="wfp-mono"
-              style={{
-                fontSize: 11,
-                color: 'var(--wf-fg-muted)',
-                display: 'flex',
-                gap: 14,
-                flexWrap: 'wrap',
-                marginBottom: 22,
-              }}
-            >
-              {pnl.data.byCategory.map((c) => (
-                <span key={c.category}>
-                  {CATEGORY_LABEL[c.category as ExpenseCategory] ?? c.category}:{' '}
-                  {formatMoney(num(c.amountUsd))}
-                </span>
-              ))}
+      <Tabs
+        items={[
+          { id: 'overview', label: 'Огляд' },
+          { id: 'expenses', label: 'Витрати' },
+          { id: 'pnl', label: 'P&L · 6 міс' },
+        ]}
+        value={tab}
+        onChange={(id) => setTab(id as typeof tab)}
+      />
+
+      {tab === 'overview' && (
+        <div style={{ marginTop: 16 }}>
+          {pnl.isLoading ? (
+            <Skeleton style={{ height: 90 }} />
+          ) : (
+            <div className="wfp-stats" style={{ marginBottom: 18 }}>
+              <Stat k="дохід / місяць" v={formatMoney(num(p?.revenueUsd))} tone="accent" />
+              <Stat k="витрати / місяць" v={formatMoney(num(p?.expensesUsd))} />
+              <Stat k="зарплата" v={formatMoney(num(p?.salaryUsd))} />
+              <Stat
+                k={`чистий · ${p?.marginPct ?? '—'}%`}
+                v={formatMoney(num(p?.netProfitUsd))}
+                tone={(num(p?.netProfitUsd) ?? 0) < 0 ? 'warn' : 'accent'}
+              />
             </div>
           )}
-        </>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 14 }}>
+            <Card title="Витрати за категоріями · цей місяць">
+              {donutSegs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>
+                  Витрат цього місяця немає.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+                  <Donut
+                    data={donutSegs}
+                    centerValue={formatMoney(totalExp)}
+                    centerLabel="витрати"
+                  />
+                  <div style={{ display: 'grid', gap: 6, flex: 1 }}>
+                    {donutSegs.map((s) => (
+                      <div
+                        key={s.label}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: 12,
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{ width: 9, height: 9, borderRadius: 2, background: s.color }}
+                          />
+                          {s.label}
+                        </span>
+                        <span style={{ color: 'var(--wf-fg-muted)' }}>{formatMoney(s.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card title="Тренд · 6 місяців">
+              {monthly.isLoading ? (
+                <Skeleton style={{ height: 170 }} />
+              ) : (
+                <LineChart series={series} labels={labels} />
+              )}
+            </Card>
+          </div>
+        </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: 8,
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ fontSize: 18, fontWeight: 600 }}>Витрати</div>
-        <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-          Нова витрата
-        </Button>
-      </div>
-
-      {expenses.isLoading ? (
-        <Skeleton />
-      ) : activeExpenses.length === 0 ? (
-        <EmptyState
-          title="Витрат ще немає"
-          description="Додайте регулярні й разові витрати агенції."
-        />
-      ) : (
-        <Card>
-          {activeExpenses.map((e) => (
-            <div
-              key={e.id}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 12,
-                padding: '12px 0',
-                borderBottom: '1px solid var(--wf-border)',
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>
-                  {e.vendor || CATEGORY_LABEL[e.category]}{' '}
-                  <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-                    · {CATEGORY_LABEL[e.category]}
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--wf-fg-secondary)' }}>
-                  {TYPE_LABEL[e.type]}
-                  {e.frequency && e.type === 'recurring' ? ` · ${FREQ_LABEL[e.frequency]}` : ''} · з{' '}
-                  {formatDate(e.startDate)}
-                  {e.endDate ? ` до ${formatDate(e.endDate)}` : ''}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                <div style={{ fontWeight: 600 }}>
-                  {formatMoney(num(e.amount))} {e.currency}
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
-                  Змінити
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  loading={archive.isPending}
-                  onClick={() => archive.mutate(e.id)}
-                >
-                  В архів
-                </Button>
-              </div>
+      {tab === 'expenses' && (
+        <div style={{ marginTop: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              // регулярні й разові витрати
             </div>
-          ))}
-        </Card>
+            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+              Нова витрата
+            </Button>
+          </div>
+          {expenses.isLoading ? (
+            <Skeleton />
+          ) : activeExpenses.length === 0 ? (
+            <EmptyState
+              title="Витрат ще немає"
+              description="Додайте регулярні й разові витрати агенції."
+            />
+          ) : (
+            <Card>
+              {activeExpenses.map((e) => (
+                <div
+                  key={e.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--wf-border)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>
+                      {e.vendor || catLabel(e.category)}{' '}
+                      <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                        · {catLabel(e.category)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--wf-fg-secondary)' }}>
+                      {TYPE_LABEL[e.type]}
+                      {e.frequency && e.type === 'recurring'
+                        ? ` · ${FREQ_LABEL[e.frequency]}`
+                        : ''}{' '}
+                      · з {formatDate(e.startDate)}
+                      {e.endDate ? ` до ${formatDate(e.endDate)}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                    <div style={{ fontWeight: 600 }}>
+                      {formatMoney(num(e.amount))} {e.currency}
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
+                      Змінити
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={archive.isPending}
+                      onClick={() => archive.mutate(e.id)}
+                    >
+                      В архів
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {tab === 'pnl' && (
+        <div style={{ marginTop: 16 }}>
+          {monthly.isLoading ? (
+            <Skeleton style={{ height: 200 }} />
+          ) : (
+            <Card>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr repeat(5, minmax(72px, 1fr))',
+                  gap: 8,
+                  fontSize: 11,
+                  color: 'var(--wf-fg-muted)',
+                  paddingBottom: 8,
+                  borderBottom: '1px solid var(--wf-border)',
+                }}
+                className="wfp-mono"
+              >
+                <span>МІСЯЦЬ</span>
+                <span style={{ textAlign: 'right' }}>ДОХІД</span>
+                <span style={{ textAlign: 'right' }}>ВИТРАТИ</span>
+                <span style={{ textAlign: 'right' }}>ЗП</span>
+                <span style={{ textAlign: 'right' }}>ЧИСТИЙ</span>
+                <span style={{ textAlign: 'right' }}>МАРЖА</span>
+              </div>
+              {monthly.points.map((pt) => {
+                const d = pt.data
+                const net = num(d?.netProfitUsd) ?? 0
+                return (
+                  <div
+                    key={pt.month}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr repeat(5, minmax(72px, 1fr))',
+                      gap: 8,
+                      fontSize: 13,
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--wf-border)',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{pt.month}</span>
+                    <span style={{ textAlign: 'right' }}>{formatMoney(num(d?.revenueUsd))}</span>
+                    <span style={{ textAlign: 'right' }}>{formatMoney(num(d?.expensesUsd))}</span>
+                    <span style={{ textAlign: 'right' }}>{formatMoney(num(d?.salaryUsd))}</span>
+                    <span
+                      style={{
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: net < 0 ? 'var(--wf-warning)' : 'var(--wf-accent)',
+                      }}
+                    >
+                      {formatMoney(num(d?.netProfitUsd))}
+                    </span>
+                    <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
+                      {d?.marginPct ?? '—'}%
+                    </span>
+                  </div>
+                )
+              })}
+            </Card>
+          )}
+        </div>
       )}
 
       {(creating || editing) && (

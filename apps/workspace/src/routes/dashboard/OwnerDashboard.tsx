@@ -6,20 +6,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/format'
 import { useBillingOverview, num } from '@/lib/billing'
 import { usePnl, isoDay } from '@/lib/finance'
+import { catColor, catLabel } from '@/lib/expenseCategories'
 import { useOrders, countByStatus, type WorkspaceOrder } from '@/lib/orders'
 import { KanbanBoard } from '@/routes/orders/KanbanBoard'
-
-/** Expense-category display (label + donut color), shared with /finance category labels. */
-const CAT: Record<string, { label: string; color: string }> = {
-  infrastructure: { label: 'Інфра', color: '#22D3EE' },
-  software: { label: 'ПЗ', color: '#A78BFA' },
-  salary: { label: 'ЗП', color: '#C5F82A' },
-  contractor: { label: 'Підрядники', color: '#FB923C' },
-  rent: { label: 'Оренда', color: '#F472B6' },
-  tax: { label: 'Податки', color: '#F87171' },
-  marketing: { label: 'Маркетинг', color: '#38BDF8' },
-  other: { label: 'Інше', color: '#94A3B8' },
-}
 
 /** Owner home — agency-wide overview: finance KPIs + expense donut, then orders attention/board. */
 export function OwnerDashboard() {
@@ -42,9 +31,9 @@ export function OwnerDashboard() {
   const p = pnl.data
   const expenseSegs: DonutSegment[] = (p?.byCategory ?? [])
     .map((c) => ({
-      label: CAT[c.category]?.label ?? c.category,
+      label: catLabel(c.category),
       value: num(c.amountUsd) ?? 0,
-      color: CAT[c.category]?.color ?? '#94A3B8',
+      color: catColor(c.category),
     }))
     .filter((s) => s.value > 0)
   const totalExpenses = expenseSegs.reduce((s, x) => s + x.value, 0)

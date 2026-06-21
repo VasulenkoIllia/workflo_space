@@ -27,8 +27,8 @@ testimonials, cases, reports-subtabs, order-create(POST). Ці екрани — 
 
 Net-new React-компоненти над уже-портованим CSS:
 
-- [ ] **F1 Cmd-K палітра** (`⌘K`/`Ctrl+K`) — overlay + global hotkey + реєстр (навігація по екранах +
-      швидкі дії) + keyboard-nav (↑↓↵, esc). CSS `.wfp-cmdk*` готовий. Обидва апи.
+- [x] **F1 Cmd-K палітра** ✅ (`a07eb12`) — `packages/ui/CommandPalette` + ⌘K у обох AppLayout +
+      реєстр з nav + keyboard-nav. Бонус: theme-toggle у portal-топбар.
 - [ ] **F2 Sidebar footer role-menu** (workspace) — user-card `.wfp-sb-user--menu` → меню owner/manager/
       executor (+описи) + «Дивитись як клієнт». Зараз — голий logout-кнопка.
 - [ ] **F3 View-as banner** — sticky warning-банер над топбаром (read-only прев'ю ролі) + `AppShell`
@@ -40,8 +40,9 @@ Net-new React-компоненти над уже-портованим CSS:
 
 ### Phase 2 — Workspace screens (бекенд ✅, найбільший візуальний дельта)
 
-- [ ] **W-fin /finance** → 4 таби (Огляд/Витрати/Маржа/P&L) + **donut витрат** (reuse `components/Donut`) +
-      **лінійний P&L-чарт** (3 серії × 6 міс — 6 monthly pnl-запитів) + **місячна P&L-таблиця**.
+- [x] **W-fin /finance** ✅ — 3 таби (Огляд/Витрати/P&L): Огляд = KPI + **donut витрат** + **LineChart
+      тренд 6 міс** (3 серії, `useMonthlyPnl` через useQueries); P&L = місячна таблиця. Нові
+      `components/LineChart` + `lib/expenseCategories` (спільні кольори з дашборд-donut). Маржа — окремий /margin.
 - [ ] **W-margin /margin** → group-by toggle (клієнти/проєкти/виконавці) + sort + totals-row + overhead-кол.
 - [ ] **W-billing /billing** → 6-tab хаб (Рахунки/Платежі/Дебітори/Виплати/Сервіси/Гаманці) над наявними сторінками.
 - [ ] **W-svc /services** → ServiceEditModal з two-axis економікою (cost×bill mode) + makes-task + category/type + live-margin.
