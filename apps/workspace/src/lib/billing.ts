@@ -28,10 +28,11 @@ export interface WsCharge {
   paidAt: string | null
 }
 
-export function useBillingOverview() {
+export function useBillingOverview(enabled = true) {
   return useQuery({
     queryKey: ['ws-billing', 'overview'],
     queryFn: () => api.get<BillingOverview>('/workspace/billing/overview'),
+    enabled,
   })
 }
 

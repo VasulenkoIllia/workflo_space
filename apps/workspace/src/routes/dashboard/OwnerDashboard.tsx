@@ -1,15 +1,55 @@
 import { useNavigate } from 'react-router-dom'
 import { OrderInternalStatus } from '@workflo/types'
 import { EmptyState, Icon, Skeleton } from '@workflo/ui'
+import { Donut, type DonutSegment } from '@/components/Donut'
+import { useAuth } from '@/contexts/AuthContext'
+import { formatMoney } from '@/lib/format'
+import { useBillingOverview, num } from '@/lib/billing'
+import { usePnl, isoDay } from '@/lib/finance'
 import { useOrders, countByStatus, type WorkspaceOrder } from '@/lib/orders'
 import { KanbanBoard } from '@/routes/orders/KanbanBoard'
 
-/** Owner home — agency-wide overview: stats, attention items, all-orders board. */
+/** Expense-category display (label + donut color), shared with /finance category labels. */
+const CAT: Record<string, { label: string; color: string }> = {
+  infrastructure: { label: 'Інфра', color: '#22D3EE' },
+  software: { label: 'ПЗ', color: '#A78BFA' },
+  salary: { label: 'ЗП', color: '#C5F82A' },
+  contractor: { label: 'Підрядники', color: '#FB923C' },
+  rent: { label: 'Оренда', color: '#F472B6' },
+  tax: { label: 'Податки', color: '#F87171' },
+  marketing: { label: 'Маркетинг', color: '#38BDF8' },
+  other: { label: 'Інше', color: '#94A3B8' },
+}
+
+/** Owner home — agency-wide overview: finance KPIs + expense donut, then orders attention/board. */
 export function OwnerDashboard() {
   const navigate = useNavigate()
+  const { isOwner } = useAuth()
   const { data, isLoading, isError } = useOrders({})
   const { data: unassigned, isError: unassignedErr } = useOrders({ assigneeId: 'none' })
+  // Finance widgets are owner-only (manager is finance-blocked) — gate the queries so a manager
+  // viewing this dashboard never fires the 403'd billing/pnl endpoints.
+  const overview = useBillingOverview(isOwner)
+  // Current-month P&L drives the net-profit/expense KPIs + the donut.
+  const monthFrom = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  })()
+  const pnl = usePnl(monthFrom, isoDay(new Date()), isOwner)
   const orders = data?.orders ?? []
+
+  const o = overview.data
+  const p = pnl.data
+  const expenseSegs: DonutSegment[] = (p?.byCategory ?? [])
+    .map((c) => ({
+      label: CAT[c.category]?.label ?? c.category,
+      value: num(c.amountUsd) ?? 0,
+      color: CAT[c.category]?.color ?? '#94A3B8',
+    }))
+    .filter((s) => s.value > 0)
+  const totalExpenses = expenseSegs.reduce((s, x) => s + x.value, 0)
+  const netProfit = num(p?.netProfitUsd) ?? 0
+  const clientDebt = num(o?.outstandingDebt) ?? 0
 
   const queue = countByStatus(orders, [OrderInternalStatus.NEW, OrderInternalStatus.CLARIFICATION])
   const inProgress = countByStatus(orders, [
@@ -43,6 +83,129 @@ export function OwnerDashboard() {
           </button>
         </div>
       </div>
+
+      {isOwner && (
+        <>
+          {/* ── Фінанси (design-v2 owner overview) ── */}
+          <div className="wfp-stats" style={{ marginBottom: 14 }}>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">дохід / місяць</div>
+              <div className="wfp-stat-v wfp-stat-v--accent">
+                {formatMoney(num(o?.monthlyRevenueUsd))}
+              </div>
+            </div>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">борг клієнтів</div>
+              <div className={`wfp-stat-v${clientDebt > 0 ? ' wfp-stat-v--warn' : ''}`}>
+                {formatMoney(clientDebt)}
+              </div>
+            </div>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">чистий · {p?.marginPct ?? '—'}%</div>
+              <div
+                className={`wfp-stat-v ${netProfit < 0 ? 'wfp-stat-v--warn' : 'wfp-stat-v--accent'}`}
+              >
+                {formatMoney(num(p?.netProfitUsd))}
+              </div>
+              <div className="wfp-stat-sub">цей місяць</div>
+            </div>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">витрати / місяць</div>
+              <div className="wfp-stat-v">{formatMoney(num(p?.expensesUsd))}</div>
+            </div>
+          </div>
+
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}
+          >
+            <div className="wfp-card">
+              <div
+                className="wfp-mono"
+                style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+              >
+                // витрати за категоріями · цей місяць
+              </div>
+              {pnl.isLoading ? (
+                <Skeleton style={{ height: 132 }} />
+              ) : expenseSegs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>
+                  Витрат цього місяця немає.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+                  <Donut
+                    data={expenseSegs}
+                    centerValue={formatMoney(totalExpenses)}
+                    centerLabel="витрати"
+                  />
+                  <div style={{ display: 'grid', gap: 6, flex: 1 }}>
+                    {expenseSegs.map((s) => (
+                      <div
+                        key={s.label}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: 12,
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{ width: 9, height: 9, borderRadius: 2, background: s.color }}
+                          />
+                          {s.label}
+                        </span>
+                        <span style={{ color: 'var(--wf-fg-muted)' }}>{formatMoney(s.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="wfp-card">
+              <div
+                className="wfp-mono"
+                style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+              >
+                // топ боржників
+              </div>
+              {!o || o.topDebtors.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>Боргів немає 🎉</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {o.topDebtors.map((d) => (
+                    <div
+                      key={d.companyId}
+                      style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}
+                    >
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {d.name}
+                      </span>
+                      <span style={{ color: 'var(--wf-warning)', fontWeight: 600 }}>
+                        {formatMoney(num(d.debt))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+          >
+            // замовлення
+          </div>
+        </>
+      )}
 
       <div className="wfp-stats" style={{ marginBottom: 20 }}>
         <div className="wfp-stat">

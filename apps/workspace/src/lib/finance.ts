@@ -53,11 +53,11 @@ export interface ExpenseInput {
   endDate?: string | null
 }
 
-export function usePnl(from: string, to: string) {
+export function usePnl(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: ['ws-finance', 'pnl', from, to],
     queryFn: () => api.get<Pnl>(`/workspace/reports/pnl?from=${from}&to=${to}`),
-    enabled: from !== '' && to !== '',
+    enabled: enabled && from !== '' && to !== '',
   })
 }
 
