@@ -3,6 +3,7 @@
 import { Fragment } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from './Icon.js'
+import { useShellMobile } from './AppShell.js'
 import { cn } from '../lib/cn.js'
 
 export interface TopbarProps {
@@ -29,8 +30,20 @@ export function Topbar({
   bellDot = false,
   className,
 }: TopbarProps) {
+  const mobile = useShellMobile()
   return (
     <div className={cn('wfp-topbar', className)}>
+      {mobile && (
+        <button
+          type="button"
+          className="wfp-tb-burger"
+          aria-label="Меню"
+          aria-expanded={mobile.open}
+          onClick={mobile.toggle}
+        >
+          ☰
+        </button>
+      )}
       <div className="wfp-crumb">
         {crumbs.map((c, i) => (
           <Fragment key={i}>

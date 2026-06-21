@@ -34,10 +34,12 @@ Net-new React-компоненти над уже-портованим CSS:
 - [~] **F3 View-as banner** — ⏸️ **ВІДКЛАДЕНО**: погано лягає на hard-RBAC (роль із JWT, не клієнтський
   override; справжня імперсонація = SaaS SA-1, не зараз). Косметичний прев'ю-режим низькоцінний для
   тесту + плутає (роути все одно enforced server-side). Повернутись із SA-1/SaaS.
-- [ ] **F4 Bell dropdown** — ⚠️ нотифікації backend-blocked → відкласти або порожній стан.
-- [ ] **F5 Company switcher (portal)** — footer `.wfp-sb-company` → popover компаній. (1 компанія в тесті → low.)
-- [ ] **F6 Mobile drawer** — `sbOpen`+scrim+burger у `AppShell`/`Topbar` (responsive).
-- [ ] **F7 Sidebar `muted` group flag** — `{group, muted}` → `.wfp-sb-group--muted`.
+- [~] **F4 Bell dropdown** — ⏸️ **BACKEND-BLOCKED** (нотифікацій-feed нема → S6). Bell-кнопка вже є (no-op).
+- [~] **F5 Company switcher (portal)** — ⏸️ відкладено (1 компанія/клієнт у тесті, multi-company = SaaS-фаза). Low.
+- [x] **F6 Mobile drawer** ✅ — `AppShell` сам керує `mobileOpen` (контекст→`Topbar` бургер `.wfp-tb-burger`,
+      scrim `.wfp-sb-scrim`, `data-mobile-open`, nav-close через display:contents-wrapper). Обидва апи
+      автоматично (без wiring). CSS responsive ≤900px уже був.
+- [~] **F7 Sidebar `muted` group flag** — N/A: у нашій наві всі групи = наявні екрани, muted-груп нема.
 
 ### Phase 2 — Workspace screens (бекенд ✅, найбільший візуальний дельта)
 

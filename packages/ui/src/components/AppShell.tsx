@@ -1,8 +1,19 @@
-import type { ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { cn } from '../lib/cn.js'
 
 export type ShellAesthetic = 'A' | 'B'
 export type ShellDensity = 'comfortable' | 'compact'
+
+/** Mobile-drawer state, shared from AppShell down to the Topbar burger (F6). */
+interface ShellMobileCtx {
+  open: boolean
+  toggle: () => void
+}
+const ShellMobileContext = createContext<ShellMobileCtx | null>(null)
+/** Topbar reads this to render its hamburger; null outside an AppShell. */
+export function useShellMobile(): ShellMobileCtx | null {
+  return useContext(ShellMobileContext)
+}
 
 export interface AppShellProps {
   /** Sidebar node (e.g. <Sidebar/>). */
@@ -41,6 +52,9 @@ export function AppShell({
   statusBarRight,
   className,
 }: AppShellProps) {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const close = () => setMobileOpen(false)
+
   const shell = (
     <div
       className={cn(
@@ -50,8 +64,14 @@ export function AppShell({
         className
       )}
       data-density={density}
+      data-mobile-open={mobileOpen || undefined}
     >
-      {sidebar}
+      {/* Wrapper closes the off-canvas drawer on any nav click inside it (mobile). `display:contents`
+          keeps `.wfp-sb` as the grid child so layout is unchanged at desktop sizes. */}
+      <div style={{ display: 'contents' }} onClick={() => mobileOpen && close()}>
+        {sidebar}
+      </div>
+      {mobileOpen && <div className="wfp-sb-scrim" onClick={close} />}
       <main className="wfp-main">
         {topbar}
         <div className="wfp-content">{children}</div>
@@ -59,31 +79,40 @@ export function AppShell({
     </div>
   )
 
-  if (aesthetic !== 'A') return shell
+  const framed =
+    aesthetic !== 'A' ? (
+      shell
+    ) : (
+      <div className="wfp-window" style={{ height: '100%' }}>
+        <div className="wfp-window-title">
+          <div className="wfp-window-traffic">
+            <span className="wfp-window-traffic-dot" />
+            <span className="wfp-window-traffic-dot" />
+            <span className="wfp-window-traffic-dot" />
+          </div>
+          <div className="wfp-window-title-c">{windowTitle}</div>
+          <div />
+        </div>
+        <div className="wfp-window-body">{shell}</div>
+        <div className="wfp-window-statusbar">
+          <div className="wfp-window-statusbar-l">
+            {statusBarLeft ?? (
+              <>
+                <span className="wfp-status-dot" style={{ background: 'var(--wf-success)' }} />
+                <span>main</span>
+              </>
+            )}
+          </div>
+          <div className="wfp-window-statusbar-r">{statusBarRight ?? <span>/</span>}</div>
+        </div>
+      </div>
+    )
 
   return (
-    <div className="wfp-window" style={{ height: '100%' }}>
-      <div className="wfp-window-title">
-        <div className="wfp-window-traffic">
-          <span className="wfp-window-traffic-dot" />
-          <span className="wfp-window-traffic-dot" />
-          <span className="wfp-window-traffic-dot" />
-        </div>
-        <div className="wfp-window-title-c">{windowTitle}</div>
-        <div />
-      </div>
-      <div className="wfp-window-body">{shell}</div>
-      <div className="wfp-window-statusbar">
-        <div className="wfp-window-statusbar-l">
-          {statusBarLeft ?? (
-            <>
-              <span className="wfp-status-dot" style={{ background: 'var(--wf-success)' }} />
-              <span>main</span>
-            </>
-          )}
-        </div>
-        <div className="wfp-window-statusbar-r">{statusBarRight ?? <span>/</span>}</div>
-      </div>
-    </div>
+    <ShellMobileContext.Provider
+      value={{ open: mobileOpen, toggle: () => setMobileOpen((v) => !v) }}
+    >
+      {framed}
+    </ShellMobileContext.Provider>
   )
 }
