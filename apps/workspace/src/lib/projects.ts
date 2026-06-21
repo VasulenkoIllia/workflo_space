@@ -53,6 +53,7 @@ export function useCompanies() {
 export interface ProjectInput {
   companyId?: string
   name: string
+  type?: string | null
   billingModel?: FinProject['billingModel']
   currency?: string
   abonAmount?: number | null

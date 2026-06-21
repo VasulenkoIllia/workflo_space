@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { formatMoney } from '@/lib/format'
 import {
   num,
@@ -230,11 +230,231 @@ function ProjectModal({
   )
 }
 
+const WIZARD_STEPS = ['Клієнт', 'Модель і гроші', 'Цикл і погодження', 'Огляд']
+
+/** Multi-step create wizard (design-v2). Edit still uses the single-form ProjectModal. */
+function ProjectWizard({
+  companies,
+  onClose,
+}: {
+  companies: { id: string; name: string }[]
+  onClose: () => void
+}) {
+  const save = useSaveProject()
+  const [step, setStep] = useState(0)
+  const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
+  const [name, setName] = useState('')
+  const [type, setType] = useState('')
+  const [model, setModel] = useState<FinProject['billingModel']>('hourly_postpaid')
+  const [currency, setCurrency] = useState('USD')
+  const [rate, setRate] = useState('')
+  const [abon, setAbon] = useState('')
+  const [cycle, setCycle] = useState<FinProject['billingCycle']>('monthly_day_n')
+  const [terms, setTerms] = useState('')
+  const [mode, setMode] = useState<'' | NonNullable<FinProject['approvalMode']>>('')
+  const [approver, setApprover] = useState<NonNullable<FinProject['invoiceApprover']>>('internal')
+
+  const isFixed = model === 'fixed_monthly_advance'
+  const step0Valid = name.trim().length >= 2 && !!companyId
+  const step1Valid = isFixed ? Number(abon) > 0 : Number(rate) > 0
+  const stepValid = [step0Valid, step1Valid, true, true][step] ?? true
+  const last = step === WIZARD_STEPS.length - 1
+
+  const submit = () => {
+    const body: ProjectInput & { id?: string } = {
+      companyId,
+      billingModel: model,
+      name: name.trim(),
+      type: type.trim() || null,
+      currency,
+      billingCycle: cycle,
+      paymentTermsDays: terms.trim() === '' ? null : Number(terms),
+      approvalMode: mode === '' ? null : mode,
+      invoiceApprover: approver,
+      abonAmount: isFixed ? Number(abon) : null,
+      clientHourlyRate: isFixed ? null : Number(rate),
+    }
+    save.mutate(body, { onSuccess: onClose })
+  }
+
+  const money = isFixed ? `${formatMoney(num(abon))}/міс` : `${formatMoney(num(rate))}/год`
+  const reviewRow = (k: string, v: string) => (
+    <div
+      style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0' }}
+    >
+      <span style={{ color: 'var(--wf-fg-muted)' }}>{k}</span>
+      <span style={{ fontWeight: 600 }}>{v}</span>
+    </div>
+  )
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Новий фін-проєкт"
+      aux={`крок ${step + 1}/${WIZARD_STEPS.length} · ${WIZARD_STEPS[step]}`}
+      size="lg"
+      footer={
+        <>
+          {step > 0 && (
+            <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={save.isPending}>
+              Назад
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose} disabled={save.isPending}>
+            Скасувати
+          </Button>
+          {last ? (
+            <Button variant="primary" loading={save.isPending} onClick={submit}>
+              Створити
+            </Button>
+          ) : (
+            <Button variant="primary" disabled={!stepValid} onClick={() => setStep((s) => s + 1)}>
+              Далі
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {WIZARD_STEPS.map((s, i) => (
+          <div
+            key={s}
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              background: i <= step ? 'var(--wf-accent)' : 'var(--wf-border)',
+            }}
+          />
+        ))}
+      </div>
+
+      {step === 0 && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <Select
+            label="Клієнт"
+            value={companyId}
+            onChange={setCompanyId}
+            options={companies.map((c) => ({ value: c.id, label: c.name }))}
+          />
+          <Input
+            label="Назва проєкту"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={name !== '' && name.trim().length < 2 ? 'Мінімум 2 символи' : undefined}
+          />
+          <Input
+            label="Тип (опц., напр. «Підтримка»)"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+          />
+        </div>
+      )}
+
+      {step === 1 && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <Select
+            label="Модель білінгу"
+            value={model}
+            onChange={(v) => setModel(v as FinProject['billingModel'])}
+            options={Object.entries(MODEL_LABEL).map(([value, label]) => ({ value, label }))}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {isFixed ? (
+              <Input
+                label="Абонплата / міс"
+                type="number"
+                value={abon}
+                onChange={(e) => setAbon(e.target.value)}
+                error={abon !== '' && !(Number(abon) > 0) ? '> 0' : undefined}
+              />
+            ) : (
+              <Input
+                label="Ставка / год"
+                type="number"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                error={rate !== '' && !(Number(rate) > 0) ? '> 0' : undefined}
+              />
+            )}
+            <Select
+              label="Валюта"
+              value={currency}
+              onChange={setCurrency}
+              options={['USD', 'UAH', 'EUR'].map((c) => ({ value: c, label: c }))}
+            />
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Select
+              label="Цикл"
+              value={cycle}
+              onChange={(v) => setCycle(v as FinProject['billingCycle'])}
+              options={Object.entries(CYCLE_LABEL).map(([value, label]) => ({ value, label }))}
+            />
+            <Input
+              label="Строк оплати, днів (опц.)"
+              type="number"
+              value={terms}
+              onChange={(e) => setTerms(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Select
+              label="Погодження вартості"
+              value={mode}
+              onChange={(v) => setMode(v as '' | NonNullable<FinProject['approvalMode']>)}
+              options={[
+                { value: '', label: 'Успадкувати (за замовч.)' },
+                ...Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label })),
+              ]}
+            />
+            {mode === 'on_actuals' && (
+              <Select
+                label="Хто погоджує рахунок"
+                value={approver}
+                onChange={(v) => setApprover(v as NonNullable<FinProject['invoiceApprover']>)}
+                options={Object.entries(APPROVER_LABEL).map(([value, label]) => ({ value, label }))}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div>
+          {reviewRow('Клієнт', companies.find((c) => c.id === companyId)?.name ?? '—')}
+          {reviewRow('Назва', name.trim() || '—')}
+          {type.trim() && reviewRow('Тип', type.trim())}
+          {reviewRow('Модель', MODEL_LABEL[model] ?? model)}
+          {reviewRow('Вартість', `${money} ${currency}`)}
+          {reviewRow('Цикл', CYCLE_LABEL[cycle] ?? cycle)}
+          {terms.trim() && reviewRow('Строк оплати', `${terms} дн.`)}
+          {reviewRow('Погодження', mode === '' ? 'Успадкувати' : (MODE_LABEL[mode] ?? mode))}
+          {mode === 'on_actuals' && reviewRow('Погоджує', APPROVER_LABEL[approver] ?? approver)}
+        </div>
+      )}
+
+      {save.isError && (
+        <div style={{ color: 'var(--wf-destructive)', fontSize: 12, marginTop: 12 }}>
+          Не вдалося створити — перевірте поля.
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export function ProjectsPage() {
   const projects = useProjects()
   const companies = useCompanies()
   const [editing, setEditing] = useState<FinProject | null>(null)
   const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all')
 
   const companyName = useMemo(() => {
     const m = new Map<string, string>()
@@ -252,6 +472,9 @@ export function ProjectsPage() {
     )
   }
   const list = projects.data?.projects ?? []
+  const activeCount = list.filter((p) => p.active).length
+  const filtered =
+    filter === 'all' ? list : list.filter((p) => (filter === 'active' ? p.active : !p.active))
 
   return (
     <div>
@@ -260,13 +483,13 @@ export function ProjectsPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          marginBottom: 18,
+          marginBottom: 14,
         }}
       >
         <div>
           <div style={{ fontSize: 28, fontWeight: 600 }}>Фін-проєкти</div>
           <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-            // {list.length} · модель, цикл і погодження per-проєкт
+            // {activeCount} активних / {list.length} всього · модель, цикл, погодження per-проєкт
           </div>
         </div>
         <Button
@@ -279,81 +502,103 @@ export function ProjectsPage() {
         </Button>
       </div>
 
-      {list.length === 0 ? (
-        <EmptyState
-          title="Проєктів ще немає"
-          description="Створіть фін-проєкт клієнта, щоб запустити білінг."
+      {list.length > 0 && (
+        <Tabs
+          items={[
+            { id: 'all', label: `Усі (${list.length})` },
+            { id: 'active', label: `Активні (${activeCount})` },
+            { id: 'inactive', label: `Неактивні (${list.length - activeCount})` },
+          ]}
+          value={filter}
+          onChange={(id) => setFilter(id as typeof filter)}
         />
-      ) : (
-        <Card>
-          {list.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setEditing(p)}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                width: '100%',
-                gap: 12,
-                padding: '12px 0',
-                borderBottom: '1px solid var(--wf-border)',
-                background: 'none',
-                border: 'none',
-                borderBottomColor: 'var(--wf-border)',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600 }}>
-                  {p.name}{' '}
-                  <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-                    · {companyName(p.companyId)}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--wf-fg-secondary)',
-                    marginTop: 3,
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  <span>{MODEL_LABEL[p.billingModel]}</span>·
-                  <span>{CYCLE_LABEL[p.billingCycle]}</span>
-                  {p.approvalMode && p.approvalMode !== 'none' && (
-                    <>
-                      ·
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <StatusDot tone="warning" /> {MODE_LABEL[p.approvalMode]}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div style={{ fontWeight: 600, flexShrink: 0 }}>
-                {p.billingModel === 'fixed_monthly_advance'
-                  ? `${formatMoney(num(p.abonAmount))}/міс`
-                  : `${formatMoney(num(p.clientHourlyRate))}/год`}{' '}
-                {p.currency}
-              </div>
-            </button>
-          ))}
-        </Card>
       )}
 
-      {(creating || editing) && (
+      <div style={{ marginTop: 16 }}>
+        {list.length === 0 ? (
+          <EmptyState
+            title="Проєктів ще немає"
+            description="Створіть фін-проєкт клієнта, щоб запустити білінг."
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title="Немає проєктів у цьому фільтрі"
+            description="Змініть фільтр статусу."
+          />
+        ) : (
+          <Card>
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setEditing(p)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  gap: 12,
+                  padding: '12px 0',
+                  borderBottom: '1px solid var(--wf-border)',
+                  background: 'none',
+                  border: 'none',
+                  borderBottomColor: 'var(--wf-border)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>
+                    {p.name}{' '}
+                    <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                      · {companyName(p.companyId)}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--wf-fg-secondary)',
+                      marginTop: 3,
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>{MODEL_LABEL[p.billingModel]}</span>·
+                    <span>{CYCLE_LABEL[p.billingCycle]}</span>
+                    {p.approvalMode && p.approvalMode !== 'none' && (
+                      <>
+                        ·
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <StatusDot tone="warning" /> {MODE_LABEL[p.approvalMode]}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 600, flexShrink: 0 }}>
+                  {p.billingModel === 'fixed_monthly_advance'
+                    ? `${formatMoney(num(p.abonAmount))}/міс`
+                    : `${formatMoney(num(p.clientHourlyRate))}/год`}{' '}
+                  {p.currency}
+                </div>
+              </button>
+            ))}
+          </Card>
+        )}
+      </div>
+
+      {creating && (
+        <ProjectWizard
+          companies={companies.data?.companies ?? []}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {editing && (
         <ProjectModal
           project={editing}
           companies={companies.data?.companies ?? []}
-          onClose={() => {
-            setCreating(false)
-            setEditing(null)
-          }}
+          onClose={() => setEditing(null)}
         />
       )}
     </div>

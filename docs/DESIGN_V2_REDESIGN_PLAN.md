@@ -53,7 +53,10 @@ Net-new React-компоненти над уже-портованим CSS:
   ⚠️ **two-axis економіка / makes-task / category/type — BACKEND-BLOCKED** (Service-модель має лише
   name/desc/price/hours/recurring; cost/billMode/category/makesTask-полів нема → потребує schema-зміни,
   окреме рішення власника, НЕ будуємо масковані поля).
-- [ ] **W-proj /projects** → status-pills + колонки (model/cycle/margin/entity) + **ProjectCreateWizard** (multi-step: client→model→money→scope/services→cycle/contract→review).
+- [x] **W-proj /projects** ✅ — status-pills (Усі/Активні/Неактивні) + лічильник + **ProjectCreateWizard**
+      (4 кроки: Клієнт→Модель і гроші→Цикл і погодження→Огляд, з stepper + per-step валідація + review).
+      Edit лишається single-form ProjectModal. (Scope/services-крок + contract — потребують
+      estimate-line/document-UI, відкладено; колонки model/cycle/approval/rate уже в рядку.)
 - [ ] **W-orders /orders** → stats-strip + фільтри (status/client/executor) + bulk-select (assign/status/export) + SLA-кол.
 - [ ] **W-proj360 /projects/:id** → новий (Project-360: KPI-hero + таби Overview/Team/Billing/Orders/Tasks/Finance). Partial backend.
 
