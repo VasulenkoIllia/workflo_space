@@ -1,10 +1,21 @@
-import { useState } from 'react'
-import { Card, EmptyState, Skeleton } from '@workflo/ui'
-import { Select } from '@/components/Select'
+import { useMemo, useState } from 'react'
+import { Card, EmptyState, Skeleton, Tabs } from '@workflo/ui'
 import { formatMoney } from '@/lib/format'
 import { isoDay } from '@/lib/finance'
 import { useCompanies } from '@/lib/projects'
-import { num, useClientMargin, type ProjectMargin } from '@/lib/margin'
+import { num, useAllClientMargins } from '@/lib/margin'
+
+interface Row {
+  key: string
+  name: string
+  sub?: string
+  revenue: number
+  cost: number
+  margin: number
+  marginPct: number
+  paid: number
+  paidPct: number
+}
 
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
   const color =
@@ -19,62 +30,69 @@ function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }
   )
 }
 
-function marginTone(pct: number | null): 'accent' | 'warn' {
-  return (pct ?? 0) < 0 ? 'warn' : 'accent'
-}
-
-function ProjectRow({ p }: { p: ProjectMargin }) {
-  const mpct = num(p.marginPct)
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 12,
-        padding: '12px 0',
-        borderBottom: '1px solid var(--wf-border)',
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600 }}>{p.projectName}</div>
-        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-          дохід {formatMoney(num(p.revenueUsd))} · собівартість {formatMoney(num(p.costUsd))} ·
-          оплачено {p.paidPct}%
-        </div>
-      </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div
-          style={{
-            fontWeight: 600,
-            color: (mpct ?? 0) < 0 ? 'var(--wf-warning)' : 'var(--wf-accent)',
-          }}
-        >
-          {formatMoney(num(p.marginUsd))}
-        </div>
-        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-          маржа {p.marginPct}%
-        </div>
-      </div>
-    </div>
-  )
-}
+const COLS = '1.6fr repeat(5, minmax(68px, 1fr))'
 
 export function MarginPage() {
   const companies = useCompanies()
-  const [companyId, setCompanyId] = useState('')
+  const [group, setGroup] = useState<'clients' | 'projects'>('clients')
   const [range] = useState(() => {
-    const now = new Date()
-    return { from: `${now.getFullYear()}-01-01`, to: isoDay(now) }
+    const d = new Date()
+    return { from: `${d.getFullYear()}-01-01`, to: isoDay(d) }
   })
   const [from, setFrom] = useState(range.from)
   const [to, setTo] = useState(range.to)
-  const margin = useClientMargin(companyId, from, to)
+  const all = useAllClientMargins(companies.data?.companies ?? [], from, to)
 
-  const companyOptions = [
-    { value: '', label: '— оберіть клієнта —' },
-    ...(companies.data?.companies ?? []).map((c) => ({ value: c.id, label: c.name })),
-  ]
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = []
+    for (const r of all.rows) {
+      if (!r.margin) continue
+      if (group === 'clients') {
+        out.push({
+          key: r.company.id,
+          name: r.company.name,
+          revenue: num(r.margin.revenueUsd) ?? 0,
+          cost: num(r.margin.costUsd) ?? 0,
+          margin: num(r.margin.marginUsd) ?? 0,
+          marginPct: num(r.margin.marginPct) ?? 0,
+          paid: num(r.margin.paidUsd) ?? 0,
+          paidPct: num(r.margin.paidPct) ?? 0,
+        })
+      } else {
+        for (const p of r.margin.projects) {
+          out.push({
+            key: p.projectId,
+            name: p.projectName,
+            sub: r.company.name,
+            revenue: num(p.revenueUsd) ?? 0,
+            cost: num(p.costUsd) ?? 0,
+            margin: num(p.marginUsd) ?? 0,
+            marginPct: num(p.marginPct) ?? 0,
+            paid: num(p.paidUsd) ?? 0,
+            paidPct: num(p.paidPct) ?? 0,
+          })
+        }
+      }
+    }
+    return out.sort((a, b) => b.margin - a.margin)
+  }, [all.rows, group])
+
+  const totals = useMemo(() => {
+    const rev = rows.reduce((s, r) => s + r.revenue, 0)
+    const cost = rows.reduce((s, r) => s + r.cost, 0)
+    const paid = rows.reduce((s, r) => s + r.paid, 0)
+    const margin = rev - cost
+    const losses = rows.filter((r) => r.margin < 0).length
+    return {
+      rev,
+      cost,
+      paid,
+      margin,
+      marginPct: rev ? (margin / rev) * 100 : 0,
+      paidPct: rev ? (paid / rev) * 100 : 0,
+      losses,
+    }
+  }, [rows])
 
   const dateInput = (value: string, onChange: (v: string) => void) => (
     <input
@@ -92,34 +110,24 @@ export function MarginPage() {
     />
   )
 
-  const m = margin.data?.margin
+  const loading = companies.isLoading || all.isLoading
+  const noClients = !companies.isLoading && (companies.data?.companies.length ?? 0) === 0
 
   return (
     <div>
-      <div style={{ fontSize: 28, fontWeight: 600 }}>Маржа</div>
-      <div
-        className="wfp-mono"
-        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 18 }}
-      >
-        // дохід − собівартість по клієнту й проєктах (лише власник)
-      </div>
-
       <div
         style={{
           display: 'flex',
-          gap: 10,
-          alignItems: 'flex-end',
-          flexWrap: 'wrap',
-          marginBottom: 20,
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: 16,
         }}
       >
-        <div style={{ minWidth: 240 }}>
-          <Select
-            label="Клієнт"
-            value={companyId}
-            onChange={setCompanyId}
-            options={companyOptions}
-          />
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 600 }}>Маржа</div>
+          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // дохід − собівартість, по всіх клієнтах і проєктах (лише власник)
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {dateInput(from, setFrom)}
@@ -128,45 +136,156 @@ export function MarginPage() {
         </div>
       </div>
 
-      {companyId === '' ? (
-        <EmptyState
-          title="Оберіть клієнта"
-          description="Маржа рахується по обраному клієнту за вказаний період."
+      <div className="wfp-stats" style={{ marginBottom: 16 }}>
+        <Stat k="дохід усього" v={formatMoney(totals.rev)} />
+        <Stat
+          k={`маржа · ${totals.marginPct.toFixed(1)}%`}
+          v={formatMoney(totals.margin)}
+          tone={totals.margin < 0 ? 'warn' : 'accent'}
         />
-      ) : margin.isLoading ? (
-        <Skeleton style={{ height: 120 }} />
-      ) : margin.isError || !m ? (
-        <EmptyState
-          title="Не вдалося порахувати маржу"
-          description="Перевірте діапазон дат або спробуйте ще раз."
+        <Stat k="оплачено" v={`${totals.paidPct.toFixed(0)}%`} />
+        <Stat
+          k="збиткових"
+          v={String(totals.losses)}
+          tone={totals.losses > 0 ? 'warn' : undefined}
         />
-      ) : (
-        <>
-          <div className="wfp-stats" style={{ marginBottom: 18 }}>
-            <Stat k="дохід" v={formatMoney(num(m.revenueUsd))} />
-            <Stat k="собівартість" v={formatMoney(num(m.costUsd))} />
-            <Stat
-              k={`маржа · ${m.marginPct}%`}
-              v={formatMoney(num(m.marginUsd))}
-              tone={marginTone(num(m.marginPct))}
-            />
-            <Stat k="оплачено" v={`${m.paidPct}%`} />
-          </div>
+      </div>
 
-          {m.projects.length === 0 ? (
-            <EmptyState
-              title="Немає активних проєктів у періоді"
-              description="За цей діапазон у клієнта не було доходу чи витрат."
-            />
-          ) : (
-            <Card title="Проєкти">
-              {m.projects.map((p) => (
-                <ProjectRow key={p.projectId} p={p} />
-              ))}
-            </Card>
-          )}
-        </>
-      )}
+      <Tabs
+        items={[
+          { id: 'clients', label: 'За клієнтами' },
+          { id: 'projects', label: 'За проєктами' },
+        ]}
+        value={group}
+        onChange={(id) => setGroup(id as typeof group)}
+      />
+
+      <div style={{ marginTop: 16 }}>
+        {noClients ? (
+          <EmptyState
+            title="Клієнтів ще немає"
+            description="Маржа зʼявиться, коли будуть клієнти."
+          />
+        ) : loading ? (
+          <Skeleton style={{ height: 200 }} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title="Немає даних за період"
+            description="За цей діапазон не було доходу чи витрат."
+          />
+        ) : (
+          <Card>
+            <div
+              className="wfp-mono"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: COLS,
+                gap: 8,
+                fontSize: 11,
+                color: 'var(--wf-fg-muted)',
+                paddingBottom: 8,
+                borderBottom: '1px solid var(--wf-border)',
+              }}
+            >
+              <span>{group === 'clients' ? 'КЛІЄНТ' : 'ПРОЄКТ'}</span>
+              <span style={{ textAlign: 'right' }}>ДОХІД</span>
+              <span style={{ textAlign: 'right' }}>СОБІВАРТ.</span>
+              <span style={{ textAlign: 'right' }}>МАРЖА</span>
+              <span style={{ textAlign: 'right' }}>МАРЖА%</span>
+              <span style={{ textAlign: 'right' }}>ОПЛАЧ.%</span>
+            </div>
+            {rows.map((r) => (
+              <div
+                key={r.key}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: COLS,
+                  gap: 8,
+                  fontSize: 13,
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--wf-border)',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                    }}
+                  >
+                    {r.name}
+                  </span>
+                  {r.sub != null && (
+                    <span
+                      className="wfp-mono"
+                      style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}
+                    >
+                      {r.sub}
+                    </span>
+                  )}
+                </span>
+                <span style={{ textAlign: 'right' }}>{formatMoney(r.revenue)}</span>
+                <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
+                  {formatMoney(r.cost)}
+                </span>
+                <span
+                  style={{
+                    textAlign: 'right',
+                    fontWeight: 600,
+                    color: r.margin < 0 ? 'var(--wf-warning)' : 'var(--wf-accent)',
+                  }}
+                >
+                  {formatMoney(r.margin)}
+                </span>
+                <span
+                  style={{
+                    textAlign: 'right',
+                    color: r.margin < 0 ? 'var(--wf-warning)' : undefined,
+                  }}
+                >
+                  {r.marginPct.toFixed(1)}%
+                </span>
+                <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
+                  {r.paidPct.toFixed(0)}%
+                </span>
+              </div>
+            ))}
+            {/* Totals row */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: COLS,
+                gap: 8,
+                fontSize: 13,
+                padding: '12px 0 2px',
+                fontWeight: 700,
+              }}
+            >
+              <span>Разом</span>
+              <span style={{ textAlign: 'right' }}>{formatMoney(totals.rev)}</span>
+              <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
+                {formatMoney(totals.cost)}
+              </span>
+              <span
+                style={{
+                  textAlign: 'right',
+                  color: totals.margin < 0 ? 'var(--wf-warning)' : 'var(--wf-accent)',
+                }}
+              >
+                {formatMoney(totals.margin)}
+              </span>
+              <span style={{ textAlign: 'right' }}>{totals.marginPct.toFixed(1)}%</span>
+              <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
+                {totals.paidPct.toFixed(0)}%
+              </span>
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

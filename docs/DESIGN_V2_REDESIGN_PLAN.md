@@ -43,7 +43,9 @@ Net-new React-компоненти над уже-портованим CSS:
 - [x] **W-fin /finance** ✅ — 3 таби (Огляд/Витрати/P&L): Огляд = KPI + **donut витрат** + **LineChart
       тренд 6 міс** (3 серії, `useMonthlyPnl` через useQueries); P&L = місячна таблиця. Нові
       `components/LineChart` + `lib/expenseCategories` (спільні кольори з дашборд-donut). Маржа — окремий /margin.
-- [ ] **W-margin /margin** → group-by toggle (клієнти/проєкти/виконавці) + sort + totals-row + overhead-кол.
+- [x] **W-margin /margin** ✅ — toggle За клієнтами/За проєктами (один набір `useAllClientMargins`
+      через useQueries — client-margin уже несе projects) + stats (дохід/маржа%/оплачено/збиткових) +
+      сортування за маржею + totals-row + loss-підсвітка. (Виконавці/overhead — дані не покривають, відкладено.)
 - [ ] **W-billing /billing** → 6-tab хаб (Рахунки/Платежі/Дебітори/Виплати/Сервіси/Гаманці) над наявними сторінками.
 - [ ] **W-svc /services** → ServiceEditModal з two-axis економікою (cost×bill mode) + makes-task + category/type + live-margin.
 - [ ] **W-proj /projects** → status-pills + колонки (model/cycle/margin/entity) + **ProjectCreateWizard** (multi-step: client→model→money→scope/services→cycle/contract→review).
