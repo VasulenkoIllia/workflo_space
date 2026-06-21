@@ -13,6 +13,7 @@ import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { ClientsPage } from '@/routes/clients/ClientsPage'
 import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
 import { ProfilePage } from '@/routes/profile/ProfilePage'
+import { BillingPage } from '@/routes/billing/BillingPage'
 import { Placeholder } from '@/routes/Placeholder'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -72,6 +73,15 @@ export default function App() {
           element={
             <RoleRoute allow={['owner', 'manager']}>
               <TeamPage />
+            </RoleRoute>
+          }
+        />
+        {/* Finance — owner-only (manager is finance-blocked, MOD-4). */}
+        <Route
+          path="/billing"
+          element={
+            <RoleRoute allow={['owner']}>
+              <BillingPage />
             </RoleRoute>
           }
         />
