@@ -15,11 +15,13 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const count = data?.comments.length ?? 0
 
+  // Mark read once per order open — NOT on every count change, or each inbound SSE message would
+  // re-POST and prematurely mark unseen messages read.
   useEffect(() => {
     markCommentsRead(orderId).catch(() => {
       /* non-critical; unread re-syncs on next open */
     })
-  }, [orderId, count])
+  }, [orderId])
 
   useEffect(() => {
     const el = scrollRef.current

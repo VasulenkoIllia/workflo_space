@@ -5,6 +5,7 @@ export interface FinProject {
   id: string
   companyId: string
   name: string
+  type: string | null
   billingModel: 'fixed_monthly_advance' | 'hourly_prepaid' | 'hourly_postpaid'
   currency: string
   abonAmount: string | null
@@ -14,7 +15,11 @@ export interface FinProject {
   cycleWeekday: number | null
   nextCycleAt: string | null
   paymentTermsDays: number | null
+  legalEntityId: string | null
   contractRequired: boolean
+  contractDocumentId: string | null
+  requiresApproval: boolean | null
+  advanceGatePct: string | null
   includedHoursCap: string | null
   approvalMode: 'none' | 'upfront' | 'on_actuals' | null
   invoiceApprover: 'client' | 'internal' | null

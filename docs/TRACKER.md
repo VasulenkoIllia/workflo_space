@@ -1,12 +1,12 @@
 # WORKFLO.SPACE — Tracker (спрінти)
 
-> Оновлено: **9 червня 2026** (Sprint 5 завершено + аудит-ремедіація).
+> Оновлено: **21 червня 2026** (Sprint 5.6 backend ✅ + перші S5.6-екрани S5-11/S5-12 ✅ + аудит стану).
 > Статуси: ⬜ pending | 🔄 in progress | ✅ done | 🧪 tested | 🚀 deployed | ❌ blocked
 > `SPEC.md` = ЩО будуємо. Цей файл = У ЯКОМУ ПОРЯДКУ. Канон БД — `schema.prisma`; код — git.
 
 ---
 
-## 🧭 СТАН ЗАРАЗ (9 червня 2026)
+## 🧭 СТАН ЗАРАЗ (21 червня 2026)
 
 **✅ ГОТОВО (закодовано + verified, гілка `dev`):**
 
@@ -18,6 +18,9 @@
 - **S4** Workspace frontend (role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients) + IP-whitelist 🧪
 - **S5 Billing+Wallet+Finance+Team — ✅ ЗАВЕРШЕНО (фінансове ядро, backend, гілка `dev`):** усі S5-01…S5-10 + міграція `s5_00_financial_core` + 4-вимірний аудит з ремедіацією. Деталі — нижче «S5 РОЗГОРНУТО» та [`S5_AUDIT.md`](S5_AUDIT.md). Гейт: type-check 21/21 · lint 13/13 · **test (api 343 unit + 57 gated integration на реальному PG16) + types 46** · build 13/13. **Запушено** (звірено 11.06: `origin/dev` синхронний; staging redeploy тригернуто `0ecefdb`); **не протестовано вручну на staging** — план: [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md), оновлення сервера: [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md).
 - **Аудит-ремедіація (S0-S4, 11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes · runtime-branding seam · exec-доки.
+- **S5.6 «Фінансова модель 2.0» — ✅ BACKEND ЗАВЕРШЕНО (гілка `dev`):** усі P-0…P-11 + MOD-1…MOD-4. Project замінив CompanyService (P-1e drop, БЕЗ backfill); LegalEntity; гібрид cycle-engine (fixed/hourly_prepaid/hourly_postpaid · monthly/weekly/manual); маржа-движок; payment-terms→dueDate; EUR+бонус-валюта; контракт-гейт; estimate-lines (P-6); approval 02-А (upfront) + **P-11 погодження вартості 3 режими** (`approvalMode` none/upfront/on_actuals + `invoiceApprover` client/internal + counter-offer); роль `manager` у `can()` (MANAGER_BLOCKED: finance/settings/credentials/payment.confirm). Гейт: api **572** real-PG · type-check 23 · lint 14 · build 14 · drift-free. Деталі — РЕПЛАН нижче + [`PROJECTS_SPEC.md`](PROJECTS_SPEC.md) §8.
+- **S5.6 FRONTEND (перші екрани, S5-11/S5-12, ✅):** portal `/billing` (фінанси клієнта + on_actuals-погодження), workspace `/billing` (фінанси команди + черга випуску on_actuals), workspace `/projects` (конфіг фін-проєкту — self-service enabler), `GET /workspace/companies` (пікер компаній). Решта S5.6-екранів (project360/client360/margin/service-catalog/reports) — далі за `design-v2/`.
+- **🔎 Аудит стану (2026-06-21) + ремедіація S5.6-AR ✅:** 5-вимірний (security/finance/types/frontend/docs). Фін-ядро — інваріанти коректні (0 crit/high у грошах). Знайдено й **ВИПРАВЛЕНО** (рішення власника: повний finance-блок manager + усі фікси одним проходом): manager-блок на нових S5.6-роутах (projects/estimates/companies/requisites), FE-баги (`formatMoney(NaN)`, chat mark-read write-storm), контракт-дрейф (approval DTO нормалізовано; `FinProject`+5 полів), M2-M8 (currency-enum, approvalMode-каскад, discount-гарди, date-ISO). Гейт зелений (type-check 23 · lint 14 · api 425 · build 14); code-review 0 crit/high. Запис — [`AUDIT_S5.6_2026-06.md`](AUDIT_S5.6_2026-06.md).
 
 **🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
 

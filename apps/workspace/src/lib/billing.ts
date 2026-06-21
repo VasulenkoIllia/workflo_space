@@ -52,12 +52,23 @@ export interface DecideChargeVars {
   approvedAmount?: number
 }
 
+/** Release response — the decided charge's mutable fields (normalized DTO, not a full row). */
+export interface DecidedCharge {
+  id: string
+  approvalStatus: 'pending' | 'approved' | 'rejected' | null
+  approvalComment: string | null
+  approvalDecidedAt: string | null
+  approvedAmount: string | null
+  amount: string
+  totalAmount: string | null
+}
+
 /** POST /workspace/billing/charges/:id/approval — internal release of a draft on_actuals charge. */
 export function useReleaseCharge() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }: DecideChargeVars) =>
-      api.post<{ charge: WsCharge }>(`/workspace/billing/charges/${id}/approval`, body),
+      api.post<{ charge: DecidedCharge }>(`/workspace/billing/charges/${id}/approval`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['ws-billing'] })
     },

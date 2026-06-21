@@ -5,6 +5,7 @@ import {
   ProjectBillingCycle,
   ProjectBillingModel,
 } from '../enums.js'
+import { billingCurrency } from './billing.schema.js'
 
 /**
  * Financial projects (05-ПРОЕКТИ, PROJECTS_SPEC §2/§5 — S5.6 P-1). A project is a
@@ -36,7 +37,9 @@ export function defaultContractRequired(model: ProjectBillingModel): boolean {
 const baseShape = {
   name: z.string().trim().min(2).max(200),
   type: z.string().trim().max(100).nullish(),
-  currency: z.string().trim().length(3).toUpperCase().default('USD'),
+  // Must be a supported billing currency (USD/UAH/EUR) — allocation matches payment currency to
+  // charge currency, so an arbitrary code would leave the charge permanently unsettleable.
+  currency: billingCurrency.default('USD'),
   abonAmount: amount.nullish(),
   clientHourlyRate: amount.nullish(),
   billingCycle: z.nativeEnum(ProjectBillingCycle).default(ProjectBillingCycle.MONTHLY_DAY_N),

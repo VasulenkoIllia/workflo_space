@@ -87,12 +87,23 @@ export interface DecideChargeVars {
   approvedAmount?: number
 }
 
+/** Approve/reject response — the decided charge's mutable fields (normalized DTO, not a full row). */
+export interface DecidedCharge {
+  id: string
+  approvalStatus: 'pending' | 'approved' | 'rejected' | null
+  approvalComment: string | null
+  approvalDecidedAt: string | null
+  approvedAmount: string | null
+  amount: string
+  totalAmount: string | null
+}
+
 /** POST /portal/charges/:id/approval — client releases / refuses a draft on_actuals charge. */
 export function useDecideCharge() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...body }: DecideChargeVars) =>
-      api.post<{ charge: PortalCharge }>(`/portal/charges/${id}/approval`, body),
+      api.post<{ charge: DecidedCharge }>(`/portal/charges/${id}/approval`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['portal-billing'] })
     },

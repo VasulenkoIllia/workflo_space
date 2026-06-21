@@ -8,7 +8,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import {
@@ -33,7 +33,11 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || !(await moduleEnabled(agencyId, 'billing'))) {
+      if (
+        !isInternalTeam(user) ||
+        isAgencyManager(user, agencyId) ||
+        !(await moduleEnabled(agencyId, 'billing'))
+      ) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const estimate = await withTenant((tx) =>
@@ -51,7 +55,11 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
       const input = createEstimateLineSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || !(await moduleEnabled(agencyId, 'billing'))) {
+      if (
+        !isInternalTeam(user) ||
+        isAgencyManager(user, agencyId) ||
+        !(await moduleEnabled(agencyId, 'billing'))
+      ) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const line = await tenantTransaction(prisma, (tx) =>
@@ -78,7 +86,11 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
       const input = updateEstimateLineSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || !(await moduleEnabled(agencyId, 'billing'))) {
+      if (
+        !isInternalTeam(user) ||
+        isAgencyManager(user, agencyId) ||
+        !(await moduleEnabled(agencyId, 'billing'))
+      ) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const line = await tenantTransaction(prisma, (tx) =>
@@ -100,7 +112,11 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || !(await moduleEnabled(agencyId, 'billing'))) {
+      if (
+        !isInternalTeam(user) ||
+        isAgencyManager(user, agencyId) ||
+        !(await moduleEnabled(agencyId, 'billing'))
+      ) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       await tenantTransaction(prisma, (tx) =>

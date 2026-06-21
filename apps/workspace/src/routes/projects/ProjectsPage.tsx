@@ -88,8 +88,9 @@ function ProjectModal({
   const [cycle, setCycle] = useState<FinProject['billingCycle']>(
     project?.billingCycle ?? 'monthly_day_n'
   )
-  const [mode, setMode] = useState<NonNullable<FinProject['approvalMode']>>(
-    project?.approvalMode ?? 'none'
+  // '' = успадкувати (каскад компанія → агенція, P-11); явне значення закріплює цей проєкт.
+  const [mode, setMode] = useState<'' | NonNullable<FinProject['approvalMode']>>(
+    project?.approvalMode ?? ''
   )
   const [approver, setApprover] = useState<NonNullable<FinProject['invoiceApprover']>>(
     project?.invoiceApprover ?? 'internal'
@@ -106,7 +107,7 @@ function ProjectModal({
       name: name.trim(),
       currency,
       billingCycle: cycle,
-      approvalMode: mode,
+      approvalMode: mode === '' ? null : mode,
       invoiceApprover: approver,
       abonAmount: isFixed ? Number(abon) : null,
       clientHourlyRate: isFixed ? null : Number(rate),
@@ -181,10 +182,15 @@ function ProjectModal({
             onChange={(v) => setCycle(v as FinProject['billingCycle'])}
             options={Object.entries(CYCLE_LABEL).map(([value, label]) => ({ value, label }))}
           />
-          <Input
+          <Select
             label="Валюта"
             value={currency}
-            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+            onChange={setCurrency}
+            options={[
+              { value: 'USD', label: 'USD' },
+              { value: 'UAH', label: 'UAH' },
+              { value: 'EUR', label: 'EUR' },
+            ]}
           />
         </div>
         <div
@@ -199,8 +205,11 @@ function ProjectModal({
           <Select
             label="Погодження вартості"
             value={mode}
-            onChange={(v) => setMode(v as NonNullable<FinProject['approvalMode']>)}
-            options={Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label }))}
+            onChange={(v) => setMode(v as '' | NonNullable<FinProject['approvalMode']>)}
+            options={[
+              { value: '', label: 'Успадкувати (за замовч.)' },
+              ...Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label })),
+            ]}
           />
           {mode === 'on_actuals' && (
             <Select

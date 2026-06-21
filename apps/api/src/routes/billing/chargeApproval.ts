@@ -174,7 +174,18 @@ async function decideCharge(
     metadata: { channel, approvedAmount: input.approvedAmount ?? null, comment },
   })
 
-  return reply.send({ success: true, data: { charge: updated } })
+  // Normalize to a string/ISO DTO (Decimals → fixed-2, Date → ISO) so the response matches the
+  // wire contract the clients declare — never ship a raw Prisma payload.
+  const dto = {
+    id: updated.id,
+    approvalStatus: updated.approvalStatus,
+    approvalComment: updated.approvalComment,
+    approvalDecidedAt: updated.approvalDecidedAt ? updated.approvalDecidedAt.toISOString() : null,
+    approvedAmount: updated.approvedAmount ? updated.approvedAmount.toFixed(2) : null,
+    amount: updated.amount.toFixed(2),
+    totalAmount: updated.totalAmount ? updated.totalAmount.toFixed(2) : null,
+  }
+  return reply.send({ success: true, data: { charge: dto } })
 }
 
 /**

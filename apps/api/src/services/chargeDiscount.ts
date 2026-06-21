@@ -91,6 +91,7 @@ export async function applyChargeDiscount(
       agencyId: true,
       companyId: true,
       status: true,
+      approvalStatus: true,
       baseAmount: true,
       amount: true,
       discountAmount: true,
@@ -109,7 +110,26 @@ export async function applyChargeDiscount(
       409
     )
   }
-  const { manualDiscountAmount, totalAmount } = computeManualDiscount(postLoyaltyNet(existing), {
+  // A pending on_actuals draft isn't a live bill yet — discounting it would silently lower the
+  // amount the client sees in the approval flow. Resolve the approval first (P-11).
+  if (existing.approvalStatus === 'pending') {
+    throw new AppError(
+      ApiErrorCode.CONFLICT,
+      'Спочатку погодьте або відхиліть чернетку нарахування',
+      409
+    )
+  }
+  const net = postLoyaltyNet(existing)
+  // A credit line (negative net, e.g. prepaid_credit) can't be discounted — a positive reduction
+  // would shrink the client's credit and under-state moneyBalance.
+  if (net.lessThan(0)) {
+    throw new AppError(
+      ApiErrorCode.CONFLICT,
+      'Не можна змінювати знижку на кредит-нарахування',
+      409
+    )
+  }
+  const { manualDiscountAmount, totalAmount } = computeManualDiscount(net, {
     pct: args.pct,
     amount: args.amount,
   })

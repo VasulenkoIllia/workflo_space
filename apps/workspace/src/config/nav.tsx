@@ -48,13 +48,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
 
   { group: 'Акаунт', roles: 'omx' },
   { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile', roles: 'omx' },
-  {
-    id: 'settings',
-    label: 'Налаштування',
-    icon: <Icon name="settings" />,
-    href: '/settings',
-    roles: 'omx',
-  },
+  // NOTE: no workspace /settings screen exists yet (only Profile). The nav lists built screens
+  // only — re-add when the settings screen lands. The /settings route still renders a placeholder.
 ]
 
 /**

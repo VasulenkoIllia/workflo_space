@@ -10,7 +10,7 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
+import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { closeProjectCycle } from '../../services/recurringCharges.js'
@@ -64,8 +64,13 @@ function toDto(p: ProjectRow) {
   }
 }
 
-function assertInternal(user: Pick<AccessClaims, 'agencyMemberships'>): void {
-  if (!isInternalTeam(user)) {
+/**
+ * Financial-projects are a finance surface → managers are blocked (MOD-4 `MANAGER_BLOCKED`),
+ * exactly like every other billing route (overview/charges/payments/wallet/…). Owner + executor
+ * pass; manager → 403. close-cycle even generates live charges, so the gate must hold on writes.
+ */
+function assertInternal(user: Pick<AccessClaims, 'agencyMemberships'>, agencyId: string): void {
+  if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
     throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
   }
 }
@@ -93,7 +98,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
       const { companyId } = request.query
       const rows = await withTenant((tx) =>
@@ -114,7 +119,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
       const project = await withTenant((tx) =>
         tx.project.findFirst({ where: { id: request.params.id, agencyId }, select: PROJECT_SELECT })
@@ -134,7 +139,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = createProjectSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
 
       const project = await withTenant(async (tx) => {
@@ -202,7 +207,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = updateProjectSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
 
       const project = await withTenant(async (tx) => {
@@ -299,7 +304,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
 
       await withTenant(async (tx) => {
@@ -342,8 +347,16 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = closeCycleSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      assertInternal(user, agencyId)
       await assertModule(agencyId)
+
+      // The schema regex accepts well-formed but non-existent calendar dates (e.g. 2024-02-30);
+      // reject those as 400 before they reach the SQL period range as an Invalid Date.
+      const periodStart = new Date(input.periodStart)
+      const periodEnd = new Date(input.periodEnd)
+      if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime())) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Некоректна дата періоду', 400)
+      }
 
       const result = await tenantTransaction(prisma, async (tx) => {
         const project = await tx.project.findFirst({
@@ -363,8 +376,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
         return closeProjectCycle(tx, {
           agencyId,
           projectId: project.id,
-          periodStart: new Date(input.periodStart),
-          periodEnd: new Date(input.periodEnd),
+          periodStart,
+          periodEnd,
         })
       })
 

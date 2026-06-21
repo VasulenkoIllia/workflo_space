@@ -114,7 +114,7 @@ const portalSummaryRoute: FastifyPluginAsync = (fastify) => {
             amount: (p.abonAmount ?? p.clientHourlyRate)?.toFixed(2) ?? null,
             currency: p.currency,
             billingCycle: p.billingCycle,
-            nextCycleAt: p.nextCycleAt,
+            nextCycleAt: p.nextCycleAt ? p.nextCycleAt.toISOString() : null,
           })),
           paymentSettings: data.settings,
         },

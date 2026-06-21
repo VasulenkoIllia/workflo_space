@@ -48,6 +48,9 @@ vi.mock('@workflo/db', async (importOriginal) => {
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 
 const { buildApp } = await import('../src/app.js')
+// Real Prisma via the mocked module (it re-exports `actual.Prisma`) — imported here, after the
+// mock vars are initialized, to avoid the vi.mock hoist touching it during module load.
+const { Prisma } = await import('@workflo/db')
 
 const AGENCY = 'agency-1'
 const COMPANY = '11111111-1111-4111-8111-111111111111'
@@ -124,11 +127,15 @@ beforeEach(() => {
   walletAggregate.mockResolvedValue({ _sum: { amount: null } })
   // One return serves both refreshMoneyBalance $queryRaw calls (FOR UPDATE row + charged sum).
   queryRaw.mockResolvedValue([{ id: COMPANY, agencyId: AGENCY, charged: 0 }])
+  // Faithful to production: findUniqueOrThrow returns Prisma.Decimal/Date, which the route
+  // normalizes to a string/ISO DTO before responding (never a raw Prisma payload).
   chargeFindUniqueOrThrow.mockResolvedValue({
     id: 'ch-1',
     approvalStatus: 'approved',
-    totalAmount: '150.00',
-    amount: '150.00',
+    approvalComment: null,
+    approvalDecidedAt: new Date('2026-06-21T00:00:00.000Z'),
+    totalAmount: new Prisma.Decimal('150.00'),
+    amount: new Prisma.Decimal('150.00'),
     approvedAmount: null,
   })
 })
@@ -177,7 +184,15 @@ describe('POST /workspace/billing/charges/:id/approval (P-11c, internal)', () =>
 
   it('reject with reason → rejected, no balance refresh', async () => {
     chargeFindFirst.mockResolvedValue(INTERNAL_CHARGE)
-    chargeFindUniqueOrThrow.mockResolvedValue({ id: 'ch-1', approvalStatus: 'rejected' })
+    chargeFindUniqueOrThrow.mockResolvedValue({
+      id: 'ch-1',
+      approvalStatus: 'rejected',
+      approvalComment: 'Завищено',
+      approvalDecidedAt: new Date('2026-06-21T00:00:00.000Z'),
+      totalAmount: new Prisma.Decimal('150.00'),
+      amount: new Prisma.Decimal('150.00'),
+      approvedAmount: null,
+    })
     const { app, token } = await authed(TEAM)
     const res = await post(app, token, '/workspace/billing/charges/ch-1/approval', {
       decision: 'reject',

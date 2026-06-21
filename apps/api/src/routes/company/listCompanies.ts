@@ -2,12 +2,12 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 
 /**
  * GET /workspace/companies — lightweight id+name list of the agency's client companies.
- * Internal team only. Feeds the company picker on the financial-projects screen (and other
- * client-scoped UIs). The rich client profile lives in module 28 (client management).
+ * Owner + executor only (finance-context picker for the projects screen → manager-blocked,
+ * MOD-4, like the rest of the billing surface). The rich client profile lives in module 28.
  */
 const listCompaniesRoute: FastifyPluginAsync = (fastify) => {
   fastify.get(
@@ -16,7 +16,7 @@ const listCompaniesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
       const companies = await withTenant((tx) =>

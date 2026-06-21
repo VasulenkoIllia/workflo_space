@@ -79,10 +79,12 @@ function toDto(c: ChargeRow) {
     kind: c.kind ?? null,
     approvalStatus: c.approvalStatus ?? null,
     approvedAmount: c.approvedAmount ? c.approvedAmount.toFixed(2) : null,
-    approvalDecidedAt: c.approvalDecidedAt ?? null,
+    approvalDecidedAt: c.approvalDecidedAt ? c.approvalDecidedAt.toISOString() : null,
     approvalComment: c.approvalComment ?? null,
-    dueDate: c.dueDate,
-    paidAt: c.paidAt,
+    // Explicit ISO — the frontend types these as `string | null`; don't rely on Fastify's
+    // implicit Date→ISO serialization (a schema/serializer layer would break the contract).
+    dueDate: c.dueDate ? c.dueDate.toISOString() : null,
+    paidAt: c.paidAt ? c.paidAt.toISOString() : null,
   }
 }
 

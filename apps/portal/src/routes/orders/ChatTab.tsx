@@ -13,12 +13,13 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const count = data?.comments.length ?? 0
 
-  // Mark read on open + when the count changes (the live stream lives at page level).
+  // Mark read once per order open — NOT on every count change, or each inbound SSE message
+  // (the live stream lives at page level) would re-POST and mark unseen messages read.
   useEffect(() => {
     markCommentsRead(orderId).catch(() => {
       /* non-critical; unread re-syncs on next open */
     })
-  }, [orderId, count])
+  }, [orderId])
 
   // Auto-scroll to the latest message, but only if the user is already near the bottom.
   useEffect(() => {

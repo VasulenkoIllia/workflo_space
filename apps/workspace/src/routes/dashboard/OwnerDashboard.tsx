@@ -8,7 +8,7 @@ import { KanbanBoard } from '@/routes/orders/KanbanBoard'
 export function OwnerDashboard() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useOrders({})
-  const { data: unassigned } = useOrders({ assigneeId: 'none' })
+  const { data: unassigned, isError: unassignedErr } = useOrders({ assigneeId: 'none' })
   const orders = data?.orders ?? []
 
   const queue = countByStatus(orders, [OrderInternalStatus.NEW, OrderInternalStatus.CLARIFICATION])
@@ -65,7 +65,7 @@ export function OwnerDashboard() {
         </div>
       </div>
 
-      {(overdue.length > 0 || unassignedCount > 0) && (
+      {(overdue.length > 0 || unassignedCount > 0 || unassignedErr) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
           <AttentionItem
             icon="alert"
@@ -79,14 +79,17 @@ export function OwnerDashboard() {
                 .join(' · ') || '—'
             }
           />
-          <AttentionItem
-            icon="users"
-            color="var(--wf-fg-muted)"
-            title="Замовлення без виконавця"
-            value={unassignedCount}
-            hint="потребують призначення"
-            onClick={() => navigate('/orders')}
-          />
+          {(unassignedCount > 0 || unassignedErr) && (
+            <AttentionItem
+              icon="users"
+              color="var(--wf-fg-muted)"
+              title="Замовлення без виконавця"
+              // Don't silently coalesce a failed count to 0 — show that it couldn't load.
+              value={unassignedErr ? '—' : unassignedCount}
+              hint={unassignedErr ? 'не вдалося порахувати — оновіть' : 'потребують призначення'}
+              onClick={() => navigate('/orders')}
+            />
+          )}
         </div>
       )}
 
@@ -121,7 +124,7 @@ function AttentionItem({
   icon: 'alert' | 'users' | 'receipt'
   color: string
   title: string
-  value: number
+  value: number | string
   hint: string
   onClick?: () => void
 }) {

@@ -8,7 +8,8 @@ export function formatDate(iso: string | null | undefined): string {
 
 /** "$4 200" — prefix + uk-UA space-grouped, matching the design. */
 export function formatMoney(amount: number | null | undefined): string {
-  if (amount == null) return '—'
+  // Guard non-finite too: `num(badString)` returns NaN, and `NaN.toLocaleString()` → "NaN".
+  if (amount == null || !Number.isFinite(amount)) return '—'
   return `$${amount.toLocaleString('uk-UA')}`
 }
 
