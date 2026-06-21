@@ -20,7 +20,7 @@ import { MarginPage } from '@/routes/margin/MarginPage'
 import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
 import { ServicesPage } from '@/routes/services/ServicesPage'
 import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
-import { Placeholder } from '@/routes/Placeholder'
+import { SettingsPage } from '@/routes/settings/SettingsPage'
 import { useAuth } from '@/contexts/AuthContext'
 
 /** Home is role-aware: owner/manager → operational overview, executor → personal task board. */
@@ -47,7 +47,14 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/settings" element={<Placeholder title="Налаштування" />} />
+        <Route
+          path="/settings"
+          element={
+            <RoleRoute allow={['owner']}>
+              <SettingsPage />
+            </RoleRoute>
+          }
+        />
 
         {/* Owner-only */}
         <Route

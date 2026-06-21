@@ -30,7 +30,7 @@ api **425** unit · build 14/14):
 - **M2** — ProjectsPage опція «Успадкувати»→`null` (каскад Company→Agency не ламається).
 - **M3/M4** — `chargeDiscount` 409 на pending-чернетку + на кредит-рядок (negative net).
 - **M5** — `project.schema` currency = `billingCurrency` enum + ProjectsPage валюта `<Select>` USD/UAH/EUR.
-- **M6** — прибрано мертвий `/settings` nav-пункт у workspace.
+- **M6** — спершу прибрано мертвий `/settings` nav-пункт; **далі (2026-06-21) збудовано повноцінний workspace `/settings`** (owner-config: платіжні реквізити + реферальна програма) → nav-пункт повернено на реальний екран.
 - **M7** — OwnerDashboard показує помилку запиту «непризначені» (не ховає як 0).
 - **M8** — явна ISO-серіалізація дат (`charges.toDto`, `portalSummary.nextCycleAt`).
 - **L3** — close-cycle NaN-гард на дати (400 замість 500).
