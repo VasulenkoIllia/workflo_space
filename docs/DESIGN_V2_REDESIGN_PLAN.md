@@ -57,7 +57,10 @@ Net-new React-компоненти над уже-портованим CSS:
       (4 кроки: Клієнт→Модель і гроші→Цикл і погодження→Огляд, з stepper + per-step валідація + review).
       Edit лишається single-form ProjectModal. (Scope/services-крок + contract — потребують
       estimate-line/document-UI, відкладено; колонки model/cycle/approval/rate уже в рядку.)
-- [ ] **W-orders /orders** → stats-strip + фільтри (status/client/executor) + bulk-select (assign/status/export) + SLA-кол.
+- [x] **W-orders /orders** ✅ — stats-strip (всього/в роботі/прострочено/не призначені) + фільтри
+      (статус/клієнт/виконавець, server-side via useOrders) + **bulk-select + bulk-assign** (`useBulkAssign`
+      fan-out PATCH /assign) + SLA-badge «прострочено» у таблиці. (Bulk change-status/export — далі;
+      per-row assignee не показуємо — WorkspaceOrder DTO без assigneeId.)
 - [ ] **W-proj360 /projects/:id** → новий (Project-360: KPI-hero + таби Overview/Team/Billing/Orders/Tasks/Finance). Partial backend.
 
 ### Phase 3 — Portal screens (бекенд ✅)

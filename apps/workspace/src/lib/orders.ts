@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { OrderInternalStatus, type OrderClientStatus, type OrderPriority } from '@workflo/types'
 import type { StatusTone } from '@workflo/ui'
 import { api } from '@/lib/api'
@@ -54,6 +54,17 @@ export function useOrders(filters: OrderFilters) {
     // NOT fire "my tasks" before the profile id resolves (empty string). Callers
     // that omit assigneeId (undefined) or pass 'none'/a UUID are always enabled.
     enabled: filters.assigneeId !== '',
+  })
+}
+
+/** Bulk-assign (or unassign with `null`) an executor to several orders — fans out PATCH
+ * /orders/:id/assign, then refreshes the list. */
+export function useBulkAssign() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, assigneeId }: { ids: string[]; assigneeId: string | null }) =>
+      Promise.all(ids.map((id) => api.patch(`/orders/${id}/assign`, { assigneeId }))),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-orders'] }),
   })
 }
 
