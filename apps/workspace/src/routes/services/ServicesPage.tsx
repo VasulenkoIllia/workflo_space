@@ -111,8 +111,13 @@ export function ServicesPage() {
   const save = useSaveService()
   const [editing, setEditing] = useState<CatalogService | null>(null)
   const [creating, setCreating] = useState(false)
+  const [search, setSearch] = useState('')
 
   const list = services.data?.services ?? []
+  const q = search.trim().toLowerCase()
+  const filtered = q ? list.filter((s) => s.name.toLowerCase().includes(q)) : list
+  const activeCount = list.filter((s) => s.isActive).length
+  const recurringCount = list.filter((s) => s.isRecurring).length
 
   return (
     <div>
@@ -121,18 +126,41 @@ export function ServicesPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          marginBottom: 18,
+          marginBottom: 16,
         }}
       >
         <div>
           <div style={{ fontSize: 28, fontWeight: 600 }}>Каталог послуг</div>
           <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-            // {list.length} · послуги для кошторисів і нарахувань
+            // послуги для кошторисів і нарахувань
           </div>
         </div>
         <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           Нова послуга
         </Button>
+      </div>
+
+      <div className="wfp-stats" style={{ marginBottom: 14 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-v">{list.length}</div>
+          <div className="wfp-stat-k">усього</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-v wfp-stat-v--accent">{activeCount}</div>
+          <div className="wfp-stat-k">активних</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-v">{recurringCount}</div>
+          <div className="wfp-stat-k">абонентських</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 320, marginBottom: 14 }}>
+        <Input
+          placeholder="Пошук послуги…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {services.isLoading ? (
@@ -142,9 +170,11 @@ export function ServicesPage() {
           title="Послуг ще немає"
           description="Створіть послуги, щоб формувати кошториси й рахунки."
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="Нічого не знайдено" description="Змініть запит пошуку." />
       ) : (
         <Card>
-          {list.map((s) => (
+          {filtered.map((s) => (
             <div
               key={s.id}
               style={{

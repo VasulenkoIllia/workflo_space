@@ -49,7 +49,10 @@ Net-new React-компоненти над уже-портованим CSS:
 - [x] **W-billing /billing** ✅ — хаб-таби **Рахунки / Платежі / Дебітори** (Tabs) над stats-стрічкою:
       Рахунки = погодження(pending/all)+release; Платежі = `useWsPayments` історія; Дебітори = повний
       список боргів. (Виплати/Сервіси/Гаманці лишаються окремими nav-екранами — не дублюємо.)
-- [ ] **W-svc /services** → ServiceEditModal з two-axis економікою (cost×bill mode) + makes-task + category/type + live-margin.
+- [~] **W-svc /services** — ✅ feasible-частина: stats-стрічка (усього/активних/абонентських) + пошук.
+  ⚠️ **two-axis економіка / makes-task / category/type — BACKEND-BLOCKED** (Service-модель має лише
+  name/desc/price/hours/recurring; cost/billMode/category/makesTask-полів нема → потребує schema-зміни,
+  окреме рішення власника, НЕ будуємо масковані поля).
 - [ ] **W-proj /projects** → status-pills + колонки (model/cycle/margin/entity) + **ProjectCreateWizard** (multi-step: client→model→money→scope/services→cycle/contract→review).
 - [ ] **W-orders /orders** → stats-strip + фільтри (status/client/executor) + bulk-select (assign/status/export) + SLA-кол.
 - [ ] **W-proj360 /projects/:id** → новий (Project-360: KPI-hero + таби Overview/Team/Billing/Orders/Tasks/Finance). Partial backend.
