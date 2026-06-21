@@ -33,6 +33,19 @@
 | `SENTRY_DSN`                             | без моніторингу помилок (Sentry = no-op)                                                                                       |
 | `TEAM_IPS`                               | **workspace недоступний** (Traefik IP-whitelist, дефолт `127.0.0.1/32` = всіх заблоковано). Виставити свій IP/CIDR через кому. |
 
+> **🌐 Без статичної (білої) IP (рішення власника 2026-06-21):** на staging workspace відкрито через
+> `TEAM_IPS=0.0.0.0/0,::/0` — IP-whitelist знятий, доступ гейтить лише логін застосунку (JWT,
+> owner/executor). Прийнятно для staging (тест-дані + auth). Застосувати:
+>
+> ```bash
+> cd /var/www/srv/workflo/staging          # відредагувати .env: TEAM_IPS=0.0.0.0/0,::/0
+> docker compose --project-name workflo-staging --env-file .env \
+>   -f docker-compose.staging.yml up -d --force-recreate workspace
+> ```
+>
+> (Traefik перечитує label `ipwhitelist.sourcerange` при перестворенні контейнера.) **На PROD так
+> НЕ робити** — там лишити реальний `TEAM_IPS` (свій IP/VPN-CIDR) або перейти на Basic Auth / Cloudflare Access.
+
 > **Висновок:** якщо S0-S4 у тебе вже працювали на staging — для S5 **нічого додавати не треба**. Просто переконайся, що список вище не зрегресував.
 
 ---
