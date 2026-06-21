@@ -39,6 +39,11 @@
 >
 > ```bash
 > cd /var/www/srv/workflo/staging          # відредагувати .env: TEAM_IPS=0.0.0.0/0,::/0
+> # ⚠️ ТЕГ: у .env *_TAG лишаються плейсхолдером `sha-initial` — деплой підставляє реальний
+> # commit-sha тег лише у своїй SSH-сесії (export, НЕ пише в .env). Для ручного compose теж
+> # підстав актуальний тег із .last_deploy, інакше `image ...:sha-initial: not found`.
+> export TAG=$(cat .last_deploy)
+> export LANDING_TAG=$TAG PORTAL_TAG=$TAG WORKSPACE_TAG=$TAG API_TAG=$TAG BOT_TAG=$TAG
 > docker compose --project-name workflo-staging --env-file .env \
 >   -f docker-compose.staging.yml up -d --force-recreate workspace
 > ```
