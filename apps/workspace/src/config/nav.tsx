@@ -35,6 +35,13 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
 
   { group: 'Фінанси', roles: 'o' },
   { id: 'billing', label: 'Фінанси', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },
+  {
+    id: 'projects',
+    label: 'Фін-проєкти',
+    icon: <Icon name="list" />,
+    href: '/projects',
+    roles: 'o',
+  },
 
   { group: 'Команда', roles: 'om' },
   { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'om' },

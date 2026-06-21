@@ -14,6 +14,7 @@ import { ClientsPage } from '@/routes/clients/ClientsPage'
 import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
 import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { BillingPage } from '@/routes/billing/BillingPage'
+import { ProjectsPage } from '@/routes/projects/ProjectsPage'
 import { Placeholder } from '@/routes/Placeholder'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -82,6 +83,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <BillingPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <RoleRoute allow={['owner']}>
+              <ProjectsPage />
             </RoleRoute>
           }
         />
