@@ -39,7 +39,10 @@ const baseShape = {
   type: z.string().trim().max(100).nullish(),
   // Must be a supported billing currency (USD/UAH/EUR) — allocation matches payment currency to
   // charge currency, so an arbitrary code would leave the charge permanently unsettleable.
-  currency: billingCurrency.default('USD'),
+  // Pre-uppercased so case-insensitive input (e.g. "eur") still normalizes to the enum value.
+  currency: z
+    .preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), billingCurrency)
+    .default('USD'),
   abonAmount: amount.nullish(),
   clientHourlyRate: amount.nullish(),
   billingCycle: z.nativeEnum(ProjectBillingCycle).default(ProjectBillingCycle.MONTHLY_DAY_N),
