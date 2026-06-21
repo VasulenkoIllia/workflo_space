@@ -46,7 +46,9 @@ Net-new React-компоненти над уже-портованим CSS:
 - [x] **W-margin /margin** ✅ — toggle За клієнтами/За проєктами (один набір `useAllClientMargins`
       через useQueries — client-margin уже несе projects) + stats (дохід/маржа%/оплачено/збиткових) +
       сортування за маржею + totals-row + loss-підсвітка. (Виконавці/overhead — дані не покривають, відкладено.)
-- [ ] **W-billing /billing** → 6-tab хаб (Рахунки/Платежі/Дебітори/Виплати/Сервіси/Гаманці) над наявними сторінками.
+- [x] **W-billing /billing** ✅ — хаб-таби **Рахунки / Платежі / Дебітори** (Tabs) над stats-стрічкою:
+      Рахунки = погодження(pending/all)+release; Платежі = `useWsPayments` історія; Дебітори = повний
+      список боргів. (Виплати/Сервіси/Гаманці лишаються окремими nav-екранами — не дублюємо.)
 - [ ] **W-svc /services** → ServiceEditModal з two-axis економікою (cost×bill mode) + makes-task + category/type + live-margin.
 - [ ] **W-proj /projects** → status-pills + колонки (model/cycle/margin/entity) + **ProjectCreateWizard** (multi-step: client→model→money→scope/services→cycle/contract→review).
 - [ ] **W-orders /orders** → stats-strip + фільтри (status/client/executor) + bulk-select (assign/status/export) + SLA-кол.

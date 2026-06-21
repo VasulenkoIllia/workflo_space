@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { formatDate, formatMoney } from '@/lib/format'
 import {
   num,
   useBillingOverview,
   useReleaseCharge,
   useWsCharges,
+  useWsPayments,
   type WsCharge,
 } from '@/lib/billing'
 
@@ -199,10 +200,20 @@ function ReleaseModal({ charge, onClose }: { charge: WsCharge; onClose: () => vo
   )
 }
 
+const PAY_TYPE: Record<string, string> = {
+  advance: 'Аванс',
+  final: 'Фінальний',
+  invoice_payment: 'Оплата рахунку',
+  manual: 'Вручну',
+  prepaid: 'Передоплата',
+}
+
 export function BillingPage() {
   const overview = useBillingOverview()
-  const [tab, setTab] = useState<'pending' | 'all'>('pending')
-  const charges = useWsCharges(tab === 'pending' ? 'pending' : undefined)
+  const [hub, setHub] = useState<'charges' | 'payments' | 'debtors'>('charges')
+  const [chargeFilter, setChargeFilter] = useState<'pending' | 'all'>('pending')
+  const charges = useWsCharges(chargeFilter === 'pending' ? 'pending' : undefined)
+  const payments = useWsPayments()
   const [releasing, setReleasing] = useState<WsCharge | null>(null)
 
   // The pending count drives the queue badge — always query it.
@@ -232,6 +243,7 @@ export function BillingPage() {
 
   const o = overview.data
   const list = charges.data?.charges ?? []
+  const paymentList = payments.data?.payments ?? []
 
   return (
     <div>
@@ -240,7 +252,7 @@ export function BillingPage() {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 18 }}
       >
-        // рахунки, погодження та борг
+        // рахунки, платежі, погодження та борг
       </div>
 
       <div className="wfp-stats" style={{ marginBottom: 18 }}>
@@ -254,58 +266,124 @@ export function BillingPage() {
         <Stat k="на погодженні" v={String(pendingCount)} tone={pendingCount ? 'warn' : undefined} />
       </div>
 
-      <div
-        style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 18, alignItems: 'start' }}
-      >
-        <div>
-          <div className="wfp-od-tabs" role="tablist" style={{ marginBottom: 4 }}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'pending'}
-              onClick={() => setTab('pending')}
-            >
-              На погодженні{pendingCount > 0 ? ` (${pendingCount})` : ''}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'all'}
-              onClick={() => setTab('all')}
-            >
-              Всі рахунки
-            </button>
-          </div>
+      <Tabs
+        items={[
+          { id: 'charges', label: `Рахунки${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
+          { id: 'payments', label: 'Платежі' },
+          {
+            id: 'debtors',
+            label: `Дебітори${o.topDebtors.length ? ` (${o.topDebtors.length})` : ''}`,
+          },
+        ]}
+        value={hub}
+        onChange={(id) => setHub(id as typeof hub)}
+      />
 
-          {charges.isLoading ? (
+      <div style={{ marginTop: 16 }}>
+        {hub === 'charges' && (
+          <>
+            <div className="wfp-od-tabs" role="tablist" style={{ marginBottom: 4 }}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chargeFilter === 'pending'}
+                onClick={() => setChargeFilter('pending')}
+              >
+                На погодженні{pendingCount > 0 ? ` (${pendingCount})` : ''}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chargeFilter === 'all'}
+                onClick={() => setChargeFilter('all')}
+              >
+                Всі рахунки
+              </button>
+            </div>
+            {charges.isLoading ? (
+              <Skeleton />
+            ) : list.length === 0 ? (
+              <EmptyState
+                title={
+                  chargeFilter === 'pending' ? 'Немає чернеток на погодженні' : 'Рахунків ще немає'
+                }
+                description={
+                  chargeFilter === 'pending'
+                    ? 'on_actuals-нарахування зʼявляться тут для випуску.'
+                    : 'Нарахування проєктів зʼявляться тут.'
+                }
+              />
+            ) : (
+              <Card>
+                {list.map((c) => (
+                  <ChargeRow key={c.id} c={c} onRelease={setReleasing} />
+                ))}
+              </Card>
+            )}
+          </>
+        )}
+
+        {hub === 'payments' &&
+          (payments.isLoading ? (
             <Skeleton />
-          ) : list.length === 0 ? (
+          ) : paymentList.length === 0 ? (
             <EmptyState
-              title={tab === 'pending' ? 'Немає чернеток на погодженні' : 'Рахунків ще немає'}
-              description={
-                tab === 'pending'
-                  ? 'on_actuals-нарахування зʼявляться тут для випуску.'
-                  : 'Нарахування проєктів зʼявляться тут.'
-              }
+              title="Платежів ще немає"
+              description="Підтверджені платежі зʼявляться тут."
             />
           ) : (
             <Card>
-              {list.map((c) => (
-                <ChargeRow key={c.id} c={c} onRelease={setReleasing} />
+              {paymentList.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--wf-border)',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600 }}>
+                      {formatMoney(num(p.amount))} {p.currency}
+                      {p.amountUsd && p.currency !== 'USD' ? (
+                        <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                          {' '}
+                          (≈ {formatMoney(num(p.amountUsd))})
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                      {PAY_TYPE[p.type] ?? p.type}
+                      {p.paymentMethod ? ` · ${p.paymentMethod}` : ''} · {formatDate(p.confirmedAt)}
+                    </div>
+                  </div>
+                  <StatusDot tone="success" />
+                </div>
               ))}
             </Card>
-          )}
-        </div>
+          ))}
 
-        <Card title="Топ боржників">
-          {o.topDebtors.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>Боргів немає 🎉</div>
+        {hub === 'debtors' &&
+          (o.topDebtors.length === 0 ? (
+            <EmptyState
+              title="Боргів немає 🎉"
+              description="Коли в клієнтів зʼявиться борг, він буде тут."
+            />
           ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
+            <Card>
               {o.topDebtors.map((d) => (
                 <div
                   key={d.companyId}
-                  style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--wf-border)',
+                    fontSize: 14,
+                  }}
                 >
                   <span
                     style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -317,9 +395,8 @@ export function BillingPage() {
                   </span>
                 </div>
               ))}
-            </div>
-          )}
-        </Card>
+            </Card>
+          ))}
       </div>
 
       {releasing && <ReleaseModal charge={releasing} onClose={() => setReleasing(null)} />}

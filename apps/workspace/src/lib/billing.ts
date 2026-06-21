@@ -76,6 +76,28 @@ export function useReleaseCharge() {
   })
 }
 
+/** GET /workspace/billing/payments — agency-wide payment history. */
+export interface WsPayment {
+  id: string
+  companyId: string
+  orderId: string | null
+  amount: string
+  currency: string
+  amountUsd: string | null
+  type: string
+  status: string
+  paymentMethod: string | null
+  note: string | null
+  confirmedAt: string
+}
+
+export function useWsPayments() {
+  return useQuery({
+    queryKey: ['ws-billing', 'payments'],
+    queryFn: () => api.get<{ payments: WsPayment[] }>('/workspace/billing/payments?limit=100'),
+  })
+}
+
 export function num(s: string | null | undefined): number | null {
   return s == null ? null : Number(s)
 }
