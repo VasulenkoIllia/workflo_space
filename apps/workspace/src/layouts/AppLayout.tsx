@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AppShell, Sidebar, Topbar, Icon } from '@workflo/ui'
+import { AppShell, Sidebar, Topbar, Icon, useTheme, type ThemeMode } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -13,8 +13,19 @@ const ROLE_LABEL: Record<string, string> = {
 export function AppLayout() {
   const { user, role, isOwner, logout } = useAuth()
   const { locale, setLocale } = useI18n()
+  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Cycle system → light → dark → system (workspace follows the OS by default; this lets the
+  // user pin a mode, persisted via ThemeProvider's localStorage).
+  const nextTheme: Record<ThemeMode, ThemeMode> = { system: 'light', light: 'dark', dark: 'system' }
+  const themeGlyph: Record<ThemeMode, string> = { system: '◐', light: '☀', dark: '☾' }
+  const themeTitle: Record<ThemeMode, string> = {
+    system: 'Тема: системна',
+    light: 'Тема: світла',
+    dark: 'Тема: темна',
+  }
 
   const nav = navVisibleForRole(WORKSPACE_NAV, role)
   const name = user?.profile.displayName ?? '—'
@@ -73,20 +84,31 @@ export function AppLayout() {
           onSearch={() => {}}
           onBell={() => {}}
           actions={
-            <button
-              type="button"
-              className="wfp-iconbtn"
-              onClick={() => setLocale(locale === 'uk' ? 'en' : 'uk')}
-              title="Змінити мову"
-              style={{
-                width: 'auto',
-                padding: '0 8px',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
-              }}
-            >
-              {locale.toUpperCase()}
-            </button>
+            <>
+              <button
+                type="button"
+                className="wfp-iconbtn"
+                onClick={() => setTheme(nextTheme[theme])}
+                title={themeTitle[theme]}
+                style={{ width: 'auto', padding: '0 8px', fontSize: 14 }}
+              >
+                {themeGlyph[theme]}
+              </button>
+              <button
+                type="button"
+                className="wfp-iconbtn"
+                onClick={() => setLocale(locale === 'uk' ? 'en' : 'uk')}
+                title="Змінити мову"
+                style={{
+                  width: 'auto',
+                  padding: '0 8px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                }}
+              >
+                {locale.toUpperCase()}
+              </button>
+            </>
           }
         />
       }
