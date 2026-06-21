@@ -49,6 +49,7 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     href: '/finance',
     roles: 'o',
   },
+  { id: 'margin', label: 'Маржа', icon: <Icon name="kanban" />, href: '/margin', roles: 'o' },
   { id: 'payouts', label: 'Виплати', icon: <Icon name="users" />, href: '/payouts', roles: 'o' },
   {
     id: 'services',

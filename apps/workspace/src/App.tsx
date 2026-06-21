@@ -16,6 +16,7 @@ import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { BillingPage } from '@/routes/billing/BillingPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
 import { FinancePage } from '@/routes/finance/FinancePage'
+import { MarginPage } from '@/routes/margin/MarginPage'
 import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
 import { ServicesPage } from '@/routes/services/ServicesPage'
 import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
@@ -103,6 +104,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <FinancePage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/margin"
+          element={
+            <RoleRoute allow={['owner']}>
+              <MarginPage />
             </RoleRoute>
           }
         />
