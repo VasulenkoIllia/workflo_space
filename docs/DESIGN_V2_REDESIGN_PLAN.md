@@ -65,9 +65,11 @@ Net-new React-компоненти над уже-портованим CSS:
 
 ### Phase 3 — Portal screens (бекенд ✅)
 
-- [ ] **P-bill /billing** → copy-to-clipboard на реквізитах (IBAN/EDRPOU/USDT) + Recurring-таб.
-- [ ] **P-loy /loyalty** → progress-meter + «як заробити» rule-cards (spending-chart — потребує history API, відкласти).
-- [ ] **P-ref /referrals** → share-кнопки + 3-step how-it-works + masked-email/status/date колонки.
+- [x] **P-bill /billing** ✅ — copy-to-clipboard на реквізитах (IBAN/Отримувач/USDT) у Req-компоненті (⧉→✓).
+- [x] **P-loy /loyalty** ✅ — progress-meter (totalPaid→наступний тір, бар + «ще $X до…») + VIP-max-нота +
+      3 rule-cards «як працює». (spending-chart — потребує history API, відкладено.)
+- [x] **P-ref /referrals** ✅ — кнопка «копіювати посилання» (`/register?ref=код`) + 3-step how-it-works
+      (StepCard). (masked-email/status — DTO referral не несе email/status, відкладено.)
 - [ ] **P-set /settings** → sub-nav (Profile/Security/Notifications) — частина секцій backend-blocked.
 - [ ] **P-order-detail /orders/:id** → approval-banner з кнопками Погодити/Запросити-правки (потребує order-approval API).
 

@@ -348,9 +348,9 @@ export function BillingPage() {
           ) : (
             <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
               <Req k="Банк" v={s.paymentSettings.bankName} />
-              <Req k="IBAN" v={s.paymentSettings.iban} mono />
-              <Req k="Отримувач" v={s.paymentSettings.accountName} />
-              <Req k="USDT" v={s.paymentSettings.cryptoUsdt} mono />
+              <Req k="IBAN" v={s.paymentSettings.iban} mono copy />
+              <Req k="Отримувач" v={s.paymentSettings.accountName} copy />
+              <Req k="USDT" v={s.paymentSettings.cryptoUsdt} mono copy />
               {s.paymentSettings.notes ? (
                 <div style={{ color: 'var(--wf-fg-muted)', marginTop: 4 }}>
                   {s.paymentSettings.notes}
@@ -387,13 +387,65 @@ export function BillingPage() {
   )
 }
 
-function Req({ k, v, mono }: { k: string; v: string | null; mono?: boolean }) {
+function Req({
+  k,
+  v,
+  mono,
+  copy,
+}: {
+  k: string
+  v: string | null
+  mono?: boolean
+  copy?: boolean
+}) {
+  const [copied, setCopied] = useState(false)
   if (!v) return null
+  const value = v
+  const doCopy = () => {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    })
+  }
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ color: 'var(--wf-fg-muted)' }}>{k}</span>
-      <span className={mono ? 'wfp-mono' : undefined} style={{ textAlign: 'right' }}>
-        {v}
+    <div
+      style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}
+    >
+      <span style={{ color: 'var(--wf-fg-muted)', flexShrink: 0 }}>{k}</span>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          minWidth: 0,
+          textAlign: 'right',
+        }}
+      >
+        <span
+          className={mono ? 'wfp-mono' : undefined}
+          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {value}
+        </span>
+        {copy && (
+          <button
+            type="button"
+            onClick={doCopy}
+            title="Скопіювати"
+            aria-label={`Скопіювати ${k}`}
+            style={{
+              border: 0,
+              background: 'none',
+              cursor: 'pointer',
+              color: copied ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+              fontSize: 12,
+              padding: 0,
+              flexShrink: 0,
+            }}
+          >
+            {copied ? '✓' : '⧉'}
+          </button>
+        )}
       </span>
     </div>
   )

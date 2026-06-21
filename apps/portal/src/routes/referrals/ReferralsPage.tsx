@@ -6,6 +6,7 @@ import { num, useReferral } from '@/lib/referral'
 export function ReferralsPage() {
   const referral = useReferral()
   const [copied, setCopied] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   if (referral.isLoading) {
     return (
@@ -29,10 +30,17 @@ export function ReferralsPage() {
   }
 
   const r = referral.data
+  const inviteLink = `${window.location.origin}/register?ref=${r.referralCode}`
   const copy = () => {
     void navigator.clipboard?.writeText(r.referralCode).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  const copyLink = () => {
+    void navigator.clipboard?.writeText(inviteLink).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 1500)
     })
   }
 
@@ -100,14 +108,42 @@ export function ReferralsPage() {
             {r.referralCode}
           </span>
           <Button variant="secondary" size="sm" onClick={copy}>
-            {copied ? 'Скопійовано ✓' : 'Скопіювати'}
+            {copied ? 'Код скопійовано ✓' : 'Копіювати код'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={copyLink}>
+            {copiedLink ? 'Посилання ✓' : 'Копіювати посилання'}
           </Button>
         </div>
         <div style={{ fontSize: 12, color: 'var(--wf-fg-muted)', marginTop: 10 }}>
-          Дайте цей код новому клієнту — коли він зареєструється й оплатить, ви отримаєте бонус на
-          гаманець.
+          Дайте цей код або посилання новому клієнту — коли він зареєструється й оплатить, ви
+          отримаєте бонус на гаманець.
         </div>
       </Card>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gap: 12,
+          marginTop: 18,
+        }}
+      >
+        <StepCard
+          n={1}
+          title="Поділіться кодом"
+          text="Надішліть код або посилання потенційному клієнту."
+        />
+        <StepCard
+          n={2}
+          title="Клієнт реєструється"
+          text="Він створює акаунт із вашим кодом і починає роботу."
+        />
+        <StepCard
+          n={3}
+          title="Ви отримуєте бонус"
+          text="Після його оплати бонус нараховується на ваш гаманець."
+        />
+      </div>
 
       <div style={{ fontSize: 18, fontWeight: 600, marginTop: 28, marginBottom: 12 }}>
         Приведені клієнти
@@ -143,6 +179,32 @@ export function ReferralsPage() {
           ))}
         </Card>
       )}
+    </div>
+  )
+}
+
+function StepCard({ n, title, text }: { n: number; title: string; text: string }) {
+  return (
+    <div className="wfp-card">
+      <div
+        className="wfp-mono"
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          background: 'var(--wf-accent-soft)',
+          color: 'var(--wf-accent)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: 700,
+          marginBottom: 8,
+        }}
+      >
+        {n}
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--wf-fg-secondary)' }}>{text}</div>
     </div>
   )
 }

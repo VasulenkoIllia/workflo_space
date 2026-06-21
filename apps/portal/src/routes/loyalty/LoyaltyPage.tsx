@@ -1,6 +1,6 @@
 import { Button, Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { formatMoney } from '@/lib/format'
-import { usePortalSummary } from '@/lib/billing'
+import { num, usePortalSummary } from '@/lib/billing'
 import { useLoyaltyTiers, type LoyaltyTier } from '@/lib/loyalty'
 
 const TIER_LABEL: Record<LoyaltyTier, string> = {
@@ -44,6 +44,12 @@ export function LoyaltyPage() {
   // summary would falsely point at the first rung.
   const next = current ? ladder.find((t) => TIER_RANK[t.tier] === currentRank + 1) : undefined
 
+  // totalPaid (lifetime, from the summary) drives the progress meter toward the next threshold.
+  const paid = num(summary.data?.totalPaid) ?? 0
+  const remaining = next ? Math.max(0, next.thresholdUsd - paid) : 0
+  const progress =
+    next && next.thresholdUsd > 0 ? Math.min(100, (paid / next.thresholdUsd) * 100) : 100
+
   return (
     <div>
       <div style={{ fontSize: 28, fontWeight: 600 }}>Лояльність</div>
@@ -78,6 +84,60 @@ export function LoyaltyPage() {
           </div>
         )}
       </div>
+
+      {hasSummary && next && (
+        <Card title="Прогрес до наступного рівня">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 13,
+              marginBottom: 8,
+            }}
+          >
+            <span>
+              Сплачено: <strong>{formatMoney(paid)}</strong>
+            </span>
+            <span style={{ color: 'var(--wf-fg-muted)' }}>
+              ще {formatMoney(remaining)} до «{TIER_LABEL[next.tier]}»
+            </span>
+          </div>
+          <div
+            style={{
+              height: 8,
+              borderRadius: 4,
+              background: 'var(--wf-border)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${progress}%`,
+                background: 'var(--wf-accent)',
+                borderRadius: 4,
+                transition: 'width .3s',
+              }}
+            />
+          </div>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginTop: 6 }}
+          >
+            {progress.toFixed(0)}% до знижки −{next.discountPercent}%
+          </div>
+        </Card>
+      )}
+
+      {hasSummary && !next && current === 'vip' && (
+        <Card>
+          <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot tone="success" /> Ви на максимальному рівні — VIP зі знижкою −{discount}%. 🎉
+          </div>
+        </Card>
+      )}
+
+      <div style={{ height: 18 }} />
 
       <Card title="Рівні">
         <div style={{ display: 'grid', gap: 2 }}>
@@ -117,6 +177,37 @@ export function LoyaltyPage() {
           })}
         </div>
       </Card>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gap: 12,
+          marginTop: 18,
+        }}
+      >
+        <RuleCard
+          title="Платіть більше — рівень росте"
+          text="Сума оплат піднімає ваш рівень лояльності."
+        />
+        <RuleCard
+          title="Рівень = знижка"
+          text="Чим вищий рівень, тим більша знижка на всі майбутні рахунки."
+        />
+        <RuleCard
+          title="Нічого робити не треба"
+          text="Рівень перераховується щоночі, а знижка застосовується автоматично."
+        />
+      </div>
+    </div>
+  )
+}
+
+function RuleCard({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="wfp-card">
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--wf-fg-secondary)' }}>{text}</div>
     </div>
   )
 }
