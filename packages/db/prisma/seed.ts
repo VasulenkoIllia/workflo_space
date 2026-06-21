@@ -376,6 +376,158 @@ async function main() {
     console.log(`ℹ️ Orders already exist (${orderCount}), skipping order seed`)
   }
 
+  // ── S5 / S5.6 sample data — so the financial / design-v2 screens aren't empty ──
+  // All guarded by count() so a reseed is idempotent; only independent rows + fully
+  // self-consistent invariants (bonusBalance == Σ wallet credits) are seeded. No payments /
+  // charges / moneyBalance (those carry cross-row money invariants — created via the UI flow).
+  const now = new Date()
+  const firstOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1))
+  const firstOfNextMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1))
+
+  if ((await prisma.service.count({ where: { agencyId } })) === 0) {
+    await prisma.service.createMany({
+      data: [
+        {
+          agencyId,
+          name: 'Підтримка інфраструктури',
+          description: 'Моніторинг і супровід серверів',
+          isRecurring: true,
+          defaultPriceUsd: '300',
+          estimatedHours: '8',
+        },
+        {
+          agencyId,
+          name: 'Розробка автоматизації',
+          description: 'Скрипти, інтеграції, боти',
+          isRecurring: false,
+          defaultPriceUsd: '1500',
+          estimatedHours: '40',
+        },
+        {
+          agencyId,
+          name: 'Консультація',
+          description: 'Аудит і рекомендації',
+          isRecurring: false,
+          defaultPriceUsd: '150',
+          estimatedHours: '4',
+        },
+      ],
+    })
+    console.log('✅ Services catalog seeded (3)')
+  }
+
+  if ((await prisma.project.count({ where: { agencyId } })) === 0) {
+    await prisma.project.create({
+      data: {
+        agencyId,
+        companyId: company.id,
+        name: 'Абонентська підтримка',
+        type: 'Підтримка',
+        billingModel: 'fixed_monthly_advance',
+        currency: 'USD',
+        abonAmount: '300',
+        billingCycle: 'monthly_day_n',
+        cycleDay: 1,
+        nextCycleAt: firstOfNextMonth,
+        contractRequired: false,
+      },
+    })
+    await prisma.project.create({
+      data: {
+        agencyId,
+        companyId: company.id,
+        name: 'Розробка інтеграцій',
+        type: 'Розробка',
+        billingModel: 'hourly_postpaid',
+        currency: 'USD',
+        clientHourlyRate: '35',
+        billingCycle: 'monthly_day_n',
+        cycleDay: 1,
+        nextCycleAt: firstOfNextMonth,
+      },
+    })
+    console.log('✅ Financial projects seeded (2)')
+  }
+
+  if ((await prisma.expense.count({ where: { agencyId } })) === 0) {
+    await prisma.expense.createMany({
+      data: [
+        {
+          agencyId,
+          type: 'recurring',
+          category: 'infrastructure',
+          vendor: 'Hetzner',
+          amount: '50',
+          currency: 'USD',
+          frequency: 'monthly',
+          startDate: firstOfMonth,
+          createdById: owner.id,
+        },
+        {
+          agencyId,
+          type: 'recurring',
+          category: 'software',
+          vendor: 'GitHub',
+          amount: '20',
+          currency: 'USD',
+          frequency: 'monthly',
+          startDate: firstOfMonth,
+          createdById: owner.id,
+        },
+        {
+          agencyId,
+          type: 'one_time',
+          category: 'marketing',
+          vendor: 'Реклама',
+          amount: '120',
+          currency: 'USD',
+          frequency: 'one_time',
+          startDate: firstOfMonth,
+          createdById: owner.id,
+        },
+      ],
+    })
+    console.log('✅ Expenses seeded (3)')
+  }
+
+  // A referred company + referral + matching bonus wallet credit (consistent: bonusBalance == credit).
+  const partner = await prisma.company.upsert({
+    where: { agencyId_slug: { agencyId, slug: 'partner-co' } },
+    update: { name: 'ТОВ Партнер', referredById: company.id },
+    create: {
+      agencyId,
+      name: 'ТОВ Партнер',
+      slug: 'partner-co',
+      language: 'uk',
+      currency: 'USD',
+      referralCode: 'workflo-PARTNER',
+      referredById: company.id,
+      notes: 'Seed — приведений тест-компанією',
+    },
+  })
+  if ((await prisma.referral.count({ where: { referrerId: company.id } })) === 0) {
+    await prisma.referral.create({
+      data: { agencyId, referrerId: company.id, referredId: partner.id, totalEarned: '25.00' },
+    })
+    console.log('✅ Referral seeded (test-company → ТОВ Партнер)')
+  }
+  if ((await prisma.walletTransaction.count({ where: { companyId: company.id } })) === 0) {
+    await prisma.walletTransaction.create({
+      data: {
+        agencyId,
+        companyId: company.id,
+        type: 'credit',
+        source: 'referral_bonus',
+        amount: '25.00',
+        balanceAfter: '25.00',
+        currency: 'USD',
+        note: 'Реферальний бонус (seed)',
+      },
+    })
+    await prisma.company.update({ where: { id: company.id }, data: { bonusBalance: '25.00' } })
+    console.log('✅ Bonus wallet credit seeded ($25)')
+  }
+
   console.log('🎉 Seed completed!')
   // Never print credentials outside local/dev (avoid leaking into CI/staging logs).
   if (process.env.NODE_ENV !== 'production') {

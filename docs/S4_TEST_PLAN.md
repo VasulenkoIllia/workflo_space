@@ -75,17 +75,27 @@ SPA звертається до API **cross-origin** за абсолютним `
 
 > Це фікс із аудиту: раніше SPA кликали відносний `/api` без nginx-проксі → у проді не діставали API. Тепер CORS (`CORS_ALLOWED_ORIGINS_*`) + cookie-domain `.workflo.space` (refresh-cookie `Path=/auth/refresh`) працюють крос-доменно. Нічого додатково заповнювати не треба — лише переконайся, що `CORS_ALLOWED_ORIGINS_STAGING` містить `https://dev-work.workflo.space` (дефолт містить).
 
-### A5. Seed тест-акаунтів на staging БД (одноразово)
+### A5. Seed тест-акаунтів + зразкових даних на staging БД
 
-Міграції накочує `migrate`-сервіс автоматично. Seed (owner/executor/client) — вручну один раз:
+Міграції накочує `migrate`-сервіс автоматично. Seed — вручну (idempotent, можна перезапускати):
 
 ```bash
-# на сервері, у каталозі проекту:
-docker compose --project-name <stg-project> --env-file .env -f docker-compose.staging.yml \
-  run --rm -e SEED_OWNER_PASSWORD='<свій>' api pnpm --filter @workflo/db seed
+# на сервері, у каталозі /var/www/srv/workflo/staging:
+export TAG=$(cat .last_deploy)
+docker compose --project-name workflo-staging --env-file .env -f docker-compose.staging.yml \
+  run --rm -e API_TAG=$TAG api pnpm --filter @workflo/db seed
 ```
 
-Дефолтні акаунти (якщо не задав свої): `owner@workflo.space / Admin123!`, `executor@workflo.space / Exec123!`, `client@example.com / Client123!`.
+> ⚠️ `API_TAG=$(cat .last_deploy)` обовʼязково — інакше compose візьме плейсхолдер `sha-initial`
+> (образу нема в GHCR → `not found`). `-e SEED_OWNER_PASSWORD='…'` — опційно, свій пароль власника.
+
+Дефолтні акаунти: `owner@workflo.space / Admin123!`, `executor@workflo.space / Exec123!`, `client@example.com / Client123!`.
+
+**Seed також кладе зразкові дані (S5/S5.6), щоб фін/design-v2-екрани були не порожні:**
+3 послуги · 2 фін-проєкти (абонплата $300/міс + погодинка $35/год) · 3 витрати (P&L/donut) ·
+2-га компанія «ТОВ Партнер» (приведена тест-компанією) + реферал + бонус $25 на гаманець.
+Усе guard-нуте `count()` → повторний seed нічого не дублює. **Платежі/нарахування/moneyBalance НЕ
+сідяться** (money-інваріанти) — створюються через UI (Рахунки → згенерувати → підтвердити).
 
 ---
 
