@@ -195,8 +195,11 @@ export function FinancePage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
   }, [])
   const today = useMemo(() => isoDay(new Date()), [])
+  const [period, setPeriod] = useState<3 | 6 | 12>(6)
+  const [expType, setExpType] = useState<'all' | ExpenseType>('all')
+  const [expCat, setExpCat] = useState<'all' | ExpenseCategory>('all')
   const pnl = usePnl(monthStart, today)
-  const monthly = useMonthlyPnl(6)
+  const monthly = useMonthlyPnl(period)
   const expenses = useExpenses()
   const archive = useArchiveExpense()
   const [editing, setEditing] = useState<Expense | null>(null)
@@ -205,6 +208,52 @@ export function FinancePage() {
   const activeExpenses = useMemo(
     () => (expenses.data?.expenses ?? []).filter((e) => e.isActive),
     [expenses.data]
+  )
+  const filteredExpenses = useMemo(
+    () =>
+      activeExpenses.filter(
+        (e) =>
+          (expType === 'all' || e.type === expType) && (expCat === 'all' || e.category === expCat)
+      ),
+    [activeExpenses, expType, expCat]
+  )
+
+  const periodLabel = period === 12 ? '12 міс' : `${period} міс`
+  const exportPnlCsv = () => {
+    const head = ['Місяць', 'Дохід', 'Витрати', 'Зарплата', 'Чистий', 'Маржа%']
+    const lines = monthly.points.map((pt) => {
+      const d = pt.data
+      return [
+        pt.month,
+        num(d?.revenueUsd) ?? 0,
+        num(d?.expensesUsd) ?? 0,
+        num(d?.salaryUsd) ?? 0,
+        num(d?.netProfitUsd) ?? 0,
+        d?.marginPct ?? '',
+      ].join(',')
+    })
+    const csv = [head.join(','), ...lines].join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pnl-${period}m.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  const periodSeg = (
+    <div className="wfp-od-tabs" role="tablist">
+      {([3, 6, 12] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          role="tab"
+          aria-selected={period === m}
+          onClick={() => setPeriod(m)}
+        >
+          {m === 12 ? 'рік' : `${m}м`}
+        </button>
+      ))}
+    </div>
   )
 
   const p = pnl.data
@@ -218,39 +267,54 @@ export function FinancePage() {
   const totalExp = donutSegs.reduce((s, x) => s + x.value, 0)
 
   const labels = monthly.points.map((pt) => monthLabel(pt.month))
+  // Series colors per design-v2 (workspace-finance.jsx): revenue=success, expenses=destructive, net=accent.
   const series = [
     {
       label: 'дохід',
-      color: 'var(--wf-accent)',
+      color: 'var(--wf-success)',
       values: monthly.points.map((pt) => num(pt.data?.revenueUsd) ?? 0),
     },
     {
       label: 'витрати',
-      color: '#F87171',
+      color: 'var(--wf-destructive)',
       values: monthly.points.map((pt) => num(pt.data?.expensesUsd) ?? 0),
     },
     {
       label: 'чистий',
-      color: '#38BDF8',
+      color: 'var(--wf-accent)',
       values: monthly.points.map((pt) => num(pt.data?.netProfitUsd) ?? 0),
     },
   ]
 
   return (
     <div>
-      <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
       <div
-        className="wfp-mono"
-        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}
       >
-        // P&L, витрати та тренд агенції
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
+          >
+            // P&L, витрати та тренд агенції
+          </div>
+        </div>
+        <Button variant="secondary" size="sm" onClick={exportPnlCsv}>
+          Експорт CSV
+        </Button>
       </div>
 
       <Tabs
         items={[
           { id: 'overview', label: 'Огляд' },
           { id: 'expenses', label: 'Витрати' },
-          { id: 'pnl', label: 'P&L · 6 міс' },
+          { id: 'pnl', label: `P&L · ${periodLabel}` },
         ]}
         value={tab}
         onChange={(id) => setTab(id as typeof tab)}
@@ -311,7 +375,7 @@ export function FinancePage() {
               )}
             </Card>
 
-            <Card title="Тренд · 6 місяців">
+            <Card title={`Тренд · ${periodLabel}`} actions={periodSeg}>
               {monthly.isLoading ? (
                 <Skeleton style={{ height: 170 }} />
               ) : (
@@ -339,16 +403,68 @@ export function FinancePage() {
               Нова витрата
             </Button>
           </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 12,
+            }}
+          >
+            <div className="wfp-od-tabs" role="tablist">
+              {(
+                [
+                  ['all', 'Усі'],
+                  ['recurring', 'Регулярні'],
+                  ['one_time', 'Разові'],
+                ] as const
+              ).map(([id, l]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={expType === id}
+                  onClick={() => setExpType(id)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <select
+              value={expCat}
+              onChange={(e) => setExpCat(e.target.value as 'all' | ExpenseCategory)}
+              style={{
+                background: 'var(--wf-surface)',
+                color: 'var(--wf-fg)',
+                border: '1px solid var(--wf-border)',
+                borderRadius: 'var(--wf-radius)',
+                padding: '6px 10px',
+                fontSize: 13,
+              }}
+            >
+              <option value="all">Усі категорії</option>
+              {Object.entries(EXPENSE_CAT).map(([v, m]) => (
+                <option key={v} value={v}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
           {expenses.isLoading ? (
             <Skeleton />
-          ) : activeExpenses.length === 0 ? (
+          ) : filteredExpenses.length === 0 ? (
             <EmptyState
-              title="Витрат ще немає"
-              description="Додайте регулярні й разові витрати агенції."
+              title={activeExpenses.length === 0 ? 'Витрат ще немає' : 'Нічого за фільтром'}
+              description={
+                activeExpenses.length === 0
+                  ? 'Додайте регулярні й разові витрати агенції.'
+                  : 'Спробуйте інший тип або категорію.'
+              }
             />
           ) : (
             <Card>
-              {activeExpenses.map((e) => (
+              {filteredExpenses.map((e) => (
                 <div
                   key={e.id}
                   style={{
