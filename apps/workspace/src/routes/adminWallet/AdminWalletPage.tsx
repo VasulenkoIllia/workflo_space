@@ -164,6 +164,9 @@ export function AdminWalletPage() {
   const [selected, setSelected] = useState<WalletCompany | null>(null)
 
   const list = companies.data?.companies ?? []
+  const totalBonus = list.reduce((s, c) => s + (num(c.bonusBalance) ?? 0), 0)
+  const totalMoney = list.reduce((s, c) => s + (num(c.moneyBalance) ?? 0), 0)
+  const withBonus = list.filter((c) => (num(c.bonusBalance) ?? 0) > 0).length
 
   return (
     <div>
@@ -174,6 +177,27 @@ export function AdminWalletPage() {
       >
         // баланси клієнтів і ручні коригування
       </div>
+
+      {!companies.isLoading && list.length > 0 && (
+        <div className="wfp-stats" style={{ marginBottom: 14 }}>
+          <div className="wfp-stat">
+            <div className="wfp-stat-v">{list.length}</div>
+            <div className="wfp-stat-k">компаній</div>
+          </div>
+          <div className="wfp-stat">
+            <div className="wfp-stat-v wfp-stat-v--accent">{formatMoney(totalBonus)}</div>
+            <div className="wfp-stat-k">бонусних зобовʼязань</div>
+          </div>
+          <div className="wfp-stat">
+            <div className="wfp-stat-v">{formatMoney(totalMoney)}</div>
+            <div className="wfp-stat-k">баланс грошей</div>
+          </div>
+          <div className="wfp-stat">
+            <div className="wfp-stat-v">{withBonus}</div>
+            <div className="wfp-stat-k">з бонусом</div>
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 320, marginBottom: 14 }}>
         <Input
