@@ -201,10 +201,17 @@ function ViewBtn({
       type="button"
       onClick={onClick}
       style={{
-        border: 0,
+        // Active = subtle lime pill (matches the app's accent-active pattern); a full
+        // fg/bg inversion read as a bright white box in dark theme.
+        border: active
+          ? '1px solid color-mix(in oklab, var(--wf-accent) 40%, transparent)'
+          : '1px solid transparent',
+        borderRadius: 6,
         padding: '6px 12px',
-        background: active ? 'var(--wf-fg)' : 'transparent',
-        color: active ? 'var(--wf-bg)' : 'var(--wf-fg-secondary)',
+        background: active
+          ? 'color-mix(in oklab, var(--wf-accent) 14%, transparent)'
+          : 'transparent',
+        color: active ? 'var(--wf-accent)' : 'var(--wf-fg-secondary)',
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: 12,
         cursor: 'pointer',
