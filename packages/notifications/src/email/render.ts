@@ -7,10 +7,16 @@ import { bindTranslator, type LocaleKey } from './i18n.js'
  * cascading rules; everything is inline). Tested with Mailpit + Gmail rendering.
  */
 
-const PRIMARY_COLOR = '#0F62FE'
-const TEXT_COLOR = '#1F2933'
-const MUTED_COLOR = '#6B7785'
-const BORDER_COLOR = '#E5E9F0'
+// Brand palette — design-v2 light theme, email-safe inline hex (CSS vars don't render
+// in most email clients). Warm stone neutrals + lime accent; replaces the old
+// IBM-Carbon blue (#0F62FE) + cool-grey that diverged from the brand.
+const BRAND_COLOR = '#0C0A09' // wordmark / strong text (warm near-black)
+const ACCENT_COLOR = '#A3D90D' // lime CTA background (--wf-accent, light)
+const ACCENT_TEXT = '#0C0A09' // text on the lime button (dark, for contrast)
+const TEXT_COLOR = '#1C1917' // body text (warm stone)
+const MUTED_COLOR = '#78716C' // muted / footer (warm stone)
+const BORDER_COLOR = '#E7E5E4' // warm stone border
+const PAGE_BG = '#FAFAF9' // page background (warm stone)
 
 /** Escape for HTML text node — converts < > & " ' */
 export function escapeText(input: string): string {
@@ -50,13 +56,13 @@ export function renderLayout(opts: LayoutOptions): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
   </head>
-  <body style="margin:0;padding:0;background:#F4F6FA;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${TEXT_COLOR};">
+  <body style="margin:0;padding:0;background:${PAGE_BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${TEXT_COLOR};">
     ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;">${preheader}</div>` : ''}
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F4F6FA;padding:24px 12px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:${PAGE_BG};padding:24px 12px;">
       <tr><td align="center">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#FFFFFF;border:1px solid ${BORDER_COLOR};border-radius:12px;overflow:hidden;">
           <tr><td style="padding:24px 32px;border-bottom:1px solid ${BORDER_COLOR};">
-            <div style="font-size:18px;font-weight:600;color:${PRIMARY_COLOR};">${brand}</div>
+            <div style="font-size:18px;font-weight:600;color:${BRAND_COLOR};">${brand}</div>
           </td></tr>
           <tr><td style="padding:32px;font-size:15px;line-height:1.55;color:${TEXT_COLOR};">
             ${opts.bodyHtml}
@@ -74,7 +80,7 @@ export function renderLayout(opts: LayoutOptions): string {
 /** Inline button. URL is escaped for the href attribute. */
 export function renderButton(url: string, label: string): string {
   return `<p style="margin:24px 0;">
-  <a href="${escapeAttr(url)}" style="display:inline-block;padding:12px 24px;background:${PRIMARY_COLOR};color:#FFFFFF;text-decoration:none;border-radius:8px;font-weight:600;">${escapeText(label)}</a>
+  <a href="${escapeAttr(url)}" style="display:inline-block;padding:12px 24px;background:${ACCENT_COLOR};color:${ACCENT_TEXT};text-decoration:none;border-radius:8px;font-weight:600;">${escapeText(label)}</a>
 </p>`
 }
 
