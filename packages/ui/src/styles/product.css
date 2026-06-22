@@ -336,7 +336,9 @@
 /* Stats row */
 .wfp-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit so 3-stat rows fill the width (no empty 4th cell); 4-stat rows stay 4-up
+     on desktop (content ≥ ~760px) and wrap gracefully on narrow screens. */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1px;
   background: var(--wf-border);
   border: 1px solid var(--wf-border);
