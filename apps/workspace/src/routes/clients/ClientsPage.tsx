@@ -3,9 +3,42 @@ import { EmptyState, Skeleton } from '@workflo/ui'
 import { useClients } from '@/lib/clients'
 import { formatMoney } from '@/lib/format'
 
+/** Loyalty-tier display (label + accent flag) — mirrors the 5-tier model (10-loyalty). */
+const TIER: Record<string, { label: string; vip?: boolean }> = {
+  new: { label: 'Новий' },
+  regular: { label: 'Постійний' },
+  silver: { label: 'Срібний' },
+  partner: { label: 'Партнер', vip: true },
+  vip: { label: 'VIP', vip: true },
+}
+
+function TierPill({ tier }: { tier: string | null }) {
+  if (!tier) return <span style={{ color: 'var(--wf-fg-muted)' }}>—</span>
+  const meta = TIER[tier] ?? { label: tier }
+  return (
+    <span
+      className="wfp-mono"
+      style={{
+        fontSize: 10,
+        padding: '2px 7px',
+        borderRadius: 999,
+        border: '1px solid var(--wf-border)',
+        color: meta.vip ? 'var(--wf-accent)' : 'var(--wf-fg-secondary)',
+        background: meta.vip
+          ? 'color-mix(in oklab, var(--wf-accent) 10%, transparent)'
+          : 'transparent',
+        textTransform: 'uppercase',
+      }}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
 /**
- * Owner — client list derived from orders (grouped by company). Full client
- * profiles (names, loyalty, payments, debt) arrive with the clients module (S5/28).
+ * Owner — client registry: agency companies (real names + loyalty tier from
+ * GET /workspace/companies) enriched with order activity. Rich profile (LTV /
+ * debt / industry / last contact) arrives with the clients module (28).
  */
 export function ClientsPage() {
   const navigate = useNavigate()
@@ -16,7 +49,7 @@ export function ClientsPage() {
       <div className="wfp-ph">
         <div className="wfp-ph-l">
           <h1 className="wfp-ph-h1">Клієнти</h1>
-          <div className="wfp-ph-sub">// {clients.length} компаній із замовленнями</div>
+          <div className="wfp-ph-sub">// {clients.length} клієнтів</div>
         </div>
       </div>
 
@@ -31,7 +64,7 @@ export function ClientsPage() {
           color: 'var(--wf-fg-secondary)',
         }}
       >
-        // профілі клієнтів (назви, лояльність, платежі, борг) — з модулем «Клієнти» (S5)
+        // LTV, борг, індустрія та останній контакт — за модулем «Клієнти» (28)
       </div>
 
       {isLoading ? (
@@ -45,13 +78,14 @@ export function ClientsPage() {
       ) : clients.length === 0 ? (
         <EmptyState
           title="Поки немає клієнтів"
-          description="Клієнти зʼявляться тут, коли в компаній будуть замовлення."
+          description="Клієнти зʼявляться тут, коли в агенції будуть компанії."
         />
       ) : (
         <table className="wfp-table">
           <thead>
             <tr>
               <th>Компанія</th>
+              <th>Тір</th>
               <th className="wfp-num">Активних</th>
               <th className="wfp-num">Усього замовлень</th>
               <th className="wfp-num">Сума</th>
@@ -74,8 +108,11 @@ export function ClientsPage() {
               >
                 <td>
                   <span className="wfp-link" style={{ fontWeight: 500 }}>
-                    Клієнт · {c.companyId.slice(0, 8)}
+                    {c.name}
                   </span>
+                </td>
+                <td>
+                  <TierPill tier={c.loyaltyTier} />
                 </td>
                 <td className="wfp-num" style={{ color: 'var(--wf-accent)' }}>
                   {c.active}

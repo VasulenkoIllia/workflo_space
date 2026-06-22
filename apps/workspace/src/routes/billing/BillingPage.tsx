@@ -489,7 +489,7 @@ export function BillingPage() {
         }}
       >
         <div>
-          <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
+          <div style={{ fontSize: 28, fontWeight: 600 }}>Білінг</div>
           <div
             className="wfp-mono"
             style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 18 }}
