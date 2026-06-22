@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ALLOWED_ORDER_TRANSITIONS } from '@workflo/types'
-import type { OrderInternalStatus } from '@workflo/types'
+import { ALLOWED_ORDER_TRANSITIONS, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { INTERNAL_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
 import {
@@ -183,16 +182,22 @@ export function OrderDetailPage() {
 function StatusControl({ orderId, current }: { orderId: string; current: OrderInternalStatus }) {
   const transition = useTransitionStatus(orderId)
   const [target, setTarget] = useState<OrderInternalStatus | ''>('')
+  const [reason, setReason] = useState('')
   const options = ALLOWED_ORDER_TRANSITIONS[current] ?? []
+  // Pausing / cancelling should carry a reason (→ onHoldReason / cancelledReason).
+  const needsReason =
+    target === OrderInternalStatus.ON_HOLD || target === OrderInternalStatus.CANCELLED
+  const reasonInvalid = needsReason && reason.trim() === ''
 
   const apply = () => {
-    if (!target) return
+    if (!target || reasonInvalid) return
     transition.mutate(
-      { status: target },
+      { status: target, comment: needsReason ? reason.trim() : undefined },
       {
         onSuccess: () => {
           toast.success(`Статус → ${INTERNAL_STATUS_META[target].label}`)
           setTarget('')
+          setReason('')
         },
       }
     )
@@ -207,36 +212,61 @@ function StatusControl({ orderId, current }: { orderId: string; current: OrderIn
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <select
-        value={target}
-        onChange={(e) => {
-          const v = e.target.value
-          // Only the real options come from the state machine; '' is the placeholder.
-          setTarget(v === '' ? '' : (v as OrderInternalStatus))
-        }}
-        style={{
-          minWidth: 160,
-          height: 36,
-          padding: '0 10px',
-          borderRadius: 6,
-          border: '1px solid var(--wf-border)',
-          background: 'var(--wf-bg)',
-          color: 'var(--wf-fg)',
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 12,
-        }}
-      >
-        <option value="">Змінити статус…</option>
-        {options.map((s) => (
-          <option key={s} value={s}>
-            {INTERNAL_STATUS_META[s].label}
-          </option>
-        ))}
-      </select>
-      <Button variant="primary" disabled={!target} loading={transition.isPending} onClick={apply}>
-        Застосувати
-      </Button>
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <select
+          value={target}
+          onChange={(e) => {
+            const v = e.target.value
+            // Only the real options come from the state machine; '' is the placeholder.
+            setTarget(v === '' ? '' : (v as OrderInternalStatus))
+          }}
+          style={{
+            minWidth: 160,
+            height: 36,
+            padding: '0 10px',
+            borderRadius: 6,
+            border: '1px solid var(--wf-border)',
+            background: 'var(--wf-bg)',
+            color: 'var(--wf-fg)',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12,
+          }}
+        >
+          <option value="">Змінити статус…</option>
+          {options.map((s) => (
+            <option key={s} value={s}>
+              {INTERNAL_STATUS_META[s].label}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="primary"
+          disabled={!target || reasonInvalid}
+          loading={transition.isPending}
+          onClick={apply}
+        >
+          Застосувати
+        </Button>
+      </div>
+      {needsReason && (
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder={
+            target === OrderInternalStatus.CANCELLED ? 'Причина скасування…' : 'Причина паузи…'
+          }
+          style={{
+            height: 34,
+            padding: '0 10px',
+            borderRadius: 6,
+            border: `1px solid ${reasonInvalid ? 'var(--wf-destructive)' : 'var(--wf-border)'}`,
+            background: 'var(--wf-bg)',
+            color: 'var(--wf-fg)',
+            fontSize: 13,
+          }}
+        />
+      )}
     </div>
   )
 }

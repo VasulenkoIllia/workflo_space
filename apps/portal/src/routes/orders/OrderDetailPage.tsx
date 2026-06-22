@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { OrderClientStatus } from '@workflo/types'
-import { Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { CLIENT_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
-import { useActivity, useCommentStream, useOrder } from '@/lib/orderDetail'
+import { useActivity, useCommentStream, useDecideApproval, useOrder } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
 import { FilesTab } from './FilesTab'
@@ -22,6 +22,9 @@ export function OrderDetailPage() {
   const { data: order, isLoading, isError } = useOrder(id)
   useCommentStream(id) // keep live chat updates flowing regardless of the active tab
   const [tab, setTab] = useState('chat')
+  const decide = useDecideApproval(id)
+  const [rejecting, setRejecting] = useState(false)
+  const [reason, setReason] = useState('')
 
   if (isLoading) return <DetailSkeleton />
   if (isError || !order) {
@@ -75,9 +78,29 @@ export function OrderDetailPage() {
             <div className="wfp-approve-k">// потрібна ваша дія</div>
             <div className="wfp-approve-t">Замовлення очікує вашого погодження</div>
             <div className="wfp-approve-sub">
-              Перегляньте оцінку й деталі. Щоб погодити або запросити правки — напишіть команді в
-              чаті нижче.
+              Оцінка:{' '}
+              <strong>
+                {formatMoney(order.totalAmount)} {order.currency}
+              </strong>
+              . Погодьте, щоб команда почала роботу, або запросіть правки з коментарем.
             </div>
+            {decide.isError && !rejecting && (
+              <div style={{ color: 'var(--wf-destructive)', fontSize: 12, marginTop: 6 }}>
+                Не вдалося — оновіть сторінку й спробуйте ще раз.
+              </div>
+            )}
+          </div>
+          <div className="wfp-approve-r">
+            <Button variant="ghost" disabled={decide.isPending} onClick={() => setRejecting(true)}>
+              Запросити правки
+            </Button>
+            <Button
+              variant="primary"
+              loading={decide.isPending}
+              onClick={() => decide.mutate({ decision: 'approve' })}
+            >
+              Погодити
+            </Button>
           </div>
         </div>
       )}
@@ -154,6 +177,60 @@ export function OrderDetailPage() {
           <ActivityCard orderId={order.id} />
         </aside>
       </div>
+
+      {rejecting && (
+        <Modal
+          open
+          onClose={() => setRejecting(false)}
+          title="Запросити правки"
+          footer={
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => setRejecting(false)}
+                disabled={decide.isPending}
+              >
+                Скасувати
+              </Button>
+              <Button
+                variant="primary"
+                loading={decide.isPending}
+                disabled={reason.trim() === ''}
+                onClick={() =>
+                  decide.mutate(
+                    { decision: 'reject', comment: reason.trim() },
+                    {
+                      onSuccess: () => {
+                        setRejecting(false)
+                        setReason('')
+                      },
+                    }
+                  )
+                }
+              >
+                Надіслати
+              </Button>
+            </>
+          }
+        >
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+              Опишіть, що змінити в оцінці — команда отримає ваш коментар і повернеться з правками.
+            </div>
+            <Input
+              label="Коментар"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              error={reason.trim() === '' ? 'Вкажіть, що змінити' : undefined}
+            />
+            {decide.isError && (
+              <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
+                Не вдалося надіслати — оновіть сторінку й спробуйте ще раз.
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

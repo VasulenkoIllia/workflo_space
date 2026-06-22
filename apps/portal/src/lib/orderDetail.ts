@@ -114,6 +114,22 @@ export function usePostComment(id: string) {
   })
 }
 
+/**
+ * POST /portal/orders/:id/approval (02-А) — the company owner decides on the submitted
+ * estimate. approve → opens the in-progress gate; reject MUST carry a reason.
+ */
+export function useDecideApproval(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { decision: 'approve' | 'reject'; comment?: string }) =>
+      api.post<{ order: { id: string } }>(`/portal/orders/${id}/approval`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
+      void qc.invalidateQueries({ queryKey: orderKeys.activity(id) })
+    },
+  })
+}
+
 export function useUploadFile(id: string) {
   const qc = useQueryClient()
   return useMutation({

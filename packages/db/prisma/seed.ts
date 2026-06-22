@@ -341,6 +341,11 @@ async function main() {
           billingType: 'fixed',
           totalAmount: item.totalAmount,
           currency: 'USD',
+          // A pending_approval order must actually await a client decision so the portal
+          // approval banner buttons (POST /portal/orders/:id/approval) work end-to-end.
+          requiresApproval: item.clientStatus === 'pending_approval',
+          approvalStatus: item.clientStatus === 'pending_approval' ? 'pending' : null,
+          fixedPrice: item.clientStatus === 'pending_approval' ? item.totalAmount : null,
         },
       })
 

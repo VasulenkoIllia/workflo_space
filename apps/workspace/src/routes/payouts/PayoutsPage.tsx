@@ -146,6 +146,31 @@ function PayoutRow({ p, name }: { p: Payout; name: string }) {
   )
 }
 
+const MONTHS_UK = [
+  'Січень',
+  'Лютий',
+  'Березень',
+  'Квітень',
+  'Травень',
+  'Червень',
+  'Липень',
+  'Серпень',
+  'Вересень',
+  'Жовтень',
+  'Листопад',
+  'Грудень',
+]
+/** 'YYYY-MM' → 'Місяць РІК' (UK), independent of the OS locale a native month-input would use. */
+function monthLabelUk(period: string): string {
+  const [y, m] = period.split('-').map(Number)
+  return `${MONTHS_UK[(m || 1) - 1] ?? ''} ${y}`
+}
+function shiftMonth(period: string, delta: number): string {
+  const [y, m] = period.split('-').map(Number)
+  const d = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 + delta, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 export function PayoutsPage() {
   const [period, setPeriod] = useState(currentMonth())
   const team = useTeam()
@@ -179,19 +204,56 @@ export function PayoutsPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            type="month"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
+          <div
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
               background: 'var(--wf-surface)',
-              color: 'var(--wf-fg)',
               border: '1px solid var(--wf-border)',
               borderRadius: 'var(--wf-radius)',
-              padding: '6px 8px',
-              fontSize: 13,
+              padding: '2px 4px',
             }}
-          />
+          >
+            <button
+              type="button"
+              aria-label="Попередній місяць"
+              onClick={() => setPeriod(shiftMonth(period, -1))}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--wf-fg-secondary)',
+                cursor: 'pointer',
+                fontSize: 16,
+                padding: '2px 8px',
+                lineHeight: 1,
+              }}
+            >
+              ‹
+            </button>
+            <span
+              className="wfp-mono"
+              style={{ fontSize: 13, minWidth: 130, textAlign: 'center', color: 'var(--wf-fg)' }}
+            >
+              {monthLabelUk(period)}
+            </span>
+            <button
+              type="button"
+              aria-label="Наступний місяць"
+              onClick={() => setPeriod(shiftMonth(period, 1))}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--wf-fg-secondary)',
+                cursor: 'pointer',
+                fontSize: 16,
+                padding: '2px 8px',
+                lineHeight: 1,
+              }}
+            >
+              ›
+            </button>
+          </div>
           <Button
             variant="primary"
             size="sm"
