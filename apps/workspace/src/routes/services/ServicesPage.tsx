@@ -118,6 +118,7 @@ export function ServicesPage() {
   const filtered = q ? list.filter((s) => s.name.toLowerCase().includes(q)) : list
   const activeCount = list.filter((s) => s.isActive).length
   const recurringCount = list.filter((s) => s.isRecurring).length
+  const oneTimeCount = list.length - recurringCount
 
   return (
     <div>
@@ -152,6 +153,10 @@ export function ServicesPage() {
         <div className="wfp-stat">
           <div className="wfp-stat-v">{recurringCount}</div>
           <div className="wfp-stat-k">абонентських</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-v">{oneTimeCount}</div>
+          <div className="wfp-stat-k">разових</div>
         </div>
       </div>
 
