@@ -297,7 +297,7 @@ async function main() {
         internalStatus: 'new' as const,
         clientStatus: 'in_progress' as const,
         priority: 'medium' as const,
-        totalAmount: null,
+        totalAmount: '800.00',
       },
       {
         title: 'CRM інтеграція з 1C',
@@ -341,11 +341,12 @@ async function main() {
           billingType: 'fixed',
           totalAmount: item.totalAmount,
           currency: 'USD',
-          // A pending_approval order must actually await a client decision so the portal
-          // approval banner buttons (POST /portal/orders/:id/approval) work end-to-end.
+          // fixedPrice = the agreed fixed price → a pre-work order with one can be submitted
+          // for approval (team «Надіслати на погодження»). The pending_approval order also
+          // gets approvalStatus=pending so the portal approval banner works on a fresh seed.
+          fixedPrice: item.totalAmount,
           requiresApproval: item.clientStatus === 'pending_approval',
           approvalStatus: item.clientStatus === 'pending_approval' ? 'pending' : null,
-          fixedPrice: item.clientStatus === 'pending_approval' ? item.totalAmount : null,
         },
       })
 

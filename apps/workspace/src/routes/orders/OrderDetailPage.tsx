@@ -8,8 +8,10 @@ import {
   useActivity,
   useCommentStream,
   useOrder,
+  useSubmitApproval,
   useTimeLogs,
   useTransitionStatus,
+  type WorkspaceOrderDetail,
 } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
@@ -117,6 +119,8 @@ export function OrderDetailPage() {
             </Card>
           )}
 
+          <ApprovalCard order={order} />
+
           <Card title="Фінанси" style={{ marginBottom: 16 }}>
             <div className="wfp-side">
               <div className="wfp-side-row">
@@ -179,6 +183,76 @@ export function OrderDetailPage() {
 }
 
 /** Status transition control — offers only the transitions the state machine allows. */
+/** Pre-work states from which an estimate may be sent to the client (02-А). */
+const SUBMITTABLE_STATUSES: OrderInternalStatus[] = [
+  OrderInternalStatus.NEW,
+  OrderInternalStatus.CLARIFICATION,
+  OrderInternalStatus.ESTIMATING,
+]
+
+/** Team-side estimate-approval control: submit for client approval, or show the current state. */
+function ApprovalCard({ order }: { order: WorkspaceOrderDetail }) {
+  const submit = useSubmitApproval(order.id)
+  const hasEstimate =
+    (order.fixedPrice != null && order.fixedPrice > 0) ||
+    (order.hourlyRate != null && order.estimatedHours != null)
+  const submittable = SUBMITTABLE_STATUSES.includes(order.internalStatus)
+
+  if (order.approvalStatus === 'pending') {
+    return (
+      <Card title="Погодження" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <StatusDot tone="warning" /> Очікує погодження клієнта
+        </div>
+      </Card>
+    )
+  }
+  if (order.approvalStatus === 'approved') {
+    return (
+      <Card title="Погодження" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <StatusDot tone="success" /> Клієнт погодив оцінку
+        </div>
+      </Card>
+    )
+  }
+  // rejected (re-submit allowed) or never submitted — only meaningful before work starts.
+  if (!submittable) return null
+  return (
+    <Card title="Погодження" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {order.approvalStatus === 'rejected' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <StatusDot tone="muted" /> Клієнт запросив правки
+          </div>
+        )}
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // надіслати оцінку клієнту на погодження (02-А)
+        </div>
+        {hasEstimate ? (
+          <Button
+            variant="primary"
+            size="sm"
+            loading={submit.isPending}
+            onClick={() => submit.mutate(undefined)}
+          >
+            {order.approvalStatus === 'rejected' ? 'Надіслати ще раз' : 'Надіслати на погодження'}
+          </Button>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            Спершу виставте оцінку (суму або ставку + години).
+          </div>
+        )}
+        {submit.isError && (
+          <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
+            Не вдалося надіслати — перевірте стан замовлення.
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 function StatusControl({ orderId, current }: { orderId: string; current: OrderInternalStatus }) {
   const transition = useTransitionStatus(orderId)
   const [target, setTarget] = useState<OrderInternalStatus | ''>('')

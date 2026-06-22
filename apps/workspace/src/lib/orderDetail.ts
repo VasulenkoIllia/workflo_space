@@ -38,6 +38,8 @@ export interface WorkspaceOrderDetail {
   paidAt?: string | null
   onHoldReason?: string | null
   cancelledReason?: string | null
+  requiresApproval?: boolean
+  approvalStatus?: 'pending' | 'approved' | 'rejected' | null
   createdAt: string
   updatedAt: string
   company?: { id: string; name: string } | null
@@ -163,6 +165,27 @@ export function useDeleteTimeLog(id: string) {
   return useMutation({
     mutationFn: (logId: string) => api.delete<{ id: string }>(`/orders/${id}/time-logs/${logId}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.timeLogs(id) }),
+  })
+}
+
+/**
+ * POST /workspace/orders/:id/submit-approval (02-А) — the team sends the estimate to the
+ * client for approval (order → pending_approval). Re-submitting a rejected estimate resets
+ * it to pending. Requires a pre-work status + an estimate (fixed price, or rate + hours).
+ */
+export function useSubmitApproval(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (note?: string) =>
+      api.post<{ order: { id: string } }>(
+        `/workspace/orders/${id}/submit-approval`,
+        note ? { note } : {}
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
+      void qc.invalidateQueries({ queryKey: orderKeys.activity(id) })
+      void qc.invalidateQueries({ queryKey: ['ws-orders'] })
+    },
   })
 }
 
