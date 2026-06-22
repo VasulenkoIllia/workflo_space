@@ -3,6 +3,9 @@
 > ⚠️ **Інвентар роутів/сторінок (актуальний як перелік екранів), але візуальна мова
 > SUPERSEDED `DESIGN_SYSTEM.md`** (lime «Engineer's Cut», `.wfp-*`/`--wf-*`). Чинний
 > UI-канон — `DESIGN_SYSTEM.md` + `UI_COMPONENTS.md` + `packages/ui`.
+>
+> 🗺️ **Інвентар маршрутів тут — застарілий.** Актуальний реальний перелік маршрутів (portal/workspace/landing)
+> з фактичним станом (IMPLEMENTED/PLACEHOLDER/MISSING) — у [`DESIGN_COVERAGE.md` Додаток B](DESIGN_COVERAGE.md).
 
 > Portal (portal.workflo.space) / Workspace (work.workflo.space)
 > Версія: 1.0 | Оновлено: 12 квітня 2026

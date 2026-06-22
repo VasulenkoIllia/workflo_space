@@ -1,5 +1,7 @@
 # INTEGRATIONS MODULE (inbound лідів + outbound webhooks + адаптери)
 
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
 > ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
 
 > App: API (+ Workspace settings UI) · Залежить від: **outbox** (доставка), **26-leads** (inbound → Lead), `ApiKey`/`WebhookEndpoint` (раніше згадані в 20-admin).

@@ -1,5 +1,7 @@
 # SYSTEM MONITORING MODULE
 
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
 > App: API + Workspace
 > Статус: S7-S8 (post-MVP, production hardening)
 > Залежить від: Sentry SDK, audit_logs, cron_runs

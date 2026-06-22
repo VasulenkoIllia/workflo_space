@@ -1,5 +1,7 @@
 # ADMIN SETTINGS MODULE
 
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
 > App: Workspace (admin/superadmin only)
 > Статус: S5+ (post-MVP)
 > Залежить від: `packages/db`, `packages/notifications`, `packages/templates`
