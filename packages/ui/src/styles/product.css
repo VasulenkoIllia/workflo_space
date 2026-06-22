@@ -570,11 +570,20 @@
   border-bottom: 1px solid var(--wf-border);
   margin-bottom: 18px;
 }
-.wfp-od-tab {
+/* `.wfp-od-tab` is the classed tab (Tabs component); bare `<button>` children of a
+   tab bar (period / sub-tab segments) get the same underline-tab styling. Both must
+   reset the native button chrome (background/border/appearance) — otherwise the
+   browser-default light button background shows through in dark theme. */
+.wfp-od-tab,
+.wfp-od-tabs > button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
   padding: 10px 14px;
   font-size: 13px;
   color: var(--wf-fg-muted);
-  border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
@@ -582,8 +591,13 @@
   align-items: center;
   gap: 6px;
 }
-.wfp-od-tab:hover { color: var(--wf-fg); }
-.wfp-od-tab[data-on="true"] {
+.wfp-od-tab:hover,
+.wfp-od-tabs > button:hover {
+  color: var(--wf-fg);
+}
+.wfp-od-tab[data-on="true"],
+.wfp-od-tabs > button[data-on="true"],
+.wfp-od-tabs > button[aria-selected="true"] {
   color: var(--wf-fg);
   border-bottom-color: var(--wf-accent);
   font-weight: 500;
