@@ -16,6 +16,9 @@ export interface WsCharge {
   projectId: string | null
   kind: string | null
   amount: string
+  baseAmount: string | null
+  manualDiscountPct: string | null
+  manualDiscountAmount: string | null
   totalAmount: string | null
   approvedAmount: string | null
   currency: string
@@ -76,6 +79,28 @@ export function useReleaseCharge() {
   })
 }
 
+export interface ApplyDiscountVars {
+  id: string
+  discountPct?: number
+  discountAmount?: number
+  reason?: string
+}
+
+/**
+ * POST /workspace/billing/charges/:id/discount (P-10, 05-З) — owner-only one-time
+ * manual discount on top of loyalty. At least one of pct/amount must be set.
+ */
+export function useApplyDiscount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: ApplyDiscountVars) =>
+      api.post<{ charge: WsCharge }>(`/workspace/billing/charges/${id}/discount`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['ws-billing'] })
+    },
+  })
+}
+
 /** GET /workspace/billing/payments — agency-wide payment history. */
 export interface WsPayment {
   id: string
@@ -95,6 +120,42 @@ export function useWsPayments() {
   return useQuery({
     queryKey: ['ws-billing', 'payments'],
     queryFn: () => api.get<{ payments: WsPayment[] }>('/workspace/billing/payments?limit=100'),
+  })
+}
+
+/** Body for POST /workspace/billing/payments (manual confirm). Mirrors `createPaymentSchema`. */
+export interface CreatePaymentVars {
+  companyId: string
+  orderId?: string
+  amount: number
+  currency: string
+  type: 'advance' | 'final' | 'partial'
+  paymentMethod?: string
+  paymentReference?: string
+  note?: string
+}
+
+/** Fresh idempotency key per submit; mutations don't auto-retry, so one submit = one key. */
+function freshKey(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return `pay-${c.randomUUID()}`
+  return `pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * POST /workspace/billing/payments — operator records a confirmed manual payment.
+ * Idempotent server-side via the `Idempotency-Key` header (8–200 chars).
+ */
+export function useCreatePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: CreatePaymentVars) =>
+      api.post<{ payment: { id: string } }>('/workspace/billing/payments', vars, {
+        headers: { 'Idempotency-Key': freshKey() },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['ws-billing'] })
+    },
   })
 }
 
