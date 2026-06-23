@@ -211,6 +211,14 @@ jobs:
             echo "Applying database migrations (prisma migrate deploy)..."
             compose run --rm --no-deps migrate
 
+            # Staging-only: ensure baseline sample data exists (idempotent — the seed is
+            # count-guarded, so it only fills gaps and never duplicates or overwrites). This
+            # removes the manual "staging is empty → seed by hand" step. NEVER on production.
+            # Non-fatal: a seed hiccup must not block an otherwise-healthy deploy.
+            echo "Seeding staging baseline data (idempotent)..."
+            compose run --rm --no-deps api pnpm --filter @workflo/db run seed \
+              || echo "WARN: seed step failed (non-fatal)"
+
             # AR-04: --wait blocks until healthchecked services report healthy (bot has
             # no HTTP surface → no healthcheck → counted as started). Replaces the old
             # `compose ps` grep, which passed containers that crashed seconds later.
@@ -272,6 +280,18 @@ jobs:
             wait_for_non_default_cert dev-api.workflo.space /health
 
             echo "sha-${{ github.sha }}" > .last_deploy
+
+            # Persist the resolved image tags into .env so manual `docker compose` ops on
+            # the server (seed, rollback, container recreate) use the deployed images
+            # WITHOUT re-exporting *_TAG — previously a fresh SSH session fell back to the
+            # bogus `${API_TAG:-sha-initial}` and failed with "sha-initial: not found".
+            for var in LANDING_TAG PORTAL_TAG WORKSPACE_TAG API_TAG BOT_TAG; do
+              if grep -q "^${var}=" .env 2>/dev/null; then
+                sed -i "s|^${var}=.*|${var}=sha-${{ github.sha }}|" .env
+              else
+                echo "${var}=sha-${{ github.sha }}" >> .env
+              fi
+            done
 
   health-check:
     name: Health check

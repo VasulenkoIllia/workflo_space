@@ -2297,3 +2297,76 @@ GitHub Secrets — стан:
 □ rate limiting на auth endpoints (login, register, reset password)
 □ HTTPS only (HTTP → redirect)
 ```
+
+---
+
+## CI/CD & DevOps — аудит і стандартизація (2026-06-22)
+
+### Канонічна серверна розкладка (єдине джерело істини)
+
+| Шлях                              | Що це                                                                                | Ким керується                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `/var/www/srv/workflo/staging`    | Рантайм staging: `docker-compose.staging.yml` + `.env` + `backups/` + `.last_deploy` | `staging.yml` (push у `dev`)                      |
+| `/var/www/srv/workflo/production` | Рантайм production (analog)                                                          | `production.yml` (push у `main`, manual approval) |
+| `/var/www/mail/`                  | Mailcow (пошта)                                                                      | окремо                                            |
+| `/var/www/proxy/`                 | Traefik (reverse-proxy, network `proxy`/`traefik_network`)                           | окремо                                            |
+
+> ⚠️ **`/var/www/projects/workflo_space` — НЕ канон.** Жоден workflow на нього не посилається (перевірено
+> grep'ом). Це ручний клон джерела, який пайплайн **не використовує**. Прибрати (підтвердивши, що нічого
+> вручну звідти не запускається): `rm -rf /var/www/projects/workflo_space`. Усі рантайм-операції — лише в
+> `srv/workflo/{staging,production}`.
+
+### Деплой = тільки збірка образів + перестворення контейнерів
+
+`staging.yml`/`production.yml` SCP-лять compose+infra у рантайм-теку і роблять `compose up -d --wait` з
+**новими sha-тегами** — контейнери перестворюються автоматично. Якщо UI «старий» після успішного деплою —
+це **кеш браузера**, а не контейнер (див. нижче). Перевірка свіжості: `curl -ksI https://<host>/ | grep -i etag`.
+
+### SPA-кеш (фікс «задеплоїв, а UI старий»)
+
+`apps/{portal,workspace}/nginx.conf`:
+
+- `index.html` → `Cache-Control: no-cache, must-revalidate` (завжди ревалідація → новий деплой одразу видно).
+- `/assets/*` (контент-хешовані) → `public, max-age=31536000, immutable`.
+
+Без цього `index.html` кешувався евристично і віддавав старі хеші ассетів → старий UI попри свіжий деплой.
+
+### Manual ops тепер працюють без `export *_TAG`
+
+Деплой **персистить резолвнуті теги у серверний `.env`** (`*_TAG=sha-…`). Тож на сервері просто:
+
+```bash
+cd /var/www/srv/workflo/staging
+docker compose --project-name workflo-staging --env-file .env -f docker-compose.staging.yml run --rm api pnpm --filter @workflo/db seed     # ручний seed
+docker compose ... up -d --force-recreate workspace                                                                                        # перестворити сервіс
+```
+
+Раніше fallback `${API_TAG:-sha-initial}` падав із `sha-initial: not found`.
+
+### Авто-seed staging (ідемпотентний)
+
+`staging.yml` після міграцій робить `compose run --rm api pnpm --filter @workflo/db run seed` —
+seed count-guarded (тільки заповнює прогалини, не дублює/не перезаписує). На **production seed НЕ виконується**.
+
+### Rollback-дрил (app)
+
+Образи зберігаються (retention 5). Відкат застосунку на попередній sha:
+
+```bash
+cd /var/www/srv/workflo/{staging|production}
+export TAG=$(cat .previous_deploy)   # production веде .previous_deploy; staging — попередній sha вручну
+export API_TAG=$TAG PORTAL_TAG=$TAG WORKSPACE_TAG=$TAG LANDING_TAG=$TAG BOT_TAG=$TAG
+docker compose --project-name workflo-{staging|production} --env-file .env -f docker-compose.{staging|production}.yml up -d --wait
+```
+
+Відкат **БД** = restore з `backups/pre-migrate-*.sql.gz` (Prisma не має down-міграцій). `scripts/rollback.sh`.
+
+### Роадмеп покращень (ще НЕ зроблено)
+
+- **Post-deploy frontend smoke (Playwright):** гейт type/lint/test не ловить «виглядає не так» (фронт-тестів
+  нема). Додати headless-прохід ключових сторінок + 0 console-errors + базовий рендер після деплою. **Найвищий
+  важіль** — закриває весь клас conformance-регресій без ручного огляду.
+- **Sentry + uptime-монітор:** `SENTRY_DSN` зараз порожній; увімкнути error-tracking + зовнішній uptime (S7–S8).
+- **PR-флоу:** §1 принципів каже «в `main` тільки PR», але фактично — direct-push; гейти продубльовано в
+  deploy-воркфлоу (працює). Або перейти на PR (гейт до merge), або оновити §1 під фактичний direct-push.
+- **Doc-drift:** §1 «нічого не пушиться напряму, тільки PR» розходиться з реальним процесом — синхронізувати.

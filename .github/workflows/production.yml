@@ -310,6 +310,18 @@ jobs:
             cd "${{ env.RUNTIME_ROOT }}/production"
             echo "sha-${{ github.sha }}" > .last_deploy
 
+            # Persist the verified image tags into .env so manual `docker compose` ops
+            # (rollback, container recreate) use the deployed images without re-exporting
+            # *_TAG (otherwise compose falls back to the bogus `sha-initial`). Only the
+            # last-known-GOOD tags land here — this runs after verification passed.
+            for var in LANDING_TAG PORTAL_TAG WORKSPACE_TAG API_TAG BOT_TAG; do
+              if grep -q "^${var}=" .env 2>/dev/null; then
+                sed -i "s|^${var}=.*|${var}=sha-${{ github.sha }}|" .env
+              else
+                echo "${var}=sha-${{ github.sha }}" >> .env
+              fi
+            done
+
       - name: Auto rollback on failure
         if: failure()
         uses: appleboy/ssh-action@v1
