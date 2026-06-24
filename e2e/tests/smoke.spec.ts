@@ -14,6 +14,7 @@ const CONFIG = {
       ['/wallet', /Гаманець/],
       ['/loyalty', /Лояльність/],
       ['/referrals', /Реферал/],
+      ['/team', /Учасники/],
       ['/settings', /Налаштування/],
     ],
   },
@@ -24,12 +25,16 @@ const CONFIG = {
       ['/', /Огляд/],
       ['/orders', /Замовлення/],
       ['/clients', /Клієнти/],
+      ['/team', /Команда/],
       ['/billing', /Білінг|Фінанси/],
       ['/finance', /Фінанси/],
       ['/projects', /Фін-проєкти/],
       ['/margin', /Маржа/],
+      ['/payouts', /Виплати/],
       ['/services', /Каталог послуг/],
       ['/admin-wallet', /Бонусні гаманці/],
+      ['/profile', /Профіль/],
+      ['/settings', /Налаштування/],
     ],
   },
 } as const
@@ -201,6 +206,15 @@ test.describe('smoke', () => {
         await dialog.getByRole('button', { name: 'Створити' }).click()
         await expect(page, 'should land on the new order').toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
         await page.screenshot({ path: 'screenshots/workspace/_order-create.png', fullPage: true })
+      })
+
+      await test.step('workspace /clients → open a client 360', async () => {
+        await gotoInApp(page, '/clients')
+        // Client rows are role=button → navigate to /clients/:id.
+        await page.locator('[role="button"]').filter({ hasText: /ТОВ|Компан/ }).first().click()
+        await expect(page).toHaveURL(/\/clients\/[0-9a-f-]{8,}/)
+        await expect(page.getByText(/усього замовлень/i).first()).toBeVisible()
+        await page.screenshot({ path: 'screenshots/workspace/_client-detail.png', fullPage: true })
       })
     }
 
