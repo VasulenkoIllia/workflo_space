@@ -1,5 +1,11 @@
 import { type Prisma, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, OrderInternalStatus, updateOrderSchema } from '@workflo/types'
+import {
+  ApiErrorCode,
+  AppError,
+  BillingType,
+  OrderInternalStatus,
+  updateOrderSchema,
+} from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
@@ -29,6 +35,11 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
             internalStatus: true,
             approvalStatus: true,
             deletedAt: true,
+            // current billing snapshot — needed to re-derive totalAmount on a partial edit
+            billingType: true,
+            fixedPrice: true,
+            hourlyRate: true,
+            estimatedHours: true,
           },
         })
       )
@@ -89,6 +100,24 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
         if (input.fixedPrice !== undefined) data.fixedPrice = input.fixedPrice
         if (input.hourlyRate !== undefined) data.hourlyRate = input.hourlyRate
         if (input.estimatedHours !== undefined) data.estimatedHours = input.estimatedHours
+        // totalAmount is a derived field (fixed sum, or hourly rate × estimated hours) — keep it
+        // in sync whenever the estimate changes, so «оцінка» reflects it for the team AND client.
+        if (editsBilling) {
+          const dec = (d: Prisma.Decimal | null) => (d == null ? null : Number(d))
+          const billingType = (input.billingType ?? order.billingType) as BillingType
+          const fixedPrice =
+            input.fixedPrice !== undefined ? input.fixedPrice : dec(order.fixedPrice)
+          const hourlyRate =
+            input.hourlyRate !== undefined ? input.hourlyRate : dec(order.hourlyRate)
+          const estimatedHours =
+            input.estimatedHours !== undefined ? input.estimatedHours : dec(order.estimatedHours)
+          data.totalAmount =
+            billingType === BillingType.HOURLY
+              ? hourlyRate != null && estimatedHours != null
+                ? hourlyRate * estimatedHours
+                : null
+              : (fixedPrice ?? null)
+        }
       }
 
       const updated = await withTenant((tx) =>

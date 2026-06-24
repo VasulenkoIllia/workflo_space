@@ -303,8 +303,12 @@ function EstimateCard({ order }: { order: WorkspaceOrderDetail }) {
             estimatedHours: null,
           }
         : { billingType: BillingType.HOURLY, hourlyRate: r, estimatedHours: h, fixedPrice: null }
+    const canSubmit = SUBMITTABLE_STATUSES.includes(order.internalStatus)
     update.mutate(body, {
-      onSuccess: () => toast.success('Оцінку збережено — можна надіслати на погодження'),
+      onSuccess: () =>
+        toast.success(
+          canSubmit ? 'Оцінку збережено — можна надіслати на погодження' : 'Оцінку збережено'
+        ),
       onError: (e) =>
         toast.error('Не вдалося зберегти оцінку', {
           description: e instanceof Error ? e.message : undefined,
