@@ -273,8 +273,12 @@ function EstimateCard({ order }: { order: WorkspaceOrderDetail }) {
     order.estimatedHours != null ? String(order.estimatedHours) : ''
   )
 
+  // The team may price the order until the client's approval is pending/approved (server-
+  // enforced) and while it's still live — so an order that reached in-progress/review WITHOUT an
+  // estimate can still get one (not only in the pre-work states).
   const editable =
-    SUBMITTABLE_STATUSES.includes(order.internalStatus) &&
+    order.internalStatus !== OrderInternalStatus.DONE &&
+    order.internalStatus !== OrderInternalStatus.CANCELLED &&
     order.approvalStatus !== 'pending' &&
     order.approvalStatus !== 'approved'
   if (!editable) return null

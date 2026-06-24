@@ -113,6 +113,7 @@
 - **Client 360** (7 табів: vault, dunning, tags, activity, people-admin, client-docs).
 - **Project 360** (8 табів: team-on-project, retainer/services, contracts, recurring-tasks).
 - **Звіти** (6-таб аналітика поверх агрегацій).
+- **Білінг разового замовлення (order → рахунок/акт, без проєкту)** — `02-Б` (`02-orders.md`:397, :53). Модель уже частково готова (`ServiceCharge.projectId` опційний = «manual-разові без проєкту»), але **немає wired-флоу**: approved-кошторис замовлення → `service_charge` → акт. Зараз білінг лише **проєктний** (close-cycle/recurring) + ручний платіж. _Виконувати замовлення без проєкту вже МОЖНА (час/чат/задачі/оцінка/погодження); бракує саме виставлення рахунку напряму із замовлення._
 - **Секрети/Vault** (encrypted storage + 2FA-reveal + журнал).
 - **Сервіси-каталог dual-axis** (cost×bill, kind, makesTask) — Prisma-міграція.
 - **Auth multi-method** (phone/2FA/magic-link/OAuth; `Profile.phone`).
