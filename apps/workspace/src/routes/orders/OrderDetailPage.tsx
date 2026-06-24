@@ -17,6 +17,7 @@ import {
 } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
+import { DocumentsTab } from './DocumentsTab'
 import { FilesTab } from './FilesTab'
 import { TimeTab } from './TimeTab'
 
@@ -106,11 +107,13 @@ export function OrderDetailPage() {
               { id: 'chat', label: 'Чат' },
               { id: 'files', label: 'Файли' },
               { id: 'time', label: 'Час' },
+              { id: 'docs', label: 'Документи' },
             ]}
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
           {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'time' && <TimeTab orderId={order.id} />}
+          {tab === 'docs' && <DocumentsTab orderId={order.id} />}
         </div>
 
         <aside>

@@ -182,13 +182,17 @@ test.describe('smoke', () => {
         await page.screenshot({ path: 'screenshots/workspace/_orders-timeline.png', fullPage: true })
       })
 
-      await test.step('workspace order detail renders (Чат·Файли·Час, no Задачі)', async () => {
+      await test.step('workspace order detail: tabs + generate a document (D1/D3)', async () => {
         // Open an order via the timeline rows (they carry the seed client name).
         await page.getByRole('button', { name: /ТОВ Тестова Компанія/ }).first().click()
         await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
         await expect(page.getByRole('tab', { name: 'Час' })).toBeVisible()
         // «Задачі» tab was removed (design has no per-order task kanban).
         await expect(page.getByRole('tab', { name: 'Задачі' })).toHaveCount(0)
+        // Documents tab → generate an invoice → it lands with a per-agency number (INV-YYYY-NNNNNN).
+        await page.getByRole('tab', { name: 'Документи' }).click()
+        await page.getByRole('button', { name: /Рахунок/ }).first().click()
+        await expect(page.getByText(/INV-\d{4}-\d{6}/).first()).toBeVisible({ timeout: 10000 })
         await page.screenshot({ path: 'screenshots/workspace/_order-detail.png', fullPage: true })
       })
 

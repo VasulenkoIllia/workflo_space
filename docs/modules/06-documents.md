@@ -11,7 +11,9 @@
 
 ---
 
-> 🔄 **design-v2 (2026-06-20):** доставлено **documents-eu** — 8 екранів EU/юр-комплекту (інвойс, credit-note, SoW/SoA/Agreement/Act, публічна pay-сторінка): [`workspace-documents-eu.jsx`](../../design-v2/project/workspace-documents-eu.jsx). ⚠️ **Бекенд-блокер (звірено 2026-06-20):** `Document`/`DocumentCounter` моделі є (читаються з billing/legal-entities), але **route генерації/видачі немає** + PDF-движок `packages/templates` `generatePdf()` досі stub. W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+> 🔄 **design-v2 (2026-06-20):** доставлено **documents-eu** — 8 екранів EU/юр-комплекту (інвойс, credit-note, SoW/SoA/Agreement/Act, публічна pay-сторінка): [`workspace-documents-eu.jsx`](../../design-v2/project/workspace-documents-eu.jsx). Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+>
+> ✅ **S6-D1/D3 (2026-06-24):** route генерації/видачі **є** — `POST/GET /orders/:orderId/documents` (`apps/api/src/routes/documents/`): per-agency race-safe нумерація (`DocumentCounter` `INSERT…ON CONFLICT…RETURNING`, формат `INV-2026-000001`) + таб «Документи» (workspace генерує рахунок/акт/спец, портал — read-only). Звірено E2E на реальній PG (smoke). ⚠️ **Лишається (D2):** PDF-движок `packages/templates` `generatePdf()` досі stub (status=`generated`, `storedAs=null`) → перегляд/надсилання PDF + автоген при `done` + credit-note.
 
 ## Огляд
 

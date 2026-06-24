@@ -6,6 +6,7 @@ import { CLIENT_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
 import { useActivity, useCommentStream, useDecideApproval, useOrder } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
+import { DocumentsTab } from './DocumentsTab'
 import { FilesTab } from './FilesTab'
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -118,15 +119,7 @@ export function OrderDetailPage() {
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
           {tab === 'files' && <FilesTab orderId={order.id} />}
-          {tab === 'docs' && (
-            <div style={{ padding: '14px 0' }}>
-              <EmptyState
-                glyph="// docs"
-                title="Документи зʼявляться автоматично"
-                description="Специфікація, рахунок та акт генеруються після ключових подій замовлення."
-              />
-            </div>
-          )}
+          {tab === 'docs' && <DocumentsTab orderId={order.id} />}
         </div>
 
         <aside>
