@@ -44,6 +44,27 @@ describe('createLegalEntitySchema', () => {
   it('rejects a missing required field', () => {
     expect(() => createLegalEntitySchema.parse({ name: 'ФОП', legalType: 'fop' })).toThrow()
   })
+
+  // Regression: the create form sends `null` for every cleared optional field
+  // (`x.trim() || null`). taxId used `.optional()` (string|undefined) while every
+  // sibling + updateLegalEntitySchema.taxId used `.nullish()`, so a blank ІПН 400'd —
+  // the whole "add legal entity" flow was unusable (caught by the form-submit smoke).
+  it('accepts null for cleared optional fields (form sends `x || null`)', () => {
+    const r = createLegalEntitySchema.safeParse({
+      name: 'Smoke ФОП',
+      legalType: 'fop',
+      legalName: 'ФОП Тестовий',
+      taxId: null,
+      vatPayer: false,
+      vatId: null,
+      legalAddress: null,
+      bankName: null,
+      iban: null,
+      signerName: null,
+      signerTitle: null,
+    })
+    expect(r.success).toBe(true)
+  })
 })
 
 describe('updateLegalEntitySchema', () => {

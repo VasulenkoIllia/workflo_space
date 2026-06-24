@@ -112,6 +112,29 @@ test.describe('smoke', () => {
       })
     }
 
+    // Workspace-only: actually SUBMIT a form (create a legal entity) — guards the
+    // contract class that page-visits can't see (e.g. the createExpenseSchema null-400
+    // that shipped because nothing exercised a submit). The DB is re-seeded per run
+    // (scripts/e2e.sh), so the name is deterministic and collision-free.
+    if (info.project.name === 'workspace') {
+      await test.step('workspace /settings → create legal entity', async () => {
+        await gotoInApp(page, '/settings')
+        await page.getByRole('button', { name: '+ Додати юр-особу' }).click()
+        // Scope to the dialog: buttons render with bracket decoration ("[ Додати ]"),
+        // and "+ Додати юр-особу" also contains "Додати" — the dialog disambiguates.
+        const dialog = page.getByRole('dialog')
+        await dialog.getByLabel('Назва (внутрішня)').fill('Smoke ФОП')
+        await dialog.getByLabel('Юридична назва').fill('ФОП Тестовий Смоук')
+        await dialog.getByRole('button', { name: 'Додати' }).click()
+        // Modal closes + list refetches → the new row renders (proves POST 201 + re-fetch).
+        await expect(page.getByText('Smoke ФОП')).toBeVisible()
+        await page.screenshot({
+          path: 'screenshots/workspace/_settings-legal-entity.png',
+          fullPage: true,
+        })
+      })
+    }
+
     expect(errors, `uncaught/console errors:\n${errors.join('\n')}`).toEqual([])
   })
 })

@@ -34,7 +34,9 @@ export const createLegalEntitySchema = z.object({
   name: z.string().trim().min(2).max(200),
   legalType: z.string().trim().min(2).max(40), // 'fop' | 'tov' | 'individual' | 'foreign' (free — П8)
   legalName: z.string().trim().min(2).max(300),
-  taxId: taxId.optional(),
+  // nullish (not optional): a cleared optional field sends `null` from the form —
+  // matches every sibling here, vatId (same base), and updateLegalEntitySchema.taxId.
+  taxId: taxId.nullish(),
   vatPayer: z.boolean().default(false),
   vatId: taxId.nullish(),
   legalAddress: z.string().trim().max(500).nullish(),
