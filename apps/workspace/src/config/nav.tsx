@@ -20,6 +20,7 @@ type WsNavEntry = SidebarNavEntry & { roles?: string }
  */
 export const WORKSPACE_NAV: WsNavEntry[] = [
   { id: 'dashboard', label: 'Дашборд', icon: <Icon name="home" />, href: '/', roles: 'omx' },
+  { id: 'inbox', label: 'Інбокс', icon: <Icon name="inbox" />, href: '/inbox', roles: 'omx' },
 
   { group: 'Робота', roles: 'om' },
   { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },

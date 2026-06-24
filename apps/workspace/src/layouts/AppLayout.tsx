@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
 import { useOrders } from '@/lib/orders'
+import { useNotifications } from '@/lib/notifications'
 
 const ROLE_LABEL: Record<string, string> = {
   owner: 'власник',
@@ -51,14 +52,15 @@ export function AppLayout() {
     .filter((c): c is string => Boolean(c))
     .map((c, i) => <span key={i}>{c}</span>)
 
-  // Sidebar badge: count of new (un-triaged) orders, shown on the «Замовлення» item.
+  // Sidebar badges: new (un-triaged) orders on «Замовлення», unread notifications on «Інбокс».
   const newCount = useOrders({ status: 'new', limit: 100 }).data?.orders.length ?? 0
-  const navWithBadges =
-    newCount > 0
-      ? nav.map((e) =>
-          'id' in e && e.id === 'orders' ? { ...e, badge: newCount, badgeAccent: true } : e
-        )
-      : nav
+  const unread = useNotifications(1).data?.meta.unreadCount ?? 0
+  const navWithBadges = nav.map((e) => {
+    if (!('id' in e)) return e
+    if (e.id === 'orders' && newCount > 0) return { ...e, badge: newCount, badgeAccent: true }
+    if (e.id === 'inbox' && unread > 0) return { ...e, badge: unread, badgeAccent: true }
+    return e
+  })
 
   // ── ⌘K command palette ──────────────────────────────────────────────────
   const [cmdkOpen, setCmdkOpen] = useState(false)
@@ -141,7 +143,8 @@ export function AppLayout() {
           avatar={initials}
           crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
-          onBell={() => {}}
+          onBell={() => navigate('/inbox')}
+          bellDot={unread > 0}
           actions={
             <>
               <button

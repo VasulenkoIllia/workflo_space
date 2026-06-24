@@ -12,6 +12,7 @@ import { OrdersPage } from '@/routes/orders/OrdersPage'
 import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { ClientsPage } from '@/routes/clients/ClientsPage'
 import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
+import { InboxPage } from '@/routes/inbox/InboxPage'
 import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { BillingPage } from '@/routes/billing/BillingPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
@@ -47,6 +48,7 @@ export default function App() {
       >
         <Route path="/" element={<Home />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/inbox" element={<InboxPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route
           path="/settings"

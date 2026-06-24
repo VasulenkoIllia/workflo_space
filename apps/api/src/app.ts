@@ -15,6 +15,7 @@ import financeRoutes from './routes/finance/index.js'
 import healthRoute from './routes/health.js'
 import inviteRoutes from './routes/invites/index.js'
 import loyaltyRoutes from './routes/loyalty/index.js'
+import notificationRoutes from './routes/notifications/index.js'
 import orderRoutes from './routes/orders/index.js'
 import profileRoutes from './routes/profile/index.js'
 import referralRoutes from './routes/referral/index.js'
@@ -98,6 +99,7 @@ export function buildApp() {
   app.register(walletRoutes)
   app.register(referralRoutes)
   app.register(loyaltyRoutes)
+  app.register(notificationRoutes)
   app.register(teamRoutes)
   app.register(financeRoutes)
   app.register(adminRoutes)

@@ -10,6 +10,7 @@ const CONFIG = {
     password: 'Client123!',
     pages: [
       ['/orders', /Замовлення/],
+      ['/inbox', /Інбокс/],
       ['/billing', /Фінанси|Рахунки|Білінг/],
       ['/wallet', /Гаманець/],
       ['/loyalty', /Лояльність/],
@@ -23,6 +24,7 @@ const CONFIG = {
     password: 'Admin123!',
     pages: [
       ['/', /Огляд/],
+      ['/inbox', /Інбокс/],
       ['/orders', /Замовлення/],
       ['/clients', /Клієнти/],
       ['/team', /Команда/],

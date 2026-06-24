@@ -15,6 +15,7 @@ import { WalletPage } from '@/routes/wallet/WalletPage'
 import { LoyaltyPage } from '@/routes/loyalty/LoyaltyPage'
 import { ReferralsPage } from '@/routes/referrals/ReferralsPage'
 import { OrderCreatePage } from '@/routes/orders/OrderCreatePage'
+import { InboxPage } from '@/routes/inbox/InboxPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -44,8 +45,8 @@ export default function App() {
         <Route path="/team" element={<TeamPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/inbox" element={<InboxPage />} />
         {/* design-v2 PORTAL_NAV destinations — Placeholder until their feature wave */}
-        <Route path="/inbox" element={<Placeholder title="Інбокс" />} />
         <Route path="/projects" element={<Placeholder title="Проєкти" />} />
         <Route path="/company" element={<Placeholder title="Моя компанія" />} />
         <Route path="/secrets" element={<Placeholder title="Секрети" />} />

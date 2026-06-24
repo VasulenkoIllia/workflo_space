@@ -12,6 +12,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { PORTAL_NAV, activeNavId } from '@/config/nav'
+import { useNotifications } from '@/lib/notifications'
 import { SidebarCompanyMenu } from '@/components/SidebarCompanyMenu'
 
 export function AppLayout() {
@@ -33,6 +34,12 @@ export function AppLayout() {
   const crumbs = ['portal', sectionLabel]
     .filter((c): c is string => Boolean(c))
     .map((c, i) => <span key={i}>{c}</span>)
+
+  // Unread notifications → «Інбокс» nav badge + bell dot.
+  const unread = useNotifications(1).data?.meta.unreadCount ?? 0
+  const navWithBadges = PORTAL_NAV.map((e) =>
+    'id' in e && e.id === 'inbox' && unread > 0 ? { ...e, badge: unread, badgeAccent: true } : e
+  )
 
   const nextTheme: Record<ThemeMode, ThemeMode> = { system: 'light', light: 'dark', dark: 'system' }
   const themeGlyph: Record<ThemeMode, string> = { system: '◐', light: '☀', dark: '☾' }
@@ -97,7 +104,7 @@ export function AppLayout() {
       statusBarRight={<span>{location.pathname}</span>}
       sidebar={
         <Sidebar
-          nav={PORTAL_NAV}
+          nav={navWithBadges}
           active={activeNavId(location.pathname)}
           aesthetic="A"
           sub="portal"
@@ -110,7 +117,8 @@ export function AppLayout() {
           avatar={initials}
           crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
-          onBell={() => {}}
+          onBell={() => navigate('/inbox')}
+          bellDot={unread > 0}
           actions={
             <>
               <button
