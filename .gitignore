@@ -28,6 +28,9 @@ logs/
 coverage/
 playwright-report/
 test-results/
+e2e/.logs/
+e2e/screenshots/
+e2e/test-results/
 
 # Prisma
 packages/db/prisma/migrations/*.sql.bak

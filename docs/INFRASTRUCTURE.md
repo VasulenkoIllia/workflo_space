@@ -2361,11 +2361,25 @@ docker compose --project-name workflo-{staging|production} --env-file .env -f do
 
 Відкат **БД** = restore з `backups/pre-migrate-*.sql.gz` (Prisma не має down-міграцій). `scripts/rollback.sh`.
 
+### Frontend smoke (Playwright) — ЗРОБЛЕНО (2026-06-24)
+
+Гейт type/lint/test не ловить «сторінка впала / зникли дані / зламалась авторизація» (фронт-юніт-тестів нема).
+Закрито headless-прогоном на **ефемерному, продакшн-ідентичному стеку**:
+
+- `e2e/` — окремий workspace-пакет (`@workflo/e2e`, Playwright). `tests/smoke.spec.ts`: логін як owner/client →
+  обхід усіх реалізованих (≤ S5) екранів **клієнтсайд-навігацією SPA** (pushState+popstate — зберігає
+  in-memory access-token; `goto()` його б скинув, а refresh-cookie `Path=/auth/refresh` у dev-проксі не
+  доходить) → ассерт: роут змонтувався + ключовий заголовок видно + 0 uncaught/console + 0 4xx/5xx на
+  data-ендпоінтах (bootstrap-401 до логіну відсікаються). Скріни кожного екрана — артефакт.
+- `scripts/e2e.sh` — оркестратор (локально й у CI): PG → build deps → migrate → seed → api + 2× vite dev →
+  playwright → teardown (trap). Локально піднімає throwaway-PG (docker, порт 5466); у CI бере `DATABASE_URL`
+  з PG-сервісу.
+- `.github/workflows/smoke.yml` — reusable (як `db-gate.yml`); викликається з `ci.yml` (PR) і **гейтить
+  `build`** у `staging.yml` + `production.yml` (`needs: [check, db, smoke]`). Не проти живого staging-URL —
+  він за IP-whitelist (`TEAM_IPS`), недосяжний з раннерів; ганяємо ті самі образи на ефемерному стеку.
+
 ### Роадмеп покращень (ще НЕ зроблено)
 
-- **Post-deploy frontend smoke (Playwright):** гейт type/lint/test не ловить «виглядає не так» (фронт-тестів
-  нема). Додати headless-прохід ключових сторінок + 0 console-errors + базовий рендер після деплою. **Найвищий
-  важіль** — закриває весь клас conformance-регресій без ручного огляду.
 - **Sentry + uptime-монітор:** `SENTRY_DSN` зараз порожній; увімкнути error-tracking + зовнішній uptime (S7–S8).
 - **PR-флоу:** §1 принципів каже «в `main` тільки PR», але фактично — direct-push; гейти продубльовано в
   deploy-воркфлоу (працює). Або перейти на PR (гейт до merge), або оновити §1 під фактичний direct-push.

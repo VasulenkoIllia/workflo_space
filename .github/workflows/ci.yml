@@ -44,3 +44,10 @@ jobs:
   db:
     name: DB gate
     uses: ./.github/workflows/db-gate.yml
+
+  # Playwright smoke: ephemeral stack + drive the implemented screens (login, key
+  # pages render, no uncaught/4xx/5xx). Catches render-crash/missing-data regressions
+  # the unit gate can't — there are no frontend unit tests.
+  smoke:
+    name: Smoke
+    uses: ./.github/workflows/smoke.yml

@@ -58,9 +58,16 @@ jobs:
     name: DB gate
     uses: ./.github/workflows/db-gate.yml
 
+  # Pre-deploy smoke: ephemeral stack + drive the implemented screens. Blocks the
+  # deploy if a key page crashes / loses data / regresses auth (no frontend unit
+  # tests cover this). Ephemeral, not the live staging URL (IP-whitelisted).
+  smoke:
+    name: Smoke
+    uses: ./.github/workflows/smoke.yml
+
   build:
     name: Build ${{ matrix.app }}
-    needs: [check, db]
+    needs: [check, db, smoke]
     runs-on: ubuntu-latest
     strategy:
       matrix:

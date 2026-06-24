@@ -1,0 +1,13 @@
+{
+  "name": "@workflo/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Post-deploy smoke E2E (Playwright) — login + key pages render without crashes.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

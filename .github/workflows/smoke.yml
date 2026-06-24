@@ -1,0 +1,81 @@
+# Reusable Playwright smoke (roadmap item, INFRASTRUCTURE.md → CI/CD audit). Spins
+# an ephemeral, production-identical stack (real Postgres + seed + api + both SPAs)
+# and drives the implemented (≤ S5) screens: log in, visit every key page via SPA
+# navigation, assert the route mounts + key heading renders + no uncaught/4xx/5xx
+# errors. Catches the "page crashed / data missing / auth regression" class that the
+# type/lint/unit gate can't (there are no frontend unit tests).
+#
+# Why an ephemeral stack and not the live staging URL: staging is IP-whitelisted
+# (TEAM_IPS) and unreachable from GitHub runners. This validates the SAME code/images
+# about to ship — a pre-deploy gate, run via the exact scripts/e2e.sh used locally.
+name: Smoke
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: playwright-smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: workflo
+          POSTGRES_PASSWORD: workflo_e2e
+          POSTGRES_DB: workflo_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U workflo -d workflo_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # DATABASE_URL set → scripts/e2e.sh reuses this service instead of spinning
+      # its own docker Postgres (the local-dev path).
+      DATABASE_URL: postgresql://workflo:workflo_e2e@localhost:5432/workflo_e2e
+      JWT_SECRET: ci-smoke-jwt-secret-at-least-32-characters-long
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Install Playwright chromium
+        run: pnpm --filter @workflo/e2e exec playwright install --with-deps chromium
+
+      # The same orchestrator developers run locally: build deps → migrate → seed →
+      # start api + both vite dev servers → run the smoke → tear down.
+      - name: Run smoke
+        run: bash scripts/e2e.sh
+
+      - name: Upload smoke artifacts (screenshots + report)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: |
+            e2e/screenshots/
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
