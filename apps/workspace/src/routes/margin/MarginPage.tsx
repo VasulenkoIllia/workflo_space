@@ -55,12 +55,31 @@ function ExecutorTable({ rows, nameOf }: { rows: ExecRow[]; nameOf: (id: string)
           <span
             style={{
               fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
             }}
           >
-            {nameOf(r.executorId)}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {nameOf(r.executorId)}
+            </span>
+            {r.cost === 0 && r.hours > 0 && (
+              <span
+                className="wfp-mono"
+                title="Без прямої собівартості — години йдуть у маржу повністю"
+                style={{
+                  fontSize: 9,
+                  padding: '0 5px',
+                  borderRadius: 4,
+                  whiteSpace: 'nowrap',
+                  background: 'color-mix(in oklab, var(--wf-accent) 16%, transparent)',
+                  color: 'var(--wf-fg)',
+                }}
+              >
+                0-cost
+              </span>
+            )}
           </span>
           <span style={{ textAlign: 'right' }}>{r.hours.toFixed(1)}</span>
           <span style={{ textAlign: 'right', color: 'var(--wf-fg-muted)' }}>
@@ -88,6 +107,15 @@ function ExecutorTable({ rows, nameOf }: { rows: ExecRow[]; nameOf: (id: string)
         </span>
         <span style={{ textAlign: 'right' }}>100%</span>
       </div>
+      {rows.some((r) => r.cost === 0 && r.hours > 0) && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 10 }}
+        >
+          // 0-cost виконавці (напр. власник) не мають прямої собівартості — їхні години йдуть у
+          маржу повністю
+        </div>
+      )}
     </Card>
   )
 }

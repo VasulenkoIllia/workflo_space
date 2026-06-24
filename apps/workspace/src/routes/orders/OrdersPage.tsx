@@ -45,8 +45,10 @@ function isOverdue(o: WorkspaceOrder): boolean {
 export function OrdersPage() {
   const [params, setParams] = useSearchParams()
   const viewParam = params.get('view')
+  // Design: /orders is the filterable table registry by default; board (kanban) + timeline are
+  // opt-in views (the dedicated «Дошка задач» lands in S6).
   const view: View =
-    viewParam === 'table' ? 'table' : viewParam === 'timeline' ? 'timeline' : 'board'
+    viewParam === 'board' ? 'board' : viewParam === 'timeline' ? 'timeline' : 'table'
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const debounced = useDebounce(search, 300)
@@ -87,7 +89,7 @@ export function OrdersPage() {
 
   const setView = (v: View) => {
     const next = new URLSearchParams(params)
-    if (v === 'board') next.delete('view')
+    if (v === 'table') next.delete('view')
     else next.set('view', v)
     setParams(next, { replace: true })
   }

@@ -93,6 +93,10 @@ export function OrderDetailPage() {
         <StatusControl orderId={order.id} current={order.internalStatus} />
       </div>
 
+      {order.estimatedHours != null && order.estimatedHours > 0 && (
+        <EstimateProgress logged={logged} estimated={order.estimatedHours} />
+      )}
+
       <div className="wfp-od">
         <div>
           <Tabs
@@ -193,6 +197,66 @@ const SUBMITTABLE_STATUSES: OrderInternalStatus[] = [
   OrderInternalStatus.CLARIFICATION,
   OrderInternalStatus.ESTIMATING,
 ]
+
+/** Estimate-vs-actual bar (design «PROGRESS · ESTIMATE VS ACTUAL»): logged hours against the
+ * estimate, with an 80% tick and an over-budget alert. Only for hourly-estimated orders. */
+function EstimateProgress({ logged, estimated }: { logged: number; estimated: number }) {
+  const pct = Math.round((logged / estimated) * 100)
+  const over = pct > 100
+  const warn = pct >= 80 && !over
+  const remaining = Math.max(0, estimated - logged)
+  const tone = over ? 'var(--wf-destructive)' : warn ? 'var(--wf-warning)' : 'var(--wf-accent)'
+  return (
+    <div style={{ margin: '0 0 18px' }}>
+      <div
+        className="wfp-mono"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: 11,
+          color: 'var(--wf-fg-muted)',
+          marginBottom: 6,
+        }}
+      >
+        <span>// estimate vs actual</span>
+        <span>
+          {logged} год / {estimated} год · {pct}%
+        </span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--wf-border)',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: tone }} />
+        <div
+          style={{
+            position: 'absolute',
+            inset: '0 auto 0 80%',
+            width: 1,
+            background: 'var(--wf-fg-subtle)',
+          }}
+        />
+      </div>
+      <div
+        className="wfp-mono"
+        style={{
+          fontSize: 11,
+          marginTop: 6,
+          color: over ? 'var(--wf-destructive)' : 'var(--wf-fg-muted)',
+        }}
+      >
+        {over
+          ? `⚠ перевищення на ${pct - 100}% (${(logged - estimated).toFixed(1)} год понад оцінку)`
+          : `залишок: ${remaining.toFixed(1)} год`}
+      </div>
+    </div>
+  )
+}
 
 /** Pre-approval estimate editor: fixed sum, or hourly rate × hours. Hidden once approval is
  * pending/approved (billing is locked server-side) or the order has left pre-work. */
