@@ -5,7 +5,6 @@ import {
   CommandPalette,
   Sidebar,
   Topbar,
-  Icon,
   useTheme,
   type CommandItem,
   type ThemeMode,
@@ -13,6 +12,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { PORTAL_NAV, activeNavId } from '@/config/nav'
+import { SidebarCompanyMenu } from '@/components/SidebarCompanyMenu'
 
 export function AppLayout() {
   const { user, logout } = useAuth()
@@ -61,35 +61,22 @@ export function AppLayout() {
     return items
   }, [navigate])
 
+  const roleLabel =
+    company?.role === 'owner'
+      ? 'власник'
+      : company?.role === 'member'
+        ? 'учасник'
+        : (user?.profile.role ?? '')
   const footer = (
-    <div className="wfp-sb-foot">
-      <button
-        type="button"
-        className="wfp-sb-company"
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          background: 'none',
-          border: 0,
-          cursor: 'pointer',
-        }}
-        onClick={() => void logout()}
-        title="Вийти"
-      >
-        <div className="wfp-sb-company-avatar">{(company?.name ?? 'W').slice(0, 1)}</div>
-        <div className="wfp-sb-company-meta">
-          <div className="wfp-sb-company-name">{company?.name ?? 'workflo'}</div>
-          <div className="wfp-sb-company-role">
-            <span>{company?.role ?? user?.profile.role}</span>
-            <span>·</span>
-            <span className="wfp-sb-company-role-tier">вийти</span>
-          </div>
-        </div>
-        <span className="wfp-sb-company-chev">
-          <Icon name="chevron" size={14} />
-        </span>
-      </button>
-    </div>
+    <SidebarCompanyMenu
+      companyName={company?.name ?? 'workflo'}
+      roleLabel={roleLabel}
+      items={[
+        { label: 'Моя компанія', onClick: () => navigate('/company') },
+        { label: 'Налаштування', onClick: () => navigate('/settings') },
+        { label: 'Вийти', danger: true, onClick: () => void logout() },
+      ]}
+    />
   )
 
   return (
