@@ -163,6 +163,13 @@ test.describe('smoke', () => {
         await expect(page.getByText('Smoke task')).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_order-tasks.png', fullPage: true })
       })
+
+      await test.step('workspace /margin → executors tab', async () => {
+        await gotoInApp(page, '/margin')
+        await page.getByRole('tab', { name: 'За виконавцями' }).click()
+        await expect(page.getByText('Маржа').first()).toBeVisible()
+        await page.screenshot({ path: 'screenshots/workspace/_margin-executors.png', fullPage: true })
+      })
     }
 
     expect(errors, `uncaught/console errors:\n${errors.join('\n')}`).toEqual([])
