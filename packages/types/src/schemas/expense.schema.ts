@@ -25,12 +25,16 @@ export const createExpenseSchema = z
   .object({
     type: z.nativeEnum(ExpenseType),
     category: z.nativeEnum(ExpenseCategory),
-    vendor: z.string().max(200).optional(),
+    // nullish (not optional): the form sends `null` for a cleared optional field
+    // (`vendor.trim() || null`, `endDate || null`). Mirrors updateExpenseSchema —
+    // create previously rejected those null payloads with a 400 on every expense
+    // that left the (optional) end-date or vendor blank.
+    vendor: z.string().max(200).nullish(),
     amount: money,
     currency: z.enum(['USD', 'UAH', 'EUR']).default('USD'),
     frequency: z.nativeEnum(ExpenseFrequency).optional(),
     startDate: isoDate,
-    endDate: isoDate.optional(),
+    endDate: isoDate.nullish(),
     executorId: z.string().uuid().optional(),
   })
   .strict()

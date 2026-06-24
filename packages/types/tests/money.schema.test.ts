@@ -30,3 +30,41 @@ describe('money 2-decimal refine accepts float-trap amounts', () => {
     expect(ok.success).toBe(true)
   })
 })
+
+/**
+ * Regression: the "Нова витрата" form sends `null` for a cleared optional field
+ * (`vendor.trim() || null`, `endDate || null`). createExpenseSchema used `.optional()`
+ * (string | undefined), so every expense left with a blank end-date or vendor 400'd
+ * — the whole add-expense flow was broken. Now `.nullish()`, matching updateExpenseSchema.
+ */
+describe('createExpenseSchema accepts null for cleared optional fields', () => {
+  const base = {
+    type: 'recurring',
+    category: 'software',
+    amount: 10,
+    currency: 'USD',
+    frequency: 'monthly',
+    startDate: '2026-06-24',
+  }
+
+  it('accepts null endDate (blank optional end date)', () => {
+    expect(createExpenseSchema.safeParse({ ...base, endDate: null }).success).toBe(true)
+  })
+
+  it('accepts null vendor (blank supplier)', () => {
+    expect(createExpenseSchema.safeParse({ ...base, vendor: null }).success).toBe(true)
+  })
+
+  it('still accepts the fully-filled payload', () => {
+    const r = createExpenseSchema.safeParse({
+      ...base,
+      vendor: 'Acme',
+      endDate: '2026-12-31',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('still rejects a malformed date', () => {
+    expect(createExpenseSchema.safeParse({ ...base, startDate: '24.06.2026' }).success).toBe(false)
+  })
+})
