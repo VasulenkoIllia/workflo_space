@@ -1,6 +1,10 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import { notify } from '@workflo/notifications'
-import { INTERNAL_TO_CLIENT_STATUS, type OrderInternalStatus } from '@workflo/types'
+import {
+  INTERNAL_TO_CLIENT_STATUS,
+  type NotificationEvent,
+  type OrderInternalStatus,
+} from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { captureException } from '../observability/sentry.js'
@@ -120,12 +124,146 @@ async function handleOrderStatusChanged(
   }
 }
 
+const orderRefPayload = z.object({
+  orderId: z.string(),
+  actorId: z.string(),
+  comment: z.string().nullable().optional(),
+})
+
+/**
+ * Per-recipient notify loop with the same at-least-once / partial-delivery semantics as the
+ * status handler: throws (→ retry → DLQ) only if EVERY recipient's every attempted channel
+ * failed. in_app rows persist regardless (notify() writes them); email/telegram without a
+ * template come back `skipped`, so adding events with no email template is safe.
+ */
+async function deliverToRecipients(
+  logger: FastifyBaseLogger,
+  recipientProfileIds: string[],
+  event: NotificationEvent,
+  vars: Record<string, unknown>,
+  inApp: { title: string; body: string }
+): Promise<void> {
+  if (recipientProfileIds.length === 0) return
+  const deps = buildNotifyDeps(logger)
+  let attemptedTotal = 0
+  let delivered = 0
+  let failed = 0
+  for (const profileId of recipientProfileIds) {
+    const outcome = await notify(deps, { profileId, event, vars, inApp })
+    const attempted = outcome.results.filter((r) => r.result.status !== 'skipped')
+    attemptedTotal += attempted.length
+    if (attempted.length === 0) continue
+    if (attempted.every((r) => r.result.status === 'failed')) failed += 1
+    else delivered += 1
+  }
+  if (failed > 0 && delivered === 0 && attemptedTotal > 0) {
+    throw new Error(`outbox: notify failed for all ${failed} recipient(s) of "${event}"`)
+  }
+  if (failed > 0) logger.warn({ delivered, failed, event }, 'outbox: partial notify delivery')
+}
+
+/** Members of the order's client company (people on the client portal), minus the actor. */
+async function clientMemberIds(companyId: string, excludeId: string): Promise<string[]> {
+  const rows = await prisma.companyMember.findMany({
+    where: { companyId, profileId: { not: excludeId } },
+    select: { profileId: true },
+  })
+  return rows.map((r) => r.profileId)
+}
+
+/** Agency owners + managers (triage / oversight), minus the actor. */
+async function agencyStaffIds(agencyId: string, excludeId: string): Promise<string[]> {
+  const rows = await prisma.agencyMember.findMany({
+    where: { agencyId, role: { in: ['owner', 'manager'] }, profileId: { not: excludeId } },
+    select: { profileId: true },
+  })
+  return rows.map((r) => r.profileId)
+}
+
+/** Load the order + assert it belongs to the event's tenant; null → don't fan out. */
+async function loadOrderForEvent(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView,
+  orderId: string
+): Promise<{ agencyId: string; title: string; companyId: string | null } | null> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { agencyId: true, title: true, companyId: true },
+  })
+  if (!order) return null
+  if (event.agencyId && order.agencyId !== event.agencyId) {
+    logger.error(
+      { orderId, eventAgencyId: event.agencyId, orderAgencyId: order.agencyId },
+      'outbox: order/event tenant mismatch — skip'
+    )
+    return null
+  }
+  return order
+}
+
+/** `order.approval_requested` (02-А) → ask the client to approve the estimate. */
+async function handleApprovalRequested(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = orderRefPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order?.companyId) return
+  await deliverToRecipients(
+    logger,
+    await clientMemberIds(order.companyId, p.actorId),
+    'orders.status_changed',
+    { orderTitle: order.title },
+    {
+      title: 'Оцінку надіслано на погодження',
+      body: `«${order.title}» — перегляньте й погодьте оцінку`,
+    }
+  )
+}
+
+/** `order.approval_approved` / `order.approval_rejected` → the team learns the client's decision. */
+async function handleApprovalDecided(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView,
+  approved: boolean
+): Promise<void> {
+  const p = orderRefPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order) return
+  await deliverToRecipients(
+    logger,
+    await agencyStaffIds(order.agencyId, p.actorId),
+    'orders.status_changed',
+    { orderTitle: order.title },
+    approved
+      ? { title: 'Оцінку погоджено', body: `«${order.title}» — клієнт погодив, можна стартувати` }
+      : {
+          title: 'Клієнт запросив правки',
+          body: `«${order.title}»${p.comment ? ` — ${p.comment}` : ''}`,
+        }
+  )
+}
+
 /** Route a claimed event to its handler. Unknown type → throw → retried → DLQ (visible, not dropped). */
 export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
   return async (event: OutboxEventView) => {
     switch (event.type) {
       case 'order.status_changed':
         await handleOrderStatusChanged(logger, event)
+        return
+      case 'order.approval_requested':
+        await handleApprovalRequested(logger, event)
+        return
+      case 'order.approval_approved':
+        await handleApprovalDecided(logger, event, true)
+        return
+      case 'order.approval_rejected':
+        await handleApprovalDecided(logger, event, false)
+        return
+      case 'charge.approval_approved':
+      case 'charge.approval_rejected':
+        // Billing-internal: ack so the event leaves the outbox (no DLQ). A client-facing
+        // «рахунок виставлено» notification needs a billing NotificationEvent → S6 follow-up.
         return
       default:
         throw new Error(`outbox: no handler for type "${event.type}"`)

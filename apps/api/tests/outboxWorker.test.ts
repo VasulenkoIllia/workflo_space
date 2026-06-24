@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const orderFindUnique = vi.fn()
 const companyMemberFindMany = vi.fn()
+const agencyMemberFindMany = vi.fn()
 const notify = vi.fn().mockResolvedValue({ results: [], attempted: [] })
 
 vi.mock('@workflo/db', () => ({
   prisma: {
     order: { findUnique: orderFindUnique },
     companyMember: { findMany: companyMemberFindMany },
+    agencyMember: { findMany: agencyMemberFindMany },
     notificationSettings: { findUnique: vi.fn() },
     notificationPreference: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -77,5 +79,41 @@ describe('outbox worker — order.status_changed handler', () => {
 
   it('throws on an unknown event type (→ retried → DLQ, never silently dropped)', async () => {
     await expect(handler(event({}, 'unknown.type'))).rejects.toThrow(/no handler/)
+  })
+})
+
+describe('outbox worker — approval + charge handlers (S6.2)', () => {
+  afterEach(() => vi.clearAllMocks())
+
+  it('order.approval_requested → notifies the client company members', async () => {
+    orderFindUnique.mockResolvedValue({
+      agencyId: 'agency-1',
+      title: 'Лендінг',
+      companyId: 'company-1',
+    })
+    companyMemberFindMany.mockResolvedValue([{ profileId: 'c1' }])
+    await handler(event({ orderId: 'o1', actorId: 'owner-1' }, 'order.approval_requested'))
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1].inApp.title).toMatch(/погодження/i)
+    expect(companyMemberFindMany.mock.calls[0][0].where.profileId).toEqual({ not: 'owner-1' })
+  })
+
+  it('order.approval_approved → notifies agency owners/managers (the team)', async () => {
+    orderFindUnique.mockResolvedValue({
+      agencyId: 'agency-1',
+      title: 'Лендінг',
+      companyId: 'company-1',
+    })
+    agencyMemberFindMany.mockResolvedValue([{ profileId: 's1' }])
+    await handler(event({ orderId: 'o1', actorId: 'client-1' }, 'order.approval_approved'))
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1].inApp.title).toMatch(/погоджено/i)
+    expect(agencyMemberFindMany.mock.calls[0][0].where.role).toEqual({ in: ['owner', 'manager'] })
+  })
+
+  it('charge.approval_* → ack without notifying (left outbox, no DLQ)', async () => {
+    await handler(event({ chargeId: 'ch-1', actorId: 'owner-1' }, 'charge.approval_approved'))
+    expect(notify).not.toHaveBeenCalled()
+    expect(orderFindUnique).not.toHaveBeenCalled()
   })
 })
