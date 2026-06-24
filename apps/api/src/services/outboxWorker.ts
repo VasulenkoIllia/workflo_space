@@ -209,11 +209,18 @@ async function handleApprovalRequested(
   const p = orderRefPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
   if (!order?.companyId) return
+  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
   await deliverToRecipients(
     logger,
     await clientMemberIds(order.companyId, p.actorId),
     'orders.status_changed',
-    { orderTitle: order.title },
+    // Full status vars so the email template (S6-07) renders correctly: at this point the
+    // order is client-status `pending_approval` (the estimate awaits the client's decision).
+    {
+      orderTitle: order.title,
+      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+      newClientStatus: 'pending_approval',
+    },
     {
       title: 'Оцінку надіслано на погодження',
       body: `«${order.title}» — перегляньте й погодьте оцінку`,
@@ -230,11 +237,18 @@ async function handleApprovalDecided(
   const p = orderRefPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
   if (!order) return
+  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
   await deliverToRecipients(
     logger,
     await agencyStaffIds(order.agencyId, p.actorId),
     'orders.status_changed',
-    { orderTitle: order.title },
+    // Either decision moves the order to client-status `in_progress` (approved → work starts;
+    // rejected → back to estimating, which still maps to in_progress for the client).
+    {
+      orderTitle: order.title,
+      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+      newClientStatus: 'in_progress',
+    },
     approved
       ? { title: 'Оцінку погоджено', body: `«${order.title}» — клієнт погодив, можна стартувати` }
       : {

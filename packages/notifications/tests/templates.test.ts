@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   renderInviteCompanyMemberEmail,
   renderInviteExecutorEmail,
+  renderInvoiceSentEmail,
+  renderNewCommentEmail,
+  renderOrderStatusChangedEmail,
   renderPasswordResetEmail,
   renderWelcomeEmail,
 } from '../src/email/templates/index.js'
@@ -66,6 +69,52 @@ describe('email templates', () => {
     expect(r.html).toContain('did NOT request')
   })
 
+  it('orderStatusChanged: maps the client status to a human label + links the order', () => {
+    const r = renderOrderStatusChangedEmail({
+      orderTitle: 'Лендінг',
+      orderUrl: 'https://portal/tasks/o1',
+      newClientStatus: 'pending_approval',
+    })
+    expect(r.subject).toContain('Лендінг')
+    expect(r.html).toContain('Очікує погодження') // status code → label
+    expect(r.html).toContain('https://portal/tasks/o1')
+  })
+
+  it('orderStatusChanged: falls back to the raw code for an unmapped status', () => {
+    const r = renderOrderStatusChangedEmail({
+      orderTitle: 'X',
+      orderUrl: 'https://x',
+      newClientStatus: 'weird_status',
+    })
+    expect(r.html).toContain('weird_status')
+  })
+
+  it('newComment: shows author, order, quoted preview + reply link', () => {
+    const r = renderNewCommentEmail({
+      orderTitle: 'Бот',
+      authorName: 'Олена',
+      preview: 'Готово до перевірки',
+      orderUrl: 'https://portal/tasks/o2',
+    })
+    expect(r.subject).toContain('Бот')
+    expect(r.html).toContain('Олена')
+    expect(r.html).toContain('Готово до перевірки')
+    expect(r.html).toContain('https://portal/tasks/o2')
+  })
+
+  it('invoiceSent: includes number, amount, due date + pay link', () => {
+    const r = renderInvoiceSentEmail({
+      invoiceNumber: 'INV-2026-000001',
+      amount: '12 000,00 UAH',
+      dueDate: '01.07.2026',
+      invoiceUrl: 'https://portal/invoices/i1',
+    })
+    expect(r.subject).toContain('INV-2026-000001')
+    expect(r.html).toContain('12 000,00 UAH')
+    expect(r.html).toContain('01.07.2026')
+    expect(r.html).toContain('https://portal/invoices/i1')
+  })
+
   it('all templates escape HTML in user-supplied vars', () => {
     const r = renderInviteCompanyMemberEmail({
       inviterName: '<script>alert(1)</script>',
@@ -75,6 +124,17 @@ describe('email templates', () => {
     expect(r.html).not.toContain('<script>alert(1)</script>')
     expect(r.html).toContain('&lt;script&gt;')
     expect(r.html).toContain('Acme &amp; Co')
+  })
+
+  it('newComment: escapes HTML in the comment preview (user content)', () => {
+    const r = renderNewCommentEmail({
+      orderTitle: 'X',
+      authorName: 'A',
+      preview: '<img src=x onerror=alert(1)>',
+      orderUrl: 'https://x',
+    })
+    expect(r.html).not.toContain('<img src=x')
+    expect(r.html).toContain('&lt;img')
   })
 })
 

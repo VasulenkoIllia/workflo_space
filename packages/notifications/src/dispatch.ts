@@ -9,6 +9,9 @@ import type { LocaleKey } from './email/i18n.js'
 import {
   renderInviteCompanyMemberEmail,
   renderInviteExecutorEmail,
+  renderInvoiceSentEmail,
+  renderNewCommentEmail,
+  renderOrderStatusChangedEmail,
   renderPasswordResetEmail,
   renderWelcomeEmail,
   type RenderedEmail,
@@ -110,6 +113,35 @@ export function renderEmailForEvent(
         inviterName: v.inviterName,
         acceptUrl: v.acceptUrl,
         expiresAt: v.expiresAt ?? '',
+        locale,
+      })
+    }
+    case 'orders.status_changed': {
+      const v = vars as EventPayloadMap['orders.status_changed']
+      return renderOrderStatusChangedEmail({
+        orderTitle: v.orderTitle,
+        orderUrl: v.orderUrl,
+        newClientStatus: v.newClientStatus,
+        locale,
+      })
+    }
+    case 'chat.new_comment': {
+      const v = vars as EventPayloadMap['chat.new_comment']
+      return renderNewCommentEmail({
+        orderTitle: v.orderTitle,
+        authorName: v.authorName,
+        preview: v.preview,
+        orderUrl: v.orderUrl,
+        locale,
+      })
+    }
+    case 'billing.invoice_sent': {
+      const v = vars as EventPayloadMap['billing.invoice_sent']
+      return renderInvoiceSentEmail({
+        invoiceNumber: v.invoiceNumber,
+        amount: v.amount,
+        dueDate: v.dueDate,
+        invoiceUrl: v.invoiceUrl,
         locale,
       })
     }

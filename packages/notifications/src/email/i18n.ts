@@ -54,6 +54,29 @@ const uk: Dictionary = {
   'passwordReset.cta': 'Скинути пароль',
   'passwordReset.ignore':
     'Якщо ви НЕ запитували скидання, проігноруйте цей лист. Пароль не буде змінено без переходу за посиланням.',
+
+  // order status changed
+  'orderStatus.subject': 'Оновлення замовлення «{orderTitle}»',
+  'orderStatus.h1': 'Статус замовлення оновлено',
+  'orderStatus.body': 'Замовлення «{orderTitle}» тепер у статусі: {status}.',
+  'orderStatus.cta': 'Переглянути замовлення',
+  'orderStatus.s.in_progress': 'В роботі',
+  'orderStatus.s.pending_approval': 'Очікує погодження',
+  'orderStatus.s.completed': 'Завершено',
+  'orderStatus.s.cancelled': 'Скасовано',
+
+  // new comment
+  'newComment.subject': 'Новий коментар: «{orderTitle}»',
+  'newComment.h1': 'Новий коментар',
+  'newComment.body': '{authorName} залишив(ла) коментар у замовленні «{orderTitle}»:',
+  'newComment.cta': 'Відповісти',
+
+  // invoice sent
+  'invoiceSent.subject': 'Рахунок {invoiceNumber}',
+  'invoiceSent.h1': 'Виставлено рахунок',
+  'invoiceSent.body':
+    'Рахунок {invoiceNumber} на суму {amount}. Будь ласка, оплатіть до {dueDate}.',
+  'invoiceSent.cta': 'Переглянути рахунок',
 }
 
 const en: Dictionary = {
@@ -97,7 +120,29 @@ const en: Dictionary = {
     'We received a request to reset the password for this account. Click below — link is valid for 1 hour.',
   'passwordReset.cta': 'Reset password',
   'passwordReset.ignore':
-    "If you did NOT request a reset, ignore this email. Your password will not be changed without you clicking the link.",
+    'If you did NOT request a reset, ignore this email. Your password will not be changed without you clicking the link.',
+
+  // order status changed
+  'orderStatus.subject': 'Order update: “{orderTitle}”',
+  'orderStatus.h1': 'Order status updated',
+  'orderStatus.body': 'Order “{orderTitle}” is now: {status}.',
+  'orderStatus.cta': 'View order',
+  'orderStatus.s.in_progress': 'In progress',
+  'orderStatus.s.pending_approval': 'Pending approval',
+  'orderStatus.s.completed': 'Completed',
+  'orderStatus.s.cancelled': 'Cancelled',
+
+  // new comment
+  'newComment.subject': 'New comment: “{orderTitle}”',
+  'newComment.h1': 'New comment',
+  'newComment.body': '{authorName} left a comment on order “{orderTitle}”:',
+  'newComment.cta': 'Reply',
+
+  // invoice sent
+  'invoiceSent.subject': 'Invoice {invoiceNumber}',
+  'invoiceSent.h1': 'Invoice issued',
+  'invoiceSent.body': 'Invoice {invoiceNumber} for {amount}. Please pay by {dueDate}.',
+  'invoiceSent.cta': 'View invoice',
 }
 
 const DICTIONARIES: Record<LocaleKey, Dictionary> = { uk, en }
