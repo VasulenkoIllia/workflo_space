@@ -12,6 +12,7 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const post = usePostComment(orderId)
   const [text, setText] = useState('')
   const [internal, setInternal] = useState(false)
+  const [onlyInternal, setOnlyInternal] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const count = data?.comments.length ?? 0
 
@@ -37,8 +38,24 @@ export function ChatTab({ orderId }: { orderId: string }) {
   }
 
   const comments = data?.comments ?? []
+  const internalCount = comments.filter((c) => c.isInternal).length
+  const shown = onlyInternal ? comments.filter((c) => c.isInternal) : comments
   return (
     <div className="wfp-chat" ref={scrollRef}>
+      {comments.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <FilterBtn
+            label={`Усі · ${comments.length}`}
+            active={!onlyInternal}
+            onClick={() => setOnlyInternal(false)}
+          />
+          <FilterBtn
+            label={`🔒 внутрішні · ${internalCount}`}
+            active={onlyInternal}
+            onClick={() => setOnlyInternal(true)}
+          />
+        </div>
+      )}
       {isLoading ? (
         <div className="wfp-chat-row">
           <span />
@@ -53,8 +70,14 @@ export function ChatTab({ orderId }: { orderId: string }) {
             // повідомлень ще немає — напишіть першим
           </span>
         </div>
+      ) : shown.length === 0 ? (
+        <div className="wfp-chat-row">
+          <span />
+          <span />
+          <span style={{ color: 'var(--wf-fg-muted)' }}>// немає внутрішніх нотаток</span>
+        </div>
       ) : (
-        comments.map((c) => {
+        shown.map((c) => {
           const mine = c.author.id === myId
           return (
             <div
@@ -120,5 +143,36 @@ export function ChatTab({ orderId }: { orderId: string }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function FilterBtn({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="wfp-mono"
+      style={{
+        fontSize: 11,
+        padding: '3px 9px',
+        borderRadius: 999,
+        cursor: 'pointer',
+        border: '1px solid var(--wf-border)',
+        background: active
+          ? 'color-mix(in oklab, var(--wf-accent) 14%, transparent)'
+          : 'transparent',
+        color: active ? 'var(--wf-fg)' : 'var(--wf-fg-muted)',
+      }}
+    >
+      {label}
+    </button>
   )
 }
