@@ -459,8 +459,8 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 | S6-02 | API — documents **generate-from-order + list + per-agency нумерація + `GET …/pdf`** (PDF, HTML-fallback без Chromium) ✅; send-to-client → далі                      | [06-documents] | ✅ 🧪 `64ee363`           |
 | S6-03 | Documents UI — **таб «Документи» (ws генерує рахунок/акт/спец, портал read-only)** + E2E smoke                                                                       | [06-documents] | ✅ 🧪                     |
 | S6-04 | Notifications — in-app center API (list/read) GET/PATCH **+ /inbox UI + дзвоник+badge** + **approval-події у фід** (outbox handlers, fix DLQ)                        | [07]           | ✅ 🧪 `dd045c2`·`329a478` |
-| S6-05 | Bot — /start + OTP flow + webhook mode + update-id dedup                                                                                                             | [15-bot]       | ⬜                        |
-| S6-06 | Bot — notification events handler + /profile/telegram/connect                                                                                                        | [15/13]        | ⬜                        |
+| S6-05 | Bot — `/start <code>` OTP-лінк (grammY long-polling = update dedup) → `POST /telegram/link`; webhook mode → follow-up                                                | [15-bot]       | ✅ 🧪                     |
+| S6-06 | Telegram link API — `/profile/telegram/connect·status·unlink` (user) + `/telegram/link` (bot-secret); notify telegram-канал працює після лінку; UI-кнопка → далі     | [15/13]        | ✅ 🧪                     |
 | S6-07 | Email templates — **orderStatusChanged · newComment · invoiceSent** (uk+en, бренд stone+lime, escape) + wired у dispatch; status_changed email тепер реально шлеться | [08-email]     | ✅ 🧪                     |
 | S6-08 | Deploy Sprint 6 → staging                                                                                                                                            | Infra          | 🚀                        |
 

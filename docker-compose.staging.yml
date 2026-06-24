@@ -173,6 +173,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       BOT_TOKEN: ${BOT_TOKEN:-}
+      # Telegram account linking (S6-05/06): API mints deep links + verifies the bot's calls.
+      BOT_LINK_SECRET: ${BOT_LINK_SECRET:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
     labels:
@@ -213,6 +216,9 @@ services:
     environment:
       NODE_ENV: production
       BOT_TOKEN: ${BOT_TOKEN:-}
+      # Bot → API link completion (shared secret + internal API URL on app_network).
+      BOT_LINK_SECRET: ${BOT_LINK_SECRET:-}
+      BOT_API_URL: ${BOT_API_URL:-http://api:4000}
       SENTRY_DSN: ${SENTRY_DSN:-}
     logging:
       driver: json-file

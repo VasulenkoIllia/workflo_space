@@ -22,6 +22,7 @@ import profileRoutes from './routes/profile/index.js'
 import referralRoutes from './routes/referral/index.js'
 import serviceRoutes from './routes/services/index.js'
 import teamRoutes from './routes/team/index.js'
+import telegramLinkRoutes from './routes/telegram/index.js'
 import tenantBrandingRoute from './routes/tenant/branding.js'
 import walletRoutes from './routes/wallet/index.js'
 
@@ -97,6 +98,7 @@ export function buildApp() {
   app.register(billingRoutes)
   app.register(companyRoutes)
   app.register(documentRoutes)
+  app.register(telegramLinkRoutes)
   app.register(serviceRoutes)
   app.register(walletRoutes)
   app.register(referralRoutes)
