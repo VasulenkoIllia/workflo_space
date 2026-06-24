@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon, cn } from '@workflo/ui'
+import { Avatar, Button, Icon, cn } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { markCommentsRead, useComments, usePostComment } from '@/lib/orderDetail'
 import { formatDateTime } from '@/lib/format'
@@ -85,8 +85,15 @@ export function ChatTab({ orderId }: { orderId: string }) {
               className={cn('wfp-chat-row', c.isInternal && 'wfp-chat-row--internal')}
             >
               <span className="wfp-chat-ts">{formatDateTime(c.createdAt)}</span>
-              <span className={cn('wfp-chat-who', mine && 'wfp-chat-who--client')}>
-                {mine ? 'ви' : c.author.name}
+              <span
+                className={cn('wfp-chat-who', mine && 'wfp-chat-who--client')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}
+              >
+                <Avatar name={c.author.name} size={16} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {mine ? 'ви' : c.author.name}
+                </span>
+                {!mine && <RoleBadge kind={c.author.kind} />}
                 {c.isInternal && ' 🔒'}
               </span>
               <div className="wfp-chat-text">{c.content}</div>
@@ -143,6 +150,27 @@ export function ChatTab({ orderId }: { orderId: string }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function RoleBadge({ kind }: { kind: 'team' | 'client' }) {
+  const team = kind === 'team'
+  return (
+    <span
+      className="wfp-mono"
+      style={{
+        fontSize: 9,
+        lineHeight: 1.4,
+        padding: '0 5px',
+        borderRadius: 4,
+        whiteSpace: 'nowrap',
+        background: team ? 'color-mix(in oklab, var(--wf-accent) 18%, transparent)' : 'transparent',
+        border: team ? 'none' : '1px solid var(--wf-border)',
+        color: team ? 'var(--wf-fg)' : 'var(--wf-fg-muted)',
+      }}
+    >
+      {team ? 'команда' : 'клієнт'}
+    </span>
   )
 }
 

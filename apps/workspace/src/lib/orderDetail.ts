@@ -53,7 +53,7 @@ export interface ChatComment {
   isInternal: boolean
   createdAt: string
   editedAt: string | null
-  author: { id: string; name: string }
+  author: { id: string; name: string; kind: 'team' | 'client' }
 }
 
 export interface CommentsResult {

@@ -10,8 +10,34 @@ const COMMENT_SELECT = {
   isInternal: true,
   createdAt: true,
   editedAt: true,
-  author: { select: { id: true, name: true } },
+  // agencyMemberships are RLS-scoped to the order's agency, so a non-empty list means the
+  // author is internal team here — used to label команда vs клієнт. Stripped before sending.
+  author: { select: { id: true, name: true, agencyMemberships: { select: { agencyId: true } } } },
 } as const
+
+type RawComment = {
+  id: string
+  content: string
+  isInternal: boolean
+  createdAt: Date
+  editedAt: Date | null
+  author: { id: string; name: string; agencyMemberships: { agencyId: string }[] }
+}
+
+/** Strip the raw memberships and expose only `author.kind` (team if the author is an agency
+ * member of this order's agency, else client). Never leak which agencies a person belongs to. */
+function serializeComment(c: RawComment, agencyId: string) {
+  const { agencyMemberships, ...author } = c.author
+  const kind = agencyMemberships.some((m) => m.agencyId === agencyId) ? 'team' : 'client'
+  return {
+    id: c.id,
+    content: c.content,
+    isInternal: c.isInternal,
+    createdAt: c.createdAt,
+    editedAt: c.editedAt,
+    author: { ...author, kind },
+  }
+}
 
 const commentsRoute: FastifyPluginAsync = (fastify) => {
   // ── List (newest page, ascending for display) + unread meta ──────────────
@@ -58,7 +84,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       return reply.send({
         success: true,
         data: {
-          comments: page,
+          comments: page.map((c) => serializeComment(c, access.agencyId)),
           meta: { hasMore, unreadCount, lastReadAt: read?.lastReadAt ?? null },
         },
       })
@@ -98,7 +124,9 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
         metadata: { commentId: comment.id, isInternal },
       })
 
-      return reply.status(201).send({ success: true, data: { comment } })
+      return reply
+        .status(201)
+        .send({ success: true, data: { comment: serializeComment(comment, access.agencyId) } })
     }
   )
 

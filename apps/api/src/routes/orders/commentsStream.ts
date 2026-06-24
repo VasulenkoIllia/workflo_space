@@ -30,7 +30,8 @@ const STREAM_COMMENT_SELECT = {
   createdAt: true,
   editedAt: true,
   deletedAt: true,
-  author: { select: { id: true, name: true } },
+  // agencyMemberships are RLS-scoped to the order's agency → non-empty = internal team.
+  author: { select: { id: true, name: true, agencyMemberships: { select: { agencyId: true } } } },
 } as const
 
 /**
@@ -124,7 +125,13 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
               isInternal: comment.isInternal,
               createdAt: comment.createdAt,
               editedAt: comment.editedAt,
-              author: comment.author,
+              author: {
+                id: comment.author.id,
+                name: comment.author.name,
+                kind: comment.author.agencyMemberships.some((m) => m.agencyId === access.agencyId)
+                  ? 'team'
+                  : 'client',
+              },
             }
             write(`id: ${event.commentId}\nevent: comment\ndata: ${JSON.stringify(payload)}\n\n`)
           })
