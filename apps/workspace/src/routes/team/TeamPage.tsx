@@ -1,14 +1,24 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Button, Card, EmptyState, Input } from '@workflo/ui'
+import { Avatar, Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { api } from '@/lib/api'
+import { useTeam, type TeamMember } from '@/lib/payouts'
+import { formatDate } from '@/lib/format'
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/
 
-/** Owner — invite executors to the agency team. Member roster lands with billing (S5). */
+const ROLE_LABEL: Record<string, string> = {
+  owner: 'власник',
+  manager: 'менеджер',
+  executor: 'виконавець',
+}
+
+/** Owner — agency team: invite executors + roster with roles, join dates and (owner-only) rates. */
 export function TeamPage() {
   const [email, setEmail] = useState('')
+  const { data, isLoading } = useTeam()
+  const members = data?.members ?? []
 
   const invite = useMutation({
     mutationFn: (value: string) => api.post('/workspace/team/invite', { email: value }),
@@ -19,13 +29,13 @@ export function TeamPage() {
   })
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 880 }}>
       <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Команда</div>
       <div
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 24 }}
       >
-        // виконавці агенції
+        // {members.length} {members.length === 1 ? 'учасник' : 'учасників'} · виконавці агенції
       </div>
 
       <Card title="Запросити виконавця" style={{ marginBottom: 16 }}>
@@ -51,11 +61,74 @@ export function TeamPage() {
       </Card>
 
       <Card title="Склад команди">
-        <EmptyState
-          title="Список виконавців — скоро"
-          description="Перегляд складу команди, ставок і прав зʼявиться разом із біллінгом (S5)."
-        />
+        {isLoading ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <Skeleton style={{ height: 40 }} />
+            <Skeleton style={{ height: 40 }} />
+            <Skeleton style={{ height: 40 }} />
+          </div>
+        ) : members.length === 0 ? (
+          <EmptyState
+            title="Поки лише ви"
+            description="Запросіть виконавців вище — вони зʼявляться тут після прийняття."
+          />
+        ) : (
+          <div style={{ display: 'grid', gap: 2 }}>
+            {members.map((m) => (
+              <MemberRow key={m.profileId} member={m} />
+            ))}
+          </div>
+        )}
       </Card>
+    </div>
+  )
+}
+
+function MemberRow({ member }: { member: TeamMember }) {
+  const rate = member.rate
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '2fr 1fr 1.4fr auto',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 8px',
+        borderBottom: '1px solid var(--wf-border)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <Avatar name={member.name} size={28} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {member.name}
+          </div>
+          <div
+            className="wfp-mono"
+            style={{
+              fontSize: 11,
+              color: 'var(--wf-fg-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {member.email}
+          </div>
+        </div>
+      </div>
+      <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+        {ROLE_LABEL[member.role] ?? member.role}
+      </span>
+      <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
+        з {formatDate(member.joinedAt)}
+      </span>
+      <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
+        {rate
+          ? `${rate.monthlySalary ? `${Number(rate.monthlySalary)} ${rate.currency}/міс` : '—'}${
+              Number(rate.commissionPercent) ? ` · ${Number(rate.commissionPercent)}%` : ''
+            }`
+          : '—'}
+      </span>
     </div>
   )
 }
