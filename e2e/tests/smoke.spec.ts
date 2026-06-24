@@ -180,15 +180,14 @@ test.describe('smoke', () => {
         await page.screenshot({ path: 'screenshots/workspace/_orders-timeline.png', fullPage: true })
       })
 
-      await test.step('workspace order → Задачі tab → add task', async () => {
+      await test.step('workspace order detail renders (Чат·Файли·Час, no Задачі)', async () => {
         // Open an order via the timeline rows (they carry the seed client name).
         await page.getByRole('button', { name: /ТОВ Тестова Компанія/ }).first().click()
         await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
-        await page.getByRole('tab', { name: 'Задачі' }).click()
-        await page.getByPlaceholder('Нова задача…').fill('Smoke task')
-        await page.getByRole('button', { name: 'Додати' }).first().click()
-        await expect(page.getByText('Smoke task')).toBeVisible()
-        await page.screenshot({ path: 'screenshots/workspace/_order-tasks.png', fullPage: true })
+        await expect(page.getByRole('tab', { name: 'Час' })).toBeVisible()
+        // «Задачі» tab was removed (design has no per-order task kanban).
+        await expect(page.getByRole('tab', { name: 'Задачі' })).toHaveCount(0)
+        await page.screenshot({ path: 'screenshots/workspace/_order-detail.png', fullPage: true })
       })
 
       await test.step('workspace /margin → executors tab', async () => {
@@ -205,6 +204,11 @@ test.describe('smoke', () => {
         await dialog.getByLabel('Назва').fill('Smoke замовлення з workspace')
         await dialog.getByRole('button', { name: 'Створити' }).click()
         await expect(page, 'should land on the new order').toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
+        // The new order is NEW → estimate editor is visible. Set a fixed price (form-submit smoke
+        // for the estimate slice; catches any null/contract regression on PATCH /orders/:id).
+        await page.getByLabel(/Сума/).fill('1500')
+        await page.getByRole('button', { name: 'Зберегти оцінку' }).click()
+        await expect(page.getByText(/надіслати на погодження|Оцінку збережено/)).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_order-create.png', fullPage: true })
       })
 

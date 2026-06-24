@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ALLOWED_ORDER_TRANSITIONS, OrderInternalStatus } from '@workflo/types'
-import { Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
+import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { INTERNAL_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
 import {
   useActivity,
@@ -11,6 +11,8 @@ import {
   useSubmitApproval,
   useTimeLogs,
   useTransitionStatus,
+  useUpdateOrder,
+  type UpdateOrderInput,
   type WorkspaceOrderDetail,
 } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
@@ -119,6 +121,8 @@ export function OrderDetailPage() {
             </Card>
           )}
 
+          <EstimateCard order={order} />
+
           <ApprovalCard order={order} />
 
           <Card title="Фінанси" style={{ marginBottom: 16 }}>
@@ -189,6 +193,149 @@ const SUBMITTABLE_STATUSES: OrderInternalStatus[] = [
   OrderInternalStatus.CLARIFICATION,
   OrderInternalStatus.ESTIMATING,
 ]
+
+/** Pre-approval estimate editor: fixed sum, or hourly rate × hours. Hidden once approval is
+ * pending/approved (billing is locked server-side) or the order has left pre-work. */
+function EstimateCard({ order }: { order: WorkspaceOrderDetail }) {
+  const update = useUpdateOrder(order.id)
+  const [mode, setMode] = useState<BillingType>(
+    order.hourlyRate != null && order.estimatedHours != null
+      ? BillingType.HOURLY
+      : BillingType.FIXED
+  )
+  const [fixed, setFixed] = useState(order.fixedPrice != null ? String(order.fixedPrice) : '')
+  const [rate, setRate] = useState(order.hourlyRate != null ? String(order.hourlyRate) : '')
+  const [hours, setHours] = useState(
+    order.estimatedHours != null ? String(order.estimatedHours) : ''
+  )
+
+  const editable =
+    SUBMITTABLE_STATUSES.includes(order.internalStatus) &&
+    order.approvalStatus !== 'pending' &&
+    order.approvalStatus !== 'approved'
+  if (!editable) return null
+
+  const num = (s: string) => {
+    const n = Number(s.replace(',', '.'))
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+  const r = num(rate)
+  const h = num(hours)
+  const valid = mode === BillingType.FIXED ? num(fixed) != null : r != null && h != null
+  const preview = mode === BillingType.HOURLY && r != null && h != null ? r * h : null
+
+  const save = () => {
+    if (!valid) return
+    const body: UpdateOrderInput =
+      mode === BillingType.FIXED
+        ? {
+            billingType: BillingType.FIXED,
+            fixedPrice: num(fixed),
+            hourlyRate: null,
+            estimatedHours: null,
+          }
+        : { billingType: BillingType.HOURLY, hourlyRate: r, estimatedHours: h, fixedPrice: null }
+    update.mutate(body, {
+      onSuccess: () => toast.success('Оцінку збережено — можна надіслати на погодження'),
+      onError: (e) =>
+        toast.error('Не вдалося зберегти оцінку', {
+          description: e instanceof Error ? e.message : undefined,
+        }),
+    })
+  }
+
+  return (
+    <Card title="Оцінка" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <ModeBtn
+          label="Фіксована"
+          active={mode === BillingType.FIXED}
+          onClick={() => setMode(BillingType.FIXED)}
+        />
+        <ModeBtn
+          label="Погодинна"
+          active={mode === BillingType.HOURLY}
+          onClick={() => setMode(BillingType.HOURLY)}
+        />
+      </div>
+      {mode === BillingType.FIXED ? (
+        <Input
+          label={`Сума, ${order.currency}`}
+          inputMode="decimal"
+          value={fixed}
+          onChange={(e) => setFixed(e.target.value)}
+          placeholder="напр. 1200"
+        />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Input
+            label={`Ставка/год, ${order.currency}`}
+            inputMode="decimal"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder="50"
+          />
+          <Input
+            label="Годин"
+            inputMode="decimal"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            placeholder="24"
+          />
+        </div>
+      )}
+      {preview != null && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 12, color: 'var(--wf-fg-muted)', marginTop: 8 }}
+        >
+          // разом ≈ {Math.round(preview)} {order.currency}
+        </div>
+      )}
+      <Button
+        variant="primary"
+        size="sm"
+        loading={update.isPending}
+        disabled={!valid}
+        onClick={save}
+        style={{ marginTop: 12 }}
+      >
+        Зберегти оцінку
+      </Button>
+    </Card>
+  )
+}
+
+function ModeBtn({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="wfp-mono"
+      style={{
+        fontSize: 11,
+        padding: '4px 10px',
+        borderRadius: 999,
+        cursor: 'pointer',
+        border: '1px solid var(--wf-border)',
+        background: active
+          ? 'color-mix(in oklab, var(--wf-accent) 14%, transparent)'
+          : 'transparent',
+        color: active ? 'var(--wf-fg)' : 'var(--wf-fg-muted)',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
 
 /** Team-side estimate-approval control: submit for client approval, or show the current state. */
 function ApprovalCard({ order }: { order: WorkspaceOrderDetail }) {

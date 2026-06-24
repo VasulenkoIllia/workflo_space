@@ -189,6 +189,28 @@ export function useSubmitApproval(id: string) {
   })
 }
 
+/** Internal-team estimate edit: fixed sum OR hourly rate+hours. Server locks billing fields
+ * once approval is pending/approved, so the editor only renders pre-approval (02-А). */
+export interface UpdateOrderInput {
+  billingType?: BillingType
+  fixedPrice?: number | null
+  hourlyRate?: number | null
+  estimatedHours?: number | null
+}
+
+export function useUpdateOrder(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: UpdateOrderInput) =>
+      api.patch<{ order: { id: string } }>(`/orders/${id}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
+      void qc.invalidateQueries({ queryKey: orderKeys.activity(id) })
+      void qc.invalidateQueries({ queryKey: ['ws-orders'] })
+    },
+  })
+}
+
 export function useTransitionStatus(id: string) {
   const qc = useQueryClient()
   return useMutation({
