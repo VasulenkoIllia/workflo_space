@@ -16,7 +16,7 @@ import { useTeam } from '@/lib/payouts'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 import { KanbanBoard } from './KanbanBoard'
 
-type View = 'board' | 'table'
+type View = 'board' | 'table' | 'timeline'
 
 const STATUS_OPTS = [
   { value: '', label: 'Усі статуси' },
@@ -34,7 +34,9 @@ function isOverdue(o: WorkspaceOrder): boolean {
 
 export function OrdersPage() {
   const [params, setParams] = useSearchParams()
-  const view = (params.get('view') as View) === 'table' ? 'table' : 'board'
+  const viewParam = params.get('view')
+  const view: View =
+    viewParam === 'table' ? 'table' : viewParam === 'timeline' ? 'timeline' : 'board'
   const [search, setSearch] = useState('')
   const debounced = useDebounce(search, 300)
   const [statusF, setStatusF] = useState('')
@@ -97,6 +99,11 @@ export function OrdersPage() {
           >
             <ViewBtn label="Дошка" active={view === 'board'} onClick={() => setView('board')} />
             <ViewBtn label="Таблиця" active={view === 'table'} onClick={() => setView('table')} />
+            <ViewBtn
+              label="Таймлайн"
+              active={view === 'timeline'}
+              onClick={() => setView('timeline')}
+            />
           </div>
         </div>
       </div>
@@ -165,11 +172,141 @@ export function OrdersPage() {
           )}
           {view === 'board' ? (
             <KanbanBoard orders={orders} doneCount={done} />
+          ) : view === 'timeline' ? (
+            <TimelineView orders={orders} companies={companies.data?.companies ?? []} />
           ) : (
             <OrdersTable orders={orders} members={members} />
           )}
         </>
       )}
+    </div>
+  )
+}
+
+const DAY_MS = 86_400_000
+
+/** Deadline-oriented view: orders bucketed by due date (overdue/this week/later/none). */
+function TimelineView({
+  orders,
+  companies,
+}: {
+  orders: WorkspaceOrder[]
+  companies: { id: string; name: string }[]
+}) {
+  const navigate = useNavigate()
+  const nameOf = (id: string) => companies.find((c) => c.id === id)?.name ?? '—'
+  const now = Date.now()
+  const stillOpen = (o: WorkspaceOrder) =>
+    o.internalStatus !== OrderInternalStatus.DONE &&
+    o.internalStatus !== OrderInternalStatus.CANCELLED
+
+  const overdue: WorkspaceOrder[] = []
+  const week: WorkspaceOrder[] = []
+  const later: WorkspaceOrder[] = []
+  const noDate: WorkspaceOrder[] = []
+  for (const o of orders) {
+    if (o.dueDate == null) noDate.push(o)
+    else {
+      const t = new Date(o.dueDate).getTime()
+      if (t < now && stillOpen(o)) overdue.push(o)
+      else if (t < now + 7 * DAY_MS) week.push(o)
+      else later.push(o)
+    }
+  }
+  const byDue = (a: WorkspaceOrder, b: WorkspaceOrder) =>
+    (a.dueDate ? new Date(a.dueDate).getTime() : Infinity) -
+    (b.dueDate ? new Date(b.dueDate).getTime() : Infinity)
+  const buckets: { key: string; label: string; warn?: boolean; rows: WorkspaceOrder[] }[] = [
+    { key: 'overdue', label: 'Прострочено', warn: true, rows: overdue.sort(byDue) },
+    { key: 'week', label: 'Цей тиждень', rows: week.sort(byDue) },
+    { key: 'later', label: 'Пізніше', rows: later.sort(byDue) },
+    { key: 'none', label: 'Без дедлайну', rows: noDate.sort(byDue) },
+  ]
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      {buckets
+        .filter((b) => b.rows.length > 0)
+        .map((b) => (
+          <div key={b.key}>
+            <div
+              className="wfp-mono"
+              style={{
+                fontSize: 11,
+                color: b.warn ? 'var(--wf-warning)' : 'var(--wf-fg-muted)',
+                textTransform: 'uppercase',
+                marginBottom: 8,
+              }}
+            >
+              // {b.label} · {b.rows.length}
+            </div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {b.rows.map((o) => {
+                const meta = o.internalStatus ? INTERNAL_STATUS_META[o.internalStatus] : undefined
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => navigate(`/orders/${o.id}`)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      border: '1px solid var(--wf-border)',
+                      borderRadius: 8,
+                      background: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span
+                      className="wfp-mono"
+                      style={{
+                        flexShrink: 0,
+                        width: 86,
+                        fontSize: 12,
+                        color: b.warn ? 'var(--wf-warning)' : 'var(--wf-fg-secondary)',
+                      }}
+                    >
+                      {o.dueDate ? formatDate(o.dueDate) : '—'}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        fontWeight: 500,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {o.title}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)', flexShrink: 0 }}>
+                      {nameOf(o.companyId)}
+                    </span>
+                    {meta && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          fontSize: 12,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <StatusDot tone={meta.tone} />
+                        {meta.label}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
     </div>
   )
 }

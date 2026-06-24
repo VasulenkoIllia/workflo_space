@@ -145,6 +145,13 @@ test.describe('smoke', () => {
         await expect(page.getByText('Юр-особа').first()).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_project-detail.png', fullPage: true })
       })
+
+      await test.step('workspace /orders → timeline view', async () => {
+        await gotoInApp(page, '/orders')
+        await page.getByRole('button', { name: 'Таймлайн' }).click()
+        await expect(page.getByRole('heading', { name: 'Замовлення' })).toBeVisible()
+        await page.screenshot({ path: 'screenshots/workspace/_orders-timeline.png', fullPage: true })
+      })
     }
 
     expect(errors, `uncaught/console errors:\n${errors.join('\n')}`).toEqual([])
