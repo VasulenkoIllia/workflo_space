@@ -453,16 +453,16 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 
 ## SPRINT 6 — Documents + Notification-channels + Bot (ядро)
 
-| ID    | Задача                                                             | Модуль         | Статус |
-| ----- | ------------------------------------------------------------------ | -------------- | ------ |
-| S6-01 | packages/templates — Invoice/Act/Specification PDF                 | [06-documents] | ⬜     |
-| S6-02 | API — documents create/download/send + per-agency numbering (race) | [06-documents] | ⬜     |
-| S6-03 | Documents UI — Portal+Workspace вкладка                            | [06-documents] | ⬜     |
-| S6-04 | Notifications — in-app center API (list/read) GET/PATCH            | [07]           | ⬜     |
-| S6-05 | Bot — /start + OTP flow + webhook mode + update-id dedup           | [15-bot]       | ⬜     |
-| S6-06 | Bot — notification events handler + /profile/telegram/connect      | [15/13]        | ⬜     |
-| S6-07 | Email templates HTML design (всі транзакційні)                     | [08-email]     | ⬜     |
-| S6-08 | Deploy Sprint 6 → staging                                          | Infra          | 🚀     |
+| ID    | Задача                                                                                               | Модуль         | Статус          |
+| ----- | ---------------------------------------------------------------------------------------------------- | -------------- | --------------- |
+| S6-01 | packages/templates — Invoice/Act/Specification PDF                                                   | [06-documents] | ⬜              |
+| S6-02 | API — documents create/download/send + per-agency numbering (race)                                   | [06-documents] | ⬜              |
+| S6-03 | Documents UI — Portal+Workspace вкладка                                                              | [06-documents] | ⬜              |
+| S6-04 | Notifications — in-app center API (list/read) GET/PATCH **+ /inbox UI + дзвоник+badge (обидва апи)** | [07]           | ✅ 🧪 `dd045c2` |
+| S6-05 | Bot — /start + OTP flow + webhook mode + update-id dedup                                             | [15-bot]       | ⬜              |
+| S6-06 | Bot — notification events handler + /profile/telegram/connect                                        | [15/13]        | ⬜              |
+| S6-07 | Email templates HTML design (всі транзакційні)                                                       | [08-email]     | ⬜              |
+| S6-08 | Deploy Sprint 6 → staging                                                                            | Infra          | 🚀              |
 
 ---
 
