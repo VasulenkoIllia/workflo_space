@@ -112,6 +112,20 @@ test.describe('smoke', () => {
       })
     }
 
+    // Portal-only: client saves their company legal requisites (another form submit).
+    if (info.project.name === 'portal') {
+      await test.step('portal /settings → save company requisites', async () => {
+        await gotoInApp(page, '/settings')
+        await page.getByLabel('Юридична назва').fill('ТОВ Смоук Клієнт')
+        await page.getByRole('button', { name: 'Зберегти реквізити' }).first().click()
+        await expect(page.getByText('Реквізити збережено')).toBeVisible()
+        await page.screenshot({
+          path: 'screenshots/portal/_settings-requisites.png',
+          fullPage: true,
+        })
+      })
+    }
+
     // Workspace-only: actually SUBMIT a form (create a legal entity) — guards the
     // contract class that page-visits can't see (e.g. the createExpenseSchema null-400
     // that shipped because nothing exercised a submit). The DB is re-seeded per run
