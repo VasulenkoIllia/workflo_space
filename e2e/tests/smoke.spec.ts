@@ -152,6 +152,17 @@ test.describe('smoke', () => {
         await expect(page.getByRole('heading', { name: 'Замовлення' })).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_orders-timeline.png', fullPage: true })
       })
+
+      await test.step('workspace order → Задачі tab → add task', async () => {
+        // Open an order via the timeline rows (they carry the seed client name).
+        await page.getByRole('button', { name: /ТОВ Тестова Компанія/ }).first().click()
+        await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
+        await page.getByRole('tab', { name: 'Задачі' }).click()
+        await page.getByPlaceholder('Нова задача…').fill('Smoke task')
+        await page.getByRole('button', { name: 'Додати' }).first().click()
+        await expect(page.getByText('Smoke task')).toBeVisible()
+        await page.screenshot({ path: 'screenshots/workspace/_order-tasks.png', fullPage: true })
+      })
     }
 
     expect(errors, `uncaught/console errors:\n${errors.join('\n')}`).toEqual([])

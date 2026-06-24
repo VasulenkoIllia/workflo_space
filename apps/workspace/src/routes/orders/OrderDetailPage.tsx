@@ -17,6 +17,7 @@ import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/for
 import { ChatTab } from './ChatTab'
 import { FilesTab } from './FilesTab'
 import { TimeTab } from './TimeTab'
+import { TasksTab } from './TasksTab'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   status_changed: 'змінив статус',
@@ -98,11 +99,13 @@ export function OrderDetailPage() {
             onChange={setTab}
             items={[
               { id: 'chat', label: 'Чат' },
+              { id: 'tasks', label: 'Задачі' },
               { id: 'files', label: 'Файли' },
               { id: 'time', label: 'Час' },
             ]}
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
+          {tab === 'tasks' && <TasksTab orderId={order.id} />}
           {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'time' && <TimeTab orderId={order.id} />}
         </div>

@@ -40,6 +40,7 @@
 - **Slice №1 — Юр-особи агенції** (LegalEntity CRUD UI у `/settings`): список + create/edit-модалка + дефолт + delete; smoke тепер **сабмітить форму**; дорогою fix `taxId` 400.
 - **Slice №2 — Екран проєкту** `/projects/:id`: Білінг + **селектор юр-особи** + per-project Маржа + close-cycle (manual); рядок списку → деталь; smoke ходить у деталь.
 - **Slice №3 — Orders-v2** (закрито): **Timeline-view** (бакети дедлайнів: прострочено/тиждень/пізніше/без дати) додано. _Recon показав: bulk-assign + triage-фільтр уже були в таблиці._
+- **Slice №4 — Задачі замовлення** (per-order `InternalTask` kanban): таб **«Задачі»** у деталі замовлення — todo/in*progress/done, create/move/assign/delete; smoke додає задачу. \_Recon: глобальна командна дошка backend-blocked → Фаза B.*
 
 ---
 
@@ -50,10 +51,9 @@
 
 | #   | Зріз                                                   | Модуль     | Бекенд          | Цінність | Стан / нотатка                              |
 | --- | ------------------------------------------------------ | ---------- | --------------- | -------- | ------------------------------------------- |
-| 1   | **Board** (InternalTask kanban, фікс-колонки)          | 02/board   | ✅ InternalTask | **П1**   | окремого екрана дошки задач нема.           |
-| 2   | **Margin:** per-executor розбивка + тумблер `zeroCost` | 22 Finance | ✅ `byExecutor` | П2       | margin «за проєктами» є; per-executor — ні. |
-| 3   | **Order-chat:** фільтр «Усі / Тільки внутрішні»        | 03 Chat    | ✅              | П2       | дрібний conformance-RISK у ChatTab.         |
-| 4   | **Юр-онбординг компанії** (форма реквізитів)           | 06 Docs    | ✅ requisites   | П2       | API GET/PATCH готовий; решта 06 = S6+.      |
+| 1   | **Margin:** per-executor розбивка + тумблер `zeroCost` | 22 Finance | ✅ `byExecutor` | **П1**   | margin «за проєктами» є; per-executor — ні. |
+| 2   | **Order-chat:** фільтр «Усі / Тільки внутрішні»        | 03 Chat    | ✅              | П2       | дрібний conformance-RISK у ChatTab.         |
+| 3   | **Юр-онбординг компанії** (форма реквізитів)           | 06 Docs    | ✅ requisites   | П2       | API GET/PATCH готовий; решта 06 = S6+.      |
 
 Коли Фаза A вичерпана → **S5.6-фронт повністю закрито** → старт **S6** по TRACKER.
 
@@ -64,6 +64,7 @@
 - **client360** (картка клієнта 360°) — потребує clients-CRUD; **рішення власника 2026-06-20: не підтягувати наперед**.
 - **notify-feed** (центр сповіщень) — модель є, read/mark-read API нема.
 - **documents-eu / PDF-движок**, **vault** (секрети), **support**, **calendar**, **testimonials**, **case-editor**.
+- **Глобальна командна дошка** (`workspace-board.jsx`: team-boards, агрегація «усі команди», DnD, фільтри) — нема cross-order/team-board API (`InternalTask` лише per-order). _Per-order kanban задач уже зроблено (slice №4)._
 - **Team** ростер/картка виконавця — бекенд partial, перевірити перед плануванням.
 - **S6 core:** Documents + Notifications + Bot.
 
