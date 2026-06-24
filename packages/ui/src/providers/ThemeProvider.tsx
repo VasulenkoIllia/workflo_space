@@ -24,7 +24,7 @@ export interface AccentPreset {
   softDark: string
 }
 
-/** Swappable accent palette. Source of truth: design/project/product-shell.jsx +
+/** Swappable accent palette. Source of truth: design-v2/project/product-shell.jsx +
  * docs/DESIGN_SYSTEM.md §3.3. Applied at runtime as inline --wf-* (see ThemeProvider). */
 export const ACCENT_PRESETS: Record<AccentKey, AccentPreset> = {
   lime: { name: 'Lime', light: '#A3D90D', dark: '#C5F82A', soft: '#ECFCC4', softDark: '#3F4F0F' },
@@ -85,7 +85,7 @@ function readStored<T extends string>(key: string, allowed: readonly T[], fallba
 }
 
 /** Compute the inline accent CSS variables for the active preset + resolved theme,
- * mirroring design/project/product-shell.jsx. */
+ * mirroring design-v2/project/product-shell.jsx. */
 export function accentVars(accent: AccentKey, resolvedTheme: ResolvedTheme): CSSProperties {
   const p = ACCENT_PRESETS[accent]
   return {

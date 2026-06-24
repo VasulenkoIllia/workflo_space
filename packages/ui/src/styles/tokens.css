@@ -1,4 +1,4 @@
-/* tokens.css — workflo design tokens (ported from design/project/styles.css §Tokens).
+/* tokens.css — workflo design tokens (ported from design-v2/project/styles.css §Tokens).
  * Re-scoped .wf-root → .wfp-root so the product layer (product.css) resolves the
  * --wf-* custom properties WITHOUT pulling in the landing stylesheet.
  * Source of truth: docs/DESIGN_SYSTEM.md §3.
@@ -6,7 +6,7 @@
  * Theme: toggled via [data-theme="dark"] on the .wfp-root node.
  * Accent: 6 swappable presets applied at runtime by ThemeProvider as inline
  *   --wf-accent / --wf-accent-bg / --wf-accent-soft (see ACCENT_PRESETS), mirroring
- *   design/project/product-shell.jsx. The lime defaults below are the baseline.
+ *   design-v2/project/product-shell.jsx. The lime defaults below are the baseline.
  */
 
 /* ───────── Tokens (light · default accent = lime) ───────── */

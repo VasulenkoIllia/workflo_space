@@ -28,7 +28,7 @@
 - **Дизайн-система (НЕ змінюється):** `DESIGN_SYSTEM.md`. **Engineer's Cut** (термінал, режим A), лайм-акцент,
   stone-нейтралі, Geist + JetBrains Mono + Caveat. Токени **`--wf-*`** (свапабельні: 6 accent × light/dark).
   Класи: **`.wfp-*`** (продукт), **`.wfl-*`** (лендінг), **`.wfd-*`** (документи), **`.wfm-*`** (email).
-- **Наявні мокапи:** `design/project/*.jsx` (~60 файлів) — реально намальовані MVP-екрани (позначені РЕЮЗ).
+- **Наявні мокапи:** `design-v2/project/*.jsx` (~60 файлів) — реально намальовані MVP-екрани (позначені РЕЮЗ).
 - **Попередні дизайн-доки** (тепер допоміжні, цей файл їх консолідує): `DESIGN_TODO.md` (MVP-список),
   `DESIGN_TZ_2026-06.md` (деталі нових екранів — джерело Частин I-II тут).
 
@@ -350,9 +350,9 @@ workflo.space  ·  portal
 
 **Файли-референси (абсолютні шляхи):**
 
-- Каркас: `/Users/monstermac/WebstormProjects/workflo_space/design/project/eco-nav.jsx` (РЕЮЗ), `/Users/monstermac/WebstormProjects/workflo_space/design/project/product-shell.jsx` (РЕЮЗ компонентів; `WORKSPACE_NAV`/`PORTAL_NAV` — переробка конфіга під цю IA).
-- Mobile: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-mobile.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-mobile.jsx`.
-- Стани/skeletons: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/skeletons.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-missing.jsx`.
+- Каркас: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/eco-nav.jsx` (РЕЮЗ), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/product-shell.jsx` (РЕЮЗ компонентів; `WORKSPACE_NAV`/`PORTAL_NAV` — переробка конфіга під цю IA).
+- Mobile: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-mobile.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-mobile.jsx`.
+- Стани/skeletons: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/skeletons.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-missing.jsx`.
 - Канон: `docs/adr/008-saas-module-packaging.md`, `docs/LEGAL_ENTITY_SPEC.md`, `docs/PROJECTS_SPEC.md`, `docs/MODULE_REVIEW_2026-06.md`, `docs/DESIGN_TZ_2026-06.md §1`.
 
 ---
@@ -362,7 +362,7 @@ workflo.space  ·  portal
 ## ЛЕНДІНГ — повна логіка і дизайн по ВСІХ блоках
 
 > **Скоуп секції.** Публічний сайт `workflo.space` (модуль **14-landing** + **11-content-blog**). Двомовний (UA/EN, **06-Е**), Next.js 15 App Router (SSG/ISR). Естетика — **Engineer's Cut / Terminal (режим A)** (DESIGN_SYSTEM §3.6): macOS-вікно (`wf-tm-window`: traffic-dots, title-bar `~/illia/workflo/… — bash`, status-bar), команди-роздільники (`## ls ~/services`), лайм-акцент за замовчуванням, stone-нейтралі, Geist + JetBrains Mono + Caveat.
-> **Стан мокапів.** Усі публічні сторінки вже існують у `design/project/` і рендеряться через спільний `TermPageShell` (`landing-blog.jsx`). Головна (one-pager, 9+ секцій) — `terminal-variant.jsx` (`TerminalLanding`) + `terminal-pages.jsx`. Підсторінки — `landing-blog/cases/pricing/marketing/booking.jsx`. Тому **більшість блоків = РЕЮЗ**; ДОДАТИ треба точково (відгуки/логотипи 14-Г, booking-CTA 14-В, cookie-банер GDPR, analytics-хуки 14-Ж, slots під CMS-картинки). Нижче для кожного блоку явно позначено **РЕЮЗ** vs **ДОДАТИ**.
+> **Стан мокапів.** Усі публічні сторінки вже існують у `design-v2/project/` і рендеряться через спільний `TermPageShell` (`landing-blog.jsx`). Головна (one-pager, 9+ секцій) — `terminal-variant.jsx` (`TerminalLanding`) + `terminal-pages.jsx`. Підсторінки — `landing-blog/cases/pricing/marketing/booking.jsx`. Тому **більшість блоків = РЕЮЗ**; ДОДАТИ треба точково (відгуки/логотипи 14-Г, booking-CTA 14-В, cookie-банер GDPR, analytics-хуки 14-Ж, slots під CMS-картинки). Нижче для кожного блоку явно позначено **РЕЮЗ** vs **ДОДАТИ**.
 > **Загальний пріоритет лендінгу — П2** (DESIGN_TZ): фінмодель/документи/білінг (П1) важливіші. Виняток: cookie-банер і lead-контракт контакт-форми тягнуться раніше, бо це юридичний/конверсійний мінімум. SaaS-пресети — **П3**.
 
 ---
@@ -790,7 +790,7 @@ workflo.space  ·  portal
 
 **Релевантні файли (абсолютні шляхи):**
 
-- Мокапи лендінгу: `/Users/monstermac/WebstormProjects/workflo_space/design/project/terminal-variant.jsx` (home, `TerminalLanding` + усі секції), `/Users/monstermac/WebstormProjects/workflo_space/design/project/terminal-pages.jsx` (project/company/case-блоки), `landing-blog.jsx` (`TermPageShell`, blog), `landing-cases.jsx`, `landing-pricing.jsx` (pricing+legal), `landing-marketing.jsx` (services/about/contact/500), `landing-booking.jsx`, `eco-nav.jsx`, `workflo-landing.html`.
+- Мокапи лендінгу: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/terminal-variant.jsx` (home, `TerminalLanding` + усі секції), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/terminal-pages.jsx` (project/company/case-блоки), `landing-blog.jsx` (`TermPageShell`, blog), `landing-cases.jsx`, `landing-pricing.jsx` (pricing+legal), `landing-marketing.jsx` (services/about/contact/500), `landing-booking.jsx`, `eco-nav.jsx`, `workflo-landing.html`.
 - Канон: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/14-landing.md`, `docs/modules/11-content-blog.md`, `docs/modules/26-leads.md`, `docs/adr/008-saas-module-packaging.md`, `docs/MODULE_REVIEW_2026-06.md` (рядки 231/233/239/328-334), `docs/DESIGN_TZ_2026-06.md`, `docs/DESIGN_SYSTEM.md`.
 
 ---
@@ -847,7 +847,7 @@ workflo.space  ·  portal
 6. **Респонсив і a11y.** Перевірити mobile-варіанти всіх auth-екранів (одна колонка, sticky-кнопки), `OtpInput` — фокус-навігація між полями, paste-6-цифр, ARIA для лічильника спроб/таймерів; контраст error-станів на терміналь-фоні; readonly-поля email (invite/verify) — візуально відрізнити від редагованих.
 7. **Двомовність email-шаблонів (UA/EN)** показана лише частково; для auth-флоу критичні `EmailVerify`, `EmailPasswordReset/Changed`, новий magic-link і пара зміни email — дати парні UA/EN-приклади та hex-фолбеки кольорів (поштові клієнти не підтримують `--wf-*`).
 
-Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/01-auth.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 12–28), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§5 IA, блоки 5–6, EMAIL §8). Наявні мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-auth.jsx`, `onboarding.jsx`, `portal-settings.jsx`, `email-templates.jsx`. Відсутній (потрібно створити): `workspace-auth.jsx`.
+Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/01-auth.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 12–28), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§5 IA, блоки 5–6, EMAIL §8). Наявні мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-auth.jsx`, `onboarding.jsx`, `portal-settings.jsx`, `email-templates.jsx`. Відсутній (потрібно створити): `workspace-auth.jsx`.
 
 ---
 
@@ -910,7 +910,7 @@ workflo.space  ·  portal
 
 7. **Стани, респонсив, a11y:** скрізь додати loading-skeleton (список/канбан/деталь/чат), empty («Ще немає повідомлень/замовлень»), error-банер (окремо для медіа-аплоаду — прогрес/«повторити»); permissions-варіанти (executor бачить лише `assigneeId=me`; manager — без фінблоків/маржі; client-member scoped). Mobile: лайтбокс fullscreen, sticky-інпут, горизонтальні таби. A11y: статус-кольори (9+4) **не лише кольором** — потрібні підписи/іконки для дальтонізму; усе themeable через `--wf-*` (статус-токени мають витримувати зміну акценту/теми).
 
-Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-screens.jsx`, `.../workspace-tasks.jsx`, `.../portal-screens.jsx`, `.../portal-order-new.jsx`, `.../portal-mobile.jsx`, `.../workspace-mobile.jsx`, `.../inbox-screens.jsx`, `.../product-app.jsx` (артборди), `.../product-data.js` (статус-дані).
+Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-screens.jsx`, `.../workspace-tasks.jsx`, `.../portal-screens.jsx`, `.../portal-order-new.jsx`, `.../portal-mobile.jsx`, `.../workspace-mobile.jsx`, `.../inbox-screens.jsx`, `.../product-app.jsx` (артборди), `.../product-data.js` (статус-дані).
 
 ---
 
@@ -960,9 +960,9 @@ workflo.space  ·  portal
 - `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/03-chat-comments.md`
 - `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділ «03 — Chat & Comments», рядки 49-63)
 - `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (екран «4. Замовлення: деталь», рядки 1145-1169)
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-screens.jsx` (`OrderDetailChat`, `PortalOrderDetail`)
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-screens.jsx` (`WorkspaceOrderDetail`, центр-колонка чату)
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/inbox-screens.jsx` (`InboxChatThread`)
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-screens.jsx` (`OrderDetailChat`, `PortalOrderDetail`)
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-screens.jsx` (`WorkspaceOrderDetail`, центр-колонка чату)
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/inbox-screens.jsx` (`InboxChatThread`)
 
 ---
 
@@ -995,7 +995,7 @@ workflo.space  ·  portal
 6. **Респонсив (mobile).** Лайтбокс/PDF-вʼюер/плеєри на повний екран (`portal-mobile.css`); жести swipe ←/→ між картинками; sticky-інпут чату не має перекривати overlay. Перевірити `wfm-in-preview` (portal-mobile.css:243) як можливу базу мобільного прев'ю.
 7. **A11y та download-семантика.** Лайтбокс: фокус-трап, Esc-закриття, alt-тексти, keyboard ←/→; усі файли віддаються `Content-Disposition: attachment` (а PDF/картинки переглядаються через canvas/thumbnail-варіант, не inline-рендер) — переконатися, що кнопка «завантажити» присутня на кожному прев'ю, а не лише перегляд.
 
-Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/04-files.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 67-81), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1145-1169). Мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-screens.jsx` (OrderDetailChat, OrderDetailFiles), `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-components.jsx` (FileRow, UploadZone), `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-screens.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/product-styles.css` (`.wfp-chat-attach`, `.wfp-upload`, `.wfp-file-row`).
+Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/04-files.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 67-81), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1145-1169). Мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-screens.jsx` (OrderDetailChat, OrderDetailFiles), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-components.jsx` (FileRow, UploadZone), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-screens.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/product-styles.css` (`.wfp-chat-attach`, `.wfp-upload`, `.wfp-file-row`).
 
 ---
 
@@ -1101,9 +1101,9 @@ workflo.space  ·  portal
 
 **Релевантні файли (абсолютні):**
 
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/documents-screens.jsx` — UA PDF-комплект (toolkit `wfd-*`) + `DocumentsIndex`
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/product-data.js` (рядки 186-432) — дані `invoice_full`/`act_full`/`reconciliation_full`/`spec_full`/`contract_full`/`documents_list`/`doc_types`
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/email-templates.jsx` — `EmailDocReady`/`EmailInvoice` (06-Г/доставка)
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/documents-screens.jsx` — UA PDF-комплект (toolkit `wfd-*`) + `DocumentsIndex`
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/product-data.js` (рядки 186-432) — дані `invoice_full`/`act_full`/`reconciliation_full`/`spec_full`/`contract_full`/`documents_list`/`doc_types`
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/email-templates.jsx` — `EmailDocReady`/`EmailInvoice` (06-Г/доставка)
 - `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/06-documents.md` — канон модуля (секції «Аудит-фіналізація», «Прохід власника 11.06.2026»)
 - `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1064-1322) — детальні описи екранів Portal+Документи
 
@@ -1231,7 +1231,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 
 7. **Стани, яких бракує:** empty (нуль рефералів / нуль кліків — приховати або занулити воронку), loading-скелетони таблиці й воронки, toast «скопійовано», модалка/флоу QR-завантаження, модалка «Запросити email» з валідацією й кулдауном. **A11y:** воронка і прогрес-бар потребують текстових еквівалентів (не лише колір), email-masked — переконатися що скрін-рідер не зачитує приватні дані. **Гейтинг (ADR-008):** якщо тариф тенанта без Referral — пункт `/referrals` прихований; передбачити, що сторінки немає взагалі (не «доступ заборонено»).
 
-Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/09-referral.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розд. «09 — Referral», ряд 192), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (ряд 1173-1192, 827, 1008). Мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-referrals.jsx`, `portal-loyalty.jsx`, `portal-mobile-app.jsx`, `workspace-wallet.jsx`.
+Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/09-referral.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розд. «09 — Referral», ряд 192), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (ряд 1173-1192, 827, 1008). Мокапи: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-referrals.jsx`, `portal-loyalty.jsx`, `portal-mobile-app.jsx`, `workspace-wallet.jsx`.
 
 ---
 
@@ -1271,7 +1271,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 
 7. **Респонсив і a11y.** Mobile: драбина тірів — горизонтальний скрол; графік витрат і прогрес-метр — стовпчиком. Прогрес-бар і tier-стани (passed/current/next) не повинні розрізнятись лише кольором — додати іконки/мітки (контраст, дальтонізм). Перевірити читабельність мітки «ви тут» і % на барі в обох темах (токени `--wf-*`).
 
-Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-loyalty.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-wallet.jsx` (функція `ReferralTiers`, рядки 190-218), `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/10-loyalty.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1173-1192).
+Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-loyalty.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-wallet.jsx` (функція `ReferralTiers`, рядки 190-218), `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/10-loyalty.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1173-1192).
 
 ---
 
@@ -1497,7 +1497,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 7. **Стани доставки документів (06-Г) у боті.** Іконку каналу `telegram` та статус «надіслано/доставлено/прочитано» синхронізувати з документ-рядком у Portal — щоб клієнт бачив однаковий статус і в боті-нотифікації, і в списку документів.
 8. **A11y / адаптив веб-частин.** `/admin/bot` на mobile: композер+аудиторія+історія мають згортатися в стек; таблиці акаунтів/історії → картки. Live-Markdown-прев'ю має мати достатній контраст у dark-режимі. Countdown-кнопка підтвердження — не покладатися лише на колір (додати текст таймера, що вже зроблено).
 
-Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/15-bot.md`; `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділ «15 — Telegram Bot», рядки 338–345); `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1135, 1163, 1204, 1289 — Telegram-канал/прив'язка/матриця/06-Г); мокапи `/Users/monstermac/WebstormProjects/workflo_space/design/project/round4-bot.jsx`, `portal-settings.jsx` (Telegram bind, рядки 175–199), `workspace-integrations.jsx` (Telegram-as-lead-source — інший модуль), `inbox-screens.jsx` (приймач 15-Д).
+Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/15-bot.md`; `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділ «15 — Telegram Bot», рядки 338–345); `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 1135, 1163, 1204, 1289 — Telegram-канал/прив'язка/матриця/06-Г); мокапи `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/round4-bot.jsx`, `portal-settings.jsx` (Telegram bind, рядки 175–199), `workspace-integrations.jsx` (Telegram-as-lead-source — інший модуль), `inbox-screens.jsx` (приймач 15-Д).
 
 ---
 
@@ -1556,7 +1556,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 6. **Ролі/видимість:** у Workspace таб «Секрети» — owner+manager, але **reveal — лише owner**; executor картку клієнта не відкриває зовсім. Показати стан картки для manager (видно label/username, кнопка reveal — disabled/прихована) та банер «дії логуються для всіх ролей».
 7. **Стани revoked/expiring + a11y/респонсив:** домалювати приглушений вигляд revoked-картки, бейдж ротації, фокус-стани і `aria` для reveal-toggle та per-поле copy; на mobile — copy-кнопки повнорядкові, картки стеком (desktop — 2 колонки + журнал нижче).
 
-Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/17-credentials.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (розділ 1.6 «Секрети» + нав-рядок `/vault` рядок 130), `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 363-374), наявний мокап `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-clients.jsx` (`ClientCreds`, таб `creds`).
+Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/17-credentials.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (розділ 1.6 «Секрети» + нав-рядок `/vault` рядок 130), `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 363-374), наявний мокап `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-clients.jsx` (`ClientCreds`, таб `creds`).
 
 ---
 
@@ -1628,7 +1628,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 - **Ролі manager vs owner на рівні звітів.** Manager не бачить групу `// фінанси` (виручка/маржа/дебіторка/виплати) і собівартість у план-факті, але БАЧИТЬ завантаженість (capacity — це HR, не фінанси). Намалювати view-as / приховані стани: для manager звіти без cost/margin-колонок; для executor — лише власний рядок у timesheet і план-факті. Перевірити, що жодна cost/margin-цифра не протікає у manager-/executor-в'ю.
 - **Планові звіти та конструктор (П3) існують лише як кнопка-тригер «Subscribe email».** Якщо беремо в обсяг — потрібні форми `ReportSchedule` (тип·частота·отримувачі·формат) і `ReportDefinition` (whitelist-метрики·groupBy·фільтри·превʼю); інакше явно позначити як заглушку-disabled, щоб дизайнер не плутав.
 
-Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-reports.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-screens.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-finance.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-screens.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/19-reports.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділи 19 + 12-ПЛАН-ФАКТ), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (розділи 4 і 6).
+Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-reports.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-screens.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-finance.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-screens.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/19-reports.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділи 19 + 12-ПЛАН-ФАКТ), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (розділи 4 і 6).
 
 ---
 
@@ -1668,7 +1668,7 @@ Email — це **канал** notify-матриці (модуль 07), не ок
 6. **Респонсив адмінки:** суб-таби на mobile → дропдаун; глибокі форми (юр-реквізити, шаблон-редактор з preview-pane) — **повноекранні sheet, не модалки**; SMTP mapping drag-drop потребує touch-альтернативи.
 7. **a11y та стани:** color-picker брендингу і `isComplete`/status-pill (✓/⚠/✗) не покладатися лише на колір — додати іконку/текст; one-time-secret екрани (API-ключ, webhook secret) — явне попередження «показано один раз» + copy-кнопка з підтвердженням; усі деструктивні toggle (pause cron, deactivate, revoke key) — confirm.
 
-Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-admin-settings.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-admin.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-reports.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/product-shell.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/20-admin-settings.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/LEGAL_ENTITY_SPEC.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§1 IA + §7 АДМІНКА), `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділ 20), `/Users/monstermac/WebstormProjects/workflo_space/docs/adr/008-saas-module-packaging.md`.
+Релевантні файли (абсолютні): `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-admin-settings.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-admin.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-reports.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/product-shell.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/20-admin-settings.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/LEGAL_ENTITY_SPEC.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§1 IA + §7 АДМІНКА), `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (розділ 20), `/Users/monstermac/WebstormProjects/workflo_space/docs/adr/008-saas-module-packaging.md`.
 
 ---
 
@@ -1748,8 +1748,8 @@ Owner-only фінансове ядро агенції: облік витрат, 
 
 Релевантні файли (абсолютні шляхи):
 
-- Мокап: `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-finance.jsx` (+ дані `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-finance-data.js`, стилі `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-finance.css`)
-- Суміжні мокапи для реюзу: `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-reports.jsx`, `.../workspace-admin.jsx` (`EditMemberModal`), `.../workspace-clients.jsx` (`ClientBilling`), `.../documents-screens.jsx` (дропзона/превʼю)
+- Мокап: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-finance.jsx` (+ дані `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-finance-data.js`, стилі `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-finance.css`)
+- Суміжні мокапи для реюзу: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-reports.jsx`, `.../workspace-admin.jsx` (`EditMemberModal`), `.../workspace-clients.jsx` (`ClientBilling`), `.../documents-screens.jsx` (дропзона/превʼю)
 - Канон: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/22-finance-expenses.md`, `.../docs/MODULE_REVIEW_2026-06.md` (розділ «22 — Finance & Expenses», рядки 433-447), `.../docs/DESIGN_TZ_2026-06.md` (розділ 6 «ФІНАНСИ / P&L», рядки 1014-1027; §2.3 маржа проєкту, рядки 957-968; §3 zeroCost/собівартість, рядки 972-985), `.../docs/PROJECTS_SPEC.md`
 
 ---
@@ -1898,7 +1898,7 @@ Owner-only фінансове ядро агенції: облік витрат, 
 
 8. **Звʼязок іконок джерел із модулем 27.** `WfSource`/`SRC` (B1) свідомо спільний з каналами інтеграцій — дизайнеру тримати єдиний набір (не плодити дублікати в integrations-мокапах), бо джерела лідів = канали інтеграцій.
 
-Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/26-leads.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 487-496), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 320, 633-661, 689, 728-735), `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-leads.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/landing-marketing.jsx` (ContactPage).
+Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/26-leads.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 487-496), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (рядки 320, 633-661, 689, 728-735), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-leads.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/landing-marketing.jsx` (ContactPage).
 
 ---
 
@@ -1933,7 +1933,7 @@ Owner-only фінансове ядро агенції: облік витрат, 
 6. **SaaS-ліміти/quota** (тариф агенції обмежує к-сть ключів/endpoint'ів — §8 доку) ніяк не відображені: додати банер ліміту й заблокований CTA при досягненні.
 7. **Респонсив і a11y**: 2-колонковий layout табу «Форма» (`1fr 380px`) і сітка карток каналів — задати поведінку на вузькому екрані; code-сніпети й JSON-payload потребують keyboard-доступного copy і коректних `aria-label`; статус-пілюлі (ok/bad/warn/muted) не повинні розрізнятися лише кольором — додати іконку/текст для дальтоніків; масковані значення (`wf_sk_live_••••`, `whsec_••••`) — toggle «показати» з правильним фокусом.
 
-Джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/27-integrations.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 499-507), `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-integrations.jsx`.
+Джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/27-integrations.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 499-507), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-integrations.jsx`.
 
 ---
 
@@ -1976,7 +1976,7 @@ CRM-адмінування клієнтів агенцією (Workspace, роз�
 6. **Бракує службових станів:** empty (нема клієнтів / нема проєктів / нема документів / порожній таймлайн), loading-skeleton списку й табів, deactivated-картка з повноцінним read-only банером (зараз лише opacity у рядку), 2FA-gate на reveal секрету. Перевірити теж dirty-unsaved у формі реквізитів.
 7. **Респонсив і a11y:** на mobile 7 табів → горизонтальний скрол-чіпс, глибокі форми як повноекранні sheet (не модалки); перевірити фокус-пастку/Esc у модалах reset/deactivate, читабельність masked-значень секретів, контраст ризик-бейджів і tone-плиток у режимі A (термінал), та доступність copy/eye-кнопок у Секретах із клавіатури.
 
-Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/28-client-management.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 511–521), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§2.2–2.6, рядки 148–214), мокап `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-clients.jsx`.
+Релевантні файли: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/28-client-management.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 511–521), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (§2.2–2.6, рядки 148–214), мокап `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-clients.jsx`.
 
 ---
 
@@ -2016,7 +2016,7 @@ CRM-адмінування клієнтів агенцією (Workspace, роз�
 - **Розшир. фільтри й permission-стани.** Черга має лише 4 pills — домалювати фільтри assignee/category/company/source/«без відповіді»; визначити, що executor може робити в панелі дій (переназначення, зміна пріоритету) vs owner/manager.
 - **Респонсив і a11y.** Workspace-черга — таблиця → картки на mobile, тред-деталь повноекранно (як у портфоліо інших модулів). Тред-бульбашки, SLA/статус-pill, prio-крапка — контраст і не-лише-колір (додати текст/іконку); CSAT-облич — доступні з клавіатури; tour-оверлеї — focus-trap і `Esc`/skip.
 
-Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/29-support.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 525-536), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (IA: рядки 113, 238; матриця 323; тури 1342). Наявний мокап: `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-support.jsx` (усі 6 базових екранів — Portal list/new/thread + Workspace queue/thread shared).
+Файли-джерела: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/29-support.md`, `/Users/monstermac/WebstormProjects/workflo_space/docs/MODULE_REVIEW_2026-06.md` (рядки 525-536), `/Users/monstermac/WebstormProjects/workflo_space/docs/DESIGN_TZ_2026-06.md` (IA: рядки 113, 238; матриця 323; тури 1342). Наявний мокап: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-support.jsx` (усі 6 базових екранів — Portal list/new/thread + Workspace queue/thread shared).
 
 ---
 

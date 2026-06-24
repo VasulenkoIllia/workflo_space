@@ -17,7 +17,7 @@
 3. **Я додаю фічу — чи є під неї дизайн?** → §7 (workflow-гейт). Це обов'язковий крок перед кодом.
 4. **Що треба домалювати / передати дизайнеру?** → окремий файл [`DESIGN_TODO.md`](DESIGN_TODO.md) (handoff на допрацювання).
 
-**Правило проєкту:** жоден UI не пишемо «з голови». Спочатку дивимось сюди → знаходимо екран → відкриваємо відповідний файл у [`design/project/`](../design-v2/project/) → реалізуємо піксель-в-піксель у нашому стеку (React/Vite або Next.js) → оновлюємо статус у §5. Якщо дизайну немає — це стоп-сигнал (див. §7).
+**Правило проєкту:** жоден UI не пишемо «з голови». Спочатку дивимось сюди → знаходимо екран → відкриваємо відповідний файл у [`design-v2/project/`](../design-v2/project/) → реалізуємо піксель-в-піксель у нашому стеку (React/Vite або Next.js) → оновлюємо статус у §5. Якщо дизайну немає — це стоп-сигнал (див. §7).
 
 ---
 
@@ -25,18 +25,18 @@
 
 **Канонічний бандл — [`design-v2/`](../design-v2/)** (159 source-файлів, імпорт 2026-06-20 через Claude Design MCP, entry `design-v2/project/workflo-prototype.html`). Старий [`design/`](../design/) (R6, 113 файлів) лишено для порівняння. Це HTML/CSS/JS-прототип (React 18 + Babel standalone, рендериться у браузері без збірки). Його **не треба запускати** — читаємо вихідний код напряму. **Нові 17 модулів design-v2 — §5.13.**
 
-| Що                                                       | Файл                                                                                                                                           | Призначення                                                                                                                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Інструкція хендоффу                                      | [`design-v2/README.md`](../design-v2/README.md)                                                                                                | Що робити з бандлом                                                                                                                      |
-| **Інтерактивний прототип** (r3 entry)                    | [`design/project/workflo-prototype.html`](../design-v2/project/workflo-prototype.html)                                                         | **Кликабельний end-to-end:** лендинг / Портал / Workspace / Компоненти з реальною sidebar-навігацією, ⌘K, bell. Поточний головний entry. |
-| Артборди продукту (portal+workspace+documents+brandbook) | [`design/project/workflo-product.html`](../design-v2/project/workflo-product.html)                                                             | Канвас з усіма артбордами/станами/модалями (для дизайн-ревʼю)                                                                            |
-| **Лендинг**                                              | [`design/project/workflo-landing.html`](../design-v2/project/workflo-landing.html)                                                             | Маркетинг-сайт                                                                                                                           |
-| Реєстр екранів продукту                                  | [`design/project/product-app.jsx`](../design-v2/project/product-app.jsx)                                                                       | Список **усіх** артбордів (екран = `<DCArtboard>`)                                                                                       |
-| Реєстр екранів лендингу                                  | [`design/project/app.jsx`](../design-v2/project/app.jsx)                                                                                       | Артборди лендингу                                                                                                                        |
-| Дані-заглушки                                            | [`design/project/product-data.js`](../design-v2/project/product-data.js), [`design/project/pages-data.js`](../design-v2/project/pages-data.js) | Моделі даних, статуси, матриці                                                                                                           |
-| Токени (CSS-змінні)                                      | [`design/project/styles.css`](../design-v2/project/styles.css)                                                                                 | `--wf-*` змінні — джерело §3                                                                                                             |
-| Стилі продукту                                           | [`design/project/product-styles.css`](../design-v2/project/product-styles.css)                                                                 | `.wfp-*` / `.wfd-*` компоненти                                                                                                           |
-| Інтент (переписка)                                       | [`design/chats/`](../design/chats/)                                                                                                            | 8 транскриптів — лише у старому `design/chats/` (design-v2 імпортовано через MCP, без chats)                                             |
+| Що                                                       | Файл                                                                                                                                                 | Призначення                                                                                                                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Інструкція хендоффу                                      | [`design-v2/README.md`](../design-v2/README.md)                                                                                                      | Що робити з бандлом                                                                                                                      |
+| **Інтерактивний прототип** (r3 entry)                    | [`design-v2/project/workflo-prototype.html`](../design-v2/project/workflo-prototype.html)                                                            | **Кликабельний end-to-end:** лендинг / Портал / Workspace / Компоненти з реальною sidebar-навігацією, ⌘K, bell. Поточний головний entry. |
+| Артборди продукту (portal+workspace+documents+brandbook) | [`design-v2/project/workflo-product.html`](../design-v2/project/workflo-product.html)                                                                | Канвас з усіма артбордами/станами/модалями (для дизайн-ревʼю)                                                                            |
+| **Лендинг**                                              | [`design-v2/project/workflo-landing.html`](../design-v2/project/workflo-landing.html)                                                                | Маркетинг-сайт                                                                                                                           |
+| Реєстр екранів продукту                                  | [`design-v2/project/product-app.jsx`](../design-v2/project/product-app.jsx)                                                                          | Список **усіх** артбордів (екран = `<DCArtboard>`)                                                                                       |
+| Реєстр екранів лендингу                                  | [`design-v2/project/app.jsx`](../design-v2/project/app.jsx)                                                                                          | Артборди лендингу                                                                                                                        |
+| Дані-заглушки                                            | [`design-v2/project/product-data.js`](../design-v2/project/product-data.js), [`design-v2/project/pages-data.js`](../design-v2/project/pages-data.js) | Моделі даних, статуси, матриці                                                                                                           |
+| Токени (CSS-змінні)                                      | [`design-v2/project/styles.css`](../design-v2/project/styles.css)                                                                                    | `--wf-*` змінні — джерело §3                                                                                                             |
+| Стилі продукту                                           | [`design-v2/project/product-styles.css`](../design-v2/project/product-styles.css)                                                                    | `.wfp-*` / `.wfd-*` компоненти                                                                                                           |
+| Інтент (переписка)                                       | [`design/chats/`](../design/chats/)                                                                                                                  | 8 транскриптів — лише у старому `design/chats/` (design-v2 імпортовано через MCP, без chats)                                             |
 
 **Префікси класів** (важливо для розуміння файлів):
 
@@ -73,7 +73,7 @@
 
 ## 3. Дизайн-токени (канонічні)
 
-Джерело: [`design/project/styles.css`](../design-v2/project/styles.css). Тема перемикається через `data-theme`, акцент — `data-accent`.
+Джерело: [`design-v2/project/styles.css`](../design-v2/project/styles.css). Тема перемикається через `data-theme`, акцент — `data-accent`.
 
 ### 3.1 Кольори — Light
 
@@ -111,7 +111,7 @@
 
 ### 3.3 Акцент-пресети (6)
 
-Перемикач `data-accent`. Джерело: `ACCENT_PRESETS` у [`design/project/product-shell.jsx`](../design-v2/project/product-shell.jsx).
+Перемикач `data-accent`. Джерело: `ACCENT_PRESETS` у [`design-v2/project/product-shell.jsx`](../design-v2/project/product-shell.jsx).
 
 | Пресет             | Light     | Dark      | Soft (light) |
 | ------------------ | --------- | --------- | ------------ |
@@ -141,7 +141,7 @@
 
 ### 3.6 Естетика продукту — A · Terminal (рішення 2026-05-29)
 
-**Офіційно: режим A · Terminal — для обох поверхонь** (portal і workspace). Shell ([`design/project/product-shell.jsx`](../design-v2/project/product-shell.jsx)) завжди рендериться у термінал-вікні:
+**Офіційно: режим A · Terminal — для обох поверхонь** (portal і workspace). Shell ([`design-v2/project/product-shell.jsx`](../design-v2/project/product-shell.jsx)) завжди рендериться у термінал-вікні:
 
 - macOS-вікно: traffic-dots, title-bar (`portal.workflo.space — bash`), status-bar (branch `main`, час, тема).
 - `[ ... ]`-брекети навколо кнопок, `// group`-лейбли у sidebar.
@@ -194,7 +194,7 @@
 
 ### 5.2 Landing — `workflo.space`
 
-Дизайн: [`design/project/app.jsx`](../design-v2/project/app.jsx), [`design/project/terminal-variant.jsx`](../design-v2/project/terminal-variant.jsx), [`design/project/terminal-pages.jsx`](../design-v2/project/terminal-pages.jsx). Код: [`apps/landing/`](../apps/landing/) (Next.js 15).
+Дизайн: [`design-v2/project/app.jsx`](../design-v2/project/app.jsx), [`design-v2/project/terminal-variant.jsx`](../design-v2/project/terminal-variant.jsx), [`design-v2/project/terminal-pages.jsx`](../design-v2/project/terminal-pages.jsx). Код: [`apps/landing/`](../apps/landing/) (Next.js 15).
 
 | Екран / секція                       | Дизайн      | Стани в дизайні                                                         | Код | Нотатки                                                          |
 | ------------------------------------ | ----------- | ----------------------------------------------------------------------- | --- | ---------------------------------------------------------------- |
@@ -224,7 +224,7 @@
 
 Дизайн: `portal-*.jsx`, `inbox-screens.jsx`, `documents-screens.jsx`. Код: [`apps/portal/`](../apps/portal/) — **лише scaffold** (`App.tsx` = `<h1>Workflo Portal</h1>`). Усі рядки нижче в коді = ❌.
 
-**Auth** — [`design/project/portal-auth.jsx`](../design-v2/project/portal-auth.jsx)
+**Auth** — [`design-v2/project/portal-auth.jsx`](../design-v2/project/portal-auth.jsx)
 
 | Екран                 | Дизайн | Стани (артборди)                                         |
 | --------------------- | ------ | -------------------------------------------------------- |
@@ -236,7 +236,7 @@
 | `/reset-password`     | ✅     | новий пароль                                             |
 | `/invite/:token`      | ✅     | приєднання до компанії                                   |
 
-**Orders** — [`design/project/portal-screens.jsx`](../design-v2/project/portal-screens.jsx), [`portal-order-new.jsx`](../design-v2/project/portal-order-new.jsx)
+**Orders** — [`design-v2/project/portal-screens.jsx`](../design-v2/project/portal-screens.jsx), [`portal-order-new.jsx`](../design-v2/project/portal-order-new.jsx)
 
 | Екран                    | Дизайн | Стани / таби / попапи                                                              |
 | ------------------------ | ------ | ---------------------------------------------------------------------------------- |
@@ -259,7 +259,7 @@
 | `/referrals` | ✅     | код+лінк, 3-step explainer, список (masked), правила              | [`portal-referrals.jsx`](../design-v2/project/portal-referrals.jsx) |
 | `/team`      | ✅     | учасники компанії + activity                                      | [`portal-team.jsx`](../design-v2/project/portal-team.jsx)           |
 
-**Settings** — [`design/project/portal-settings.jsx`](../design-v2/project/portal-settings.jsx)
+**Settings** — [`design-v2/project/portal-settings.jsx`](../design-v2/project/portal-settings.jsx)
 
 | Екран                     | Дизайн | Стани                                           |
 | ------------------------- | ------ | ----------------------------------------------- |
@@ -269,7 +269,7 @@
 | `/settings/notifications` | ✅     | матриця **14 подій × 3 канали** + тихі години   |
 | `/settings/security`      | ✅     | overview · зміна номера (крок 1) · OTP (крок 2) |
 
-**States + Overlays** — [`design/project/portal-states.jsx`](../design-v2/project/portal-states.jsx)
+**States + Overlays** — [`design-v2/project/portal-states.jsx`](../design-v2/project/portal-states.jsx)
 
 | Елемент                       | Дизайн | Тип                               |
 | ----------------------------- | ------ | --------------------------------- |
@@ -279,7 +279,7 @@
 | Company switcher              | ✅     | popover (3 компанії + create)     |
 | New company wizard            | ✅     | модал                             |
 
-**Mobile (native, iPhone 390×844)** — [`design/project/portal-mobile.jsx`](../design-v2/project/portal-mobile.jsx)
+**Mobile (native, iPhone 390×844)** — [`design-v2/project/portal-mobile.jsx`](../design-v2/project/portal-mobile.jsx)
 
 | Екран                                  | Дизайн |
 | -------------------------------------- | ------ |
@@ -292,13 +292,13 @@
 | `/loyalty`                             | ✅     |
 | Bottom-sheet (перемикач компаній / Ще) | ✅     |
 
-**Inbox** — [`design/project/inbox-screens.jsx`](../design-v2/project/inbox-screens.jsx)
+**Inbox** — [`design-v2/project/inbox-screens.jsx`](../design-v2/project/inbox-screens.jsx)
 
 | Екран    | Дизайн | Стани                                                                                                               |
 | -------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
 | `/inbox` | ✅     | master-detail; фільтри: усі · @згадки · system; quick-reply; kind-мітки (chat/mention/status/doc/payment/marketing) |
 
-**Documents index** — [`design/project/documents-screens.jsx`](../design-v2/project/documents-screens.jsx)
+**Documents index** — [`design-v2/project/documents-screens.jsx`](../design-v2/project/documents-screens.jsx)
 
 | Екран                                       | Дизайн |
 | ------------------------------------------- | ------ |
@@ -339,7 +339,7 @@
 
 ### 5.5 Documents / PDF
 
-Дизайн: [`design/project/documents-screens.jsx`](../design-v2/project/documents-screens.jsx) + дані в `product-data.js`. Код: [`packages/templates/src/index.ts`](../packages/templates/src/index.ts) — `generatePdf()` **кидає** «not implemented yet. Planned for Sprint 6». Усі = 🟡 (дизайн ✅, код ні).
+Дизайн: [`design-v2/project/documents-screens.jsx`](../design-v2/project/documents-screens.jsx) + дані в `product-data.js`. Код: [`packages/templates/src/index.ts`](../packages/templates/src/index.ts) — `generatePdf()` **кидає** «not implemented yet. Planned for Sprint 6». Усі = 🟡 (дизайн ✅, код ні).
 
 | Документ           | Код-тип | Дизайн | Особливості                                                          |
 | ------------------ | ------- | ------ | -------------------------------------------------------------------- |
@@ -354,7 +354,7 @@
 
 ### 5.6 Email-шаблони
 
-**Дизайн (r2 — G1 закрито):** 15 HTML-шаблонів у [`design/project/email-templates.jsx`](../design-v2/project/email-templates.jsx) + [`email-templates.css`](../design-v2/project/email-templates.css). Mono + lime, з прев'ю всередині поштового клієнта.
+**Дизайн (r2 — G1 закрито):** 15 HTML-шаблонів у [`design-v2/project/email-templates.jsx`](../design-v2/project/email-templates.jsx) + [`email-templates.css`](../design-v2/project/email-templates.css). Mono + lime, з прев'ю всередині поштового клієнта.
 **Код:** [`packages/notifications/src/email/templates/`](../packages/notifications/src/email/templates/) — реалізовані 4 шаблони (welcome/inviteExecutor/inviteCompanyMember/passwordReset). Решту 11 треба додати + переписати inline-CSS під фірмовий стиль.
 
 **Transactional (5):**
@@ -395,7 +395,7 @@
 
 ### 5.8 Shared UI — `packages/ui`
 
-Дизайн-довідник: brandbook (`bb-foundations` + `bb-components`) — [`design/project/brandbook.jsx`](../design-v2/project/brandbook.jsx), [`brandbook-product.jsx`](../design-v2/project/brandbook-product.jsx). Код: [`packages/ui/src/`](../packages/ui/src/).
+Дизайн-довідник: brandbook (`bb-foundations` + `bb-components`) — [`design-v2/project/brandbook.jsx`](../design-v2/project/brandbook.jsx), [`brandbook-product.jsx`](../design-v2/project/brandbook-product.jsx). Код: [`packages/ui/src/`](../packages/ui/src/).
 
 | Компонент                                                       | Дизайн   | Код                          |
 | --------------------------------------------------------------- | -------- | ---------------------------- |
@@ -601,7 +601,7 @@
 
 **Гейт перед написанням будь-якого UI / візуального артефакту:**
 
-1. **Знайди екран** у §5 (або в реєстрі [`design/project/product-app.jsx`](../design-v2/project/product-app.jsx) / [`app.jsx`](../design-v2/project/app.jsx)).
+1. **Знайди екран** у §5 (або в реєстрі [`design-v2/project/product-app.jsx`](../design-v2/project/product-app.jsx) / [`app.jsx`](../design-v2/project/app.jsx)).
 2. **Дизайн є (✅)?**
    - **Так** → відкрий відповідний `*.jsx` + `styles.css`/`product-styles.css`, звір токени з §3, реалізуй піксель-в-піксель. Перевір **усі стани**: default / empty / loading / error / а також модали й overlays зі стовпця «Стани».
    - **Ні / частково (◑/❌)** → **стоп**. Не вигадуй UI. Познач дизайн-гап (issue / рядок у §5), узгодь з власником дизайну, домалюй або зафіксуй тимчасове рішення явно.
@@ -611,7 +611,7 @@
 **Чек-лист «фіча → дизайн» (вставляй у PR-опис):**
 
 ```
-- [ ] Екран знайдено в DESIGN_SYSTEM.md §5 (або в design/project/*.jsx)
+- [ ] Екран знайдено в DESIGN_SYSTEM.md §5 (або в design-v2/project/*.jsx)
 - [ ] Дизайн існує (✅). Якщо ні — гап зафіксовано та узгоджено
 - [ ] Токени з §3 (кольори/шрифти/радіуси), без хардкоду hex
 - [ ] Реалізовано всі стани: empty / loading / error + модали/overlays

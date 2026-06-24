@@ -552,7 +552,7 @@ export async function notify(
 
 ### packages/templates (новий — для PDF документів)
 
-> **Движок: HTML → Puppeteer → PDF** (рішення дизайн-фази, 2026-05-29 — див. `DESIGN_SYSTEM.md §5.5 + §8 row 4`). HTML/CSS-мокапи з `design/project/documents-screens.jsx` реюзяться 1:1 — точне повторення (QR, watermark SIGNED/DRAFT, Caveat-підпис). Уникає переписування дизайну в react-pdf-примітивах.
+> **Движок: HTML → Puppeteer → PDF** (рішення дизайн-фази, 2026-05-29 — див. `DESIGN_SYSTEM.md §5.5 + §8 row 4`). HTML/CSS-мокапи з `design-v2/project/documents-screens.jsx` реюзяться 1:1 — точне повторення (QR, watermark SIGNED/DRAFT, Caveat-підпис). Уникає переписування дизайну в react-pdf-примітивах.
 >
 > _Примітка: попередній план використовував `@react-pdf/renderer`. Перейшли на Puppeteer для pixel-perfect-збігу з мокапами._
 
@@ -604,7 +604,7 @@ export async function generatePdf(
 }
 ```
 
-**Чому Puppeteer:** дизайн `design/project/documents-screens.jsx` уже HTML/CSS → реюз без переписування. Watermark `SIGNED/DRAFT`, QR-код, Caveat-підпис (−3°) працюють «з коробки». Browser-pool через singleton — амортизація запуску chrome (~300ms cold).
+**Чому Puppeteer:** дизайн `design-v2/project/documents-screens.jsx` уже HTML/CSS → реюз без переписування. Watermark `SIGNED/DRAFT`, QR-код, Caveat-підпис (−3°) працюють «з коробки». Browser-pool через singleton — амортизація запуску chrome (~300ms cold).
 
 **Trade-off:** headless-chrome на сервері (~120MB пам'яті). Прийнятно для Hetzner VPS. Альтернатива — `@sparticuz/chromium` якщо переїдемо у serverless.
 

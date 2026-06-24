@@ -28,7 +28,7 @@
 > **Що superseded:**
 >
 > - §1 повністю (кольори + типографіка + dark theme) — заміна в `DESIGN_SYSTEM.md §3`
-> - §5 (Компоненти) — заміна в `DESIGN_SYSTEM.md §3.6` + brandbook у `design/project/brandbook*.jsx`
+> - §5 (Компоненти) — заміна в `DESIGN_SYSTEM.md §3.6` + brandbook у `design-v2/project/brandbook*.jsx`
 >
 > Для нових модулів (Leads / Integrations / Client-Mgmt / Support / SaaS white-label) — окремий бриф [`DESIGN_BRIEF_GROWTH.md`](DESIGN_BRIEF_GROWTH.md).
 

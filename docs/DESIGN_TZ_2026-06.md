@@ -18,8 +18,8 @@
   (свапабельні: 6 accent-пресетів × light/dark — палітра не зашита). Класи: **`.wfp-*`** (продукт),
   **`.wfl-*`** (лендінг), **`.wfd-*`** (документи), **`.wfm-*`** (email).
 - **Попередній MVP-handoff:** `DESIGN_TODO.md` (база, закрита 02.06). Цей документ — її детальне розширення
-  з проходу власника. Наявні мокапи — у `design/project/` (позначено РЕЮЗ / РОЗШИР / НОВЕ).
-- **Правило процесу:** функціонал = логіка = дизайн на одному рівні. Кожен новий екран: мокап → `design/project/`
+  з проходу власника. Наявні мокапи — у `design-v2/project/` (позначено РЕЮЗ / РОЗШИР / НОВЕ).
+- **Правило процесу:** функціонал = логіка = дизайн на одному рівні. Кожен новий екран: мокап → `design-v2/project/`
   → токени `--wf-*`/класи `.wfp-*` → реалізація.
 
 ## Легенда
@@ -349,9 +349,9 @@ workflo.space  ·  portal
 
 **Файли-референси (абсолютні шляхи):**
 
-- Каркас: `/Users/monstermac/WebstormProjects/workflo_space/design/project/eco-nav.jsx` (РЕЮЗ), `/Users/monstermac/WebstormProjects/workflo_space/design/project/product-shell.jsx` (РЕЮЗ компонентів; `WORKSPACE_NAV`/`PORTAL_NAV` — переробка конфіга під цю IA).
-- Mobile: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-mobile.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-mobile.jsx`.
-- Стани/skeletons: `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/skeletons.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-missing.jsx`.
+- Каркас: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/eco-nav.jsx` (РЕЮЗ), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/product-shell.jsx` (РЕЮЗ компонентів; `WORKSPACE_NAV`/`PORTAL_NAV` — переробка конфіга під цю IA).
+- Mobile: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-mobile.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-mobile.jsx`.
+- Стани/skeletons: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-states.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/skeletons.jsx`, `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-missing.jsx`.
 - Канон: `docs/adr/008-saas-module-packaging.md`, `docs/LEGAL_ENTITY_SPEC.md`, `docs/PROJECTS_SPEC.md`, `docs/MODULE_REVIEW_2026-06.md`, `docs/DESIGN_TZ_2026-06.md §1`.
 
 ---
@@ -361,7 +361,7 @@ workflo.space  ·  portal
 ## ЛЕНДІНГ — повна логіка і дизайн по ВСІХ блоках
 
 > **Скоуп секції.** Публічний сайт `workflo.space` (модуль **14-landing** + **11-content-blog**). Двомовний (UA/EN, **06-Е**), Next.js 15 App Router (SSG/ISR). Естетика — **Engineer's Cut / Terminal (режим A)** (DESIGN_SYSTEM §3.6): macOS-вікно (`wf-tm-window`: traffic-dots, title-bar `~/illia/workflo/… — bash`, status-bar), команди-роздільники (`## ls ~/services`), лайм-акцент за замовчуванням, stone-нейтралі, Geist + JetBrains Mono + Caveat.
-> **Стан мокапів.** Усі публічні сторінки вже існують у `design/project/` і рендеряться через спільний `TermPageShell` (`landing-blog.jsx`). Головна (one-pager, 9+ секцій) — `terminal-variant.jsx` (`TerminalLanding`) + `terminal-pages.jsx`. Підсторінки — `landing-blog/cases/pricing/marketing/booking.jsx`. Тому **більшість блоків = РЕЮЗ**; ДОДАТИ треба точково (відгуки/логотипи 14-Г, booking-CTA 14-В, cookie-банер GDPR, analytics-хуки 14-Ж, slots під CMS-картинки). Нижче для кожного блоку явно позначено **РЕЮЗ** vs **ДОДАТИ**.
+> **Стан мокапів.** Усі публічні сторінки вже існують у `design-v2/project/` і рендеряться через спільний `TermPageShell` (`landing-blog.jsx`). Головна (one-pager, 9+ секцій) — `terminal-variant.jsx` (`TerminalLanding`) + `terminal-pages.jsx`. Підсторінки — `landing-blog/cases/pricing/marketing/booking.jsx`. Тому **більшість блоків = РЕЮЗ**; ДОДАТИ треба точково (відгуки/логотипи 14-Г, booking-CTA 14-В, cookie-банер GDPR, analytics-хуки 14-Ж, slots під CMS-картинки). Нижче для кожного блоку явно позначено **РЕЮЗ** vs **ДОДАТИ**.
 > **Загальний пріоритет лендінгу — П2** (DESIGN_TZ): фінмодель/документи/білінг (П1) важливіші. Виняток: cookie-банер і lead-контракт контакт-форми тягнуться раніше, бо це юридичний/конверсійний мінімум. SaaS-пресети — **П3**.
 
 ---
@@ -789,7 +789,7 @@ workflo.space  ·  portal
 
 **Релевантні файли (абсолютні шляхи):**
 
-- Мокапи лендінгу: `/Users/monstermac/WebstormProjects/workflo_space/design/project/terminal-variant.jsx` (home, `TerminalLanding` + усі секції), `/Users/monstermac/WebstormProjects/workflo_space/design/project/terminal-pages.jsx` (project/company/case-блоки), `landing-blog.jsx` (`TermPageShell`, blog), `landing-cases.jsx`, `landing-pricing.jsx` (pricing+legal), `landing-marketing.jsx` (services/about/contact/500), `landing-booking.jsx`, `eco-nav.jsx`, `workflo-landing.html`.
+- Мокапи лендінгу: `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/terminal-variant.jsx` (home, `TerminalLanding` + усі секції), `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/terminal-pages.jsx` (project/company/case-блоки), `landing-blog.jsx` (`TermPageShell`, blog), `landing-cases.jsx`, `landing-pricing.jsx` (pricing+legal), `landing-marketing.jsx` (services/about/contact/500), `landing-booking.jsx`, `eco-nav.jsx`, `workflo-landing.html`.
 - Канон: `/Users/monstermac/WebstormProjects/workflo_space/docs/modules/14-landing.md`, `docs/modules/11-content-blog.md`, `docs/modules/26-leads.md`, `docs/adr/008-saas-module-packaging.md`, `docs/MODULE_REVIEW_2026-06.md` (рядки 231/233/239/328-334), `docs/DESIGN_TZ_2026-06.md`, `docs/DESIGN_SYSTEM.md`.
 
 ---
@@ -1062,7 +1062,7 @@ CTA «Створити проєкт» → активація з можливим
 | P&L/звіти v1                                 | `workspace-finance.jsx`, `workspace-reports.jsx`            | РЕЮЗ + 22-Д/22-Г/19-Г                        |
 | Адмінка: юр-особи, view-as банер             | `workspace-admin-settings.jsx`, `workspace-admin.jsx`       | РЕЮЗ-патерн + НОВЕ (юр-особи, view-as банер) |
 
-## Релевантні файли (абсолютні шляхи): `/Users/monstermac/WebstormProjects/workflo_space/design/project/workspace-clients.jsx`, `.../workspace-services.jsx`, `.../workspace-finance.jsx`, `.../workspace-wallet.jsx`, `.../workspace-reports.jsx`, `.../workspace-admin.jsx`, `.../workspace-admin-settings.jsx`, `.../workspace-tasks.jsx`, `.../documents-screens.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/PROJECTS_SPEC.md`, `.../docs/LEGAL_ENTITY_SPEC.md`, `.../docs/MODULE_REVIEW_2026-06.md`, `.../docs/modules/28-client-management.md`, `.../docs/adr/008-saas-module-packaging.md`.
+## Релевантні файли (абсолютні шляхи): `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/workspace-clients.jsx`, `.../workspace-services.jsx`, `.../workspace-finance.jsx`, `.../workspace-wallet.jsx`, `.../workspace-reports.jsx`, `.../workspace-admin.jsx`, `.../workspace-admin-settings.jsx`, `.../workspace-tasks.jsx`, `.../documents-screens.jsx`; канон — `/Users/monstermac/WebstormProjects/workflo_space/docs/PROJECTS_SPEC.md`, `.../docs/LEGAL_ENTITY_SPEC.md`, `.../docs/MODULE_REVIEW_2026-06.md`, `.../docs/modules/28-client-management.md`, `.../docs/adr/008-saas-module-packaging.md`.
 
 # Частина IV — Portal + Документи + Email (детальні екрани)
 
@@ -1318,10 +1318,10 @@ CTA «Створити проєкт» → активація з можливим
 
 **Релевантні файли (абсолютні шляхи):**
 
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/documents-screens.jsx` — UA-комплект PDF (toolkit `wfd-*`), `DocumentsIndex`.
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/email-templates.jsx` — 15 транзакційних шаблонів (`wfm-*`).
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-screens.jsx` — `PortalBilling`, `PortalOrderDetail`, `OrderDetailChat`.
-- `/Users/monstermac/WebstormProjects/workflo_space/design/project/portal-settings.jsx`, `portal-loyalty.jsx`, `portal-referrals.jsx`, `portal-order-new.jsx`, `portal-auth.jsx`, `onboarding.jsx`, `inbox-screens.jsx`.
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/documents-screens.jsx` — UA-комплект PDF (toolkit `wfd-*`), `DocumentsIndex`.
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/email-templates.jsx` — 15 транзакційних шаблонів (`wfm-*`).
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-screens.jsx` — `PortalBilling`, `PortalOrderDetail`, `OrderDetailChat`.
+- `/Users/monstermac/WebstormProjects/workflo_space/design-v2/project/portal-settings.jsx`, `portal-loyalty.jsx`, `portal-referrals.jsx`, `portal-order-new.jsx`, `portal-auth.jsx`, `onboarding.jsx`, `inbox-screens.jsx`.
 - Канон: `docs/LEGAL_ENTITY_SPEC.md`, `docs/PROJECTS_SPEC.md`, `docs/modules/{05,06,02,03,18,25,10,09,01,13,08}-*.md` (секції «Прохід власника / Для ТЗ дизайнеру»), `docs/DESIGN_TZ_2026-06.md` (рядки 49, 61, 139-147, 168, 221).
 
 ---

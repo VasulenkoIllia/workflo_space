@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 
-// Lucide-style icon set ported from design/project/product-shell.jsx (1.6px stroke,
+// Lucide-style icon set ported from design-v2/project/product-shell.jsx (1.6px stroke,
 // currentColor). Grounded in the designer's icon library; extend as screens need.
 const ICONS = {
   inbox: (

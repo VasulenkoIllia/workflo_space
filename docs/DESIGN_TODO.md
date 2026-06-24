@@ -124,7 +124,7 @@
 
 ## Рамки стилю (на майбутні раунди)
 
-Повні токени — [`DESIGN_SYSTEM.md §3`](DESIGN_SYSTEM.md) / [`design/project/styles.css`](../design-v2/project/styles.css):
+Повні токени — [`DESIGN_SYSTEM.md §3`](DESIGN_SYSTEM.md) / [`design-v2/project/styles.css`](../design-v2/project/styles.css):
 
 - **Усе на `--wf-*` токенах** — особливо критично для white-label (G24)
 - Акцент: лайм default; 6 пресетів (lime/indigo/amber/cyan/rose/emerald) + custom-picker через E1 branding

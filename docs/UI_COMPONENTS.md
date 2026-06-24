@@ -26,13 +26,13 @@ pnpm --filter @workflo/ui build-storybook   # статична збірка (sto
 
 Усе під класом-скоупом **`.wfp-root`** (його рендерить `ThemeProvider`).
 
-| Файл                        | Роль                                                                                            |
-| --------------------------- | ----------------------------------------------------------------------------------------------- |
-| `src/styles/tokens.css`     | `--wf-*` токени (light + `[data-theme=dark]`), re-scoped на `.wfp-root`                         |
-| `src/styles/product.css`    | **vendored** — копія `design/project/product-styles.css` (класи `.wfp-*`). Не редагувати руками |
-| `src/styles/polish.css`     | **vendored** — копія `design/project/polish.css` (elevation/skeletons)                          |
-| `src/styles/components.css` | **наш** шар: стани/варіанти, яких дизайн-CSS не визначив (button loading/lg/link/block)         |
-| `src/styles/index.css`      | єдиний вхід → `import '@workflo/ui/styles.css'`                                                 |
+| Файл                        | Роль                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/styles/tokens.css`     | `--wf-*` токени (light + `[data-theme=dark]`), re-scoped на `.wfp-root`                            |
+| `src/styles/product.css`    | **vendored** — копія `design-v2/project/product-styles.css` (класи `.wfp-*`). Не редагувати руками |
+| `src/styles/polish.css`     | **vendored** — копія `design-v2/project/polish.css` (elevation/skeletons)                          |
+| `src/styles/components.css` | **наш** шар: стани/варіанти, яких дизайн-CSS не визначив (button loading/lg/link/block)            |
+| `src/styles/index.css`      | єдиний вхід → `import '@workflo/ui/styles.css'`                                                    |
 
 **Accent** застосовується в рантаймі `ThemeProvider`-ом як inline `--wf-accent/-bg/-soft`
 (пресети — `ACCENT_PRESETS`, дзеркало `product-shell.jsx`). Re-sync vendored-CSS із
@@ -40,7 +40,7 @@ pnpm --filter @workflo/ui build-storybook   # статична збірка (sto
 
 ## Воркфлоу нового компонента (повторюваний)
 
-1. **Знайди в дизайні** — звір клас(и) `.wfp-*` у `design/project/product-styles.css` + екран у `DESIGN_SYSTEM.md §5`.
+1. **Знайди в дизайні** — звір клас(и) `.wfp-*` у `design-v2/project/product-styles.css` + екран у `DESIGN_SYSTEM.md §5`.
 2. **Компонент** — `src/components/X.tsx`: типована обгортка над `.wfp-*` класами. Колір/розміри **лише через токени `--wf-*`**, ніколи не хардкодь hex. Розширення станів, яких нема в дизайн-CSS, — у `components.css`.
 3. **Інтерактивний?** — додай директиву `'use client'` (для Next-консюмера landing).
 4. **Story** — `X.stories.tsx` з `tags: ['autodocs']`: усі варіанти × розміри × **стани** (default/hover/loading/disabled/empty/error — що застосовно).

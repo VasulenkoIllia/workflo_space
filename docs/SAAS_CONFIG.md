@@ -108,7 +108,7 @@
 ## 6. Що це означає для майбутнього фронтенд-проходу (чек-лист tenant-aware)
 
 - [ ] `packages/ui` — усі компоненти лише на `--wf-*` токенах (нуль hex-хардкоду). _(перший крок UI-kit)_
-- [ ] tokens.css — `--wf-*` (light/dark) + `data-accent`-пресети з `design/project/styles.css`.
+- [ ] tokens.css — `--wf-*` (light/dark) + `data-accent`-пресети з `design-v2/project/styles.css`.
 - [ ] **Token-injection bootstrap:** SSR inline (Next-лендинг) + SPA pre-paint inline (portal/workspace) — ставить бренд тенанта до першого рендера.
 - [ ] **Host→tenant resolver** (subdomain/customDomain → agencyId + branding) — API `GET /tenant/branding` + Next middleware.
 - [ ] Лендинг (Next) — multi-tenant: рендерить контент агенції по хосту (ISR), платформний хост окремо.

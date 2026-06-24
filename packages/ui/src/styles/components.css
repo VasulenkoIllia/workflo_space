@@ -1,7 +1,7 @@
 /* components.css — @workflo/ui component-layer styles that EXTEND the ported design
  * CSS (product.css). Only token-based additions for component states/variants the
  * design stylesheet does not itself define. Ported design classes live in product.css
- * (treat as vendored — do not hand-edit; re-sync from design/ deliberately).
+ * (treat as vendored — do not hand-edit; re-sync from design-v2/ deliberately).
  */
 
 /* ─────────────────────────── Button extensions ─────────────────────────── */
