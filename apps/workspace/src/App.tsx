@@ -15,6 +15,7 @@ import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
 import { ProfilePage } from '@/routes/profile/ProfilePage'
 import { BillingPage } from '@/routes/billing/BillingPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
+import { ProjectDetailPage } from '@/routes/projects/ProjectDetailPage'
 import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
@@ -103,6 +104,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <ProjectsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/projects/:id"
+          element={
+            <RoleRoute allow={['owner']}>
+              <ProjectDetailPage />
             </RoleRoute>
           }
         />

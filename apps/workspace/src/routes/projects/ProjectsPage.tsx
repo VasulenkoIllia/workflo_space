@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { formatMoney } from '@/lib/format'
 import {
@@ -66,7 +67,7 @@ function Select({
   )
 }
 
-function ProjectModal({
+export function ProjectModal({
   project,
   companies,
   onClose,
@@ -450,9 +451,9 @@ function ProjectWizard({
 }
 
 export function ProjectsPage() {
+  const navigate = useNavigate()
   const projects = useProjects()
   const companies = useCompanies()
-  const [editing, setEditing] = useState<FinProject | null>(null)
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all')
 
@@ -531,7 +532,7 @@ export function ProjectsPage() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setEditing(p)}
+                onClick={() => navigate(`/projects/${p.id}`)}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -592,13 +593,6 @@ export function ProjectsPage() {
         <ProjectWizard
           companies={companies.data?.companies ?? []}
           onClose={() => setCreating(false)}
-        />
-      )}
-      {editing && (
-        <ProjectModal
-          project={editing}
-          companies={companies.data?.companies ?? []}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

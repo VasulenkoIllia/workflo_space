@@ -66,6 +66,7 @@ export interface ProjectInput {
   contractRequired?: boolean
   paymentTermsDays?: number | null
   includedHoursCap?: number | null
+  legalEntityId?: string | null
 }
 
 export function useSaveProject() {
@@ -75,6 +76,36 @@ export function useSaveProject() {
       id
         ? api.patch<{ project: FinProject }>(`/workspace/projects/${id}`, body)
         : api.post<{ project: FinProject }>('/workspace/projects', body),
+    // invalidating ['projects'] also matches ['projects', id] (prefix) → detail refetches.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['projects'] }),
+  })
+}
+
+/** GET /workspace/projects/:id — single project for the detail screen. */
+export function useProject(id: string) {
+  return useQuery({
+    queryKey: ['projects', id],
+    queryFn: () => api.get<{ project: FinProject }>(`/workspace/projects/${id}`),
+    enabled: id !== '',
+  })
+}
+
+/** PATCH only the project's legal entity (20-Д selector). null → inherit agency default. */
+export function useSetProjectLegalEntity(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (legalEntityId: string | null) =>
+      api.patch<{ project: FinProject }>(`/workspace/projects/${id}`, { legalEntityId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['projects'] }),
+  })
+}
+
+/** POST /workspace/projects/:id/close-cycle — manual cycle close for a period. */
+export function useCloseCycle(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { periodStart: string; periodEnd: string }) =>
+      api.post<{ created: number }>(`/workspace/projects/${id}/close-cycle`, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['projects'] }),
   })
 }

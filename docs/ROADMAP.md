@@ -38,19 +38,19 @@
 - **Fix:** expense `null` endDate/vendor → 400 (`createExpenseSchema` `.nullish()`).
 - **DevOps:** SPA cache-headers, idempotent staging seed, **Playwright-smoke у CI** (гейтить `build`).
 - **Slice №1 — Юр-особи агенції** (LegalEntity CRUD UI у `/settings`): список + create/edit-модалка + дефолт + delete; smoke тепер **сабмітить форму**; дорогою fix `taxId` 400.
+- **Slice №2 — Екран проєкту** `/projects/:id`: Білінг + **селектор юр-особи** + per-project Маржа + close-cycle (manual); рядок списку → деталь; smoke ходить у деталь.
 
 ---
 
 ## 📋 Черга (за цінністю; backend-ready = найдешевше)
 
-| #   | Зріз                                                                                                 | Модуль     | Бекенд                                                              | Цінність | Стан / нотатка                                                                                |
-| --- | ---------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| 1   | **Екран проєкту** `/projects/:id` (деталь + per-project маржа + close-cycle + **селектор юр-особи**) | 05/22      | ✅ GET `/:id`, close-cycle, `computeProjectMargin`, `legalEntityId` | **П1**   | Маршруту нема (🟡 PLHD). Розблоковує Finance-маржу + добиває селектор юр-особи (зі slice №1). |
-| 2   | **Картка клієнта 360°** — таби (Фінанси: борг/LTV/маржа, Проєкти)                                    | 28 Clients | partial (потрібен clients-aggregate)                                | **П1**   | Зараз `ClientDetailPage` = плоский список без табів.                                          |
-| 3   | **Orders:** Timeline-вʼю + Triage вхідних + bulk-дії                                                 | 02 Orders  | ✅ є                                                                | **П1**   | board+table готові; Timeline/Triage/bulk — ні.                                                |
-| 4   | **Finance:** per-executor маржа + тумблер `zeroCost` (EditMember)                                    | 22 Finance | ✅ поля + `computeProjectMargin`                                    | П2       | margin має «за проєктами»; per-executor/zeroCost — ні.                                        |
-| 5   | **Team:** ростер, картка виконавця, панель часу                                                      | 12 Team    | partial — **перевірити API спершу**                                 | П2       | —                                                                                             |
-| 6   | **Документи:** юр-онбординг компанії (форма реквізитів)                                              | 06 Docs    | ✅ requisites GET/PATCH                                             | П2       | API готовий, UI нема. (Решта модуля 06 = PDF-движок = S6+.)                                   |
+| #   | Зріз                                                              | Модуль     | Бекенд                               | Цінність | Стан / нотатка                                              |
+| --- | ----------------------------------------------------------------- | ---------- | ------------------------------------ | -------- | ----------------------------------------------------------- |
+| 1   | **Картка клієнта 360°** — таби (Фінанси: борг/LTV/маржа, Проєкти) | 28 Clients | partial (потрібен clients-aggregate) | **П1**   | Зараз `ClientDetailPage` = плоский список без табів.        |
+| 2   | **Orders:** Timeline-вʼю + Triage вхідних + bulk-дії              | 02 Orders  | ✅ є                                 | **П1**   | board+table готові; Timeline/Triage/bulk — ні.              |
+| 3   | **Finance:** per-executor маржа + тумблер `zeroCost` (EditMember) | 22 Finance | ✅ поля + `computeProjectMargin`     | П2       | margin має «за проєктами»; per-executor/zeroCost — ні.      |
+| 4   | **Team:** ростер, картка виконавця, панель часу                   | 12 Team    | partial — **перевірити API спершу**  | П2       | —                                                           |
+| 5   | **Документи:** юр-онбординг компанії (форма реквізитів)           | 06 Docs    | ✅ requisites GET/PATCH              | П2       | API готовий, UI нема. (Решта модуля 06 = PDF-движок = S6+.) |
 
 _Повний беклог (28 backend-ready + backend-blocked) — [`DESIGN_PHASE2_PLAN.md`](DESIGN_PHASE2_PLAN.md) Трек B/C. Пер-екранний стан — [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md)._
 

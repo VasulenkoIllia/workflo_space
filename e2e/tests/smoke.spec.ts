@@ -133,6 +133,18 @@ test.describe('smoke', () => {
           fullPage: true,
         })
       })
+
+      await test.step('workspace /projects → open a project detail', async () => {
+        await gotoInApp(page, '/projects')
+        // Project rows carry the price ("…/міс USD" | "…/год USD") — unique to a row.
+        await page
+          .locator('button', { hasText: /\/(міс|год)/ })
+          .first()
+          .click()
+        await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{8,}/)
+        await expect(page.getByText('Юр-особа').first()).toBeVisible()
+        await page.screenshot({ path: 'screenshots/workspace/_project-detail.png', fullPage: true })
+      })
     }
 
     expect(errors, `uncaught/console errors:\n${errors.join('\n')}`).toEqual([])
