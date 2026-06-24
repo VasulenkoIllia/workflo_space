@@ -21,21 +21,25 @@ type RawComment = {
   isInternal: boolean
   createdAt: Date
   editedAt: Date | null
-  author: { id: string; name: string; agencyMemberships: { agencyId: string }[] }
+  // The list/create selects always include author + agencyMemberships; typed loosely so the
+  // serializer also tolerates partial rows (e.g. unit-test mocks) without throwing.
+  author?: { id: string; name: string; agencyMemberships?: { agencyId: string }[] } | null
 }
 
 /** Strip the raw memberships and expose only `author.kind` (team if the author is an agency
  * member of this order's agency, else client). Never leak which agencies a person belongs to. */
 function serializeComment(c: RawComment, agencyId: string) {
-  const { agencyMemberships, ...author } = c.author
-  const kind = agencyMemberships.some((m) => m.agencyId === agencyId) ? 'team' : 'client'
+  const author = c.author
+  const kind = (author?.agencyMemberships ?? []).some((m) => m.agencyId === agencyId)
+    ? 'team'
+    : 'client'
   return {
     id: c.id,
     content: c.content,
     isInternal: c.isInternal,
     createdAt: c.createdAt,
     editedAt: c.editedAt,
-    author: { ...author, kind },
+    author: { id: author?.id ?? '', name: author?.name ?? '', kind },
   }
 }
 
