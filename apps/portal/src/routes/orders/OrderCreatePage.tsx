@@ -118,7 +118,9 @@ export function OrderCreatePage() {
           </div>
           {create.isError && (
             <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
-              Не вдалося створити — перевірте поля (дедлайн має бути в майбутньому).
+              {create.error instanceof Error
+                ? create.error.message
+                : 'Не вдалося створити замовлення — спробуйте ще раз.'}
             </div>
           )}
         </div>
