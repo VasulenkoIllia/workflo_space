@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   OrderInternalStatus,
+  canTransitionOrder,
   type OrderClientStatus,
   type OrderPriority,
   type OrderType,
@@ -91,6 +92,56 @@ export function useBulkAssign() {
     mutationFn: ({ ids, assigneeId }: { ids: string[]; assigneeId: string | null }) =>
       Promise.all(ids.map((id) => api.patch(`/orders/${id}/assign`, { assigneeId }))),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-orders'] }),
+  })
+}
+
+/**
+ * Dropping a card on a board column moves the order to the FIRST status mapped to that
+ * column that is a legal transition from the card's current status — so dragging an
+ * «оцінка» card back to «Нові» resolves to CLARIFICATION (allowed), not NEW (not).
+ * Returns null when nothing in the column is reachable → an invalid drop the UI rejects.
+ */
+const COLUMN_DROP_TARGETS: Record<string, OrderInternalStatus[]> = {
+  queue: [OrderInternalStatus.CLARIFICATION, OrderInternalStatus.NEW],
+  estimating: [OrderInternalStatus.ESTIMATING],
+  in_progress: [OrderInternalStatus.IN_PROGRESS, OrderInternalStatus.REVISION],
+  review: [OrderInternalStatus.REVIEW],
+  on_hold: [OrderInternalStatus.ON_HOLD],
+  done: [OrderInternalStatus.DONE],
+}
+
+export function resolveDropStatus(
+  from: OrderInternalStatus | undefined,
+  columnId: string
+): OrderInternalStatus | null {
+  if (!from) return null
+  const candidates = COLUMN_DROP_TARGETS[columnId] ?? []
+  return candidates.find((s) => s !== from && canTransitionOrder(from, s)) ?? null
+}
+
+/** PATCH /orders/:id/status — move an order through the internal state machine, with an
+ * optimistic board update that rolls back if the server rejects the transition. */
+export function useTransitionStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: OrderInternalStatus }) =>
+      api.patch(`/orders/${id}/status`, { status }),
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['ws-orders'] })
+      const snapshot = qc.getQueriesData<OrdersPage>({ queryKey: ['ws-orders'] })
+      for (const [key, data] of snapshot) {
+        if (!data) continue
+        qc.setQueryData<OrdersPage>(key, {
+          ...data,
+          orders: data.orders.map((o) => (o.id === id ? { ...o, internalStatus: status } : o)),
+        })
+      }
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['ws-orders'] }),
   })
 }
 
