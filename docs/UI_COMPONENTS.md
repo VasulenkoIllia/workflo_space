@@ -36,7 +36,7 @@ pnpm --filter @workflo/ui build-storybook   # статична збірка (sto
 
 **Accent** застосовується в рантаймі `ThemeProvider`-ом як inline `--wf-accent/-bg/-soft`
 (пресети — `ACCENT_PRESETS`, дзеркало `product-shell.jsx`). Re-sync vendored-CSS із
-`design/` — лише свідомо (`cp`), не ручним редагуванням.
+`design-v2/` — лише свідомо (`cp`), не ручним редагуванням.
 
 ## Воркфлоу нового компонента (повторюваний)
 
