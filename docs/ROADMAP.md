@@ -42,15 +42,17 @@
 - **Slice №3 — Orders-v2** (закрито): **Timeline-view** (бакети дедлайнів: прострочено/тиждень/пізніше/без дати) додано. _Recon показав: bulk-assign + triage-фільтр уже були в таблиці._
 - **Slice №4 — Задачі замовлення** (per-order `InternalTask` kanban): таб **«Задачі»** у деталі замовлення — `todo`/`in_progress`/`done`, create/move/assign/delete; smoke додає задачу. (Recon: глобальна командна дошка backend-blocked → Фаза B.)
 - **Slice №5 — Margin per-executor**: третій таб **«За виконавцями»** у `/margin` — години + собівартість + % собів. по всіх проєктах, з підсумком. (`zeroCost`-тумблер → Фаза B: його UI-дім EditMember/executor-rates ще нема.)
-- **Slice №7 — Реквізити компанії** (06-Б юр-онбординг): секція **«Реквізити компанії»** у portal `/settings` — форма на `/portal/company/requisites` + isComplete-індикатор; smoke сабмітить. **Закриває S5.6-фронт.**
+- **Slice №7 — Реквізити компанії** (06-Б юр-онбординг): секція **«Реквізити компанії»** у portal `/settings` — форма на `/portal/company/requisites` + isComplete-індикатор; smoke сабмітить.
+- **Slice №8 — Створення замовлення** (портал + workspace): portal `/orders/new` `OrderCreatePage` + workspace `CreateOrderModal` (клієнт + **проєкт під білінг** + пріоритет + дедлайн). Розблоковує повний флоу замовлення; smoke сабмітить обидві форми. _(Був пропущений backend-ready пункт — знайдено під час тест-планування.)_
 
 ---
 
 ## ✅ Фаза A — фронт S5.6 ЗАКРИТО (2026-06-24)
 
-Усі **backend-ready** екрани S5.6 добудовано — **7 зрізів**: юр-особи · екран проєкту `/projects/:id` ·
-Orders Timeline · задачі замовлення · margin per-executor · chat-фільтр · реквізити компанії.
-**S5.6-фронт повністю закрито** (фронт + бекенд + conformance + form-submit smoke на кожен зріз).
+Усі **backend-ready** екрани S5.6 добудовано — **8 зрізів**: юр-особи · екран проєкту `/projects/:id` ·
+Orders Timeline · задачі замовлення · margin per-executor · chat-фільтр · реквізити компанії ·
+**створення замовлення** (портал+workspace). **S5.6-фронт повністю закрито** (фронт + бекенд +
+conformance + form-submit smoke на кожен зріз).
 
 ➡️ **Далі — S6** (Documents + Notifications + Bot) по [`TRACKER.md`](TRACKER.md). Це **новий бекенд** —
 планувати окремо (інший масштаб, не «дотягнути UI»). Backend-blocked залишки — Фаза B нижче.

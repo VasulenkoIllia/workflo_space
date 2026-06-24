@@ -14,6 +14,7 @@ import { BillingPage } from '@/routes/billing/BillingPage'
 import { WalletPage } from '@/routes/wallet/WalletPage'
 import { LoyaltyPage } from '@/routes/loyalty/LoyaltyPage'
 import { ReferralsPage } from '@/routes/referrals/ReferralsPage'
+import { OrderCreatePage } from '@/routes/orders/OrderCreatePage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -33,7 +34,7 @@ export default function App() {
         }
       >
         <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/orders/new" element={<Placeholder title="Нове замовлення" />} />
+        <Route path="/orders/new" element={<OrderCreatePage />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/wallet" element={<WalletPage />} />

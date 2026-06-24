@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   INTERNAL_TO_CLIENT_STATUS,
   OrderClientStatus,
@@ -59,4 +59,20 @@ export const PRIORITY_LABEL: Record<OrderPriority, string> = {
   medium: 'середній',
   high: 'високий',
   urgent: 'терміновий',
+}
+
+/** POST /orders — client creates a request. `dueDate` must be an ISO datetime in the future. */
+export interface CreateOrderInput {
+  title: string
+  description?: string
+  priority?: OrderPriority
+  dueDate?: string
+}
+
+export function useCreateOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateOrderInput) => api.post<{ order: PortalOrder }>('/orders', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['orders'] }),
+  })
 }

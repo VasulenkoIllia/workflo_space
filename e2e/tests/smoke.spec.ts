@@ -124,6 +124,14 @@ test.describe('smoke', () => {
           fullPage: true,
         })
       })
+
+      await test.step('portal create order', async () => {
+        await gotoInApp(page, '/orders/new')
+        await page.getByLabel('Назва').fill('Smoke замовлення з порталу')
+        await page.getByRole('button', { name: 'Створити замовлення' }).first().click()
+        await expect(page, 'should land on the new order').toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
+        await page.screenshot({ path: 'screenshots/portal/_order-create.png', fullPage: true })
+      })
     }
 
     // Workspace-only: actually SUBMIT a form (create a legal entity) — guards the
@@ -183,6 +191,16 @@ test.describe('smoke', () => {
         await page.getByRole('tab', { name: 'За виконавцями' }).click()
         await expect(page.getByText('Маржа').first()).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_margin-executors.png', fullPage: true })
+      })
+
+      await test.step('workspace create order (modal)', async () => {
+        await gotoInApp(page, '/orders')
+        await page.getByRole('button', { name: 'Нове замовлення' }).first().click()
+        const dialog = page.getByRole('dialog')
+        await dialog.getByLabel('Назва').fill('Smoke замовлення з workspace')
+        await dialog.getByRole('button', { name: 'Створити' }).click()
+        await expect(page, 'should land on the new order').toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
+        await page.screenshot({ path: 'screenshots/workspace/_order-create.png', fullPage: true })
       })
     }
 

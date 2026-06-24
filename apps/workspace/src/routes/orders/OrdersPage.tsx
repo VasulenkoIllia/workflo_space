@@ -1,17 +1,27 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, EmptyState, Icon, Skeleton, StatusDot, useDebounce } from '@workflo/ui'
-import { OrderInternalStatus } from '@workflo/types'
+import {
+  Button,
+  EmptyState,
+  Icon,
+  Input,
+  Modal,
+  Skeleton,
+  StatusDot,
+  useDebounce,
+} from '@workflo/ui'
+import { OrderInternalStatus, OrderPriority, OrderType } from '@workflo/types'
 import { Select } from '@/components/Select'
 import {
   INTERNAL_STATUS_META,
   PRIORITY_LABEL,
   countByStatus,
   useBulkAssign,
+  useCreateOrder,
   useOrders,
   type WorkspaceOrder,
 } from '@/lib/orders'
-import { useCompanies } from '@/lib/projects'
+import { useCompanies, useProjects } from '@/lib/projects'
 import { useTeam } from '@/lib/payouts'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 import { KanbanBoard } from './KanbanBoard'
@@ -38,6 +48,7 @@ export function OrdersPage() {
   const view: View =
     viewParam === 'table' ? 'table' : viewParam === 'timeline' ? 'timeline' : 'board'
   const [search, setSearch] = useState('')
+  const [creating, setCreating] = useState(false)
   const debounced = useDebounce(search, 300)
   const [statusF, setStatusF] = useState('')
   const [clientF, setClientF] = useState('')
@@ -88,7 +99,7 @@ export function OrdersPage() {
           <h1 className="wfp-ph-h1">Замовлення</h1>
           <div className="wfp-ph-sub">// {data?.pagination.total ?? orders.length} всього</div>
         </div>
-        <div className="wfp-ph-r">
+        <div className="wfp-ph-r" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div
             style={{
               display: 'inline-flex',
@@ -105,6 +116,14 @@ export function OrdersPage() {
               onClick={() => setView('timeline')}
             />
           </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setCreating(true)}
+            disabled={(companies.data?.companies.length ?? 0) === 0}
+          >
+            Нове замовлення
+          </Button>
         </div>
       </div>
 
@@ -179,7 +198,150 @@ export function OrdersPage() {
           )}
         </>
       )}
+      {creating && (
+        <CreateOrderModal
+          companies={companies.data?.companies ?? []}
+          onClose={() => setCreating(false)}
+        />
+      )}
     </div>
+  )
+}
+
+const modalControlStyle = {
+  width: '100%',
+  background: 'var(--wf-surface)',
+  color: 'var(--wf-fg)',
+  border: '1px solid var(--wf-border)',
+  borderRadius: 'var(--wf-radius)',
+  padding: '8px 10px',
+  fontSize: 14,
+} as const
+
+function CreateOrderModal({
+  companies,
+  onClose,
+}: {
+  companies: { id: string; name: string }[]
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const create = useCreateOrder()
+  const projects = useProjects()
+  const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<OrderPriority>(OrderPriority.MEDIUM)
+  const [projectId, setProjectId] = useState('')
+  const [dueDate, setDueDate] = useState('')
+
+  const titleInvalid = title.trim().length < 3
+  const companyProjects = (projects.data?.projects ?? []).filter((p) => p.companyId === companyId)
+
+  const submit = () => {
+    if (titleInvalid || !companyId) return
+    create.mutate(
+      {
+        companyId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        type: OrderType.CLIENT_ORDER,
+        priority,
+        projectId: projectId || null,
+        dueDate: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : undefined,
+      },
+      { onSuccess: (res) => navigate(`/orders/${res.order.id}`) }
+    )
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Нове замовлення"
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            disabled={titleInvalid || !companyId}
+            onClick={submit}
+          >
+            Створити
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        <Select
+          label="Клієнт"
+          value={companyId}
+          onChange={(v) => {
+            setCompanyId(v)
+            setProjectId('')
+          }}
+          options={companies.map((c) => ({ value: c.id, label: c.name }))}
+        />
+        <Input
+          label="Назва"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          error={titleInvalid && title.length > 0 ? 'мін. 3 символи' : undefined}
+        />
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            ОПИС
+          </span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            placeholder="Деталі, контекст…"
+            style={{ ...modalControlStyle, resize: 'vertical', fontFamily: 'inherit' }}
+          />
+        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Select
+            label="Пріоритет"
+            value={priority}
+            onChange={(v) => setPriority(v as OrderPriority)}
+            options={(['low', 'medium', 'high', 'urgent'] as OrderPriority[]).map((p) => ({
+              value: p,
+              label: PRIORITY_LABEL[p],
+            }))}
+          />
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+              ДЕДЛАЙН (ОПЦ.)
+            </span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              style={modalControlStyle}
+            />
+          </label>
+        </div>
+        <Select
+          label="Проєкт (опц. — під білінг)"
+          value={projectId}
+          onChange={setProjectId}
+          options={[
+            { value: '', label: '— без проєкту' },
+            ...companyProjects.map((p) => ({ value: p.id, label: p.name })),
+          ]}
+        />
+        {create.isError && (
+          <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
+            Не вдалося створити — перевірте поля (дедлайн має бути в майбутньому).
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

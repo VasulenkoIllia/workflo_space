@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { OrderInternalStatus, type OrderClientStatus, type OrderPriority } from '@workflo/types'
+import {
+  OrderInternalStatus,
+  type OrderClientStatus,
+  type OrderPriority,
+  type OrderType,
+} from '@workflo/types'
 import type { StatusTone } from '@workflo/ui'
 import { api } from '@/lib/api'
 
@@ -54,6 +59,27 @@ export function useOrders(filters: OrderFilters) {
     // NOT fire "my tasks" before the profile id resolves (empty string). Callers
     // that omit assigneeId (undefined) or pass 'none'/a UUID are always enabled.
     enabled: filters.assigneeId !== '',
+  })
+}
+
+/** POST /workspace/orders — team creates a (client or internal) order, optionally under a
+ * project. `dueDate` must be an ISO datetime in the future. */
+export interface CreateWorkspaceOrderInput {
+  companyId: string
+  title: string
+  description?: string
+  type?: OrderType
+  priority?: OrderPriority
+  projectId?: string | null
+  dueDate?: string
+}
+
+export function useCreateOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateWorkspaceOrderInput) =>
+      api.post<{ order: { id: string } }>('/workspace/orders', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-orders'] }),
   })
 }
 
