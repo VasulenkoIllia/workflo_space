@@ -10,8 +10,13 @@
 FROM node:20-bookworm-slim
 WORKDIR /app
 
+# openssl/ca-certs for prisma+TLS; chromium + fonts for the documents PDF engine (06, S6-D2).
+# `chromium` pulls its own shared-lib deps via apt; fonts-dejavu carries Cyrillic glyphs so
+# Ukrainian invoices render. puppeteer-core launches this binary via PUPPETEER_EXECUTABLE_PATH.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && apt-get install -y --no-install-recommends \
+        openssl ca-certificates \
+        chromium fonts-liberation fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
@@ -44,6 +49,8 @@ RUN chown -R node:node /app
 ENV NODE_ENV=production
 ENV API_HOST=0.0.0.0
 ENV API_PORT=4000
+# Documents PDF engine (S6-D2): puppeteer-core launches the apt-installed Chromium.
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 EXPOSE 4000
 USER node

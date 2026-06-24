@@ -4,6 +4,7 @@ import { formatDate } from '@/lib/format'
 import {
   DOC_STATUS_LABEL,
   DOC_TYPE_LABEL,
+  openDocumentPdf,
   useGenerateDocument,
   useOrderDocuments,
   type DocumentType,
@@ -70,9 +71,27 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
                 borderBottom: '1px solid var(--wf-border)',
               }}
             >
-              <span className="wfp-mono" style={{ fontSize: 12 }}>
+              <button
+                type="button"
+                className="wfp-mono"
+                title="Переглянути PDF"
+                onClick={() =>
+                  void openDocumentPdf(orderId, d).catch(() =>
+                    toast.error('Не вдалося відкрити документ')
+                  )
+                }
+                style={{
+                  fontSize: 12,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: 'var(--wf-accent)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
                 {d.number}
-              </span>
+              </button>
               <span style={{ fontWeight: 500 }}>{DOC_TYPE_LABEL[d.type]}</span>
               <span
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
@@ -96,7 +115,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 12 }}
       >
-        // PDF-перегляд і надсилання клієнту — наступний крок (D2)
+        // Клік на номер → PDF (друк-HTML, якщо рендер недоступний). Надсилання клієнту — далі.
       </div>
     </div>
   )

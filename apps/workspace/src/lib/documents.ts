@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { API_URL, api, getAccessToken } from '@/lib/api'
 
 export type DocumentType =
   | 'invoice'
@@ -51,4 +51,21 @@ export function useGenerateDocument(orderId: string) {
       api.post<{ document: OrderDocument }>(`/orders/${orderId}/documents`, { type }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-documents', orderId] }),
   })
+}
+
+/**
+ * The PDF endpoint requires Bearer auth (in-memory token), so a plain <a href> can't carry it —
+ * fetch the blob and open it in a new tab. Falls back to a printable HTML page when the server
+ * has no Chromium (it sets Content-Type accordingly; the browser renders either inline).
+ */
+export async function openDocumentPdf(orderId: string, doc: OrderDocument): Promise<void> {
+  const token = getAccessToken()
+  const res = await fetch(`${API_URL}/orders/${orderId}/documents/${doc.id}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Не вдалося відкрити документ')
+  const url = URL.createObjectURL(await res.blob())
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

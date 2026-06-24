@@ -1,6 +1,12 @@
+import { toast } from 'sonner'
 import { EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { formatDate } from '@/lib/format'
-import { DOC_STATUS_LABEL, DOC_TYPE_LABEL, useOrderDocuments } from '@/lib/documents'
+import {
+  DOC_STATUS_LABEL,
+  DOC_TYPE_LABEL,
+  openDocumentPdf,
+  useOrderDocuments,
+} from '@/lib/documents'
 
 /** Client-side: read-only list of documents the team issued on this order. */
 export function DocumentsTab({ orderId }: { orderId: string }) {
@@ -40,9 +46,27 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
             borderBottom: '1px solid var(--wf-border)',
           }}
         >
-          <span className="wfp-mono" style={{ fontSize: 12 }}>
+          <button
+            type="button"
+            className="wfp-mono"
+            title="Переглянути PDF"
+            onClick={() =>
+              void openDocumentPdf(orderId, d).catch(() =>
+                toast.error('Не вдалося відкрити документ')
+              )
+            }
+            style={{
+              fontSize: 12,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: 'var(--wf-accent)',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
             {d.number}
-          </span>
+          </button>
           <span style={{ fontWeight: 500 }}>{DOC_TYPE_LABEL[d.type]}</span>
           <span
             className="wfp-mono"

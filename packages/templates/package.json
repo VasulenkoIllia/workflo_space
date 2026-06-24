@@ -9,5 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
   }
 }

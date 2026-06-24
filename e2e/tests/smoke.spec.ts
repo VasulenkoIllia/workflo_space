@@ -193,6 +193,13 @@ test.describe('smoke', () => {
         await page.getByRole('tab', { name: 'Документи' }).click()
         await page.getByRole('button', { name: /Рахунок/ }).first().click()
         await expect(page.getByText(/INV-\d{4}-\d{6}/).first()).toBeVisible({ timeout: 10000 })
+        // Click the number → renders the document (PDF, or HTML fallback when no Chromium) in a tab.
+        const [docView] = await Promise.all([
+          page.waitForEvent('popup'),
+          page.getByRole('button', { name: /INV-\d{4}-\d{6}/ }).first().click(),
+        ])
+        await docView.waitForLoadState('domcontentloaded')
+        await docView.close()
         await page.screenshot({ path: 'screenshots/workspace/_order-detail.png', fullPage: true })
       })
 
