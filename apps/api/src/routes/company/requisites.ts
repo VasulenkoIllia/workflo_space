@@ -79,6 +79,39 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── Client reads their company's member roster (read-only; tenant-scoped to own company) ──
+  fastify.get(
+    '/portal/company/members',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const { companyId } = activeCompany(user)
+      const members = await withTenant((tx) =>
+        tx.companyMember.findMany({
+          where: { companyId },
+          select: {
+            role: true,
+            joinedAt: true,
+            profile: { select: { id: true, name: true, email: true } },
+          },
+          orderBy: { joinedAt: 'asc' },
+        })
+      )
+      return reply.send({
+        success: true,
+        data: {
+          members: members.map((m) => ({
+            profileId: m.profile.id,
+            name: m.profile.name,
+            email: m.profile.email,
+            role: m.role,
+            joinedAt: m.joinedAt,
+          })),
+        },
+      })
+    }
+  )
+
   // ── Agency reads a client's requisites (document readiness) ───────────────────
   fastify.get<{ Params: { id: string } }>(
     '/workspace/clients/:id/requisites',

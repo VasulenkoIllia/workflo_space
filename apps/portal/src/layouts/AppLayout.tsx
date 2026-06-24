@@ -24,6 +24,16 @@ export function AppLayout() {
   const company = user?.companies.find((c) => c.id === user.activeCompanyId) ?? user?.companies[0]
   const initials = (user?.profile.displayName ?? '?').trim().slice(0, 2).toUpperCase()
 
+  // Breadcrumbs: app root + the active section's label (design topbar crumbs).
+  const activeEntry = PORTAL_NAV.find((e) => 'id' in e && e.id === activeNavId(location.pathname))
+  const sectionLabel =
+    activeEntry && 'label' in activeEntry && typeof activeEntry.label === 'string'
+      ? activeEntry.label
+      : undefined
+  const crumbs = ['portal', sectionLabel]
+    .filter((c): c is string => Boolean(c))
+    .map((c, i) => <span key={i}>{c}</span>)
+
   const nextTheme: Record<ThemeMode, ThemeMode> = { system: 'light', light: 'dark', dark: 'system' }
   const themeGlyph: Record<ThemeMode, string> = { system: '◐', light: '☀', dark: '☾' }
   const themeTitle: Record<ThemeMode, string> = {
@@ -98,6 +108,7 @@ export function AppLayout() {
       topbar={
         <Topbar
           avatar={initials}
+          crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
           onBell={() => {}}
           actions={

@@ -14,6 +14,7 @@ import { SidebarUserMenu } from '@/components/SidebarUserMenu'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
+import { useOrders } from '@/lib/orders'
 
 const ROLE_LABEL: Record<string, string> = {
   owner: 'власник',
@@ -39,6 +40,25 @@ export function AppLayout() {
   }
 
   const nav = navVisibleForRole(WORKSPACE_NAV, role)
+
+  // Breadcrumbs: app root + the active section's label (design topbar crumbs).
+  const activeEntry = nav.find((e) => 'id' in e && e.id === activeNavId(location.pathname, nav))
+  const sectionLabel =
+    activeEntry && 'label' in activeEntry && typeof activeEntry.label === 'string'
+      ? activeEntry.label
+      : undefined
+  const crumbs = ['work', sectionLabel]
+    .filter((c): c is string => Boolean(c))
+    .map((c, i) => <span key={i}>{c}</span>)
+
+  // Sidebar badge: count of new (un-triaged) orders, shown on the «Замовлення» item.
+  const newCount = useOrders({ status: 'new', limit: 100 }).data?.orders.length ?? 0
+  const navWithBadges =
+    newCount > 0
+      ? nav.map((e) =>
+          'id' in e && e.id === 'orders' ? { ...e, badge: newCount, badgeAccent: true } : e
+        )
+      : nav
 
   // ── ⌘K command palette ──────────────────────────────────────────────────
   const [cmdkOpen, setCmdkOpen] = useState(false)
@@ -108,7 +128,7 @@ export function AppLayout() {
       statusBarRight={<span>{location.pathname}</span>}
       sidebar={
         <Sidebar
-          nav={nav}
+          nav={navWithBadges}
           active={activeNavId(location.pathname, nav)}
           aesthetic="A"
           sub={isOwner ? 'workspace · owner' : 'workspace'}
@@ -119,6 +139,7 @@ export function AppLayout() {
       topbar={
         <Topbar
           avatar={initials}
+          crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
           onBell={() => {}}
           actions={

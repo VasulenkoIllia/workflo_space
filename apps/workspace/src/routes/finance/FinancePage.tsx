@@ -5,6 +5,7 @@ import { LineChart } from '@/components/LineChart'
 import { Select } from '@/components/Select'
 import { catColor, catLabel, EXPENSE_CAT } from '@/lib/expenseCategories'
 import { formatDate, formatMoney } from '@/lib/format'
+import { useTeam } from '@/lib/payouts'
 import {
   isoDay,
   num,
@@ -26,6 +27,16 @@ const FREQ_LABEL: Record<string, string> = {
   quarterly: 'Щокварталу',
   annual: 'Щороку',
   one_time: 'Одноразово',
+}
+/** Normalize a recurring expense to its monthly-equivalent (run-rate / MRR). */
+const MONTHLY_FACTOR: Record<string, number> = {
+  monthly: 1,
+  quarterly: 1 / 3,
+  annual: 1 / 12,
+  one_time: 0,
+}
+function monthlyEq(amount: number, frequency: string | null): number {
+  return amount * (MONTHLY_FACTOR[frequency ?? 'one_time'] ?? 0)
 }
 const MONTH_ABBR = [
   'січ',
@@ -202,6 +213,9 @@ export function FinancePage() {
   const monthly = useMonthlyPnl(period)
   const expenses = useExpenses()
   const archive = useArchiveExpense()
+  const team = useTeam()
+  const execName = (id: string) =>
+    team.data?.members.find((m) => m.profileId === id)?.name ?? id.slice(0, 8)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -490,9 +504,24 @@ export function FinancePage() {
                         : ''}{' '}
                       · з {formatDate(e.startDate)}
                       {e.endDate ? ` до ${formatDate(e.endDate)}` : ''}
+                      {e.executorId ? ` · 👤 ${execName(e.executorId)}` : ''}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                    {e.type === 'recurring' && e.frequency && e.frequency !== 'one_time' && (
+                      <div
+                        className="wfp-mono"
+                        style={{
+                          fontSize: 11,
+                          color: 'var(--wf-fg-muted)',
+                          textAlign: 'right',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title="Місячний еквівалент (run-rate)"
+                      >
+                        {formatMoney(monthlyEq(num(e.amount) ?? 0, e.frequency))} {e.currency}/міс
+                      </div>
+                    )}
                     <div style={{ fontWeight: 600 }}>
                       {formatMoney(num(e.amount))} {e.currency}
                     </div>
