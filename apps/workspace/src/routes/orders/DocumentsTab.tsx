@@ -7,7 +7,9 @@ import {
   openDocumentPdf,
   useGenerateDocument,
   useOrderDocuments,
+  useSendDocument,
   type DocumentType,
+  type OrderDocument,
 } from '@/lib/documents'
 
 const GENERATE: { type: DocumentType; label: string }[] = [
@@ -20,12 +22,22 @@ const GENERATE: { type: DocumentType; label: string }[] = [
 export function DocumentsTab({ orderId }: { orderId: string }) {
   const { data: documents = [], isLoading } = useOrderDocuments(orderId)
   const generate = useGenerateDocument(orderId)
+  const send = useSendDocument(orderId)
 
   const onGenerate = (type: DocumentType) =>
     generate.mutate(type, {
       onSuccess: (r) => toast.success(`Сформовано: ${r.document.number}`),
       onError: (e) =>
         toast.error('Не вдалося сформувати', {
+          description: e instanceof Error ? e.message : undefined,
+        }),
+    })
+
+  const onSend = (d: OrderDocument) =>
+    send.mutate(d.id, {
+      onSuccess: (r) => toast.success(`Надіслано клієнту: ${r.document.number}`),
+      onError: (e) =>
+        toast.error('Не вдалося надіслати', {
           description: e instanceof Error ? e.message : undefined,
         }),
     })
@@ -64,7 +76,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
               key={d.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'auto 1.4fr 1fr auto',
+                gridTemplateColumns: 'auto 1.3fr 1fr auto auto',
                 alignItems: 'center',
                 gap: 12,
                 padding: '10px 8px',
@@ -106,6 +118,24 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
               >
                 {formatDate(d.generatedAt)}
               </span>
+              {d.status === 'sent' ? (
+                <span
+                  className="wfp-mono"
+                  title="Надіслано клієнту"
+                  style={{ fontSize: 11, color: 'var(--wf-success, var(--wf-accent))' }}
+                >
+                  ✓ надіслано
+                </span>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={send.isPending && send.variables === d.id}
+                  onClick={() => onSend(d)}
+                >
+                  Надіслати
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -115,7 +145,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 12 }}
       >
-        // Клік на номер → PDF (друк-HTML, якщо рендер недоступний). Надсилання клієнту — далі.
+        // Клік на номер → PDF · «Надіслати» → клієнт отримує сповіщення + статус «надіслано».
       </div>
     </div>
   )

@@ -53,6 +53,16 @@ export function useGenerateDocument(orderId: string) {
   })
 }
 
+/** Send a document to the client (status → sent + client notification). */
+export function useSendDocument(orderId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (docId: string) =>
+      api.post<{ document: OrderDocument }>(`/orders/${orderId}/documents/${docId}/send`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-documents', orderId] }),
+  })
+}
+
 /**
  * The PDF endpoint requires Bearer auth (in-memory token), so a plain <a href> can't carry it —
  * fetch the blob and open it in a new tab. Falls back to a printable HTML page when the server

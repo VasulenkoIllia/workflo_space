@@ -200,6 +200,9 @@ test.describe('smoke', () => {
         ])
         await docView.waitForLoadState('domcontentloaded')
         await docView.close()
+        // Send the invoice to the client (BE-2/FE-2) → row status flips to «надіслано».
+        await page.getByRole('button', { name: 'Надіслати' }).first().click()
+        await expect(page.getByText(/надіслано/).first()).toBeVisible({ timeout: 10000 })
         await page.screenshot({ path: 'screenshots/workspace/_order-detail.png', fullPage: true })
       })
 
