@@ -337,6 +337,44 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
   )
 }
 
+const documentSentPayload = z.object({
+  orderId: z.string(),
+  docType: z.string(),
+  number: z.string(),
+  amount: z.string(),
+  dueDate: z.string(),
+  actorId: z.string(),
+})
+
+/** `document.sent` → tell the client a document was issued. Invoices use the rich
+ * billing.invoice_sent email; other types land in_app via the documents category. */
+async function handleDocumentSent(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = documentSentPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order?.companyId) return
+
+  const isInvoice = p.docType === 'invoice' || p.docType === 'advance_invoice'
+  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  await deliverToRecipients(
+    logger,
+    await clientMemberIds(order.companyId, p.actorId),
+    isInvoice ? 'billing.invoice_sent' : 'documents.completion_act_ready',
+    {
+      invoiceNumber: p.number,
+      amount: p.amount,
+      dueDate: p.dueDate,
+      invoiceUrl: `${portalUrl}/tasks/${p.orderId}`,
+    },
+    {
+      title: isInvoice ? 'Виставлено рахунок' : 'Новий документ',
+      body: `${p.number} — надіслано`,
+    }
+  )
+}
+
 /** Route a claimed event to its handler. Unknown type → throw → retried → DLQ (visible, not dropped). */
 export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
   return async (event: OutboxEventView) => {
@@ -352,6 +390,9 @@ export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
         return
       case 'order.comment_created':
         await handleNewComment(logger, event)
+        return
+      case 'document.sent':
+        await handleDocumentSent(logger, event)
         return
       case 'order.approval_requested':
         await handleApprovalRequested(logger, event)

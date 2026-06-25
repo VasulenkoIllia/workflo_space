@@ -164,6 +164,46 @@ describe('outbox worker — S6 event handlers (created / assigned / comment)', (
     expect(notify.mock.calls[0][1].vars.authorName).toBe('Олена')
   })
 
+  it('document.sent (invoice) → billing.invoice_sent to the client with invoice vars', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    companyMemberFindMany.mockResolvedValue([{ profileId: 'cl1' }])
+    await handler(
+      event(
+        {
+          orderId: 'o1',
+          docType: 'invoice',
+          number: 'INV-2026-000001',
+          amount: '500,00 UAH',
+          dueDate: '01.07.2026',
+          actorId: 'owner-1',
+        },
+        'document.sent'
+      )
+    )
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1].event).toBe('billing.invoice_sent')
+    expect(notify.mock.calls[0][1].vars.invoiceNumber).toBe('INV-2026-000001')
+  })
+
+  it('document.sent (act) → documents event (in_app), not the invoice email', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    companyMemberFindMany.mockResolvedValue([{ profileId: 'cl1' }])
+    await handler(
+      event(
+        {
+          orderId: 'o1',
+          docType: 'completion_act',
+          number: 'ACT-2026-000001',
+          amount: '500,00 UAH',
+          dueDate: '01.07.2026',
+          actorId: 'owner-1',
+        },
+        'document.sent'
+      )
+    )
+    expect(notify.mock.calls[0][1].event).toBe('documents.completion_act_ready')
+  })
+
   it('order.comment_created (internal) → team only, never fans out to the client', async () => {
     orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
     profileFindUnique.mockResolvedValue({ name: 'Команда' })

@@ -8,6 +8,7 @@ import {
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 
 /** Documents that can be generated from an order (contract is issued separately). */
@@ -211,6 +212,62 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
         }
         throw err
       }
+    }
+  )
+
+  // ── Send a document to the client (team-only) ────────────────────────────────
+  // Flips status → sent + stamps sentAt, then enqueues a notification so the client
+  // learns (invoice → billing.invoice_sent email; other types → in_app).
+  fastify.post<{ Params: { orderId: string; docId: string } }>(
+    '/orders/:orderId/documents/:docId/send',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+
+      const doc = await withTenant((tx) =>
+        tx.document.findFirst({
+          where: { id: request.params.docId, orderId },
+          select: {
+            id: true,
+            type: true,
+            number: true,
+            order: { select: { totalAmount: true, currency: true } },
+          },
+        })
+      )
+      if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+
+      const settings = await withTenant((tx) =>
+        tx.paymentSettings.findUnique({
+          where: { agencyId },
+          select: { paymentTermsDays: true },
+        })
+      )
+      const now = new Date()
+      const dueDate = new Date(now.getTime() + (settings?.paymentTermsDays ?? 7) * 86_400_000)
+
+      const document = await tenantTransaction(prisma, async (tx) => {
+        const updated = await tx.document.update({
+          where: { id: doc.id },
+          data: { status: 'sent', sentAt: now },
+          select: DOC_SELECT,
+        })
+        await enqueueOutbox(tx, {
+          type: 'document.sent',
+          payload: {
+            orderId,
+            docId: doc.id,
+            docType: doc.type,
+            number: doc.number,
+            amount: `${fmtMoney(doc.order?.totalAmount)} ${doc.order?.currency ?? 'UAH'}`,
+            dueDate: fmtDate(dueDate),
+            actorId: request.user.sub,
+          },
+          agencyId,
+        })
+        return updated
+      })
+      return reply.send({ success: true, data: { document } })
     }
   )
 
