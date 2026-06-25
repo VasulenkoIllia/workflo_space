@@ -205,33 +205,52 @@ function InboxRow({
 function InboxDetail({ n, onGo }: { n: Notification | null; onGo: (id: string) => void }) {
   if (!n) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-        <EmptyState
-          glyph="// inbox"
-          title="Оберіть сповіщення"
-          description="Деталі зʼявляться тут."
-        />
+      <div className="wfp-ibox-detail">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            padding: 40,
+          }}
+        >
+          <EmptyState
+            glyph="// inbox"
+            title="Оберіть сповіщення"
+            description="Деталі зʼявляться тут."
+          />
+        </div>
       </div>
     )
   }
   const kind = notifKind(n.type)
   const linkId = notifLinkId(n.metadata)
   return (
-    <div style={{ padding: '20px 24px', minWidth: 0 }}>
-      <span className={`wfp-ibox-row-kind wfp-ibox-row-kind--${kind}`}>{KIND_LABEL[kind]}</span>
-      <div style={{ fontSize: 20, fontWeight: 600, margin: '10px 0 6px' }}>{n.title}</div>
-      <div
-        className="wfp-mono"
-        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
-      >
-        {formatDateTime(n.createdAt)}
+    <div className="wfp-ibox-detail">
+      <div className="wfp-ibox-detail-h">
+        <div className="wfp-ibox-detail-meta">
+          <span className={`wfp-ibox-row-kind wfp-ibox-row-kind--${kind}`}>{KIND_LABEL[kind]}</span>
+          <span>·</span>
+          <span>{formatDateTime(n.createdAt)}</span>
+        </div>
+        <div className="wfp-ibox-detail-t">{n.title}</div>
       </div>
-      <p style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--wf-fg-secondary)' }}>{n.body}</p>
-      {linkId && (
-        <Button variant="primary" size="sm" style={{ marginTop: 16 }} onClick={() => onGo(linkId)}>
-          Перейти до замовлення →
-        </Button>
-      )}
+      <div style={{ padding: '16px 20px', minWidth: 0 }}>
+        <p style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--wf-fg-secondary)', margin: 0 }}>
+          {n.body}
+        </p>
+        {linkId && (
+          <Button
+            variant="primary"
+            size="sm"
+            style={{ marginTop: 16 }}
+            onClick={() => onGo(linkId)}
+          >
+            Перейти до замовлення →
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

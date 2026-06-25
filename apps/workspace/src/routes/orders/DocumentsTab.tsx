@@ -1,8 +1,10 @@
 import { toast } from 'sonner'
-import { Button, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
+import { Button, EmptyState, Skeleton } from '@workflo/ui'
 import { formatDate } from '@/lib/format'
 import {
+  DOC_STATUS_BADGE,
   DOC_STATUS_LABEL,
+  DOC_TYPE_CODE,
   DOC_TYPE_LABEL,
   openDocumentPdf,
   useGenerateDocument,
@@ -104,12 +106,13 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
               >
                 {d.number}
               </button>
-              <span style={{ fontWeight: 500 }}>{DOC_TYPE_LABEL[d.type]}</span>
-              <span
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-                className="wfp-mono"
-              >
-                <StatusDot tone={d.status === 'sent' ? 'success' : 'accent'} />
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className="wfp-doc-type-pill" data-t={d.type}>
+                  {DOC_TYPE_CODE[d.type]}
+                </span>
+                {DOC_TYPE_LABEL[d.type]}
+              </span>
+              <span className={`wfp-badge wfp-badge--${DOC_STATUS_BADGE[d.status]}`}>
                 {DOC_STATUS_LABEL[d.status]}
               </span>
               <span

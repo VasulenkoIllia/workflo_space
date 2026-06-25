@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
+import { Button, Card, EmptyState, Icon, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { formatDate } from '@/lib/format'
 import { useTelegramConnect, useTelegramDisconnect, useTelegramStatus } from '@/lib/telegram'
@@ -669,8 +669,14 @@ function TelegramSection() {
           {status?.linked ? (
             <>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <StatusDot tone="success" />
-                Підключено{status.linkedAt ? ` · ${formatDate(status.linkedAt)}` : ''}
+                <span className="wfp-verified-pill">
+                  <Icon name="check" size={11} /> підключено
+                </span>
+                {status.linkedAt && (
+                  <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                    · {formatDate(status.linkedAt)}
+                  </span>
+                )}
               </span>
               <Button
                 variant="secondary"

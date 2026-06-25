@@ -34,6 +34,23 @@ export const DOC_STATUS_LABEL: Record<DocumentStatus, string> = {
   sent: 'надіслано',
 }
 
+/** Short code for the `.wfp-doc-type-pill` (design: documents-screens.jsx DocumentsIndex). */
+export const DOC_TYPE_CODE: Record<DocumentType, string> = {
+  invoice: 'INV',
+  advance_invoice: 'ADV',
+  completion_act: 'ACT',
+  specification: 'SPC',
+  reconciliation_act: 'REC',
+  contract: 'CTR',
+}
+
+/** Status → `.wfp-badge--{cls}` tone (design DOC_STATUS map). */
+export const DOC_STATUS_BADGE: Record<DocumentStatus, string> = {
+  draft: 'soft',
+  generated: 'partial',
+  sent: 'partial',
+}
+
 export function useOrderDocuments(orderId: string) {
   return useQuery({
     queryKey: ['order-documents', orderId],

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Locale } from '@workflo/i18n'
-import { Button, Card, Input, Skeleton, StatusDot, useTheme, type ThemeMode } from '@workflo/ui'
+import { Button, Card, Icon, Input, Skeleton, useTheme, type ThemeMode } from '@workflo/ui'
 import { api, ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import { useTelegramConnect, useTelegramDisconnect, useTelegramStatus } from '@/lib/telegram'
@@ -313,8 +313,14 @@ function TelegramSection() {
           {status?.linked ? (
             <>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <StatusDot tone="success" />
-                Підключено{status.linkedAt ? ` · ${formatDate(status.linkedAt)}` : ''}
+                <span className="wfp-verified-pill">
+                  <Icon name="check" size={11} /> підключено
+                </span>
+                {status.linkedAt && (
+                  <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                    · {formatDate(status.linkedAt)}
+                  </span>
+                )}
               </span>
               <Button
                 variant="secondary"
