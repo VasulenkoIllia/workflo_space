@@ -133,6 +133,10 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
+          # Default is 10m. Pulling 5 GHCR images (~200MB each) onto the host can exceed that
+          # when a layer download stalls, killing an otherwise-healthy deploy. 20m + per-pull
+          # retry (below) absorbs transient GHCR/network stalls.
+          command_timeout: 20m
           script: |
             set -e
             cd "${{ env.RUNTIME_ROOT }}/staging"
@@ -183,7 +187,22 @@ jobs:
             export BOT_TAG=sha-${{ github.sha }}
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            compose pull
+            # GHCR layer pulls occasionally stall mid-download on the host (transient network).
+            # A bare `compose pull` would hang until the SSH command_timeout kills the whole
+            # deploy. Wrap each attempt in `timeout` so a stalled pull is aborted and retried;
+            # 3 × 6m < the 20m command_timeout above.
+            pull_with_retry() {
+              for attempt in 1 2 3; do
+                if timeout 360 compose pull; then
+                  return 0
+                fi
+                echo "WARN: image pull failed/stalled (attempt ${attempt}/3); retrying in 10s..."
+                sleep 10
+              done
+              echo "FATAL: image pull failed after 3 attempts"
+              return 1
+            }
+            pull_with_retry
             compose build postgres
             compose up -d postgres
 
