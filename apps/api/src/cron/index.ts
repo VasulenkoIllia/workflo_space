@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
+import { startIdempotencyKeySweepCron, stopIdempotencyKeySweepCron } from './idempotencyKeySweep.js'
 import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 import { startRefreshTokenSweepCron, stopRefreshTokenSweepCron } from './refreshTokenSweep.js'
@@ -17,6 +18,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startRecurringChargesCron(logger)
   startLoyaltyRecalcCron(logger)
   startRefreshTokenSweepCron(logger)
+  startIdempotencyKeySweepCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -24,4 +26,5 @@ export function stopCronJobs(): void {
   stopRecurringChargesCron()
   stopLoyaltyRecalcCron()
   stopRefreshTokenSweepCron()
+  stopIdempotencyKeySweepCron()
 }

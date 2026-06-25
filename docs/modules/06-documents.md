@@ -15,7 +15,9 @@
 >
 > ✅ **S6-D1/D3 (2026-06-24):** route генерації/видачі **є** — `POST/GET /orders/:orderId/documents` (`apps/api/src/routes/documents/`): per-agency race-safe нумерація (`DocumentCounter` `INSERT…ON CONFLICT…RETURNING`, формат `INV-2026-000001`) + таб «Документи» (workspace генерує рахунок/акт/спец, портал — read-only; клік на номер → перегляд). Звірено E2E на реальній PG (smoke).
 >
-> ✅ **S6-D2 (2026-06-24):** PDF-движок **реалізовано** — `packages/templates`: `renderDocumentHtml()` (брендований HTML, `wfd-*`-мова, кирилиця) + `htmlToPdf()` (`puppeteer-core` → system Chromium; `Dockerfile.api` ставить `chromium`+шрифти, `PUPPETEER_EXECUTABLE_PATH`). `GET /orders/:id/documents/:docId/pdf` віддає PDF; **без Chromium (local/CI) — graceful HTML-fallback** (той самий HTML, друк-у-PDF). Реальний рендер звірено (76 КБ `%PDF-`). ⚠️ **Лишається:** надсилання клієнту (`sent`/email-вкладення) · stored-snapshot (`storedAs`, зараз on-demand з поточних даних) · автоген при `done` · credit-note · решта 7 EU-шаблонів.
+> ✅ **S6-D2 (2026-06-24):** PDF-движок **реалізовано** — `packages/templates`: `renderDocumentHtml()` (брендований HTML, `wfd-*`-мова, кирилиця) + `htmlToPdf()` (`puppeteer-core` → system Chromium; `Dockerfile.api` ставить `chromium`+шрифти, `PUPPETEER_EXECUTABLE_PATH`). `GET /orders/:id/documents/:docId/pdf` віддає PDF; **без Chromium (local/CI) — graceful HTML-fallback** (той самий HTML, друк-у-PDF). Реальний рендер звірено (76 КБ `%PDF-`).
+>
+> ✅ **S6-BE-2 (2026-06-25):** **надсилання клієнту** — `POST /orders/:id/documents/:docId/send` (team) → status `sent` + `sentAt` → outbox `document.sent` → нотифікація клієнту (рахунок → `billing.invoice_sent` email; інші типи → in_app). Звірено наживо. ⚠️ **Лишається:** email-вкладення PDF (зараз лінк) · stored-snapshot (`storedAs`, рендер on-demand) · автоген акту при `done` · credit-note · решта EU-шаблонів · UI-кнопка «Надіслати» (фронт-фаза).
 
 ## Огляд
 

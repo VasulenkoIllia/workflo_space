@@ -61,7 +61,7 @@
 | S5-09    | loyalty tier-recalc cron + history + override                                               |
 | S5-10    | Expense CRUD + P&L (revenue−expenses, salary з ExecutorRate)                                |
 
-**Наскрізні відкладення → S6:** нотифікації (outbox enqueue+handler), IdempotencyKey TTL-sweep cron, referral 5-min cache, `ExecutorRate.hourlyRate`.
+**Наскрізні відкладення → S6:** ~~нотифікації (outbox enqueue+handler)~~ ✅ BE-1/2 · ~~IdempotencyKey TTL-sweep cron~~ ✅ BE-3 · referral 5-min cache, `ExecutorRate.hourlyRate` (лишаються).
 
 **⏸️ ВІДКЛАДЕНО СВІДОМО (не для соло-фази):**
 
@@ -456,9 +456,9 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 | ID    | Задача                                                                                                                                                                                                                | Модуль         | Статус                    |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------- |
 | S6-01 | packages/templates — **`renderDocumentHtml` + `htmlToPdf` (puppeteer-core + apt-Chromium у Dockerfile.api)** ✅                                                                                                       | [06-documents] | ✅ 🧪                     |
-| S6-02 | API — documents **generate-from-order + list + per-agency нумерація + `GET …/pdf`** (PDF, HTML-fallback без Chromium) ✅; send-to-client → далі                                                                       | [06-documents] | ✅ 🧪 `64ee363`           |
+| S6-02 | API — documents **generate + list + нумерація + `GET …/pdf`** (PDF/HTML-fallback) + **`POST …/send`** (status `sent` → invoice notify, BE-2) ✅                                                                       | [06-documents] | ✅ 🧪 `64ee363`·`00c6ba3` |
 | S6-03 | Documents UI — **таб «Документи» (ws генерує рахунок/акт/спец, портал read-only)** + E2E smoke                                                                                                                        | [06-documents] | ✅ 🧪                     |
-| S6-04 | Notifications — in-app center API (list/read) GET/PATCH **+ /inbox UI + дзвоник+badge** + **approval-події у фід** (outbox handlers, fix DLQ)                                                                         | [07]           | ✅ 🧪 `dd045c2`·`329a478` |
+| S6-04 | Notifications — center API + /inbox UI + дзвоник + **approval-події** + **created/assigned/comment/document-події** (BE-1/2; активує newComment·invoiceSent шаблони) — фід реально живий                              | [07]           | ✅ 🧪 `dd045c2`·`e8da1a7` |
 | S6-05 | Bot — `/start <code>` OTP-лінк (grammY long-polling = update dedup) → `POST /telegram/link`; webhook mode → follow-up                                                                                                 | [15-bot]       | ✅ 🧪                     |
 | S6-06 | Telegram link API — `/profile/telegram/connect·status·unlink` (user) + `/telegram/link` (bot-secret) + **UI-картка «Telegram-сповіщення» в обох settings** (connect/unlink); notify telegram-канал працює після лінку | [15/13]        | ✅ 🧪                     |
 | S6-07 | Email templates — **orderStatusChanged · newComment · invoiceSent** (uk+en, бренд stone+lime, escape) + wired у dispatch; status_changed email тепер реально шлеться                                                  | [08-email]     | ✅ 🧪                     |
