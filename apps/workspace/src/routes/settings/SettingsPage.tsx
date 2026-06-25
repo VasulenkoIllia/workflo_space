@@ -1,10 +1,20 @@
-import { useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { formatDate } from '@/lib/format'
 import { useTelegramConnect, useTelegramDisconnect, useTelegramStatus } from '@/lib/telegram'
+import {
+  LOCKED_EMAIL,
+  NOTIF_CATEGORIES,
+  NOTIF_CHANNELS,
+  prefKey,
+  useNotificationPrefs,
+  useSaveNotificationPrefs,
+  type NotifCategory,
+  type NotifChannel,
+} from '@/lib/notificationPrefs'
 import {
   usePaymentSettings,
   useReferralSettings,
@@ -500,6 +510,111 @@ function LegalEntitiesSection() {
   )
 }
 
+function NotificationsSection() {
+  const { data: prefs, isLoading } = useNotificationPrefs()
+  const save = useSaveNotificationPrefs()
+  const [matrix, setMatrix] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (!prefs) return
+    const m: Record<string, boolean> = {}
+    for (const p of prefs) m[prefKey(p.category, p.channel)] = p.enabled
+    setMatrix(m)
+  }, [prefs])
+
+  const isLocked = (cat: NotifCategory, ch: NotifChannel) =>
+    ch === 'email' && LOCKED_EMAIL.includes(cat)
+  const isOn = (cat: NotifCategory, ch: NotifChannel) =>
+    isLocked(cat, ch) || matrix[prefKey(cat, ch)] === true
+  const toggle = (cat: NotifCategory, ch: NotifChannel) => {
+    if (isLocked(cat, ch)) return
+    setMatrix((m) => ({ ...m, [prefKey(cat, ch)]: !m[prefKey(cat, ch)] }))
+  }
+
+  const onSave = () => {
+    const preferences = NOTIF_CATEGORIES.flatMap((c) =>
+      NOTIF_CHANNELS.map((ch) => ({
+        category: c.key,
+        channel: ch.key,
+        enabled: isOn(c.key, ch.key),
+      }))
+    )
+    save.mutate(preferences, {
+      onSuccess: () => toast.success('Налаштування сповіщень збережено'),
+      onError: () => toast.error('Не вдалося зберегти'),
+    })
+  }
+
+  return (
+    <Card title="Сповіщення">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 12 }}
+      >
+        // які події в які канали приходять
+      </div>
+      {isLoading ? (
+        <Skeleton style={{ height: 220 }} />
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1.4fr repeat(3, 1fr)',
+              gap: '10px 8px',
+              alignItems: 'center',
+            }}
+          >
+            <div />
+            {NOTIF_CHANNELS.map((ch) => (
+              <div
+                key={ch.key}
+                style={{
+                  textAlign: 'center',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: 'var(--wf-fg-muted)',
+                }}
+              >
+                {ch.label}
+              </div>
+            ))}
+            {NOTIF_CATEGORIES.map((c) => (
+              <Fragment key={c.key}>
+                <div style={{ fontSize: 14 }}>{c.label}</div>
+                {NOTIF_CHANNELS.map((ch) => {
+                  const locked = isLocked(c.key, ch.key)
+                  return (
+                    <div key={ch.key} style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isOn(c.key, ch.key)}
+                        disabled={locked}
+                        onChange={() => toggle(c.key, ch.key)}
+                        title={locked ? 'Критичні події — email завжди увімкнено' : undefined}
+                        style={{ cursor: locked ? 'not-allowed' : 'pointer' }}
+                      />
+                    </div>
+                  )
+                })}
+              </Fragment>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            <Button variant="primary" size="sm" loading={save.isPending} onClick={onSave}>
+              Зберегти
+            </Button>
+            <span style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              Email для «Безпека» та «Рахунки й оплати» завжди увімкнено.
+            </span>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
 function TelegramSection() {
   const qc = useQueryClient()
   const { data: status, isLoading } = useTelegramStatus()
@@ -588,6 +703,7 @@ export function SettingsPage() {
         ) : referral.data ? (
           <ReferralForm initial={referral.data} />
         ) : null}
+        <NotificationsSection />
         <TelegramSection />
       </div>
     </div>

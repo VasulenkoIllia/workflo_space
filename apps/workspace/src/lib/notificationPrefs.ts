@@ -1,0 +1,60 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+
+export type NotifCategory =
+  | 'orders'
+  | 'chat'
+  | 'billing'
+  | 'documents'
+  | 'loyalty'
+  | 'system'
+  | 'auth'
+export type NotifChannel = 'in_app' | 'email' | 'telegram'
+
+export interface NotifPref {
+  category: string
+  channel: string
+  enabled: boolean
+}
+
+/** Rows of the matrix (display order + labels). */
+export const NOTIF_CATEGORIES: { key: NotifCategory; label: string }[] = [
+  { key: 'orders', label: 'Замовлення' },
+  { key: 'chat', label: 'Чат і коментарі' },
+  { key: 'billing', label: 'Рахунки й оплати' },
+  { key: 'documents', label: 'Документи' },
+  { key: 'loyalty', label: 'Бонуси' },
+  { key: 'system', label: 'Система' },
+  { key: 'auth', label: 'Безпека' },
+]
+
+/** Columns — the three live channels (sms/push/webhook are future). */
+export const NOTIF_CHANNELS: { key: NotifChannel; label: string }[] = [
+  { key: 'in_app', label: 'В застосунку' },
+  { key: 'email', label: 'Email' },
+  { key: 'telegram', label: 'Telegram' },
+]
+
+/** ADR-003: email for these categories is locked ON (critical security/billing events). */
+export const LOCKED_EMAIL: ReadonlyArray<NotifCategory> = ['auth', 'billing']
+
+export function useNotificationPrefs() {
+  return useQuery({
+    queryKey: ['notification-prefs'],
+    queryFn: () =>
+      api.get<{ preferences: NotifPref[] }>('/profile/notifications').then((r) => r.preferences),
+  })
+}
+
+export function useSaveNotificationPrefs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (preferences: NotifPref[]) => api.patch('/profile/notifications', { preferences }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['notification-prefs'] }),
+  })
+}
+
+/** Build a `${category}:${channel}` → enabled lookup from the loaded rows. */
+export function prefKey(category: string, channel: string): string {
+  return `${category}:${channel}`
+}

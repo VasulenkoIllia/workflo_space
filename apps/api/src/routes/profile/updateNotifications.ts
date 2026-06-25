@@ -91,6 +91,26 @@ const updateNotificationsRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // GET — load the current (category × channel) matrix so the settings UI can render toggles.
+  fastify.get(
+    '/profile/notifications',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const settings = await prisma.notificationSettings.findUnique({
+        where: { profileId: request.user.sub },
+        select: { id: true },
+      })
+      const preferences = settings
+        ? await prisma.notificationPreference.findMany({
+            where: { settingsId: settings.id },
+            select: { category: true, channel: true, enabled: true },
+            orderBy: [{ category: 'asc' }, { channel: 'asc' }],
+          })
+        : []
+      return reply.send({ success: true, data: { preferences } })
+    }
+  )
+
   return Promise.resolve()
 }
 
