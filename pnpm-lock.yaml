@@ -295,12 +295,18 @@ importers:
       '@workflo/types':
         specifier: workspace:*
         version: link:../types
+      '@workflo/ui':
+        specifier: workspace:*
+        version: link:../ui
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      react-router-dom:
+        specifier: ^6.30.4
+        version: 6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       sonner:
         specifier: ^2.0.3
         version: 2.0.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

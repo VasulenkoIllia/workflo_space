@@ -12,3 +12,8 @@ export * from './password.js'
 export * from './PasswordStrengthMeter.js'
 export * from './i18n.js'
 export * from './ErrorBoundary.js'
+// S6 notification surface — was byte-identical in both apps (drift risk); shared here.
+export * from './notifications.js'
+export * from './notificationPrefs.js'
+export * from './telegram.js'
+export * from './InboxView.js'
