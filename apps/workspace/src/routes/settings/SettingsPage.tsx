@@ -1,6 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { formatDate } from '@/lib/format'
+import { useTelegramConnect, useTelegramDisconnect, useTelegramStatus } from '@/lib/telegram'
 import {
   usePaymentSettings,
   useReferralSettings,
@@ -496,6 +500,68 @@ function LegalEntitiesSection() {
   )
 }
 
+function TelegramSection() {
+  const qc = useQueryClient()
+  const { data: status, isLoading } = useTelegramStatus()
+  const connect = useTelegramConnect()
+  const disconnect = useTelegramDisconnect()
+
+  const onConnect = () =>
+    connect.mutate(undefined, {
+      onSuccess: (r) => {
+        window.open(r.deepLink, '_blank')
+        toast.info('Відкрийте Telegram і натисніть «Start», потім поверніться сюди')
+        // The link completes async via the bot — re-check shortly after the user returns.
+        setTimeout(() => void qc.invalidateQueries({ queryKey: ['telegram-status'] }), 8000)
+      },
+      onError: () => toast.error('Не вдалося створити посилання'),
+    })
+
+  return (
+    <Card title="Telegram-сповіщення">
+      {isLoading ? (
+        <Skeleton style={{ height: 48 }} />
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          {status?.linked ? (
+            <>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <StatusDot tone="success" />
+                Підключено{status.linkedAt ? ` · ${formatDate(status.linkedAt)}` : ''}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={disconnect.isPending}
+                onClick={() => disconnect.mutate()}
+              >
+                Відвʼязати
+              </Button>
+            </>
+          ) : (
+            <>
+              <span style={{ color: 'var(--wf-fg-muted)', fontSize: 14 }}>
+                Підключіть Telegram, щоб отримувати миттєві сповіщення про замовлення.
+              </span>
+              <Button size="sm" loading={connect.isPending} onClick={onConnect}>
+                Підключити Telegram
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export function SettingsPage() {
   const payment = usePaymentSettings()
   const referral = useReferralSettings()
@@ -522,6 +588,7 @@ export function SettingsPage() {
         ) : referral.data ? (
           <ReferralForm initial={referral.data} />
         ) : null}
+        <TelegramSection />
       </div>
     </div>
   )
