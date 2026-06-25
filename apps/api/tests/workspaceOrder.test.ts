@@ -16,6 +16,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     order: { create: orderCreate },
     auditLog: { create: auditLogCreate },
     agency: { findUniqueOrThrow: agencyFindUniqueOrThrow },
+    outboxEvent: { create: vi.fn() }, // order.created enqueue (notification)
   }
   return {
     ...actual,

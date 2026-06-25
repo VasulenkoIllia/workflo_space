@@ -2,6 +2,7 @@ import { type Prisma, withTenant } from '@workflo/db'
 import { createCommentSchema, listCommentsQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant } from './access.js'
 
 const COMMENT_SELECT = {
@@ -106,8 +107,8 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       // Clients can never author internal notes regardless of the flag they send.
       const isInternal = access.isInternal && input.isInternal
 
-      const comment = await withTenant((tx) =>
-        tx.orderComment.create({
+      const comment = await withTenant(async (tx) => {
+        const c = await tx.orderComment.create({
           data: {
             order: { connect: { id: access.orderId } },
             agency: { connect: { id: access.agencyId } },
@@ -117,7 +118,19 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
           },
           select: COMMENT_SELECT,
         })
-      )
+        // Notify thread participants (chat.new_comment) — handled by the outbox worker.
+        await enqueueOutbox(tx, {
+          type: 'order.comment_created',
+          payload: {
+            orderId: access.orderId,
+            authorId: user.sub,
+            isInternal,
+            preview: input.content.slice(0, 200),
+          },
+          agencyId: access.agencyId,
+        })
+        return c
+      })
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

@@ -5,6 +5,7 @@ import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
  * POST /orders — a client creates an order for their active company.
@@ -35,8 +36,8 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
       // SaaS quota seam (no-op Phase 0; per-plan limit Phase 1) — SAAS.md F2 / ADR-007.
       await assertWithinQuota(agencyId, 'orders')
 
-      const order = await withTenant((tx) =>
-        tx.order.create({
+      const order = await withTenant(async (tx) => {
+        const created = await tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
             company: { connect: { id: companyId } },
@@ -71,7 +72,14 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
             updatedAt: true,
           },
         })
-      )
+        // Notify the agency team a new order landed.
+        await enqueueOutbox(tx, {
+          type: 'order.created',
+          payload: { orderId: created.id, actorId: user.sub },
+          agencyId,
+        })
+        return created
+      })
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

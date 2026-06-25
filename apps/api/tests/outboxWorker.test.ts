@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const orderFindUnique = vi.fn()
 const companyMemberFindMany = vi.fn()
 const agencyMemberFindMany = vi.fn()
+const profileFindUnique = vi.fn()
 const notify = vi.fn().mockResolvedValue({ results: [], attempted: [] })
 
 vi.mock('@workflo/db', () => ({
@@ -10,6 +11,7 @@ vi.mock('@workflo/db', () => ({
     order: { findUnique: orderFindUnique },
     companyMember: { findMany: companyMemberFindMany },
     agencyMember: { findMany: agencyMemberFindMany },
+    profile: { findUnique: profileFindUnique },
     notificationSettings: { findUnique: vi.fn() },
     notificationPreference: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -115,5 +117,64 @@ describe('outbox worker — approval + charge handlers (S6.2)', () => {
     await handler(event({ chargeId: 'ch-1', actorId: 'owner-1' }, 'charge.approval_approved'))
     expect(notify).not.toHaveBeenCalled()
     expect(orderFindUnique).not.toHaveBeenCalled()
+  })
+})
+
+describe('outbox worker — S6 event handlers (created / assigned / comment)', () => {
+  afterEach(() => vi.clearAllMocks())
+
+  it('order.created → notifies agency staff, minus the actor', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'New job', companyId: 'c1' })
+    agencyMemberFindMany.mockResolvedValue([{ profileId: 'm1' }, { profileId: 'm2' }])
+    await handler(event({ orderId: 'o1', actorId: 'actor-1' }, 'order.created'))
+    expect(notify).toHaveBeenCalledTimes(2)
+    expect(notify.mock.calls[0][1].event).toBe('orders.created')
+    expect(agencyMemberFindMany.mock.calls[0][0].where.profileId).toEqual({ not: 'actor-1' })
+  })
+
+  it('order.assigned → notifies the assigned executor only', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    await handler(
+      event({ orderId: 'o1', executorId: 'exec-9', actorId: 'mgr-1' }, 'order.assigned')
+    )
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1].profileId).toBe('exec-9')
+    expect(notify.mock.calls[0][1].event).toBe('orders.assigned')
+  })
+
+  it('order.assigned → silent when the actor assigned themselves', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    await handler(event({ orderId: 'o1', executorId: 'me', actorId: 'me' }, 'order.assigned'))
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('order.comment_created (public) → team + client, with resolved author name', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    profileFindUnique.mockResolvedValue({ name: 'Олена' })
+    agencyMemberFindMany.mockResolvedValue([{ profileId: 'm1' }])
+    companyMemberFindMany.mockResolvedValue([{ profileId: 'cl1' }])
+    await handler(
+      event(
+        { orderId: 'o1', authorId: 'a1', isInternal: false, preview: 'готово' },
+        'order.comment_created'
+      )
+    )
+    expect(notify).toHaveBeenCalledTimes(2) // m1 (team) + cl1 (client)
+    expect(notify.mock.calls[0][1].event).toBe('chat.new_comment')
+    expect(notify.mock.calls[0][1].vars.authorName).toBe('Олена')
+  })
+
+  it('order.comment_created (internal) → team only, never fans out to the client', async () => {
+    orderFindUnique.mockResolvedValue({ agencyId: 'agency-1', title: 'Job', companyId: 'c1' })
+    profileFindUnique.mockResolvedValue({ name: 'Команда' })
+    agencyMemberFindMany.mockResolvedValue([{ profileId: 'm1' }])
+    await handler(
+      event(
+        { orderId: 'o1', authorId: 'a1', isInternal: true, preview: 'нотатка' },
+        'order.comment_created'
+      )
+    )
+    expect(companyMemberFindMany).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledTimes(1)
   })
 })

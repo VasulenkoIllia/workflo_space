@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
  * PATCH /orders/:id/assign — triage: assign an executor to the order (null =
@@ -46,15 +47,24 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
         }
       }
 
-      const updated = await withTenant((tx) =>
-        tx.order.update({
+      const updated = await withTenant(async (tx) => {
+        const u = await tx.order.update({
           where: { id: order.id },
           data: input.assigneeId
             ? { assignee: { connect: { id: input.assigneeId } } }
             : { assignee: { disconnect: true } },
           select: { id: true, assigneeId: true, updatedAt: true },
         })
-      )
+        // Notify the executor on assignment (not on unassign).
+        if (input.assigneeId) {
+          await enqueueOutbox(tx, {
+            type: 'order.assigned',
+            payload: { orderId: order.id, executorId: input.assigneeId, actorId: user.sub },
+            agencyId: order.agencyId,
+          })
+        }
+        return u
+      })
 
       writeAuditAsync(request.log, {
         actorId: user.sub,

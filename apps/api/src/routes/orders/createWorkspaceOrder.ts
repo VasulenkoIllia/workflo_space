@@ -6,6 +6,7 @@ import { isInternalTeam } from '../../auth/tokens.js'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { resolveApprovalMode } from '../../services/approvalPolicy.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
  * POST /workspace/orders (P-7) — the internal team (owner/executor) creates a task FOR a
@@ -80,7 +81,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
           agencyDefault: agency.defaultApprovalMode as ApprovalMode,
         })
         const requiresApproval = approvalMode === ApprovalMode.UPFRONT
-        return tx.order.create({
+        const created = await tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
             company: { connect: { id: input.companyId } },
@@ -113,6 +114,12 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             createdAt: true,
           },
         })
+        await enqueueOutbox(tx, {
+          type: 'order.created',
+          payload: { orderId: created.id, actorId: user.sub },
+          agencyId,
+        })
+        return created
       })
 
       writeAuditAsync(request.log, {

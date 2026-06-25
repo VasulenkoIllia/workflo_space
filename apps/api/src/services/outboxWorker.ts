@@ -258,12 +258,100 @@ async function handleApprovalDecided(
   )
 }
 
+/** `order.created` → tell the agency team a new order landed (in_app; no email/telegram template). */
+async function handleOrderCreated(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = orderRefPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order) return
+  await deliverToRecipients(
+    logger,
+    await agencyStaffIds(order.agencyId, p.actorId),
+    'orders.created',
+    { orderTitle: order.title },
+    { title: 'Нове замовлення', body: `«${order.title}» — нове замовлення` }
+  )
+}
+
+const assignedPayload = z.object({
+  orderId: z.string(),
+  executorId: z.string(),
+  actorId: z.string(),
+})
+
+/** `order.assigned` → tell the executor they were put on the order (in_app). */
+async function handleOrderAssigned(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = assignedPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order) return
+  await deliverToRecipients(
+    logger,
+    [p.executorId].filter((id) => id !== p.actorId),
+    'orders.assigned',
+    { orderTitle: order.title },
+    { title: 'Вас призначено виконавцем', body: `«${order.title}» — нове призначення` }
+  )
+}
+
+const commentPayload = z.object({
+  orderId: z.string(),
+  authorId: z.string(),
+  isInternal: z.boolean(),
+  preview: z.string(),
+})
+
+/** `order.comment_created` → notify thread participants (chat.new_comment: email + telegram + in_app).
+ * Internal notes stay team-only; public comments fan out to team + client, never the author. */
+async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventView): Promise<void> {
+  const p = commentPayload.parse(event.payload)
+  const order = await loadOrderForEvent(logger, event, p.orderId)
+  if (!order) return
+
+  const author = await prisma.profile.findUnique({
+    where: { id: p.authorId },
+    select: { name: true },
+  })
+  const authorName = author?.name ?? 'Учасник'
+  const team = await agencyStaffIds(order.agencyId, p.authorId)
+  const recipients = p.isInternal
+    ? team
+    : [...team, ...(order.companyId ? await clientMemberIds(order.companyId, p.authorId) : [])]
+
+  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  await deliverToRecipients(
+    logger,
+    recipients,
+    'chat.new_comment',
+    {
+      orderTitle: order.title,
+      authorName,
+      preview: p.preview,
+      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+    },
+    { title: 'Новий коментар', body: `${authorName} · «${order.title}»` }
+  )
+}
+
 /** Route a claimed event to its handler. Unknown type → throw → retried → DLQ (visible, not dropped). */
 export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
   return async (event: OutboxEventView) => {
     switch (event.type) {
       case 'order.status_changed':
         await handleOrderStatusChanged(logger, event)
+        return
+      case 'order.created':
+        await handleOrderCreated(logger, event)
+        return
+      case 'order.assigned':
+        await handleOrderAssigned(logger, event)
+        return
+      case 'order.comment_created':
+        await handleNewComment(logger, event)
         return
       case 'order.approval_requested':
         await handleApprovalRequested(logger, event)
