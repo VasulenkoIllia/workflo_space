@@ -86,7 +86,7 @@ async function handleOrderStatusChanged(
       event: 'orders.status_changed',
       vars: {
         orderTitle: order.title,
-        orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+        orderUrl: `${portalUrl}/orders/${p.orderId}`,
         newClientStatus: clientTo,
       },
       inApp: { title: 'Оновлення замовлення', body: `«${order.title}» — новий статус` },
@@ -218,7 +218,7 @@ async function handleApprovalRequested(
     // order is client-status `pending_approval` (the estimate awaits the client's decision).
     {
       orderTitle: order.title,
-      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+      orderUrl: `${portalUrl}/orders/${p.orderId}`,
       newClientStatus: 'pending_approval',
     },
     {
@@ -246,7 +246,7 @@ async function handleApprovalDecided(
     // rejected → back to estimating, which still maps to in_progress for the client).
     {
       orderTitle: order.title,
-      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+      orderUrl: `${portalUrl}/orders/${p.orderId}`,
       newClientStatus: 'in_progress',
     },
     approved
@@ -331,7 +331,7 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
       orderTitle: order.title,
       authorName,
       preview: p.preview,
-      orderUrl: `${portalUrl}/tasks/${p.orderId}`,
+      orderUrl: `${portalUrl}/orders/${p.orderId}`,
     },
     { title: 'Новий коментар', body: `${authorName} · «${order.title}»` }
   )
@@ -366,7 +366,7 @@ async function handleDocumentSent(
       invoiceNumber: p.number,
       amount: p.amount,
       dueDate: p.dueDate,
-      invoiceUrl: `${portalUrl}/tasks/${p.orderId}`,
+      invoiceUrl: `${portalUrl}/orders/${p.orderId}`,
     },
     {
       title: isInvoice ? 'Виставлено рахунок' : 'Новий документ',
