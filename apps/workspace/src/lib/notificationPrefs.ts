@@ -28,11 +28,11 @@ export const NOTIF_CATEGORIES: { key: NotifCategory; label: string }[] = [
   { key: 'auth', label: 'Безпека' },
 ]
 
-/** Columns — the three live channels (sms/push/webhook are future). */
+/** Columns — the three live channels, in the design's order (sms/push/webhook are future). */
 export const NOTIF_CHANNELS: { key: NotifChannel; label: string }[] = [
-  { key: 'in_app', label: 'В застосунку' },
   { key: 'email', label: 'Email' },
   { key: 'telegram', label: 'Telegram' },
+  { key: 'in_app', label: 'В застосунку' },
 ]
 
 /** ADR-003: email for these categories is locked ON (critical security/billing events). */

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Locale } from '@workflo/i18n'
@@ -155,6 +155,42 @@ const reqSelectStyle = {
   fontSize: 14,
 } as const
 
+/** Pill switch (design: workspace-notify.jsx NfToggle). Locked → non-interactive, dimmed. */
+function NfToggle({ on, locked, onClick }: { on: boolean; locked?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={locked ? undefined : onClick}
+      disabled={locked}
+      title={locked ? 'Критичні події — email завжди увімкнено' : undefined}
+      style={{
+        width: 38,
+        height: 22,
+        borderRadius: 999,
+        border: 0,
+        cursor: locked ? 'not-allowed' : 'pointer',
+        padding: 2,
+        background: on ? 'var(--wf-accent)' : 'var(--wf-border-strong)',
+        display: 'inline-flex',
+        justifyContent: on ? 'flex-end' : 'flex-start',
+        transition: 'background .12s',
+        opacity: locked ? 0.6 : 1,
+        verticalAlign: 'middle',
+      }}
+    >
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+        }}
+      />
+    </button>
+  )
+}
+
 function NotificationsSection() {
   const { data: prefs, isLoading } = useNotificationPrefs()
   const save = useSaveNotificationPrefs()
@@ -202,50 +238,34 @@ function NotificationsSection() {
         <Skeleton style={{ height: 220 }} />
       ) : (
         <>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.4fr repeat(3, 1fr)',
-              gap: '10px 8px',
-              alignItems: 'center',
-            }}
-          >
-            <div />
-            {NOTIF_CHANNELS.map((ch) => (
-              <div
-                key={ch.key}
-                style={{
-                  textAlign: 'center',
-                  fontSize: 11,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  color: 'var(--wf-fg-muted)',
-                }}
-              >
-                {ch.label}
-              </div>
-            ))}
-            {NOTIF_CATEGORIES.map((c) => (
-              <Fragment key={c.key}>
-                <div style={{ fontSize: 14 }}>{c.label}</div>
-                {NOTIF_CHANNELS.map((ch) => {
-                  const locked = isLocked(c.key, ch.key)
-                  return (
-                    <div key={ch.key} style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={isOn(c.key, ch.key)}
-                        disabled={locked}
-                        onChange={() => toggle(c.key, ch.key)}
-                        title={locked ? 'Критичні події — email завжди увімкнено' : undefined}
-                        style={{ cursor: locked ? 'not-allowed' : 'pointer' }}
+          <table className="wfp-table">
+            <thead>
+              <tr>
+                <th>Категорія</th>
+                {NOTIF_CHANNELS.map((ch) => (
+                  <th key={ch.key} style={{ textAlign: 'center' }}>
+                    {ch.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {NOTIF_CATEGORIES.map((c) => (
+                <tr key={c.key}>
+                  <td style={{ fontWeight: 500 }}>{c.label}</td>
+                  {NOTIF_CHANNELS.map((ch) => (
+                    <td key={ch.key} style={{ textAlign: 'center' }}>
+                      <NfToggle
+                        on={isOn(c.key, ch.key)}
+                        locked={isLocked(c.key, ch.key)}
+                        onClick={() => toggle(c.key, ch.key)}
                       />
-                    </div>
-                  )
-                })}
-              </Fragment>
-            ))}
-          </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
             <Button variant="primary" size="sm" loading={save.isPending} onClick={onSave}>
               Зберегти
