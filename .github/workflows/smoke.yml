@@ -61,7 +61,14 @@ jobs:
           restore-keys: playwright-${{ runner.os }}-
 
       - name: Install Playwright chromium
-        run: pnpm --filter @workflo/e2e exec playwright install --with-deps chromium
+        run: |
+          # Runner-shipped third-party apt repos (azure-cli / packages.microsoft.com)
+          # intermittently 403 during `apt-get update`, which fails playwright's --with-deps.
+          # They aren't needed for chromium's libs (those come from ubuntu main/universe), so
+          # drop them first to keep the smoke gate from flaking on someone else's repo outage.
+          sudo rm -f /etc/apt/sources.list.d/microsoft*.list \
+                     /etc/apt/sources.list.d/azure*.list 2>/dev/null || true
+          pnpm --filter @workflo/e2e exec playwright install --with-deps chromium
 
       # The same orchestrator developers run locally: build deps → migrate → seed →
       # start api + both vite dev servers → run the smoke → tear down.
