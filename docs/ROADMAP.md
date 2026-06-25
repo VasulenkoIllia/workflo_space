@@ -92,6 +92,23 @@ conformance + form-submit smoke на кожен зріз).
 
 _Повний беклог — [`DESIGN_PHASE2_PLAN.md`](DESIGN_PHASE2_PLAN.md) Трек B/C. Пер-екранний стан — [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md)._
 
+## 🛠 Інфра / DevOps — відкладений блок (НЕ зараз)
+
+> Серверний аудит 2026-06-26 ([`AUDIT_INFRA_DEVOPS_2026-06.md`](AUDIT_INFRA_DEVOPS_2026-06.md), беклог-секція в
+> [`BACKLOG.md`](BACKLOG.md)). Механіка деплою сучасна; прогалина — **операційна стійкість** (DR/бекапи/моніторинг).
+> **Рішення власника 26.06: весь блок у беклог.** **Тригер промоуту: перед першим зовнішнім платним тенантом.**
+> Коли візьмемо — фазами, перший зріз **INFRA-DR1** (DR/бекапи P0 — єдине з ризиком незворотної втрати даних).
+
+| Фаза | Зріз (код у BACKLOG)                                                            | Пріоритет |
+| ---- | ------------------------------------------------------------------------------- | --------- |
+| 1    | **INFRA-DR1** restore.sh + drill + офсайт restic + uploads-volume               | P0        |
+| 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                | P0        |
+| 3    | **INFRA-OBS1** Sentry + uptime + notify-on-failure (⊃ OPS-D1)                   | P1        |
+| 4    | **INFRA-SEC1/2** пін екшенів+SSH-fingerprint · edge security-headers+rate-limit | P0/P1     |
+| 5    | **INFRA-OPS1** staging-rollback + health→/ready                                 | P1        |
+| 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                 | P1/P2     |
+| 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                       | P1        |
+
 ## 🧱 Правила черги
 
 - **Строго по фазах.** Фаза A до кінця → потім S6. Backend-blocked не тягнемо наперед.

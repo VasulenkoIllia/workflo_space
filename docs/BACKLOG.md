@@ -8,6 +8,28 @@
 
 ---
 
+## 🛠 Аудит інфраструктури / DevOps 26.06.2026 ([`AUDIT_INFRA_DEVOPS_2026-06.md`](AUDIT_INFRA_DEVOPS_2026-06.md)) — відкладено цілим блоком
+
+> Цільовий серверний аудит (4 агенти, крос-верифіковано по коду). Вердикт: **механіка деплою
+> сучасна й добра**; прогалина — в **операційній стійкості** (підтверджує «DR = нуль» з AUDIT_FULL).
+> Рішення власника 26.06: **весь блок у беклог**, у роботу не зараз. **Загальний тригер промоуту:
+> перед першим зовнішнім платним тенантом** (збігається з [ops] SA-5 / [ops] OPS-D1 нижче).
+> Повний фазовий план + докази — в аудит-доку. Рекомендований перший зріз — **INFRA-DR1**.
+
+- [ops] **INFRA-DR1 disaster-recovery бекапів (P0):** `restore.sh` + щомісячний restore-drill (gunzip останнього дампу в throwaway-БД, assert row-counts, звіт у Telegram); активувати офсайт **restic** (код є, сховище ні); `--clean --if-exists` у денні дампи; **змонтувати + бекапити uploads** (`STORAGE_TYPE=local` + нема volume → файли клієнтів губляться при recreate). Перетворює «втрата боксу = кінець» на виміряний RTO. ~1.5–2 дні. (created: 2026-06-26)
+- [ops] **INFRA-DR2 infrastructure-as-code (P0):** Ansible/cloud-init на сервер (Docker, Traefik, pg_cron, backup-cron, `.env`-скелет) — зараз 0 IaC, сервер «pet», rebuild = ручна археологія. ~1–2 дні. (created: 2026-06-26)
+- [ops] **INFRA-OBS1 моніторинг/алертинг (P1)** — _розширює [ops] OPS-D1_: увімкнути Sentry (`SENTRY_DSN` порожній на проді); UptimeRobot на `/ready`; **notify-on-failure** крок у деплой-воркфлоу (через наш Telegram-бот) — зараз навіть провал авто-rollback тихий. ~1 день. (created: 2026-06-26)
+- [sec] **INFRA-SEC1 supply-chain пайплайну (P0):** пін усіх third-party екшенів на commit-SHA + Dependabot (`appleboy/ssh-action@v1`, `scp-action@v0.1.7` тримають **prod SSH-ключ** на floating-тегу) + SSH host-key fingerprint (зараз TOFU). ~0.5 дня. (created: 2026-06-26)
+- [sec] **INFRA-SEC2 edge-hardening (P1):** Traefik security-headers (HSTS/X-Frame-Options/CSP) + `rateLimit` middleware + явний `tls.options minVersion`; ті ж headers у nginx SPA-конфіги. Зараз edge має лише cert+redirect. ~0.5 дня. (created: 2026-06-26)
+- [ci] **INFRA-OPS1 staging-rollback + health→/ready (P1):** портувати prod-патерн `verify`+`if:failure()`+`.previous_deploy` у `staging.yml` (зараз staging без rollback → застрягає); перенаправити post-deploy health з `/health` (liveness) на `/ready` (DB-backed) → API без БД фейлить гейт. ~0.5 дня. (created: 2026-06-26)
+- [docs] **INFRA-DOC1 серверні рунбуки (P1):** `OPS_RUNBOOK.md` (deploy-stuck / DB-down / ротація секрету / severity+escalation) + `DISASTER_RECOVERY.md` (rebuild з нуля, RTO-drill); виправити `INFRASTRUCTURE.md §5` (застаріла на 2 покоління: inline-`docker run` міграції замість `migrate`-сервісу) + мертві шляхи `infra/scripts/...` (канон `scripts/`); ADR-009 на топологію деплою. ~1 день. (created: 2026-06-26)
+- [infra] **INFRA-HARD1 container/Dockerfile hardening (P2):** multi-stage bot/landing (як AR-50b для api); `HEALTHCHECK` у Dockerfile'ах + compose-healthcheck для bot/worker; `no-new-privileges`/`cap_drop`/`read_only` на сервісах; пін баз на digest; ротація Traefik access-log; docker-socket-proxy перед Traefik. Збирати разом, коли візьмемо INFRA-блок. (created: 2026-06-26)
+
+> **Уже в беклозі, підтверджені цим аудитом** (не дублюю — підбирати в межах INFRA-блоку):
+> [infra] **AR-50b** (true prod-prune api-образу) · [ci] **CI-D1** (affected-only build + image-promotion staging→prod) · [ci] **CI-D2** (trivy-скан + GHCR retention) · [ops] **OPS-D1** (моніторинг — поглинається INFRA-OBS1) · [ops] **SA-5** (рознесення серверів / zero-downtime).
+
+---
+
 ## 🔍 Повний аудит 11.06.2026 ([`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md)) — відкладене з диспозицією
 
 > Виправлене — спринт **S5.5** (TRACKER, AR-01…AR-60). Нижче — свідомо відкладене.
