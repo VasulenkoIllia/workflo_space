@@ -9,6 +9,7 @@ const npFindUnique = vi.fn()
 const npUpsert = vi.fn()
 const npFindMany = vi.fn()
 const nsFindUnique = vi.fn()
+const nsUpsert = vi.fn()
 const refreshTokenUpdateMany = vi.fn()
 const auditLogCreate = vi.fn()
 const transaction = vi.fn()
@@ -16,7 +17,7 @@ const transaction = vi.fn()
 vi.mock('@workflo/db', () => ({
   prisma: {
     profile: { findUnique: profileFindUnique, update: profileUpdate },
-    notificationSettings: { findUnique: nsFindUnique },
+    notificationSettings: { findUnique: nsFindUnique, upsert: nsUpsert },
     notificationPreference: { findUnique: npFindUnique, upsert: npUpsert, findMany: npFindMany },
     refreshToken: { updateMany: refreshTokenUpdateMany },
     auditLog: { create: auditLogCreate },
@@ -163,7 +164,7 @@ describe('PATCH /profile/notifications', () => {
   afterEach(() => vi.clearAllMocks())
 
   it('upserts preferences and returns the full matrix', async () => {
-    nsFindUnique.mockResolvedValue({ id: 'settings-1' })
+    nsUpsert.mockResolvedValue({ id: 'settings-1' })
     npUpsert.mockResolvedValue({})
     transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({ notificationPreference: { upsert: npUpsert } })
@@ -199,12 +200,12 @@ describe('PATCH /profile/notifications', () => {
       payload: { preferences: [{ category: 'billing', channel: 'email', enabled: false }] },
     })
     expect(res.statusCode).toBe(400)
-    expect(nsFindUnique).not.toHaveBeenCalled() // rejected before any DB work
+    expect(nsUpsert).not.toHaveBeenCalled() // rejected before any DB work
     await app.close()
   })
 
   it('allows disabling telegram for a critical category', async () => {
-    nsFindUnique.mockResolvedValue({ id: 'settings-1' })
+    nsUpsert.mockResolvedValue({ id: 'settings-1' })
     npUpsert.mockResolvedValue({})
     transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({ notificationPreference: { upsert: npUpsert } })
@@ -222,8 +223,14 @@ describe('PATCH /profile/notifications', () => {
     await app.close()
   })
 
-  it('404 when notification settings missing', async () => {
-    nsFindUnique.mockResolvedValue(null)
+  it('creates the settings row when missing (upsert, no 404)', async () => {
+    nsUpsert.mockResolvedValue({ id: 'new-settings' })
+    npUpsert.mockResolvedValue({})
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({ notificationPreference: { upsert: npUpsert } })
+    )
+    npFindMany.mockResolvedValue([{ category: 'orders', channel: 'email', enabled: true }])
+    auditLogCreate.mockResolvedValue({})
     const { app, token } = await authedApp()
     const res = await app.inject({
       method: 'PATCH',
@@ -231,7 +238,8 @@ describe('PATCH /profile/notifications', () => {
       headers: { authorization: `Bearer ${token}` },
       payload: { preferences: [{ category: 'orders', channel: 'email', enabled: true }] },
     })
-    expect(res.statusCode).toBe(404)
+    expect(res.statusCode).toBe(200)
+    expect(nsUpsert).toHaveBeenCalled()
     await app.close()
   })
 })

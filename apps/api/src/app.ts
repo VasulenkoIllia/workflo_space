@@ -45,6 +45,7 @@ function buildLoggerConfig() {
       paths: [
         'req.headers.authorization',
         'req.headers.cookie',
+        'req.headers["x-bot-secret"]',
         'req.body.password',
         'req.body.passwordHash',
         'req.body.token',

@@ -28,7 +28,7 @@ notify(event, recipients, payload)
 
 ## 1. Шаблони — TypeScript-функції (не HTML-файли)
 
-Шаблони живуть у `packages/notifications/src/email/templates/*.ts` як **render-функції**, зібрані з примітивів `render.ts` (`renderLayout` / `renderButton` / `renderHeading` / `renderParagraph` / `renderMuted`). Реально існують **4**:
+Шаблони живуть у `packages/notifications/src/email/templates/*.ts` як **render-функції**, зібрані з примітивів `render.ts` (`renderLayout` / `renderButton` / `renderHeading` / `renderParagraph` / `renderMuted`). Реально існують **7** (S6-07 додав `renderOrderStatusChangedEmail` · `renderNewCommentEmail` · `renderInvoiceSentEmail`, uk+en, вплетені в `dispatch.renderEmailForEvent`; палітра — warm **stone+lime**, не IBM-Carbon):
 
 | Функція                          | Подія                           | Змінні (приклад)                          |
 | -------------------------------- | ------------------------------- | ----------------------------------------- |
@@ -49,13 +49,15 @@ notify(event, recipients, payload)
 
 **Transactional (5):**
 
-| Функція (план)                | Подія (07)                               | Реалізовано? | Дизайн                    |
-| ----------------------------- | ---------------------------------------- | ------------ | ------------------------- |
-| `renderInvitePortalEmail`     | `system.invite_sent` (member)            | ✅ (= вище)  | `email-invite`            |
-| `renderOrderReceivedEmail`    | `orders.created` (підтвердження клієнту) | ❌           | `email-order`             |
-| `renderInvoiceSentEmail`      | `billing.invoice_sent`                   | ❌           | `email-invoice` (pay CTA) |
-| `renderPaymentOkEmail`        | `billing.invoice_paid`                   | ❌           | `email-payment` (receipt) |
-| `renderDeadlineReminderEmail` | `billing.invoice_overdue` (warning)      | ❌           | `email-deadline`          |
+| Функція (план)                  | Подія (07)                               | Реалізовано? | Дизайн                    |
+| ------------------------------- | ---------------------------------------- | ------------ | ------------------------- |
+| `renderInvitePortalEmail`       | `system.invite_sent` (member)            | ✅ (= вище)  | `email-invite`            |
+| `renderOrderReceivedEmail`      | `orders.created` (підтвердження клієнту) | ❌           | `email-order`             |
+| `renderInvoiceSentEmail`        | `billing.invoice_sent`                   | ✅ S6-07     | `email-invoice` (pay CTA) |
+| `renderOrderStatusChangedEmail` | `orders.status_changed`                  | ✅ S6-07     | status email              |
+| `renderNewCommentEmail`         | `chat.new_comment`                       | ✅ S6-07     | comment email             |
+| `renderPaymentOkEmail`          | `billing.invoice_paid`                   | ❌           | `email-payment` (receipt) |
+| `renderDeadlineReminderEmail`   | `billing.invoice_overdue` (warning)      | ❌           | `email-deadline`          |
 
 **Auth + безпека (6):**
 

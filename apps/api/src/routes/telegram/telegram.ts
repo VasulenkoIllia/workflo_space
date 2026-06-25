@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { prisma } from '@workflo/db'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
@@ -24,7 +24,10 @@ const telegramRoutes: FastifyPluginAsync = (fastify) => {
   // ── User: mint a connect deep link ──────────────────────────────────────────
   fastify.post(
     '/profile/telegram/connect',
-    { preHandler: [fastify.authenticate] },
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+    },
     async (request, reply) => {
       const username = process.env.TELEGRAM_BOT_USERNAME
       if (!username) {
@@ -80,48 +83,62 @@ const telegramRoutes: FastifyPluginAsync = (fastify) => {
   )
 
   // ── Bot: complete the link (shared-secret auth, no user session) ─────────────
-  fastify.post('/telegram/link', async (request, reply) => {
-    const secret = process.env.BOT_LINK_SECRET
-    if (!secret) {
-      return reply
-        .status(503)
-        .send({ success: false, error: { message: 'telegram_link_not_configured' } })
-    }
-    if (request.headers['x-bot-secret'] !== secret) {
-      return reply.status(401).send({ success: false, error: { message: 'unauthorized' } })
-    }
-    const { code, chatId } = linkSchema.parse(request.body)
+  fastify.post(
+    '/telegram/link',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const secret = process.env.BOT_LINK_SECRET
+      if (!secret) {
+        return reply
+          .status(503)
+          .send({ success: false, error: { message: 'telegram_link_not_configured' } })
+      }
+      // Constant-time compare — a plain `!==` leaks the secret byte-by-byte via response timing.
+      const incoming = request.headers['x-bot-secret']
+      if (
+        typeof incoming !== 'string' ||
+        incoming.length !== secret.length ||
+        !timingSafeEqual(Buffer.from(incoming), Buffer.from(secret))
+      ) {
+        return reply.status(401).send({ success: false, error: { message: 'unauthorized' } })
+      }
+      const { code, chatId } = linkSchema.parse(request.body)
 
-    const token = await prisma.otpToken.findFirst({
-      where: {
-        code,
-        purpose: 'telegram_link',
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      select: { id: true, profileId: true, profile: { select: { name: true } } },
-    })
-    if (!token) {
-      return reply
-        .status(400)
-        .send({ success: false, error: { message: 'invalid_or_expired_code' } })
+      const token = await prisma.otpToken.findFirst({
+        where: {
+          code,
+          purpose: 'telegram_link',
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true, profileId: true, profile: { select: { name: true } } },
+      })
+      if (!token) {
+        return reply
+          .status(400)
+          .send({ success: false, error: { message: 'invalid_or_expired_code' } })
+      }
+
+      const now = new Date()
+      // Atomic: release the chat from any other profile, bind it here, and burn the OTP — all or
+      // nothing, so a crash mid-way can't leave the chat unbound (prior owner losing notifications).
+      // A Telegram chat links to exactly one profile.
+      await prisma.$transaction([
+        prisma.notificationSettings.updateMany({
+          where: { telegramChatId: chatId, profileId: { not: token.profileId } },
+          data: { telegramChatId: null, telegramLinkedAt: null },
+        }),
+        prisma.notificationSettings.upsert({
+          where: { profileId: token.profileId },
+          create: { profileId: token.profileId, telegramChatId: chatId, telegramLinkedAt: now },
+          update: { telegramChatId: chatId, telegramLinkedAt: now },
+        }),
+        prisma.otpToken.update({ where: { id: token.id }, data: { usedAt: now } }),
+      ])
+
+      return reply.send({ success: true, data: { profileName: token.profile.name } })
     }
-
-    const now = new Date()
-    // A Telegram chat links to exactly one profile — release it from any other first.
-    await prisma.notificationSettings.updateMany({
-      where: { telegramChatId: chatId, profileId: { not: token.profileId } },
-      data: { telegramChatId: null, telegramLinkedAt: null },
-    })
-    await prisma.notificationSettings.upsert({
-      where: { profileId: token.profileId },
-      create: { profileId: token.profileId, telegramChatId: chatId, telegramLinkedAt: now },
-      update: { telegramChatId: chatId, telegramLinkedAt: now },
-    })
-    await prisma.otpToken.update({ where: { id: token.id }, data: { usedAt: now } })
-
-    return reply.send({ success: true, data: { profileName: token.profile.name } })
-  })
+  )
 
   return Promise.resolve()
 }

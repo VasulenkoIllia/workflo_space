@@ -171,6 +171,7 @@ describe('outbox worker — S6 event handlers (created / assigned / comment)', (
       event(
         {
           orderId: 'o1',
+          docId: 'doc-1',
           docType: 'invoice',
           number: 'INV-2026-000001',
           amount: '500,00 UAH',
@@ -192,6 +193,7 @@ describe('outbox worker — S6 event handlers (created / assigned / comment)', (
       event(
         {
           orderId: 'o1',
+          docId: 'doc-2',
           docType: 'completion_act',
           number: 'ACT-2026-000001',
           amount: '500,00 UAH',

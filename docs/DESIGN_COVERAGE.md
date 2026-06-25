@@ -1,5 +1,15 @@
 # 🗺️ DESIGN_COVERAGE — матриця «дизайн ↔ модуль ↔ код»
 
+> 🟢 **КОРЕКЦІЯ S6 (2026-06-25):** таблиця нижче згенерована **2026-06-22, ДО S6-фронту** і місцями
+> застаріла. Після S6 РЕАЛЬНО збудовано (рядки 06/07/08/15/18, що позначені MISS/PLHD/«не існує», —
+> вже IMPL): **Інбокс** master-detail в обох апках (`routes/inbox/InboxPage.tsx`) · **notification read-API**
+> (`routes/notifications/` GET/PATCH/read-all) · **матриця каналів** (`/profile/telegram/connect`-сусід:
+> `/profile/notifications` GET+PATCH, UI `NotificationsSection`) · **Telegram-лінк** (API `routes/telegram/`
+>
+> - бот `apps/bot` `/start`→link) · **email** stone+lime палітра + 3 нові шаблони (status/comment/invoice) ·
+>   **Документи-таб** (генерація+PDF+«Надіслати»). Деталі — TRACKER §SPRINT 6 + `docs/modules/{06,07,08}.md`.
+>   Решта таблиці — для не-S6 модулів — лишається актуальною.
+
 > **Єдине джерело істини про РЕАЛЬНИЙ стан коду по кожному екрану.** Згенеровано наскрізним аудитом
 > `design-coverage-audit` (60 агентів, adversarial-verified) · **2026-06-22**.
 >

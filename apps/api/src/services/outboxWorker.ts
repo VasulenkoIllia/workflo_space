@@ -339,6 +339,7 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
 
 const documentSentPayload = z.object({
   orderId: z.string(),
+  docId: z.string(),
   docType: z.string(),
   number: z.string(),
   amount: z.string(),
@@ -358,16 +359,16 @@ async function handleDocumentSent(
 
   const isInvoice = p.docType === 'invoice' || p.docType === 'advance_invoice'
   const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  const url = `${portalUrl}/orders/${p.orderId}`
   await deliverToRecipients(
     logger,
     await clientMemberIds(order.companyId, p.actorId),
     isInvoice ? 'billing.invoice_sent' : 'documents.completion_act_ready',
-    {
-      invoiceNumber: p.number,
-      amount: p.amount,
-      dueDate: p.dueDate,
-      invoiceUrl: `${portalUrl}/orders/${p.orderId}`,
-    },
+    // Invoice → the billing email template reads these keys; other docs have no email template
+    // (in_app only), so use document-shaped var names rather than misleading invoice* keys.
+    isInvoice
+      ? { invoiceNumber: p.number, amount: p.amount, dueDate: p.dueDate, invoiceUrl: url }
+      : { documentNumber: p.number, documentType: p.docType, documentUrl: url },
     {
       title: isInvoice ? 'Виставлено рахунок' : 'Новий документ',
       body: `${p.number} — надіслано`,

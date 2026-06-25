@@ -12,6 +12,9 @@ export type NotifCategory =
 export type NotifChannel = 'in_app' | 'email' | 'telegram'
 
 export interface NotifPref {
+  // Kept as string (not the narrow unions): the GET response may legitimately carry channels the
+  // UI doesn't render (sms/push/webhook) without being a type-lie. The save direction builds rows
+  // from the narrow NOTIF_CATEGORIES/NOTIF_CHANNELS constants, so it's already constrained there.
   category: string
   channel: string
   enabled: boolean

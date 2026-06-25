@@ -18,6 +18,9 @@ vi.mock('@workflo/db', () => ({
       upsert: settingsUpsert,
       findUnique: vi.fn(),
     },
+    // Array form: the link endpoint batches release+bind+burn atomically.
+    $transaction: (arg: unknown) =>
+      Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)({}),
   },
   tenantTransaction: (c: unknown, fn: (tx: unknown) => unknown) => fn(c),
   withTenant: (fn: (tx: unknown) => unknown) => fn({}),

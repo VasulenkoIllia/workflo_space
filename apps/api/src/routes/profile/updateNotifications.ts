@@ -41,13 +41,14 @@ const updateNotificationsRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
-      const settings = await prisma.notificationSettings.findUnique({
+      // Upsert (not findUnique-or-404): a profile that never got a settings row provisioned
+      // must still be able to set preferences — create the row on first save.
+      const settings = await prisma.notificationSettings.upsert({
         where: { profileId },
+        create: { profileId },
+        update: {},
         select: { id: true },
       })
-      if (!settings) {
-        throw new AppError(ApiErrorCode.NOT_FOUND, 'Налаштування нотифікацій не знайдено', 404)
-      }
 
       // Upsert each (category, channel) row. Sequential keeps it simple and the
       // payload is bounded (≤42 rows by schema).

@@ -224,34 +224,34 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
 
-      const doc = await withTenant((tx) =>
-        tx.document.findFirst({
-          where: { id: request.params.docId, orderId },
-          select: {
-            id: true,
-            type: true,
-            number: true,
-            order: { select: { totalAmount: true, currency: true } },
-          },
+      const now = new Date()
+      const document = await tenantTransaction(prisma, async (tx) => {
+        // Atomic claim: the conditional updateMany flips generated→sent for exactly one of two
+        // concurrent sends (row lock → the loser gets count 0), so the client never gets two
+        // invoice emails from a double-click. Status read + write happen in one statement.
+        const claim = await tx.document.updateMany({
+          where: { id: request.params.docId, orderId, status: { not: 'sent' } },
+          data: { status: 'sent', sentAt: now },
         })
-      )
-      if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+        if (claim.count === 0) {
+          const exists = await tx.document.findFirst({
+            where: { id: request.params.docId, orderId },
+            select: { id: true },
+          })
+          if (!exists) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+          throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Документ вже надіслано', 409)
+        }
 
-      const settings = await withTenant((tx) =>
-        tx.paymentSettings.findUnique({
+        const doc = await tx.document.findFirstOrThrow({
+          where: { id: request.params.docId, orderId },
+          select: { ...DOC_SELECT, order: { select: { totalAmount: true, currency: true } } },
+        })
+        const settings = await tx.paymentSettings.findUnique({
           where: { agencyId },
           select: { paymentTermsDays: true },
         })
-      )
-      const now = new Date()
-      const dueDate = new Date(now.getTime() + (settings?.paymentTermsDays ?? 7) * 86_400_000)
+        const dueDate = new Date(now.getTime() + (settings?.paymentTermsDays ?? 7) * 86_400_000)
 
-      const document = await tenantTransaction(prisma, async (tx) => {
-        const updated = await tx.document.update({
-          where: { id: doc.id },
-          data: { status: 'sent', sentAt: now },
-          select: DOC_SELECT,
-        })
         await enqueueOutbox(tx, {
           type: 'document.sent',
           payload: {
@@ -265,7 +265,14 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
           },
           agencyId,
         })
-        return updated
+        return {
+          id: doc.id,
+          type: doc.type,
+          number: doc.number,
+          status: doc.status,
+          generatedAt: doc.generatedAt,
+          sentAt: doc.sentAt,
+        }
       })
       return reply.send({ success: true, data: { document } })
     }
