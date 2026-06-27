@@ -1,9 +1,11 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, type FormEvent, useEffect, useState } from 'react'
 import { HERO_ASCII, UA, type LandingContent } from '@/data/content'
 
 const PORTAL_URL = 'https://app.workflo.space'
+// Inlined at build (NEXT_PUBLIC_*); defaults to the staging API. Prod sets the build-arg.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://dev-api.workflo.space'
 
 /** Terminal prompt line: illia@workflo:~ $ <cmd> */
 function TermPrompt({ cmd, cwd = '~' }: { cmd: string; cwd?: string }) {
@@ -419,6 +421,129 @@ function AboutSection({ about }: { about: string[] }) {
   )
 }
 
+/** Contact — form (→ POST /content/contact) + direct channels (design: TerminalContact). */
+function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
+  const [form, setForm] = useState({ name: '', contact: '', message: '' })
+  const [website, setWebsite] = useState('') // honeypot — humans never fill it
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (state === 'sending' || state === 'sent') return
+    setState('sending')
+    try {
+      const res = await fetch(`${API_URL}/content/contact`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.contact,
+          message: form.message,
+          source: 'landing-home',
+          website,
+        }),
+      })
+      setState(res.ok ? 'sent' : 'error')
+    } catch {
+      setState('error')
+    }
+  }
+
+  const btnLabel =
+    state === 'sent'
+      ? 'sent ✓'
+      : state === 'sending'
+        ? '...'
+        : state === 'error'
+          ? 'помилка — ще раз'
+          : `${contact.send} →`
+
+  return (
+    <section className="wf-tm-section" id="contact" data-screen-label="contact">
+      <TermDivider section="contact" cmd="contact --interactive" />
+      <div className="wf-tm-output">
+        <div className="wf-tm-contact-head">
+          <div className="wf-tm-md-h1">{contact.h2}</div>
+          <p className="wf-tm-md-body">// {contact.sub}</p>
+        </div>
+        <form
+          className="wf-tm-form"
+          onSubmit={(e) => {
+            void submit(e)
+          }}
+        >
+          <div className="wf-tm-form-row">
+            <label>
+              name<span className="wf-tm-req">*</span>
+            </label>
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="—"
+            />
+          </div>
+          <div className="wf-tm-form-row">
+            <label>
+              contact<span className="wf-tm-req">*</span>
+            </label>
+            <input
+              required
+              value={form.contact}
+              onChange={(e) => setForm({ ...form, contact: e.target.value })}
+              placeholder="@tg / email"
+            />
+          </div>
+          <div className="wf-tm-form-row wf-tm-form-row--block">
+            <label>
+              message<span className="wf-tm-req">*</span>
+            </label>
+            <textarea
+              rows={5}
+              required
+              value={form.message}
+              onChange={(e) => setForm({ ...form, message: e.target.value })}
+              placeholder="—"
+            />
+          </div>
+          {/* Honeypot: visually hidden, off-tab, off-autocomplete. */}
+          <input
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+          />
+          {state === 'error' && (
+            <div className="wf-tm-form-err">// не вдалося надіслати — напишіть напряму нижче</div>
+          )}
+          <div className="wf-tm-form-row wf-tm-form-row--submit">
+            <button
+              type="submit"
+              className="wf-tm-btn wf-tm-btn--primary wf-tm-btn--big"
+              disabled={state === 'sending' || state === 'sent'}
+            >
+              [ {btnLabel} ]
+            </button>
+          </div>
+        </form>
+        <div className="wf-tm-channels-head"># {contact.or}</div>
+        <div className="wf-tm-channels">
+          {contact.channels.map((ch) => (
+            <div key={ch.kind} className="wf-tm-channel">
+              <span className="wf-tm-channel-kind">{ch.kind.toLowerCase()}</span>
+              <span className="wf-tm-channel-arrow">→</span>
+              <span className="wf-tm-channel-value">{ch.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TerminalLanding({ content = UA }: { content?: LandingContent }) {
   const c = content
   const [mounted, setMounted] = useState(false)
@@ -553,6 +678,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
             <ProcessSection items={c.process} />
             <SpotlightSection spotlight={c.spotlight} />
             <AboutSection about={c.about} />
+            <ContactSection contact={c.contact} />
           </div>
 
           {/* Status bar */}

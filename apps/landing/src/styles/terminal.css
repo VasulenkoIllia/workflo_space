@@ -1207,6 +1207,115 @@
   }
 }
 
+/* Contact (form + channels) */
+.wf-tm-contact-head {
+  margin-bottom: 20px;
+}
+.wf-tm-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 720px;
+}
+.wf-tm-form-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.wf-tm-form-row--block {
+  grid-column: 1 / -1;
+  align-items: start;
+}
+.wf-tm-form-row--submit {
+  grid-column: 1 / -1;
+}
+.wf-tm-form-row label {
+  font-size: 12px;
+  color: var(--wf-fg-muted);
+  font-family: inherit;
+}
+.wf-tm-req {
+  color: var(--wf-accent);
+  margin-left: 2px;
+}
+.wf-tm-form-row input,
+.wf-tm-form-row textarea {
+  padding: 9px 12px;
+  border: 1px solid var(--wf-border);
+  border-radius: 4px;
+  background: var(--wf-bg);
+  color: var(--wf-fg);
+  font: inherit;
+  font-size: 13px;
+  resize: none;
+  font-family: 'JetBrains Mono', monospace;
+}
+.wf-tm-form-row textarea {
+  min-height: 100px;
+}
+.wf-tm-form-row input::placeholder,
+.wf-tm-form-row textarea::placeholder {
+  color: var(--wf-fg-subtle);
+}
+.wf-tm-form-row input:focus,
+.wf-tm-form-row textarea:focus {
+  outline: none;
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--wf-accent) 22%, transparent);
+}
+.wf-tm-form-err {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--wf-destructive);
+}
+.wf-tm-channels-head {
+  font-size: 13px;
+  color: var(--wf-fg-muted);
+  margin: 28px 0 12px;
+}
+.wf-tm-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+.wf-tm-channel {
+  display: grid;
+  grid-template-columns: 100px 16px 1fr;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition:
+    background 0.12s ease-out,
+    border-color 0.12s ease-out;
+}
+.wf-tm-channel:hover {
+  background: color-mix(in oklab, var(--wf-fg) 3%, transparent);
+  border-color: var(--wf-border);
+}
+.wf-tm-channel-kind {
+  color: var(--wf-fg-muted);
+}
+.wf-tm-channel-arrow {
+  color: var(--wf-accent);
+}
+.wf-tm-channel-value {
+  color: var(--wf-fg);
+  font-weight: 500;
+}
+@container wf (max-width: 720px) {
+  .wf-tm-form {
+    grid-template-columns: 1fr;
+  }
+  .wf-tm-form-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 /* EOF + status bar */
 .wf-tm-eof {
   display: flex;

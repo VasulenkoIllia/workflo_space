@@ -36,6 +36,16 @@ export interface LandingContent {
   }[]
   spotlight: { name: string; status: string; desc: string; market: string; ctaEmailPh: string }
   about: string[]
+  contact: {
+    h2: string
+    sub: string
+    send: string
+    or: string
+    fName: string
+    fContact: string
+    fMessage: string
+    channels: { kind: string; value: string }[]
+  }
   scale: {
     subtitle: string
     stats: { v: string; k: string }[]
@@ -262,6 +272,20 @@ export const UA: LandingContent = {
     market:
       'Ринок: B2B-компанії 5–50 людей, які зараз тримають це в Notion, Excel або кустарному CRM.',
     ctaEmailPh: 'you@email.com',
+  },
+  contact: {
+    h2: 'Поговоримо?',
+    sub: 'Розкажіть коротко про проєкт — поверну протягом 24 годин у будні.',
+    send: 'Надіслати',
+    or: 'або напряму',
+    fName: 'Імʼя',
+    fContact: 'Telegram або email',
+    fMessage: 'Опис проєкту',
+    channels: [
+      { kind: 'Telegram', value: '@vasulenkoillia' },
+      { kind: 'Email', value: 'illia@workflo.space' },
+      { kind: 'GitHub', value: 'VasulenkoIllia' },
+    ],
   },
   about: [
     'Я з Луцька. Програмую з 2018-го, останні 4 роки — автоматизую процеси для бізнесів, які виросли з Excel.',
