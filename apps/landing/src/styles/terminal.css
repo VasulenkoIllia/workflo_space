@@ -823,6 +823,280 @@
   line-height: 1.55;
 }
 
+/* Markdown-ish blocks (spotlight/about/contact headings + body) */
+.wf-tm-md-h1 {
+  font-size: 22px;
+  color: var(--wf-fg);
+  font-weight: 600;
+  margin: 0;
+}
+.wf-tm-md-h2 {
+  font-size: 13px;
+  color: var(--wf-fg-muted);
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+.wf-tm-md-body {
+  font-size: 13px;
+  color: var(--wf-fg-secondary);
+  line-height: 1.6;
+  margin: 0 0 10px;
+  max-width: 600px;
+}
+.wf-tm-md-muted {
+  color: var(--wf-fg-muted);
+}
+.wf-tm-md-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--wf-border);
+}
+.wf-tm-link {
+  color: var(--wf-fg-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--wf-border-strong);
+  text-underline-offset: 3px;
+  font-size: 13px;
+  transition:
+    color 0.15s ease-out,
+    text-decoration-color 0.15s ease-out;
+}
+.wf-tm-link:hover {
+  color: var(--wf-accent);
+  text-decoration-color: var(--wf-accent);
+}
+.wf-tm-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 12px;
+  border: 1px solid var(--wf-border);
+  border-radius: 4px;
+  background: var(--wf-bg);
+  color: var(--wf-fg);
+  font: inherit;
+  font-size: 13px;
+}
+.wf-tm-input::placeholder {
+  color: var(--wf-fg-subtle);
+}
+.wf-tm-input:focus {
+  outline: none;
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--wf-accent) 22%, transparent);
+}
+
+/* Spotlight */
+.wf-tm-spotlight {
+  background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent);
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  padding: 24px 28px;
+}
+.wf-tm-spotlight-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.wf-tm-spotlight-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--wf-fg-muted);
+}
+.wf-tm-spotlight-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* About (profile + body) */
+.wf-tm-profile {
+  background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent);
+  border: 1px dashed var(--wf-border);
+  border-radius: 4px;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 32px;
+  font-size: 13px;
+}
+.wf-tm-profile-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 12px;
+}
+.wf-tm-profile-key {
+  color: var(--wf-fg-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding-top: 1px;
+}
+.wf-tm-profile-val {
+  color: var(--wf-fg);
+}
+.wf-tm-about-body {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--wf-fg-secondary);
+}
+.wf-tm-about-body p {
+  margin: 0 0 12px;
+  max-width: 640px;
+}
+.wf-tm-emph {
+  display: flex;
+  gap: 12px;
+  color: var(--wf-fg);
+  font-weight: 500;
+  padding: 12px 16px;
+  background: var(--wf-accent-soft);
+  border-left: 3px solid var(--wf-accent);
+  border-radius: 0 4px 4px 0;
+}
+.wf-root[data-theme='dark'] .wf-tm-emph {
+  background: color-mix(in oklab, var(--wf-accent) 12%, transparent);
+  color: var(--wf-fg);
+}
+.wf-tm-emph-prefix {
+  color: var(--wf-accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Scale (stats grid + NDA cards) */
+.wf-tm-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: var(--wf-border);
+  border: 1px solid var(--wf-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+.wf-tm-scale-cell {
+  background: var(--wf-bg);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wf-tm-scale-v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--wf-accent);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-feature-settings: 'tnum';
+}
+.wf-tm-scale-k {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--wf-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wf-tm-nda-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.wf-tm-nda-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px dashed var(--wf-border);
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--wf-fg) 1.5%, transparent);
+  font-family: 'JetBrains Mono', monospace;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.wf-tm-nda-card:hover {
+  border-color: var(--wf-fg-muted);
+  border-style: solid;
+  background: var(--wf-bg);
+}
+.wf-tm-nda-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wf-tm-nda-tag {
+  font-size: 11px;
+  color: var(--wf-accent);
+  font-weight: 500;
+}
+.wf-tm-nda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--wf-fg-muted);
+  background: color-mix(in oklab, var(--wf-fg) 6%, transparent);
+  border: 1px solid var(--wf-border);
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+}
+.wf-tm-nda-lock {
+  color: var(--wf-fg-muted);
+}
+.wf-tm-nda-card-name {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--wf-fg);
+  letter-spacing: -0.01em;
+}
+.wf-tm-nda-card-meta {
+  font-size: 11px;
+  color: var(--wf-fg-muted);
+}
+.wf-tm-nda-card-summary {
+  font-size: 12px;
+  color: var(--wf-fg-secondary);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+.wf-tm-nda-card-impacts {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--wf-fg);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-feature-settings: 'tnum';
+}
+.wf-tm-nda-card-impacts li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+@container wf (max-width: 720px) {
+  .wf-tm-scale-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .wf-tm-nda-grid {
+    grid-template-columns: 1fr;
+  }
+  .wf-tm-profile {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* EOF + status bar */
 .wf-tm-eof {
   display: flex;

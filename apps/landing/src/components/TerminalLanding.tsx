@@ -230,6 +230,152 @@ function ProcessSection({ items }: { items: LandingContent['process'] }) {
   )
 }
 
+/** Scale — stats grid + NDA project cards (design: TerminalScale). */
+function ScaleSection({ scale }: { scale: LandingContent['scale'] }) {
+  return (
+    <section className="wf-tm-section" id="scale" data-screen-label="scale">
+      <TermDivider section="scale" cmd="stats --all" />
+      <div className="wf-tm-output">
+        <p className="wf-tm-md-body" style={{ marginBottom: 16 }}>
+          // {scale.subtitle}
+        </p>
+        <div className="wf-tm-scale-grid">
+          {scale.stats.map((it) => (
+            <div key={it.k} className="wf-tm-scale-cell">
+              <div className="wf-tm-scale-v">{it.v}</div>
+              <div className="wf-tm-scale-k">{it.k}</div>
+            </div>
+          ))}
+        </div>
+        <div className="wf-tm-md-section">
+          <div className="wf-tm-md-h2">{scale.ndaHead}</div>
+          <p
+            className="wf-tm-md-body"
+            style={{ color: 'var(--wf-fg-muted)', fontSize: 12, marginBottom: 12 }}
+          >
+            // {scale.ndaHint}
+          </p>
+          <div className="wf-tm-nda-grid">
+            {scale.nda.map((p) => (
+              <div key={p.tag} className="wf-tm-nda-card">
+                <div className="wf-tm-nda-card-top">
+                  <span className="wf-tm-nda-tag">[{p.tag}]</span>
+                  <span className="wf-tm-nda-badge">
+                    <span className="wf-tm-nda-lock">▒</span> NDA
+                  </span>
+                </div>
+                <h4 className="wf-tm-nda-card-name">{p.name}</h4>
+                <div className="wf-tm-nda-card-meta">
+                  {p.year} · {p.duration}
+                </div>
+                <p className="wf-tm-nda-card-summary">{p.summary}</p>
+                <ul className="wf-tm-nda-card-impacts">
+                  {p.impact.map((m) => (
+                    <li key={m}>
+                      <span className="wf-tm-case-plus">+</span> {m}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Spotlight — Workflo product card + waitlist (design: TerminalSpotlight).
+ * Waitlist submit is a local confirm for now; persistence lands with the contact API slice. */
+function SpotlightSection({ spotlight }: { spotlight: LandingContent['spotlight'] }) {
+  const [email, setEmail] = useState('')
+  const [done, setDone] = useState(false)
+  return (
+    <section className="wf-tm-section" id="spotlight" data-screen-label="spotlight">
+      <TermDivider section="spotlight" cmd="cat workflo/README.md" />
+      <div className="wf-tm-output">
+        <div className="wf-tm-spotlight">
+          <div className="wf-tm-spotlight-head">
+            <h2 className="wf-tm-md-h1"># {spotlight.name}</h2>
+            <div className="wf-tm-spotlight-status">
+              <span className="wf-tm-status-dot" />
+              <span>{spotlight.status}</span>
+            </div>
+          </div>
+          <p className="wf-tm-md-body">{spotlight.desc}</p>
+          <p className="wf-tm-md-body wf-tm-md-muted">{spotlight.market}</p>
+          <div className="wf-tm-md-section">
+            <div className="wf-tm-md-h2">## subscribe</div>
+            <form
+              className="wf-tm-spotlight-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                setDone(true)
+              }}
+            >
+              <span className="wf-tm-sigil">$</span>
+              <input
+                className="wf-tm-input"
+                type="email"
+                required
+                placeholder={spotlight.ctaEmailPh}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <button type="submit" className="wf-tm-btn wf-tm-btn--primary">
+                [ {done ? 'subscribed ✓' : 'subscribe →'} ]
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const ABOUT_ROWS: [string, string][] = [
+  ['user', 'illia'],
+  ['location', 'lutsk, ua'],
+  ['since', '2018'],
+  ['focus', 'автоматизація для команд, що виросли з Excel'],
+  ['stack', 'TypeScript · Python · React · Postgres · LLMs'],
+  ['status', 'available · приймаю проєкти Q3 2026'],
+]
+
+/** About — profile rows + "why" prose (design: TerminalAbout). */
+function AboutSection({ about }: { about: string[] }) {
+  return (
+    <section className="wf-tm-section" id="who" data-screen-label="who">
+      <TermDivider section="who" cmd="whoami && cat ~/profile.md" />
+      <div className="wf-tm-output">
+        <div className="wf-tm-profile">
+          {ABOUT_ROWS.map(([k, v]) => (
+            <div key={k} className="wf-tm-profile-row">
+              <span className="wf-tm-profile-key">{k}</span>
+              <span className="wf-tm-profile-val">{v}</span>
+            </div>
+          ))}
+        </div>
+        <div className="wf-tm-md-section">
+          <div className="wf-tm-md-h2">## why</div>
+          <div className="wf-tm-about-body">
+            {about.map((p, i) => {
+              if (p === '') return <div key={`sp-${i}`} style={{ height: 6 }} />
+              const isEmph = p === 'Я роблю так, щоб цього не було.'
+              return (
+                <p key={`${i}-${p.slice(0, 12)}`} className={isEmph ? 'wf-tm-emph' : ''}>
+                  {isEmph && <span className="wf-tm-emph-prefix">{'>>>'}</span>}
+                  {p}
+                </p>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TerminalLanding({ content = UA }: { content?: LandingContent }) {
   const c = content
   const [mounted, setMounted] = useState(false)
@@ -357,9 +503,12 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
               </div>
             </section>
 
-            <ServicesSection items={c.services} />
             <CasesSection items={c.cases} />
+            <ScaleSection scale={c.scale} />
+            <ServicesSection items={c.services} />
             <ProcessSection items={c.process} />
+            <SpotlightSection spotlight={c.spotlight} />
+            <AboutSection about={c.about} />
           </div>
 
           {/* Status bar */}

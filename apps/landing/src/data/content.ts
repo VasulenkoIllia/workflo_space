@@ -23,6 +23,22 @@ export interface LandingContent {
     stack: string[]
   }[]
   process: { num: string; name: string; desc: string }[]
+  spotlight: { name: string; status: string; desc: string; market: string; ctaEmailPh: string }
+  about: string[]
+  scale: {
+    subtitle: string
+    stats: { v: string; k: string }[]
+    ndaHead: string
+    ndaHint: string
+    nda: {
+      tag: string
+      name: string
+      year: string
+      duration: string
+      summary: string
+      impact: string[]
+    }[]
+  }
 }
 
 export const UA: LandingContent = {
@@ -171,6 +187,94 @@ export const UA: LandingContent = {
       desc: 'Місячна підписка на оновлення, моніторинг, нові фічі — за бажанням. Без неї нічого не зламається.',
     },
   ],
+  spotlight: {
+    name: 'Workflo',
+    status: 'in development · beta Q3 2026',
+    desc: 'Платформа для команд, які працюють із замовленнями. Все на одній сторінці: замовлення, документи, фінанси, статуси в реальному часі. Без зайвого.',
+    market:
+      'Ринок: B2B-компанії 5–50 людей, які зараз тримають це в Notion, Excel або кустарному CRM.',
+    ctaEmailPh: 'you@email.com',
+  },
+  about: [
+    'Я з Луцька. Програмую з 2018-го, останні 4 роки — автоматизую процеси для бізнесів, які виросли з Excel.',
+    'До цього: продуктова команда в логістичному стартапі, фронтенд для української fintech-компанії, freelance-проєкти для агенцій у ЄС.',
+    '',
+    'Більшість команд, які я бачив, втрачають по 10–20 годин на тиждень на роботу, яку має робити скрипт. Хтось копіює дані між таблицями, хтось вручну формує звіти, хтось пише одне й те саме email щодня.',
+    '',
+    'Я роблю так, щоб цього не було.',
+    'Workflo — це мій спосіб дати цю можливість командам, які не можуть собі дозволити окремого розробника.',
+  ],
+  scale: {
+    subtitle: 'Що тут показано явно — верхівка айсбергу. Більшість проєктів — під NDA.',
+    stats: [
+      { v: '12', k: 'total projects' },
+      { v: '7', k: 'companies' },
+      { v: '4 роки', k: 'in automation' },
+      { v: '4', k: 'countries' },
+      { v: '5', k: 'public case studies' },
+      { v: '7', k: 'under nda' },
+    ],
+    ndaHead: '### under NDA · 7 проєктів',
+    ndaHint: 'Компанії не називаю — під NDA. На запит можу надати референси від клієнтів.',
+    nda: [
+      {
+        tag: 'fintech-eu',
+        name: 'payment orchestrator',
+        year: '2025',
+        duration: '8 тижнів',
+        summary: 'Роутинг платежів між 4 провайдерами · фолбек + ретраї',
+        impact: ['sub-50ms latency p99', '4 системи зведено'],
+      },
+      {
+        tag: 'healthtech',
+        name: 'booking automation',
+        year: '2024',
+        duration: '12 тижнів',
+        summary: 'Самозапис пацієнтів · 8 клінік',
+        impact: ['−74% phone load', '24/7 self-service'],
+      },
+      {
+        tag: 'b2b-saas-de',
+        name: 'internal CRM',
+        year: '2024',
+        duration: '6 тижнів',
+        summary: 'Внутрішній CRM для sales · 50 користувачів',
+        impact: ['80% adoption за місяць'],
+      },
+      {
+        tag: 'media-co',
+        name: 'content pipeline',
+        year: '2023',
+        duration: '4 тижні',
+        summary: 'AI-пайплайн рерайтера · ≈3k статей/міс',
+        impact: ['5× вихідний обʼєм'],
+      },
+      {
+        tag: 'legaltech',
+        name: 'document parser',
+        year: '2023',
+        duration: '3 тижні',
+        summary: 'Парсер контрактів у структуровані дані',
+        impact: ['95% точність витягу'],
+      },
+      {
+        tag: 'edtech-de',
+        name: 'payment flow',
+        year: '2023',
+        duration: '5 тижнів',
+        summary: 'Онлайн-оплата курсів · EUR/PLN/CZK',
+        impact: ['+18% conversion'],
+      },
+      {
+        tag: 'retail-pl',
+        name: 'inventory sync',
+        year: '2022',
+        duration: '6 тижнів',
+        summary: 'Синхронізація складів · 12 точок',
+        impact: ['−6h/day введення', '99.8% точність'],
+      },
+    ],
+  },
 }
 
 /** ASCII hero banner — minimal cat + wordmark (design-v2 terminal-variant HERO_ASCII). */
