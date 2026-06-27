@@ -124,6 +124,83 @@ function useTypewriter(lines: string[], enabled: boolean) {
   return { visible, activeLine, done }
 }
 
+/** Split a metric string into a big value + label (e.g. "18 год → 12 хв щодня"). */
+function splitMetric(m: string): { v: string; l: string } {
+  const arrow = m.match(/^(.+?\s*→\s*\d+\S*)\s+(.+)$/)
+  if (arrow) return { v: arrow[1] ?? '', l: arrow[2] ?? '' }
+  const sp = m.indexOf(' ')
+  return sp > 0 ? { v: m.slice(0, sp), l: m.slice(sp + 1) } : { v: m, l: '' }
+}
+
+/** Cases — git-log-styled proof cards (design: TerminalCases). Partner-chip + per-case
+ * read-more link to #company-/#project- anchors (those pages land in later S7 slices). */
+function CasesSection({ items }: { items: LandingContent['cases'] }) {
+  return (
+    <section className="wf-tm-section" id="work" data-screen-label="work">
+      <TermDivider section="work" cmd="git log --by-partner --oneline" />
+      <div className="wf-tm-output">
+        <p className="wf-tm-section-intro">// {items.length} публічних кейсів · цифри реальні</p>
+        <div className="wf-tm-case-grid">
+          {items.map((c) => {
+            const hero = splitMetric(c.metrics[0] ?? '')
+            const others = c.metrics.slice(1)
+            return (
+              <article key={c.num} className="wf-tm-case-card">
+                <div className="wf-tm-case-card-top">
+                  <a className="wf-tm-case-partner-chip" href={`#company-${c.company}`}>
+                    {c.company}
+                  </a>
+                  <span className="wf-tm-case-card-meta">
+                    {c.year} · {c.duration}
+                  </span>
+                </div>
+                <h3 className="wf-tm-case-card-title">{c.name}</h3>
+                <div className="wf-tm-case-card-metric">
+                  <div className="wf-tm-case-card-metric-v">{hero.v}</div>
+                  <div className="wf-tm-case-card-metric-l">{hero.l}</div>
+                </div>
+                <p className="wf-tm-case-card-context">{c.context}</p>
+                {others.length > 0 && (
+                  <ul className="wf-tm-case-card-others">
+                    {others.map((m) => (
+                      <li key={m}>
+                        <span className="wf-tm-case-plus">+</span> {m}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="wf-tm-case-card-stack">
+                  {c.stack.slice(0, 5).map((s) => (
+                    <span key={s} className="wf-tm-stack-chip">
+                      {s}
+                    </span>
+                  ))}
+                  {c.stack.length > 5 && (
+                    <span className="wf-tm-stack-chip wf-tm-stack-chip--more">
+                      +{c.stack.length - 5}
+                    </span>
+                  )}
+                </div>
+                {c.slug ? (
+                  <a className="wf-tm-case-card-readmore" href={`#project-${c.slug}`}>
+                    <span>$ cat ~/work/{c.slug}.md</span>
+                    <span className="wf-tm-case-card-readmore-arrow">→</span>
+                  </a>
+                ) : (
+                  <div className="wf-tm-case-card-readmore wf-tm-case-card-readmore--disabled">
+                    <span>$ ./workflo --in-development</span>
+                    <span className="wf-tm-case-card-readmore-arrow">●</span>
+                  </div>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TerminalLanding({ content = UA }: { content?: LandingContent }) {
   const c = content
   const [mounted, setMounted] = useState(false)
@@ -252,6 +329,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
             </section>
 
             <ServicesSection items={c.services} />
+            <CasesSection items={c.cases} />
           </div>
 
           {/* Status bar */}

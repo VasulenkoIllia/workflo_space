@@ -11,6 +11,17 @@ export interface LandingContent {
   liveLabel: string
   liveAgo: string[]
   services: { num: string; name: string; line: string; examples: string; tools: string[] }[]
+  cases: {
+    num: string
+    slug: string | null
+    company: string
+    name: string
+    year: string
+    duration: string
+    context: string
+    metrics: string[]
+    stack: string[]
+  }[]
 }
 
 export const UA: LandingContent = {
@@ -69,6 +80,67 @@ export const UA: LandingContent = {
       examples:
         'Парсинг даних з сайтів · генерація документів з шаблонів · заплановані звіти · scrapers · монітори.',
       tools: ['Python', 'n8n', 'Make', 'GitHub Actions'],
+    },
+  ],
+  cases: [
+    {
+      num: '01',
+      slug: 'retail-1c-integration',
+      company: 'retail',
+      name: 'Інтеграція 1С ↔ Telegram для логістики',
+      year: '2025',
+      duration: '6 тижнів',
+      context: '50 водіїв вручну скидали накладні в чат — без структури, з помилками.',
+      metrics: [
+        '−87% часу на обробку замовлень',
+        '+€12k додаткового MRR',
+        "4 системи з'єднано в один потік",
+      ],
+      stack: ['Next.js', 'Postgres', '1C API', 'Telegram Bot API', 'Anthropic'],
+    },
+    {
+      num: '02',
+      slug: 'ai-support-agent',
+      company: 'saas',
+      name: 'AI-агент саппорту для SaaS',
+      year: '2024',
+      duration: '4 тижні',
+      context: 'First-response 14 годин, нові користувачі churning на третій день.',
+      metrics: ['92% auto first response', '+24% CSAT', '~$3.2k/міс економія'],
+      stack: ['Anthropic Claude', 'RAG', 'Pinecone', 'Python', 'Slack API'],
+    },
+    {
+      num: '03',
+      slug: 'custom-crm-logistics',
+      company: 'logistics',
+      name: 'Кастомний CRM для логістичного оператора',
+      year: '2025',
+      duration: '8 тижнів',
+      context: 'Три системи (склад, доставка, фінанси) — нічна ручна синхронізація.',
+      metrics: ['400 годин/міс економії', '3 системи → 1 портал', 'Real-time tracking'],
+      stack: ['Next.js', 'Postgres', 'Prisma', 'Redis', 'Mapbox'],
+    },
+    {
+      num: '04',
+      slug: 'market-parser',
+      company: 'agency',
+      name: 'Парсер ринкових даних для агенції',
+      year: '2024',
+      duration: '2 тижні',
+      context: 'Аналітик витрачав 18 годин на тиждень на ручний збір.',
+      metrics: ['18 год → 12 хв щодня', '+200% частота звітів', '0 помилок копіювання'],
+      stack: ['Python', 'Playwright', 'GitHub Actions', 'Sheets API'],
+    },
+    {
+      num: '05',
+      slug: null,
+      company: 'workflo',
+      name: 'Workflo',
+      year: 'продукт у розробці',
+      duration: 'beta Q3 2026',
+      context: 'Платформа для команд, які працюють із замовленнями. Усе на одній сторінці.',
+      metrics: ['240+ у waitlist', '3 пілотні команди', 'beta Q3 2026'],
+      stack: ['Next.js', 'Postgres', 'Prisma', 'Anthropic', 'Tailwind'],
     },
   ],
 }
