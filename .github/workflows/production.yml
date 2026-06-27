@@ -202,12 +202,12 @@ jobs:
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
             # GHCR layer pulls occasionally stall mid-download on the host (transient network).
-            # A bare `compose pull` would hang until the SSH command_timeout kills the whole
-            # deploy. Wrap each attempt in `timeout` so a stalled pull is aborted and retried;
-            # 3 × 6m < the 20m command_timeout above.
+            # `timeout` wraps `docker compose` DIRECTLY — not the compose() shell function, which
+            # timeout can't exec (it runs a binary, not shell functions) — so a stalled pull is
+            # aborted and retried instead of hanging. 3 × 6m < the 20m command_timeout above.
             pull_with_retry() {
               for attempt in 1 2 3; do
-                if timeout 360 compose pull; then
+                if timeout 360 docker compose --project-name "${{ env.PRODUCTION_COMPOSE_PROJECT }}" --env-file .env -f docker-compose.production.yml pull; then
                   return 0
                 fi
                 echo "WARN: image pull failed/stalled (attempt ${attempt}/3); retrying in 10s..."
