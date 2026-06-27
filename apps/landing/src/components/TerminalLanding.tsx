@@ -230,6 +230,49 @@ function ProcessSection({ items }: { items: LandingContent['process'] }) {
   )
 }
 
+/** Partners — company cards (design: TerminalPartners). Cards link to #company- anchors
+ * (company detail pages land in a later slice). */
+function PartnersSection({ partners }: { partners: LandingContent['partners'] }) {
+  const totalProjects = partners.reduce((n, p) => n + p.projectsCount, 0)
+  return (
+    <section className="wf-tm-section" id="partners" data-screen-label="partners">
+      <TermDivider section="partners" cmd="ls -la ~/partners" />
+      <div className="wf-tm-output">
+        <p className="wf-tm-section-intro">
+          // {partners.length} партнерів · {totalProjects} проєктів · довгострокові партнерства
+        </p>
+        <div className="wf-tm-partner-grid">
+          {partners.map((c) => (
+            <a key={c.slug} className="wf-tm-partner-card" href={`#company-${c.slug}`}>
+              <div className="wf-tm-partner-card-top">
+                <div className="wf-tm-partner-logo-lg" style={{ background: c.accent }}>
+                  {c.logoGlyph}
+                </div>
+                <span className="wf-tm-partner-card-arrow">↗</span>
+              </div>
+              <div className="wf-tm-partner-card-body">
+                <div className="wf-tm-partner-card-name">{c.name}</div>
+                <div className="wf-tm-partner-card-industry">{c.industry}</div>
+                <p className="wf-tm-partner-card-bio">{c.bio}</p>
+              </div>
+              <div className="wf-tm-partner-card-foot">
+                <span className="wf-tm-partner-card-stat">
+                  <span className="wf-tm-accent">{c.projectsCount}</span>{' '}
+                  {c.projectsCount === 1 ? 'проєкт' : 'проєкти'}
+                </span>
+                <span className="wf-tm-sb-sep">·</span>
+                <span>since {c.since}</span>
+                <span className="wf-tm-sb-sep">·</span>
+                <span>{c.location}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 /** Scale — stats grid + NDA project cards (design: TerminalScale). */
 function ScaleSection({ scale }: { scale: LandingContent['scale'] }) {
   return (
@@ -503,6 +546,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
               </div>
             </section>
 
+            <PartnersSection partners={c.partners} />
             <CasesSection items={c.cases} />
             <ScaleSection scale={c.scale} />
             <ServicesSection items={c.services} />

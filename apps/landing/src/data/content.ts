@@ -23,6 +23,17 @@ export interface LandingContent {
     stack: string[]
   }[]
   process: { num: string; name: string; desc: string }[]
+  partners: {
+    slug: string
+    name: string
+    industry: string
+    location: string
+    since: string
+    accent: string
+    logoGlyph: string
+    bio: string
+    projectsCount: number
+  }[]
   spotlight: { name: string; status: string; desc: string; market: string; ctaEmailPh: string }
   about: string[]
   scale: {
@@ -185,6 +196,63 @@ export const UA: LandingContent = {
       num: '05',
       name: 'Підтримка (опціонально)',
       desc: 'Місячна підписка на оновлення, моніторинг, нові фічі — за бажанням. Без неї нічого не зламається.',
+    },
+  ],
+  partners: [
+    {
+      slug: 'brunky',
+      name: 'Brunky',
+      industry: 'Мережа кавʼярень',
+      location: 'Lutsk, UA',
+      since: '2024',
+      accent: '#a36b3c',
+      logoGlyph: 'B/',
+      bio: 'Локальна мережа з чотирьох кавʼярень у Луцьку. Specialty кава, домашня випічка та доставка в бізнес-центри міста.',
+      projectsCount: 2,
+    },
+    {
+      slug: 'eduforge',
+      name: 'EduForge',
+      industry: 'Онлайн-курси · інфобізнес',
+      location: 'Kyiv, UA',
+      since: '2024',
+      accent: '#5a7db5',
+      logoGlyph: 'ef',
+      bio: 'Інфобізнес із шести онлайн-курсів про дизайн, продукт і програмування. ~2400 активних студентів і сильна спільнота.',
+      projectsCount: 1,
+    },
+    {
+      slug: 'trasa-logistics',
+      name: 'Trasa Logistics',
+      industry: 'Логістика · 3PL',
+      location: 'Lviv, UA',
+      since: '2025',
+      accent: '#3c7d5a',
+      logoGlyph: 't//',
+      bio: 'Оператор вантажних перевезень на маршрутах Україна–ЄС. 300 одиниць техніки, ~80 співробітників, три не повʼязані системи.',
+      projectsCount: 1,
+    },
+    {
+      slug: 'nordstream',
+      name: 'Nordstream Agency',
+      industry: 'Маркетинг-агенція',
+      location: 'Kyiv, UA',
+      since: '2024',
+      accent: '#8b5fbf',
+      logoGlyph: 'N→',
+      bio: 'Performance-маркетингова агенція з Києва. 24 співробітники, переважно B2B-клієнти в IT та fintech.',
+      projectsCount: 2,
+    },
+    {
+      slug: 'tably',
+      name: 'Tably',
+      industry: 'B2B SaaS · бронювання послуг',
+      location: 'Berlin, DE',
+      since: '2025',
+      accent: '#d97a4a',
+      logoGlyph: '/t',
+      bio: 'SaaS-платформа для салонів краси та барбершопів: записи, фінанси, лояльність. 8000+ активних користувачів у трьох країнах.',
+      projectsCount: 1,
     },
   ],
   spotlight: {

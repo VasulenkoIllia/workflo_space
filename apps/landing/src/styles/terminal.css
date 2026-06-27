@@ -1097,6 +1097,116 @@
   }
 }
 
+/* Partners (company cards) */
+.wf-tm-partner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.wf-tm-partner-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 22px 16px;
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  background: var(--wf-bg);
+  color: var(--wf-fg-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  transition:
+    border-color 0.15s ease-out,
+    transform 0.15s ease-out,
+    background 0.15s ease-out;
+  position: relative;
+}
+.wf-tm-partner-card:hover {
+  border-color: var(--wf-accent);
+  transform: translateY(-2px);
+  background: color-mix(in oklab, var(--wf-fg) 2%, var(--wf-bg));
+}
+.wf-tm-partner-card:hover .wf-tm-partner-card-arrow {
+  color: var(--wf-accent);
+  transform: translate(2px, -2px);
+}
+.wf-tm-partner-card:hover .wf-tm-partner-card-name {
+  color: var(--wf-accent);
+}
+.wf-tm-partner-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.wf-tm-partner-logo-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+  flex-shrink: 0;
+}
+.wf-tm-partner-card-arrow {
+  color: var(--wf-fg-muted);
+  font-size: 18px;
+  transition:
+    color 0.15s ease-out,
+    transform 0.15s ease-out;
+}
+.wf-tm-partner-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.wf-tm-partner-card-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--wf-fg);
+  letter-spacing: -0.02em;
+  transition: color 0.15s;
+}
+.wf-tm-partner-card-industry {
+  font-size: 12px;
+  color: var(--wf-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wf-tm-partner-card-bio {
+  font-size: 13px;
+  color: var(--wf-fg-secondary);
+  line-height: 1.55;
+  margin: 6px 0 0;
+  font-family: 'Geist', system-ui, sans-serif;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wf-tm-partner-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px dashed var(--wf-border);
+  font-size: 11px;
+  color: var(--wf-fg-muted);
+}
+.wf-tm-partner-card-stat {
+  color: var(--wf-fg-secondary);
+}
+@container wf (max-width: 720px) {
+  .wf-tm-partner-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* EOF + status bar */
 .wf-tm-eof {
   display: flex;
