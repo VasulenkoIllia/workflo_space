@@ -201,6 +201,35 @@ function CasesSection({ items }: { items: LandingContent['cases'] }) {
   )
 }
 
+/** Process — ASCII pipeline + numbered steps (design: TerminalProcess). */
+function ProcessSection({ items }: { items: LandingContent['process'] }) {
+  const pipeline = items.map((s) => `[${s.num}]`).join(' ──→ ')
+  return (
+    <section className="wf-tm-section" id="process" data-screen-label="process">
+      <TermDivider section="process" cmd="man workflo-flow" />
+      <div className="wf-tm-output">
+        <pre className="wf-tm-pipeline" aria-hidden="true">
+          {pipeline}
+        </pre>
+        <div className="wf-tm-steps">
+          {items.map((s, i) => (
+            <div key={s.num} className="wf-tm-step">
+              <div className="wf-tm-step-marker">
+                <span className="wf-tm-step-num">[{s.num}]</span>
+                {i < items.length - 1 && <span className="wf-tm-step-line">│</span>}
+              </div>
+              <div className="wf-tm-step-body">
+                <div className="wf-tm-step-name">{s.name}</div>
+                <div className="wf-tm-step-desc">{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TerminalLanding({ content = UA }: { content?: LandingContent }) {
   const c = content
   const [mounted, setMounted] = useState(false)
@@ -330,6 +359,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
 
             <ServicesSection items={c.services} />
             <CasesSection items={c.cases} />
+            <ProcessSection items={c.process} />
           </div>
 
           {/* Status bar */}
