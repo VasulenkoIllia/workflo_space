@@ -10,6 +10,7 @@ export interface LandingContent {
   live: string[]
   liveLabel: string
   liveAgo: string[]
+  services: { num: string; name: string; line: string; examples: string; tools: string[] }[]
 }
 
 export const UA: LandingContent = {
@@ -36,6 +37,40 @@ export const UA: LandingContent = {
   ],
   liveLabel: 'зараз:',
   liveAgo: ['12m ago', '2h ago', '8m ago', '1h ago'],
+  services: [
+    {
+      num: '01',
+      name: 'Інтеграції та API',
+      line: 'Коли дві системи не розмовляють між собою.',
+      examples:
+        'CRM ↔ 1C · Notion ↔ Telegram · форми → внутрішня БД · GoogleSheets → email-розсилка з тригером.',
+      tools: ['TypeScript', 'Node', 'Python', 'REST', 'webhooks', 'queues'],
+    },
+    {
+      num: '02',
+      name: 'AI-агенти та workflow',
+      line: 'Коли потрібен агент, який щось робить, а не просто чатить.',
+      examples:
+        'Бот саппорту з контекстом ваших даних · агент-аналітик для звітів · генератор пропозицій з CRM · processor для документів.',
+      tools: ['OpenAI', 'Anthropic', 'LangChain', 'RAG', 'vector DBs'],
+    },
+    {
+      num: '03',
+      name: 'Внутрішні портали та CRM',
+      line: 'Коли готові SaaS не покривають ваші процеси.',
+      examples:
+        'Портал замовлень для клієнтів · кастомний CRM під специфіку · dashboard з real-time даних.',
+      tools: ['Next.js', 'React', 'Postgres', 'Prisma'],
+    },
+    {
+      num: '04',
+      name: 'Автоматизація рутини',
+      line: 'Коли людина робить те, що має робити скрипт.',
+      examples:
+        'Парсинг даних з сайтів · генерація документів з шаблонів · заплановані звіти · scrapers · монітори.',
+      tools: ['Python', 'n8n', 'Make', 'GitHub Actions'],
+    },
+  ],
 }
 
 /** ASCII hero banner — minimal cat + wordmark (design-v2 terminal-variant HERO_ASCII). */

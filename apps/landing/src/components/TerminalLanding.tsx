@@ -1,9 +1,81 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { HERO_ASCII, UA, type LandingContent } from '@/data/content'
 
 const PORTAL_URL = 'https://app.workflo.space'
+
+/** Terminal prompt line: illia@workflo:~ $ <cmd> */
+function TermPrompt({ cmd, cwd = '~' }: { cmd: string; cwd?: string }) {
+  return (
+    <div className="wf-tm-prompt">
+      <span className="wf-tm-user">illia</span>
+      <span className="wf-tm-at">@</span>
+      <span className="wf-tm-host">workflo</span>
+      <span className="wf-tm-colon">:</span>
+      <span className="wf-tm-cwd">{cwd}</span>
+      <span className="wf-tm-sigil">$</span>
+      <span className="wf-tm-cmd">{cmd}</span>
+    </div>
+  )
+}
+
+/** Section divider: dashed rule labelled `# <section>` + a prompt line. */
+function TermDivider({ section, cmd }: { section: string; cmd: string }) {
+  return (
+    <div className="wf-tm-divider">
+      <div className="wf-tm-divider-line" data-section={section} />
+      <TermPrompt cmd={cmd} />
+    </div>
+  )
+}
+
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[ ·&]+/g, '-')
+    .replace(/[^\p{L}\p{N}-]/gu, '')
+
+/** Services — `ls -la`-styled list (design: TerminalServices). */
+function ServicesSection({ items }: { items: LandingContent['services'] }) {
+  return (
+    <section className="wf-tm-section" id="services" data-screen-label="services">
+      <TermDivider section="services" cmd="ls ~/services" />
+      <div className="wf-tm-output">
+        <div className="wf-tm-ls-head">total {items.length}</div>
+        {items.map((it) => (
+          <div key={it.num} className="wf-tm-service">
+            <div className="wf-tm-service-row">
+              <span className="wf-tm-service-perm">drwx</span>
+              <span className="wf-tm-service-num">[{it.num}]</span>
+              <span className="wf-tm-service-name">{slug(it.name)}</span>
+              <span className="wf-tm-service-title">— {it.name}</span>
+            </div>
+            <div className="wf-tm-service-line">
+              <span className="wf-tm-key">desc</span>
+              <span className="wf-tm-val">{it.line}</span>
+            </div>
+            <div className="wf-tm-service-line">
+              <span className="wf-tm-key">examples</span>
+              <span className="wf-tm-val">{it.examples}</span>
+            </div>
+            <div className="wf-tm-service-line">
+              <span className="wf-tm-key">tools</span>
+              <span className="wf-tm-val">
+                {it.tools.map((tool, j) => (
+                  <Fragment key={tool}>
+                    {j > 0 && <span className="wf-tm-bullet"> · </span>}
+                    <span className="wf-tm-tool">{tool}</span>
+                  </Fragment>
+                ))}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 /** SSR-safe typewriter. Renders full text on the server + first client render (so the H1
  * is in the DOM for SEO + hydration matches); once `enabled` (mounted) it re-types. */
@@ -145,15 +217,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
               <pre className="wf-tm-ascii-art" aria-hidden="true">
                 {HERO_ASCII}
               </pre>
-              <div className="wf-tm-prompt">
-                <span className="wf-tm-user">illia</span>
-                <span className="wf-tm-at">@</span>
-                <span className="wf-tm-host">workflo</span>
-                <span className="wf-tm-colon">:</span>
-                <span className="wf-tm-cwd">~</span>
-                <span className="wf-tm-sigil">$</span>
-                <span className="wf-tm-cmd">./hello.sh</span>
-              </div>
+              <TermPrompt cmd="./hello.sh" />
               <div className="wf-tm-output">
                 <h1 className="wf-tm-h1" aria-label={c.hero.h1.join(' ')}>
                   {c.hero.h1.map((line, i) => {
@@ -186,6 +250,8 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
                 </div>
               </div>
             </section>
+
+            <ServicesSection items={c.services} />
           </div>
 
           {/* Status bar */}
