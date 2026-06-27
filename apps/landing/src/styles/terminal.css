@@ -49,8 +49,6 @@
   color: var(--wf-fg);
   background: var(--wf-bg);
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
   min-height: 100%;
   font-size: 16px;
   line-height: 1.5;
@@ -84,10 +82,10 @@
   font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
   background: var(--wf-bg);
   width: 100%;
-  max-width: 1200px;
 }
 .wf-tm-wrap {
   padding: 32px;
+  min-height: 100vh;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0,
@@ -95,11 +93,12 @@
     color-mix(in oklab, var(--wf-fg) 2.5%, transparent) 2px,
     color-mix(in oklab, var(--wf-fg) 2.5%, transparent) 3px
   );
-  min-height: 100%;
 }
 .wf-tm-window {
   border: 1px solid var(--wf-border-strong);
   border-radius: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
   background: var(--wf-bg);
   overflow: hidden;
   display: flex;
