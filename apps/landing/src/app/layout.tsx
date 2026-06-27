@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import '@/styles/terminal.css'
+import '@/styles/pages.css'
 
 export const metadata: Metadata = {
   title: 'workflo.space — автоматизації для команд, що виросли з Excel',
