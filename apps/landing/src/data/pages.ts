@@ -120,3 +120,143 @@ export const SERVICES: ServiceItem[] = [
 ]
 
 export const serviceBySlug = (slug: string) => SERVICES.find((s) => s.slug === slug)
+
+// ── /about ──
+export interface TeamMember {
+  name: string
+  initials: string
+  role: string
+  focus: string
+}
+
+export const ABOUT = {
+  intro:
+    'Маленька команда, яка робить руками. Без прошарку менеджерів між вами й тим, хто пише код. Ви говорите з людьми, що відповідають за результат.',
+  founder: {
+    name: 'Ілля Васюленко',
+    initials: 'ІВ',
+    role: 'Засновник · fullstack',
+    bio: [
+      '8 років роблю інтеграції, портали й автоматизацію для малого та середнього бізнесу. Починав фрілансером, зараз — невелика команда під замовлення.',
+      'Принцип простий: беремо задачу, де автоматизація реально економить гроші, і доводимо до робочого результату. Без vendor lock-in — увесь код і доступи ваші.',
+    ],
+    stats: [
+      { v: '8', k: 'років досвіду' },
+      { v: '40+', k: 'проєктів' },
+      { v: '12', k: 'активних клієнтів' },
+    ],
+  },
+  members: [
+    {
+      name: 'Олег Шевчук',
+      initials: 'ОШ',
+      role: 'Product · дизайн',
+      focus: 'UX порталів, дизайн-система, фронт',
+    },
+    {
+      name: 'Павло Кравець',
+      initials: 'ПК',
+      role: 'DevOps · інфра',
+      focus: 'Деплой, моніторинг, надійність інтеграцій',
+    },
+    {
+      name: 'Денис Бойко',
+      initials: 'ДБ',
+      role: 'Backend · інтеграції',
+      focus: '1С, REST, черги, обробка даних',
+    },
+    {
+      name: 'Анна Левченко',
+      initials: 'АЛ',
+      role: 'Контент · комунікація',
+      focus: 'Кейси, блог, листування з клієнтами',
+    },
+  ] satisfies TeamMember[],
+  principles: [
+    [
+      'Робимо, що економить гроші',
+      'Не автоматизуємо заради автоматизації. Якщо задача не повертає вкладене — кажемо прямо.',
+    ],
+    [
+      'Код і доступи — ваші',
+      'Жодного lock-in. Усе передаємо повністю: репозиторій, документацію, паролі.',
+    ],
+    ['Видимість процесу', 'Ви бачите статус, години й рахунки в порталі. Без «зробимо колись».'],
+    ['Людська мова', 'Пояснюємо технічне нормальними словами. Без жаргону й маркетингового шуму.'],
+  ] satisfies [string, string][],
+}
+
+// ── /contact ──
+export interface ContactChannel {
+  kind: 'telegram' | 'mail' | 'globe'
+  label: string
+  value: string
+  href: string
+  primary?: boolean
+  note: string
+}
+
+export interface ContactField {
+  id: string
+  label: string
+  placeholder: string
+  type: 'text' | 'textarea' | 'select'
+  options?: string[]
+}
+
+export const CONTACT_PAGE = {
+  intro:
+    'Опишіть задачу — відповім протягом дня. Найшвидше в Telegram. Безкоштовний discovery-дзвінок на 30 хвилин, щоб зрозуміти, чи можу допомогти.',
+  channels: [
+    {
+      kind: 'telegram',
+      label: 'Telegram',
+      value: '@workflo_space',
+      href: 'https://t.me/workflo_space',
+      primary: true,
+      note: 'відповідь за годину',
+    },
+    {
+      kind: 'mail',
+      label: 'Email',
+      value: 'hello@workflo.space',
+      href: 'mailto:hello@workflo.space',
+      note: 'для деталей і документів',
+    },
+    {
+      kind: 'globe',
+      label: 'Дзвінок',
+      value: 'cal.com/workflo',
+      href: 'https://cal.com/workflo',
+      note: '30 хв · discovery',
+    },
+  ] satisfies ContactChannel[],
+  fields: [
+    { id: 'name', label: 'Як вас звати?', placeholder: 'Олена · Brunky', type: 'text' },
+    {
+      id: 'contact',
+      label: 'Telegram або email',
+      placeholder: '@olena / olena@brunky.ua',
+      type: 'text',
+    },
+    {
+      id: 'budget',
+      label: 'Орієнтовний бюджет',
+      placeholder: '',
+      type: 'select',
+      options: ['Ще не знаю', 'до $1 500', '$1 500 – $5 000', '$5 000+', 'Підписка / retainer'],
+    },
+    {
+      id: 'task',
+      label: 'Що треба зробити?',
+      placeholder: 'Коротко: яка система, який результат хочете…',
+      type: 'textarea',
+    },
+  ] satisfies ContactField[],
+  reasons: [
+    'Безкоштовний discovery-дзвінок',
+    'Відповідь у день звернення',
+    'Оцінка перед стартом, без сюрпризів',
+    'NDA за потреби',
+  ],
+}
