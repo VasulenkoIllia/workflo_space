@@ -26,7 +26,9 @@
 
 ## 🔧 Зараз у роботі
 
-- **S5 — ручний тест на staging** (власник) за [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md). Баги → fix одразу в цьому ж циклі.
+- **S6 ✅ ядро закрито** (Documents + Notifications + Bot, на staging). Власник — **легкий sanity-тач** незворотних флоу (документ → надіслати → клієнт отримав + нотифікація; Telegram-лінк), НЕ вичерпний поштучний тест.
+- **🧭 Режим тестування (рішення власника 2026-06-26):** per-slice безпека = **автогейт (type-check+lint+test) + Playwright-smoke у фоні** на кожен пуш. **Комплексний наскрізний тест + точкові правки логіки/фронту — на milestone S8** (QA + перший клієнт), коли вертикалі цілісні (багато фіч backend-blocked → розблокуються потім). Презентацію/UX відкладаємо туди; **гроші · документи · нотифікації · схему/контракти доводимо рано** (дорого ретрофітити). На S8-проході вести [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md), щоб відрізняти «заглушка by design» від багу.
+- **➡️ S7 у роботі** (Landing + Blog + Chat-hub; [`TRACKER.md`](TRACKER.md) S7-01…07). **Зріз 1 ✅ — термінал-shell + Hero** (apps/landing, Next.js; ported `wf-tm-*` з design-v2, UA, light/dark, typewriter; гімікі-boot/sound/accent/CRT відкладено). **Далі по homepage:** Services → Cases → Process/Spotlight → About → Partners/Scale, потім /blog (S7-02, потребує BlogPost API) + /contact (S7-04, ContactForm API) + SEO/Lighthouse (S7-03).
 
 ### 🔍 Наскрізний design→build аудит (2026-06-24) — ДЖЕРЕЛО БЕКЛОГУ
 
@@ -51,6 +53,8 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. Збудовано: Чат · **Задачі** · Файли · Час. → per-order «Задачі» — **перехідна заглушка** (slice №4, бо глобальна дошка backend-blocked: нема агрегуючого `/workspace/tasks`); end-state = прибрати «Задачі» з замовлення, додати **Огляд/Специфікація/Документи** таби + збудувати глобальну «Дошку задач». **Фаза B.**
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **S7-01 зріз 1 — лендінг термінал-shell + Hero** (`apps/landing` Next.js): порт `wf-tm-*` дизайн-системи з `design-v2` (`terminal.css`), вікно-chrome (titlebar/nav/statusbar) + Hero (ASCII-кіт · prompt · typewriter-H1 · CTA · live-статус), UA, light/dark-тогл. Верифіковано preview (light+dark+desktop, гідрація чиста). Гейт 3/3.
 
 - **S5.6 фронт:** `/wallet`, `/loyalty`, `/finance`, `/admin-wallet`, `/payouts`, `/services`.
 - **Conformance-партія** (~11 екранів): токени чартів, таби в темній темі, картки клієнтів (реальні імена + тір), email-палітра (lime/stone).
