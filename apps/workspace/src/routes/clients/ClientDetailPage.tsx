@@ -9,8 +9,16 @@ import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
 import { useClientMargin } from '@/lib/margin'
+import { useClientRequisites } from '@/lib/requisites'
 import { isoDay } from '@/lib/finance'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
+
+const LEGAL_TYPE_LABEL: Record<string, string> = {
+  fop: 'ФОП',
+  tov: 'ТОВ',
+  individual: 'Фізособа',
+  foreign: 'Іноземна',
+}
 
 const TIER_LABEL: Record<LoyaltyTier, string> = {
   [LoyaltyTier.NEW]: 'Новий',
@@ -83,6 +91,7 @@ export function ClientDetailPage() {
 
       <LoyaltySection companyId={id} />
       <MarginSection companyId={id} />
+      <RequisitesSection companyId={id} />
 
       {orders.length === 0 ? (
         <EmptyState
@@ -394,6 +403,65 @@ function MarginSection({ companyId }: { companyId: string }) {
           → повний звіт маржі (період, за виконавцями)
         </Link>
       </div>
+    </Card>
+  )
+}
+
+/** Client legal requisites (06-Б, P-3) — the document "to" party. Read-only for the team
+ * (the client edits in Portal; agency edit-on-behalf is 28-Б). Managers are 403'd → hidden. */
+function RequisitesSection({ companyId }: { companyId: string }) {
+  const { isManager } = useAuth()
+  const { data, isLoading } = useClientRequisites(companyId, !isManager)
+  if (isManager) return null
+  if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
+  const r = data?.requisites
+  if (!r) return null
+
+  const rows: { k: string; v: string | null }[] = [
+    { k: 'Тип', v: r.legalType ? (LEGAL_TYPE_LABEL[r.legalType] ?? r.legalType) : null },
+    { k: 'Юр. назва', v: r.legalName },
+    { k: 'ЄДРПОУ/ІПН', v: r.taxId },
+    { k: 'ПДВ', v: r.vatPayer ? `Платник${r.vatId ? ` · ${r.vatId}` : ''}` : null },
+    { k: 'Юр. адреса', v: r.legalAddress },
+    { k: 'Банк', v: r.bankName },
+    { k: 'IBAN', v: r.iban },
+    {
+      k: 'Підписант',
+      v: r.signerName ? `${r.signerName}${r.signerTitle ? `, ${r.signerTitle}` : ''}` : null,
+    },
+    {
+      k: 'Email для документів',
+      v: r.documentEmail
+        ? `${r.documentEmail}${r.documentEmailCc ? ` (cc: ${r.documentEmailCc})` : ''}`
+        : null,
+    },
+  ].filter((row) => row.v)
+
+  return (
+    <Card
+      title="Реквізити"
+      style={{ marginBottom: 20 }}
+      aux={r.legalIsComplete ? '✓ повні' : 'неповні'}
+    >
+      {rows.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // клієнт ще не заповнив реквізити — документи виставити не можна
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {rows.map((row) => (
+            <div
+              key={row.k}
+              style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12, fontSize: 13 }}
+            >
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                {row.k}
+              </span>
+              <span>{row.v}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }
