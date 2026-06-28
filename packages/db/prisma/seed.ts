@@ -534,6 +534,79 @@ async function main() {
     console.log('✅ Bonus wallet credit seeded ($25)')
   }
 
+  // Blog posts (S7-02) — landing /blog reads these via the public content API. UA block content;
+  // EN mirrors UA until the i18n slice. Idempotent upsert by slug. Editing = deferred CMS (S7-05).
+  const blogPosts = [
+    {
+      slug: 'excel-to-crm-without-pain',
+      type: 'article' as const,
+      title: 'Як піти з Excel у власний портал — без болю',
+      excerpt:
+        'Excel тримає бізнес, поки не починає його гальмувати. Розбираємо, коли пора на власний інструмент і як перейти без зупинки роботи.',
+      tags: ['портали', 'процеси'],
+      featured: true,
+      content: [
+        { t: 'p', v: 'Excel — чудовий старт. Але коли в одній таблиці працює пів команди, починаються конфлікти версій, загублені рядки й «а хто це видалив?».' },
+        { t: 'h2', v: 'Коли пора' },
+        { t: 'ul', v: ['Більше 3 людей редагують одне й те саме щодня.', 'Дані дублюються між кількома файлами.', 'Звіти збираються руками понад годину.'] },
+        { t: 'h2', v: 'Як перейти без зупинки' },
+        { t: 'p', v: 'Не переписуємо все одразу. Беремо **один болючий процес**, виносимо його в портал, лишаємо Excel для решти — і мігруємо поступово.' },
+        { t: 'callout', k: 'порада', v: 'Перший реліз має закрити одну конкретну біль, а не «оцифрувати все». Так команда бачить користь за тиждень, а не за квартал.' },
+        { t: 'quote', v: 'За шість тижнів ми перейшли з ручної координації на повністю автоматичний цикл — і це вже не повернеться назад.', author: 'Olena B., COO Brunky' },
+      ],
+    },
+    {
+      slug: 'ai-agent-that-actually-works',
+      type: 'article' as const,
+      title: 'AI-агент, який реально працює, а не просто чатить',
+      excerpt:
+        'Різниця між демо-ботом і агентом, що закриває 90% звернень — у даних, гардах і метриках. Коротко про те, що відрізняє робоче рішення.',
+      tags: ['ai', 'агенти'],
+      featured: false,
+      content: [
+        { t: 'p', v: 'Більшість «AI-ботів» вражають на демо й розчаровують у проді: вони не знають ваших даних і впевнено вигадують.' },
+        { t: 'h2', v: 'Три складові робочого агента' },
+        { t: 'ul', v: ['RAG на вашій базі знань — відповіді з ваших документів, не з інтернету.', 'Гарди + ескалація до людини, коли впевненість низька.', 'Метрики: % автозакриття, точність, вартість токенів.'] },
+        { t: 'h2', v: 'Що міряти' },
+        { t: 'p', v: 'Без метрик агент — це віра. З метриками — це інструмент. Дивимось на auto-resolution rate і CSAT **до і після**.' },
+        { t: 'callout', k: 'факт', v: 'У кейсі Tably агент закрив 92% першої відповіді й підняв CSAT на 24% — за 4 тижні.' },
+      ],
+    },
+  ]
+  for (const p of blogPosts) {
+    await prisma.blogPost.upsert({
+      where: { slug: p.slug },
+      update: {
+        type: p.type,
+        titleUk: p.title,
+        titleEn: p.title,
+        excerptUk: p.excerpt,
+        excerptEn: p.excerpt,
+        contentUk: p.content,
+        contentEn: p.content,
+        tags: p.tags,
+        featured: p.featured,
+        published: true,
+      },
+      create: {
+        slug: p.slug,
+        type: p.type,
+        titleUk: p.title,
+        titleEn: p.title,
+        excerptUk: p.excerpt,
+        excerptEn: p.excerpt,
+        contentUk: p.content,
+        contentEn: p.content,
+        tags: p.tags,
+        authorId: owner.id,
+        featured: p.featured,
+        published: true,
+        publishedAt: new Date(),
+      },
+    })
+  }
+  console.log(`✅ Blog posts seeded (${blogPosts.length})`)
+
   console.log('🎉 Seed completed!')
   // Never print credentials outside local/dev (avoid leaking into CI/staging logs).
   if (process.env.NODE_ENV !== 'production') {
