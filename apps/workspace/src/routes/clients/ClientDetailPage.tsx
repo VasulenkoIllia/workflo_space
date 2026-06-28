@@ -10,6 +10,7 @@ import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
 import { useClientMargin } from '@/lib/margin'
 import { useClientRequisites } from '@/lib/requisites'
+import { useCompanyProjects } from '@/lib/projects'
 import { isoDay } from '@/lib/finance'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 
@@ -18,6 +19,18 @@ const LEGAL_TYPE_LABEL: Record<string, string> = {
   tov: 'ТОВ',
   individual: 'Фізособа',
   foreign: 'Іноземна',
+}
+
+const MODEL_LABEL: Record<string, string> = {
+  fixed_monthly_advance: 'Абонплата (аванс)',
+  hourly_prepaid: 'Погодинно (аванс)',
+  hourly_postpaid: 'Погодинно (факт)',
+}
+
+const CYCLE_LABEL: Record<string, string> = {
+  monthly_day_n: 'Щомісяця',
+  weekly_day_x: 'Щотижня',
+  manual: 'Вручну',
 }
 
 const TIER_LABEL: Record<LoyaltyTier, string> = {
@@ -89,6 +102,7 @@ export function ClientDetailPage() {
         </div>
       </div>
 
+      <ProjectsSection companyId={id} />
       <LoyaltySection companyId={id} />
       <MarginSection companyId={id} />
       <RequisitesSection companyId={id} />
@@ -460,6 +474,95 @@ function RequisitesSection({ companyId }: { companyId: string }) {
               <span>{row.v}</span>
             </div>
           ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Client's financial projects (05-ПРОЕКТИ / P-1). Internal team, manager-blocked → hidden.
+ * Read-only list here; full config (create/edit/close-cycle) lives on /projects/:id. */
+function ProjectsSection({ companyId }: { companyId: string }) {
+  const navigate = useNavigate()
+  const { isManager } = useAuth()
+  const { data, isLoading } = useCompanyProjects(companyId, !isManager)
+  if (isManager) return null
+  if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
+  const projects = data?.projects ?? []
+
+  return (
+    <Card
+      title="Проєкти"
+      style={{ marginBottom: 20 }}
+      aux={`${projects.length}`}
+      actions={
+        <Link to="/projects" className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
+          + проєкт
+        </Link>
+      }
+    >
+      {projects.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // у клієнта ще немає фін-проєктів
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {projects.map((p) => {
+            const amount =
+              p.billingModel === 'fixed_monthly_advance'
+                ? p.abonAmount
+                  ? `${Number(p.abonAmount)} ${p.currency}/міс`
+                  : '—'
+                : p.clientHourlyRate
+                  ? `${Number(p.clientHourlyRate)} ${p.currency}/год`
+                  : '—'
+            return (
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/projects/${p.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/projects/${p.id}`)
+                  }
+                }}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1.4fr 1.2fr auto',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 8px',
+                  borderBottom: '1px solid var(--wf-border)',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <span className="wfp-link" style={{ fontWeight: 500 }}>
+                    {p.name}
+                  </span>
+                  {!p.active && (
+                    <span
+                      className="wfp-mono"
+                      style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
+                    >
+                      (неактивний)
+                    </span>
+                  )}
+                </div>
+                <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  {MODEL_LABEL[p.billingModel] ?? p.billingModel}
+                </span>
+                <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
+                  {CYCLE_LABEL[p.billingCycle] ?? p.billingCycle}
+                </span>
+                <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
+                  {amount}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
     </Card>

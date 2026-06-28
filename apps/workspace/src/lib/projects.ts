@@ -42,6 +42,18 @@ export function useProjects() {
   })
 }
 
+/** Projects for one client (company) — backend filters by `companyId` query. */
+export function useCompanyProjects(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['projects', 'by-company', companyId],
+    queryFn: () =>
+      api.get<{ projects: FinProject[] }>(
+        `/workspace/projects?companyId=${encodeURIComponent(companyId)}`
+      ),
+    enabled: companyId !== '' && enabled,
+  })
+}
+
 export function useCompanies() {
   return useQuery({
     queryKey: ['companies'],
