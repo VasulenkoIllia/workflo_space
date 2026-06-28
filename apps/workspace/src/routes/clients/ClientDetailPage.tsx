@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { LoyaltyTier } from '@workflo/types'
-import { OrderInternalStatus } from '@workflo/types'
+import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
+import { useClientMargin } from '@/lib/margin'
+import { isoDay } from '@/lib/finance'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 
 const TIER_LABEL: Record<LoyaltyTier, string> = {
@@ -81,6 +82,7 @@ export function ClientDetailPage() {
       </div>
 
       <LoyaltySection companyId={id} />
+      <MarginSection companyId={id} />
 
       {orders.length === 0 ? (
         <EmptyState
@@ -298,6 +300,100 @@ function LoyaltyPanel({
           </div>
         </div>
       )}
+    </Card>
+  )
+}
+
+/** Year-to-date margin for the client (S5.6 P-9). Owner-only — the backend 403s
+ * everyone else. A compact roll-up; the full /margin screen has period controls + per-executor. */
+function MarginSection({ companyId }: { companyId: string }) {
+  const { isOwner } = useAuth()
+  const range = useMemo(() => {
+    const d = new Date()
+    return { from: `${d.getFullYear()}-01-01`, to: isoDay(d) }
+  }, [])
+  const { data, isLoading } = useClientMargin(isOwner ? companyId : '', range.from, range.to)
+  if (!isOwner) return null
+  if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
+  const m = data?.margin
+  if (!m) return null
+
+  const marginPct = Number(m.marginPct)
+  const marginTone = marginPct >= 0 ? 'var(--wf-accent)' : 'var(--wf-destructive)'
+
+  return (
+    <Card title="Маржа · з початку року (USD)" style={{ marginBottom: 20 }}>
+      <div className="wfp-stats">
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">дохід</div>
+          <div className="wfp-stat-v">{fmtUsd(m.revenueUsd)}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">собівартість</div>
+          <div className="wfp-stat-v">{fmtUsd(m.costUsd)}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">маржа</div>
+          <div className="wfp-stat-v" style={{ color: marginTone }}>
+            {fmtUsd(m.marginUsd)} · {marginPct.toFixed(0)}%
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">сплачено</div>
+          <div className="wfp-stat-v">{Number(m.paidPct).toFixed(0)}%</div>
+        </div>
+      </div>
+
+      {m.projects.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+          >
+            // ЗА ПРОЄКТАМИ
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {m.projects.map((p) => (
+              <div
+                key={p.projectId}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr auto',
+                  gap: 12,
+                  fontSize: 13,
+                  padding: '6px 0',
+                  borderBottom: '1px solid var(--wf-border)',
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.projectName}
+                </span>
+                <span className="wfp-mono" style={{ textAlign: 'right' }}>
+                  {fmtUsd(p.revenueUsd)}
+                </span>
+                <span className="wfp-mono" style={{ textAlign: 'right' }}>
+                  {fmtUsd(p.costUsd)}
+                </span>
+                <span
+                  className="wfp-mono"
+                  style={{
+                    textAlign: 'right',
+                    color: Number(p.marginPct) >= 0 ? 'var(--wf-accent)' : 'var(--wf-destructive)',
+                  }}
+                >
+                  {Number(p.marginPct).toFixed(0)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <Link to="/margin" className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
+          → повний звіт маржі (період, за виконавцями)
+        </Link>
+      </div>
     </Card>
   )
 }
