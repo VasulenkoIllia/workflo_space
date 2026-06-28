@@ -468,15 +468,15 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 
 ## SPRINT 7 — Landing + Blog + Chat-hub (ядро)
 
-| ID    | Задача                                                              | Модуль        | Статус |
-| ----- | ------------------------------------------------------------------- | ------------- | ------ |
-| S7-01 | Landing — Hero/проблеми/кейси/команда/стек/FAQ/CTA                  | [14-landing]  | ⬜     |
-| S7-02 | Landing — /blog /cases ISR + реальна BlogPost схема                 | [11-content]  | ⬜     |
-| S7-03 | Landing — UA+EN + SEO(metadata/sitemap/hreflang/OG) + Lighthouse≥90 | [14]          | ⬜     |
-| S7-04 | Landing — contact form → /api/contact (Turnstile/honeypot)          | [14-landing]  | ⬜     |
-| S7-05 | API — AI content generation (quota/sanitize) + Workspace /content   | [11]          | ⬜     |
-| S7-06 | Workspace — /messages + /inbox (chat-hub ядро)                      | [18-chat-hub] | ⬜     |
-| S7-07 | Deploy Sprint 7 → staging                                           | Infra         | 🚀     |
+| ID    | Задача                                                              | Модуль        | Статус                                                                     |
+| ----- | ------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------- |
+| S7-01 | Landing — Hero/проблеми/кейси/команда/стек/FAQ/CTA                  | [14-landing]  | ✅                                                                         |
+| S7-02 | Landing — /blog /cases ISR + реальна BlogPost схема                 | [11-content]  | ✅                                                                         |
+| S7-03 | Landing — UA+EN + SEO(metadata/sitemap/hreflang/OG) + Lighthouse≥90 | [14]          | 🔄 SEO✅(canonical/OG/sitemap/twitter); UA/EN+hreflang+Lighthouse лишились |
+| S7-04 | Landing — contact form → /api/contact (Turnstile/honeypot)          | [14-landing]  | ✅ (honeypot+rate-limit; Turnstile→пізніше)                                |
+| S7-05 | API — AI content generation (quota/sanitize) + Workspace /content   | [11]          | ⬜                                                                         |
+| S7-06 | Workspace — /messages + /inbox (chat-hub ядро)                      | [18-chat-hub] | ⬜                                                                         |
+| S7-07 | Deploy Sprint 7 → staging                                           | Infra         | 🚀                                                                         |
 
 ---
 

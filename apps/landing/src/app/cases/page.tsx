@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Кейси — workflo.space',
   description:
     'Реальні проєкти з реальними цифрами: інтеграції, AI-агенти, портали. Більшість — під NDA; тут публічні.',
+  alternates: { canonical: '/cases' },
 }
 
 function splitMetric(m: string): { v: string; l: string } {

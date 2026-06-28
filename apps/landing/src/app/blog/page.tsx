@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: 'Блог — workflo.space',
   description:
     'Нотатки про автоматизацію, AI-агентів та інтеграції — з реальних проєктів, без маркетингового шуму.',
+  alternates: { canonical: '/blog' },
 }
 
 export default async function BlogPage() {

@@ -6,6 +6,7 @@ import { SERVICES, SERVICES_INTRO } from '@/data/pages'
 export const metadata: Metadata = {
   title: 'Послуги — workflo.space',
   description: SERVICES_INTRO,
+  alternates: { canonical: '/services' },
 }
 
 export default function ServicesPage() {

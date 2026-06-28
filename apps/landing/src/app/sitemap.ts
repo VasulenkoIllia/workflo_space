@@ -1,13 +1,14 @@
 import type { MetadataRoute } from 'next'
+import { fetchBlogList } from '@/data/blog'
 import { SERVICES } from '@/data/pages'
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://workflo.space'
 
-/** Static + service routes. Blog posts are dynamic (DB) — added once the CMS/feed is wired;
- * for now the index is listed so crawlers discover published posts via it. */
-export default function sitemap(): MetadataRoute.Sitemap {
+/** Static + service + blog routes. Blog posts come from the public read API (S7-02);
+ * the fetcher fails soft to [] so the sitemap still builds when the API is unreachable. */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
-  const staticRoutes = ['', '/services', '/about', '/contact', '/blog'].map((path) => ({
+  const staticRoutes = ['', '/services', '/about', '/contact', '/blog', '/cases'].map((path) => ({
     url: `${SITE}${path}`,
     lastModified: now,
     changeFrequency: 'weekly' as const,
@@ -19,5 +20,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: 'monthly' as const,
     priority: 0.6,
   }))
-  return [...staticRoutes, ...serviceRoutes]
+  const { posts } = await fetchBlogList()
+  const blogRoutes = posts.map((p) => ({
+    url: `${SITE}/blog/${p.slug}`,
+    lastModified: p.date ? new Date(p.date) : now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.5,
+  }))
+  return [...staticRoutes, ...serviceRoutes, ...blogRoutes]
 }

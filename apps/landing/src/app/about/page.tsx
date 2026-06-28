@@ -5,6 +5,7 @@ import { ABOUT } from '@/data/pages'
 export const metadata: Metadata = {
   title: 'Про нас — workflo.space',
   description: ABOUT.intro,
+  alternates: { canonical: '/about' },
 }
 
 function Avatar({ initials, size = 44 }: { initials: string; size?: number }) {

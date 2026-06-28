@@ -11,9 +11,18 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const post = await fetchBlogPost(slug)
-  return post
-    ? { title: `${post.title} — workflo.space`, description: post.excerpt }
-    : { title: 'Стаття — workflo.space' }
+  if (!post) return { title: 'Стаття — workflo.space', alternates: { canonical: `/blog/${slug}` } }
+  return {
+    title: `${post.title} — workflo.space`,
+    description: post.excerpt,
+    alternates: { canonical: `/blog/${post.slug}` },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: 'article',
+      ...(post.date ? { publishedTime: post.date } : {}),
+    },
+  }
 }
 
 /** Inline **bold** → <strong>, no dangerouslySetInnerHTML. */

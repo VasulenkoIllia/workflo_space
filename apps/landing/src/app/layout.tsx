@@ -8,12 +8,20 @@ export const metadata: Metadata = {
   title: 'workflo.space — автоматизації для команд, що виросли з Excel',
   description:
     'Ілля з Луцька будує автоматизації для команд, що виросли з Excel. Telegram-боти, AI-агенти, інтеграції, кастомні CRM. 6 років у продуктовій розробці.',
+  alternates: { canonical: '/' },
   openGraph: {
     title: 'workflo.space — автоматизації для команд',
     description:
       'Будую Telegram-ботів, AI-агентів, внутрішні портали та інтеграції. Луцьк · Україна.',
     type: 'website',
     locale: 'uk_UA',
+    siteName: 'workflo.space',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'workflo.space — автоматизації для команд',
+    description:
+      'Будую Telegram-ботів, AI-агентів, внутрішні портали та інтеграції. Луцьк · Україна.',
   },
 }
 

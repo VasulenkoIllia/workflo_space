@@ -7,6 +7,7 @@ import { CONTACT_PAGE, type ContactChannel } from '@/data/pages'
 export const metadata: Metadata = {
   title: 'Контакт — workflo.space',
   description: CONTACT_PAGE.intro,
+  alternates: { canonical: '/contact' },
 }
 
 const ICON: Record<ContactChannel['kind'], ReactNode> = {

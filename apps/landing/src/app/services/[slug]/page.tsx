@@ -14,9 +14,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const s = serviceBySlug(slug)
-  return s
-    ? { title: `${s.name} — workflo.space`, description: s.summary }
-    : { title: 'Послуга — workflo.space' }
+  if (!s)
+    return { title: 'Послуга — workflo.space', alternates: { canonical: `/services/${slug}` } }
+  return {
+    title: `${s.name} — workflo.space`,
+    description: s.summary,
+    alternates: { canonical: `/services/${s.slug}` },
+    openGraph: { title: s.name, description: s.summary, type: 'website' },
+  }
 }
 
 export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
