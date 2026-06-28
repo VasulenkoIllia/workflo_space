@@ -4,6 +4,7 @@ import '@/styles/terminal.css'
 import '@/styles/pages.css'
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://workflo.space'),
   title: 'workflo.space — автоматизації для команд, що виросли з Excel',
   description:
     'Ілля з Луцька будує автоматизації для команд, що виросли з Excel. Telegram-боти, AI-агенти, інтеграції, кастомні CRM. 6 років у продуктовій розробці.',
