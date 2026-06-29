@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button, EmptyState, Icon, Input } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCreateTimeLog, useDeleteTimeLog, useTimeLogs, type TimeLog } from '@/lib/orderDetail'
+import { formatElapsed, useActiveTimer, useStartTimer, useStopTimer } from '@/lib/timer'
 import { formatDate } from '@/lib/format'
 
 /** YYYY-MM-DD for the date input default (local time). */
@@ -46,6 +47,8 @@ export function TimeTab({ orderId }: { orderId: string }) {
 
   return (
     <div style={{ padding: '14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <OrderTimerControl orderId={orderId} />
+
       <div className="wfp-wod-sec">
         <div className="wfp-wod-sec-h">// додати час</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -135,6 +138,79 @@ function TimeRow({
         >
           <Icon name="close" size={13} />
         </button>
+      )}
+    </div>
+  )
+}
+
+/** Prominent start/stop timer for this order (02-orders T2, фінд.#3 «помітність таймера»).
+ * Shows the live-ticking elapsed when this order's timer runs; starting auto-stops any other. */
+function OrderTimerControl({ orderId }: { orderId: string }) {
+  const { data: timer } = useActiveTimer()
+  const start = useStartTimer()
+  const stop = useStopTimer()
+  const [now, setNow] = useState(() => Date.now())
+
+  const runningHere = Boolean(timer?.startedAt && timer.orderId === orderId)
+  const runningElsewhere = Boolean(timer?.startedAt && timer.orderId !== orderId)
+
+  useEffect(() => {
+    if (!runningHere) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [runningHere])
+
+  return (
+    <div className="wfp-wod-sec">
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+      >
+        <div className="wfp-wod-sec-h" style={{ margin: 0 }}>
+          // таймер
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {runningHere && timer?.startedAt && (
+            <span className="wfp-mono" style={{ fontSize: 16, fontWeight: 600 }}>
+              {formatElapsed(timer.startedAt, now)}
+            </span>
+          )}
+          {runningHere ? (
+            <Button
+              variant="primary"
+              loading={stop.isPending}
+              onClick={() =>
+                stop.mutate(undefined, {
+                  onSuccess: (r) =>
+                    toast.success(r.timer ? `Час записано: ${r.timer.hours} год` : 'Зупинено'),
+                  onError: () => toast.error('Не вдалося зупинити таймер'),
+                })
+              }
+            >
+              Зупинити
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              loading={start.isPending}
+              onClick={() =>
+                start.mutate(orderId, {
+                  onSuccess: () => toast.success('Таймер запущено'),
+                  onError: () => toast.error('Не вдалося запустити таймер'),
+                })
+              }
+            >
+              Засікти час
+            </Button>
+          )}
+        </div>
+      </div>
+      {runningElsewhere && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 8 }}
+        >
+          // біжить інший таймер — старт зупинить його й запише час
+        </div>
       )}
     </div>
   )

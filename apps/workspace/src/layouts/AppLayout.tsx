@@ -11,6 +11,7 @@ import {
   type ThemeMode,
 } from '@workflo/ui'
 import { SidebarUserMenu } from '@/components/SidebarUserMenu'
+import { TimerBar } from '@/components/TimerBar'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -176,6 +177,7 @@ export function AppLayout() {
       }
     >
       <Outlet />
+      <TimerBar />
       <CommandPalette
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}
