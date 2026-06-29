@@ -31,6 +31,18 @@ export interface WsCharge {
   paidAt: string | null
 }
 
+/** Charges for one client (company) — backend filters by `companyId`. Internal-non-manager. */
+export function useCompanyCharges(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['ws-billing', 'charges', 'by-company', companyId],
+    queryFn: () =>
+      api.get<{ charges: WsCharge[] }>(
+        `/workspace/billing/charges?limit=100&companyId=${encodeURIComponent(companyId)}`
+      ),
+    enabled: companyId !== '' && enabled,
+  })
+}
+
 export function useBillingOverview(enabled = true) {
   return useQuery({
     queryKey: ['ws-billing', 'overview'],

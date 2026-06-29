@@ -11,6 +11,7 @@ import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@
 import { useClientMargin } from '@/lib/margin'
 import { useClientRequisites } from '@/lib/requisites'
 import { useCompanyProjects } from '@/lib/projects'
+import { type WsCharge, useCompanyCharges } from '@/lib/billing'
 import { isoDay } from '@/lib/finance'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 
@@ -107,6 +108,7 @@ export function ClientDetailPage() {
 
       {safeTab === 'overview' && (
         <>
+          <OverviewAttention companyId={id} />
           <div className="wfp-stats" style={{ marginBottom: 20 }}>
             <div className="wfp-stat">
               <div className="wfp-stat-k">усього замовлень</div>
@@ -199,6 +201,65 @@ export function ClientDetailPage() {
       )}
       {safeTab === 'requisites' && <RequisitesSection companyId={id} />}
     </div>
+  )
+}
+
+/** "Needs attention" strip for the Overview tab — overdue charges + drafts awaiting release,
+ * derived from the client's charges (internal-non-manager). Renders nothing when all clear. */
+function OverviewAttention({ companyId }: { companyId: string }) {
+  const { isManager } = useAuth()
+  const { data } = useCompanyCharges(companyId, !isManager)
+  if (isManager) return null
+  const charges = data?.charges ?? []
+  const now = Date.now()
+  const isOpen = (c: WsCharge) => c.status !== 'paid' && c.status !== 'written_off'
+  const overdue = charges.filter(
+    (c) => isOpen(c) && c.dueDate != null && new Date(c.dueDate).getTime() < now
+  )
+  const pending = charges.filter((c) => c.approvalStatus === 'pending')
+  if (overdue.length === 0 && pending.length === 0) return null
+
+  const overdueSum = overdue.reduce((s, c) => s + Number(c.totalAmount ?? c.amount), 0)
+  const cur = overdue[0]?.currency ?? ''
+
+  const dot = (color: string) => (
+    <span
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: 999,
+        background: color,
+        display: 'inline-block',
+        flexShrink: 0,
+      }}
+    />
+  )
+
+  return (
+    <Card title="Потребує уваги" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {overdue.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            {dot('var(--wf-destructive)')}
+            <span>
+              {overdue.length} прострочених рахунків · {overdueSum.toLocaleString('uk-UA')} {cur}
+            </span>
+            <Link to="/billing" className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
+              розглянути →
+            </Link>
+          </div>
+        )}
+        {pending.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            {dot('var(--wf-accent)')}
+            <span>{pending.length} нарахувань на погодженні (чернетки)</span>
+            <Link to="/billing" className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
+              черга →
+            </Link>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
 
