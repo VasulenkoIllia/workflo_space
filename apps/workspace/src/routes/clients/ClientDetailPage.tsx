@@ -10,7 +10,11 @@ import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
 import { useClientMembers } from '@/lib/clients'
 import { useClientMargin } from '@/lib/margin'
-import { useClientRequisites } from '@/lib/requisites'
+import {
+  type ClientRequisitesInput,
+  useClientRequisites,
+  useUpdateClientRequisites,
+} from '@/lib/requisites'
 import { useCompanyProjects } from '@/lib/projects'
 import { type WsCharge, useCompanyCharges } from '@/lib/billing'
 import {
@@ -666,15 +670,20 @@ function MarginSection({ companyId }: { companyId: string }) {
   )
 }
 
-/** Client legal requisites (06-Б, P-3) — the document "to" party. Read-only for the team
- * (the client edits in Portal; agency edit-on-behalf is 28-Б). Managers are 403'd → hidden. */
+/** Client legal requisites (06-Б, P-3) — the document "to" party. The team can edit on the
+ * client's behalf (28-Б, PATCH); the client also edits in Portal. Managers are 403'd → hidden. */
 function RequisitesSection({ companyId }: { companyId: string }) {
   const { isManager } = useAuth()
+  const [editing, setEditing] = useState(false)
   const { data, isLoading } = useClientRequisites(companyId, !isManager)
   if (isManager) return null
   if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
   const r = data?.requisites
   if (!r) return null
+
+  if (editing) {
+    return <RequisitesForm companyId={companyId} current={r} onDone={() => setEditing(false)} />
+  }
 
   const rows: { k: string; v: string | null }[] = [
     { k: 'Тип', v: r.legalType ? (LEGAL_TYPE_LABEL[r.legalType] ?? r.legalType) : null },
@@ -700,7 +709,27 @@ function RequisitesSection({ companyId }: { companyId: string }) {
     <Card
       title="Реквізити"
       style={{ marginBottom: 20 }}
-      aux={r.legalIsComplete ? '✓ повні' : 'неповні'}
+      actions={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span
+            className="wfp-mono"
+            style={{
+              fontSize: 11,
+              color: r.legalIsComplete ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+            }}
+          >
+            {r.legalIsComplete ? '✓ повні' : 'неповні'}
+          </span>
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 12 }}
+            onClick={() => setEditing(true)}
+          >
+            редагувати
+          </button>
+        </div>
+      }
     >
       {rows.length === 0 ? (
         <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
@@ -721,6 +750,137 @@ function RequisitesSection({ companyId }: { companyId: string }) {
           ))}
         </div>
       )}
+    </Card>
+  )
+}
+
+const reqInputStyle = {
+  background: 'var(--wf-surface)',
+  color: 'var(--wf-fg)',
+  border: '1px solid var(--wf-border)',
+  borderRadius: 'var(--wf-radius)',
+  padding: '8px 10px',
+  fontSize: 13,
+  width: '100%',
+} as const
+
+/** Agency edit-on-behalf of a client's requisites (28-Б, PATCH /workspace/clients/:id/requisites).
+ * Empty strings are sent as null; the server recomputes legalIsComplete + validates formats. */
+function RequisitesForm({
+  companyId,
+  current,
+  onDone,
+}: {
+  companyId: string
+  current: { [K in keyof ClientRequisitesInput]?: unknown } & { vatPayer: boolean }
+  onDone: () => void
+}) {
+  const update = useUpdateClientRequisites(companyId)
+  const [f, setF] = useState({
+    legalType: (current.legalType as string | null) ?? '',
+    legalName: (current.legalName as string | null) ?? '',
+    taxId: (current.taxId as string | null) ?? '',
+    vatPayer: current.vatPayer,
+    vatId: (current.vatId as string | null) ?? '',
+    legalAddress: (current.legalAddress as string | null) ?? '',
+    bankName: (current.bankName as string | null) ?? '',
+    iban: (current.iban as string | null) ?? '',
+    signerName: (current.signerName as string | null) ?? '',
+    signerTitle: (current.signerTitle as string | null) ?? '',
+    documentEmail: (current.documentEmail as string | null) ?? '',
+    documentEmailCc: (current.documentEmailCc as string | null) ?? '',
+  })
+  const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }))
+  const clean = (s: string): string | null => (s.trim() === '' ? null : s.trim())
+
+  const save = () =>
+    update.mutate(
+      {
+        legalType: clean(f.legalType),
+        legalName: clean(f.legalName),
+        taxId: clean(f.taxId),
+        vatPayer: f.vatPayer,
+        vatId: clean(f.vatId),
+        legalAddress: clean(f.legalAddress),
+        bankName: clean(f.bankName),
+        iban: clean(f.iban),
+        signerName: clean(f.signerName),
+        signerTitle: clean(f.signerTitle),
+        documentEmail: clean(f.documentEmail),
+        documentEmailCc: clean(f.documentEmailCc),
+      },
+      {
+        onSuccess: () => {
+          toast.success('Реквізити збережено')
+          onDone()
+        },
+        onError: () => toast.error('Не вдалося — перевірте формат ІПН/IBAN/email'),
+      }
+    )
+
+  const textField = (label: string, k: keyof typeof f) => (
+    <label style={{ display: 'grid', gap: 4 }}>
+      <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+        {label.toUpperCase()}
+      </span>
+      <input
+        value={f[k] as string}
+        onChange={(e) => set(k, e.target.value)}
+        style={reqInputStyle}
+      />
+    </label>
+  )
+
+  return (
+    <Card title="Реквізити · редагування" style={{ marginBottom: 20 }}>
+      <div
+        style={{
+          display: 'grid',
+          gap: 12,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        }}
+      >
+        <Select
+          label="Тип"
+          value={f.legalType}
+          onChange={(v) => set('legalType', v)}
+          options={[
+            { value: '', label: '—' },
+            { value: 'fop', label: 'ФОП' },
+            { value: 'tov', label: 'ТОВ' },
+            { value: 'individual', label: 'Фізособа' },
+            { value: 'foreign', label: 'Іноземна' },
+          ]}
+        />
+        {textField('Юр. назва', 'legalName')}
+        {textField('ЄДРПОУ/ІПН', 'taxId')}
+        {textField('Юр. адреса', 'legalAddress')}
+        {textField('Банк', 'bankName')}
+        {textField('IBAN', 'iban')}
+        {textField('Підписант', 'signerName')}
+        {textField('Посада підписанта', 'signerTitle')}
+        {textField('Email для документів', 'documentEmail')}
+        {textField('Email CC', 'documentEmailCc')}
+        {textField('ІПН ПДВ', 'vatId')}
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13 }}>
+        <input
+          type="checkbox"
+          checked={f.vatPayer}
+          onChange={(e) => set('vatPayer', e.target.checked)}
+        />
+        Платник ПДВ
+      </label>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <Button variant="primary" loading={update.isPending} onClick={save}>
+          Зберегти
+        </Button>
+        <Button variant="ghost" onClick={onDone}>
+          Скасувати
+        </Button>
+      </div>
     </Card>
   )
 }

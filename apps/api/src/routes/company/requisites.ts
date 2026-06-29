@@ -177,6 +177,36 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── Agency edits a client's requisites on behalf (28-Б) ───────────────────────
+  // Same fields/gate-recompute as the portal self-edit; here the agency team fills the
+  // client's legal data so documents can be issued. Manager-blocked (legal/PII), audited
+  // with onBehalf:true. Cross-tenant id → 404 via applyClientRequisites' agency check.
+  fastify.patch<{ Params: { id: string } }>(
+    '/workspace/clients/:id/requisites',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = updateClientRequisitesSchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      }
+      const requisites = await tenantTransaction(prisma, (tx) =>
+        applyClientRequisites(tx, { agencyId, companyId: request.params.id, input })
+      )
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'company.requisites_updated',
+        resourceType: 'company',
+        resourceId: request.params.id,
+        result: 'allowed',
+        metadata: { fields: Object.keys(input), onBehalf: true },
+      })
+      return reply.send({ success: true, data: { requisites } })
+    }
+  )
+
   return Promise.resolve()
 }
 
