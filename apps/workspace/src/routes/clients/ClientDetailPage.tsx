@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
-import { useClientMembers } from '@/lib/clients'
+import { useClientMembers, useRemoveClientMember, useUpdateClientMemberRole } from '@/lib/clients'
 import { useClientMargin } from '@/lib/margin'
 import {
   type ClientRequisitesInput,
@@ -363,14 +363,27 @@ const MEMBER_ROLE_LABEL: Record<string, string> = {
   billing: 'білінг',
 }
 
-/** «Люди» tab (28-Б): the client company's member roster. Internal-non-manager → hidden
- * for managers (the backend 403s them). Read-only; invites are managed in Portal by the client. */
+/** «Люди» tab (28-Б): the client company's member roster. Internal-non-manager → hidden for
+ * managers. The agency OWNER can change roles / remove members (last-owner-guarded on backend). */
 function PeopleSection({ companyId }: { companyId: string }) {
-  const { isManager } = useAuth()
+  const { isManager, isOwner } = useAuth()
   const { data, isLoading } = useClientMembers(companyId, !isManager)
+  const setRole = useUpdateClientMemberRole(companyId)
+  const remove = useRemoveClientMember(companyId)
   if (isManager) return null
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const members = data?.members ?? []
+
+  const changeRole = (profileId: string, role: 'owner' | 'member') =>
+    setRole.mutate({ profileId, role }, { onError: () => toast.error('Не вдалося змінити роль') })
+
+  const removeMember = (profileId: string, name: string) => {
+    if (!window.confirm(`Видалити ${name} з компанії клієнта?`)) return
+    remove.mutate(profileId, {
+      onSuccess: () => toast.success('Користувача видалено'),
+      onError: () => toast.error('Не вдалося — можливо, це останній власник'),
+    })
+  }
 
   return (
     <Card title="Люди" aux={`${members.length}`}>
@@ -385,7 +398,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
               key={m.profileId}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1.2fr',
+                gridTemplateColumns: isOwner ? '2fr 1.1fr 1fr auto' : '2fr 1fr 1.2fr',
                 alignItems: 'center',
                 gap: 12,
                 padding: '10px 8px',
@@ -411,12 +424,45 @@ function PeopleSection({ companyId }: { companyId: string }) {
                   </div>
                 </div>
               </div>
-              <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-                {MEMBER_ROLE_LABEL[m.role] ?? m.role}
-              </span>
+
+              {isOwner ? (
+                <select
+                  value={m.role}
+                  disabled={setRole.isPending}
+                  onChange={(e) => changeRole(m.profileId, e.target.value as 'owner' | 'member')}
+                  style={{
+                    background: 'var(--wf-surface)',
+                    color: 'var(--wf-fg)',
+                    border: '1px solid var(--wf-border)',
+                    borderRadius: 'var(--wf-radius)',
+                    padding: '4px 6px',
+                    fontSize: 12,
+                  }}
+                >
+                  <option value="owner">власник</option>
+                  <option value="member">учасник</option>
+                </select>
+              ) : (
+                <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  {MEMBER_ROLE_LABEL[m.role] ?? m.role}
+                </span>
+              )}
+
               <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
                 з {formatDate(m.joinedAt)}
               </span>
+
+              {isOwner && (
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
+                  disabled={remove.isPending}
+                  onClick={() => removeMember(m.profileId, m.name)}
+                >
+                  видалити
+                </button>
+              )}
             </div>
           ))}
         </div>

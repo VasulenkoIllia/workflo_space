@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { OrderInternalStatus } from '@workflo/types'
 import { api } from '@/lib/api'
 import { useOrders, type WorkspaceOrder } from './orders'
@@ -20,6 +20,26 @@ export function useClientMembers(companyId: string, enabled = true) {
     queryKey: ['client-members', companyId],
     queryFn: () => api.get<{ members: ClientMember[] }>(`/workspace/clients/${companyId}/members`),
     enabled: companyId !== '' && enabled,
+  })
+}
+
+/** PATCH role — agency owner only (28-Б). Backend refuses demoting the last owner (409). */
+export function useUpdateClientMemberRole(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, role }: { profileId: string; role: 'owner' | 'member' }) =>
+      api.patch(`/workspace/clients/${companyId}/members/${profileId}`, { role }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-members', companyId] }),
+  })
+}
+
+/** DELETE member — agency owner only. Backend refuses removing the last owner (409). */
+export function useRemoveClientMember(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      api.delete(`/workspace/clients/${companyId}/members/${profileId}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-members', companyId] }),
   })
 }
 
