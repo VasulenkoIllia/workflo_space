@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
-import { Button, Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
+import { Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
@@ -53,6 +53,8 @@ export function ClientDetailPage() {
   const firstId = orders[0]?.id ?? ''
   const { data: sample } = useOrder(firstId)
   const name = sample?.company?.name ?? `Клієнт · ${id.slice(0, 8)}`
+  const { isManager } = useAuth()
+  const [tab, setTab] = useState('overview')
 
   if (isLoading) return <Skeleton style={{ height: 280 }} />
   if (isError) {
@@ -72,6 +74,18 @@ export function ClientDetailPage() {
   ).length
   const totalValue = orders.reduce((s, o) => s + (o.totalAmount ?? 0), 0)
 
+  // Projects/Finance/Requisites are internal-non-manager on the backend → a manager sees
+  // only Огляд (the rest would 403). People/Документи/Секрети/Активність tabs from the
+  // design are backend-blocked (no per-client members/docs/vault/activity API yet) → omitted.
+  const ALL_TABS = [
+    { id: 'overview', label: 'Огляд' },
+    { id: 'projects', label: 'Проєкти' },
+    { id: 'finance', label: 'Фінанси' },
+    { id: 'requisites', label: 'Реквізити' },
+  ]
+  const visibleTabs = isManager ? ALL_TABS.filter((t) => t.id === 'overview') : ALL_TABS
+  const safeTab = visibleTabs.some((t) => t.id === tab) ? tab : 'overview'
+
   return (
     <div>
       <div className="wfp-ph">
@@ -87,91 +101,103 @@ export function ClientDetailPage() {
         </div>
       </div>
 
-      <div className="wfp-stats" style={{ marginBottom: 20 }}>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">усього замовлень</div>
-          <div className="wfp-stat-v">{orders.length}</div>
-        </div>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">активних</div>
-          <div className="wfp-stat-v wfp-stat-v--accent">{active}</div>
-        </div>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">сумарна вартість</div>
-          <div className="wfp-stat-v">{formatMoney(totalValue)}</div>
-        </div>
+      <div style={{ marginBottom: 20 }}>
+        <Tabs items={visibleTabs} value={safeTab} onChange={setTab} />
       </div>
 
-      <ProjectsSection companyId={id} />
-      <LoyaltySection companyId={id} />
-      <MarginSection companyId={id} />
-      <RequisitesSection companyId={id} />
+      {safeTab === 'overview' && (
+        <>
+          <div className="wfp-stats" style={{ marginBottom: 20 }}>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">усього замовлень</div>
+              <div className="wfp-stat-v">{orders.length}</div>
+            </div>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">активних</div>
+              <div className="wfp-stat-v wfp-stat-v--accent">{active}</div>
+            </div>
+            <div className="wfp-stat">
+              <div className="wfp-stat-k">сумарна вартість</div>
+              <div className="wfp-stat-v">{formatMoney(totalValue)}</div>
+            </div>
+          </div>
 
-      {orders.length === 0 ? (
-        <EmptyState
-          title="Немає замовлень"
-          description="У цього клієнта поки немає замовлень."
-          action={
-            <Link to="/clients">
-              <Button variant="secondary">← До клієнтів</Button>
-            </Link>
-          }
-        />
-      ) : (
-        <table className="wfp-table">
-          <thead>
-            <tr>
-              <th>№</th>
-              <th>Назва</th>
-              <th>Статус</th>
-              <th>Дедлайн</th>
-              <th className="wfp-num">Сума</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o) => {
-              const meta = o.internalStatus ? INTERNAL_STATUS_META[o.internalStatus] : null
-              const dl = deadlineMeta(o.dueDate)
-              return (
-                <tr
-                  key={o.id}
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/orders/${o.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      navigate(`/orders/${o.id}`)
-                    }
-                  }}
-                >
-                  <td className="wfp-mono">
-                    <span className="wfp-link">#{o.id.slice(0, 6)}</span>
-                  </td>
-                  <td>{o.title}</td>
-                  <td>
-                    {meta ? (
-                      <span className="wfp-order-status">
-                        <StatusDot tone={meta.tone} /> {meta.label}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td
-                    className="wfp-mono"
-                    style={{ color: dl.tone === 'over' ? 'var(--wf-destructive)' : undefined }}
-                  >
-                    {formatDate(o.dueDate)}
-                  </td>
-                  <td className="wfp-num">{formatMoney(o.totalAmount)}</td>
+          {orders.length === 0 ? (
+            <EmptyState
+              title="Немає замовлень"
+              description="У цього клієнта поки немає замовлень."
+              action={
+                <Link to="/clients">
+                  <Button variant="secondary">← До клієнтів</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <table className="wfp-table">
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>Назва</th>
+                  <th>Статус</th>
+                  <th>Дедлайн</th>
+                  <th className="wfp-num">Сума</th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {orders.map((o) => {
+                  const meta = o.internalStatus ? INTERNAL_STATUS_META[o.internalStatus] : null
+                  const dl = deadlineMeta(o.dueDate)
+                  return (
+                    <tr
+                      key={o.id}
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/orders/${o.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/orders/${o.id}`)
+                        }
+                      }}
+                    >
+                      <td className="wfp-mono">
+                        <span className="wfp-link">#{o.id.slice(0, 6)}</span>
+                      </td>
+                      <td>{o.title}</td>
+                      <td>
+                        {meta ? (
+                          <span className="wfp-order-status">
+                            <StatusDot tone={meta.tone} /> {meta.label}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td
+                        className="wfp-mono"
+                        style={{ color: dl.tone === 'over' ? 'var(--wf-destructive)' : undefined }}
+                      >
+                        {formatDate(o.dueDate)}
+                      </td>
+                      <td className="wfp-num">{formatMoney(o.totalAmount)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
+
+      {safeTab === 'projects' && <ProjectsSection companyId={id} />}
+      {safeTab === 'finance' && (
+        <>
+          <LoyaltySection companyId={id} />
+          <MarginSection companyId={id} />
+        </>
+      )}
+      {safeTab === 'requisites' && <RequisitesSection companyId={id} />}
     </div>
   )
 }
