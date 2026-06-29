@@ -51,6 +51,24 @@ export const DOC_STATUS_BADGE: Record<DocumentStatus, string> = {
   sent: 'partial',
 }
 
+/** A client document with its originating order (28-Б client card «Документи» tab). */
+export interface ClientDocument extends OrderDocument {
+  order: { id: string; title: string } | null
+}
+
+/** GET /workspace/clients/:id/documents — all of a client's documents across orders.
+ * Internal-non-manager on the backend → gate the query with `enabled`. */
+export function useClientDocuments(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['client-documents', companyId],
+    queryFn: () =>
+      api
+        .get<{ documents: ClientDocument[] }>(`/workspace/clients/${companyId}/documents`)
+        .then((r) => r.documents),
+    enabled: companyId !== '' && enabled,
+  })
+}
+
 export function useOrderDocuments(orderId: string) {
   return useQuery({
     queryKey: ['order-documents', orderId],

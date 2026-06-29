@@ -8,6 +8,8 @@ import {
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { requireActiveAgency } from '../../auth/tenant.js'
+import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 
@@ -212,6 +214,30 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
         }
         throw err
       }
+    }
+  )
+
+  // ── List ALL documents of a client (across orders) — team document overview ──
+  // The client card 360° "Документи" tab (28-Б). Document carries companyId directly, so this
+  // is a flat company-scoped read. Internal team, manager-blocked (financial/legal artefacts,
+  // like requisites/finance). A cross-tenant id returns [] (agencyId filter + RLS), no leak.
+  fastify.get<{ Params: { id: string } }>(
+    '/workspace/clients/:id/documents',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      }
+      const documents = await withTenant((tx) =>
+        tx.document.findMany({
+          where: { companyId: request.params.id, agencyId },
+          orderBy: { generatedAt: 'desc' },
+          select: { ...DOC_SELECT, order: { select: { id: true, title: true } } },
+        })
+      )
+      return reply.send({ success: true, data: { documents } })
     }
   )
 

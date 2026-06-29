@@ -64,6 +64,15 @@ const CLIENT = {
   agencyMemberships: [] as Array<{ agencyId: string; role: 'owner' | 'executor' }>,
   memberships: [{ companyId: COMPANY, role: 'owner' as const }],
 }
+const MANAGER = {
+  sub: 'manager-1',
+  email: 'm@e.com',
+  role: 'executor' as const,
+  activeAgencyId: AGENCY,
+  activeCompanyId: null,
+  agencyMemberships: [{ agencyId: AGENCY, role: 'manager' as const }],
+  memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
+}
 // Same tenant, but belongs to a different company than the order → must not see it.
 const OTHER_CLIENT = {
   ...CLIENT,
@@ -267,6 +276,64 @@ describe('GET /orders/:orderId/documents/:docId/pdf', () => {
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toContain('text/html')
     expect(res.headers['x-document-format']).toBe('html-fallback')
+    await app.close()
+  })
+})
+
+describe('GET /workspace/clients/:id/documents — client document overview', () => {
+  it('lists the client documents scoped to {companyId, agencyId} for an owner', async () => {
+    db.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        type: 'invoice',
+        number: 'INV-2026-000001',
+        status: 'sent',
+        order: { id: ORDER, title: 'Site' },
+      },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/workspace/clients/${COMPANY}/documents`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.documents).toHaveLength(1)
+    expect(db.document.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY, agencyId: AGENCY } })
+    )
+    await app.close()
+  })
+
+  it('a client cannot read the team document overview (403)', async () => {
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/workspace/clients/${COMPANY}/documents`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(db.document.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a manager is blocked (financial/legal artefacts) — 403', async () => {
+    const { app, token } = await authed(MANAGER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/workspace/clients/${COMPANY}/documents`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(db.document.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('returns 401 without a token', async () => {
+    const { app } = await authed(OWNER)
+    const res = await app.inject({ method: 'GET', url: `/workspace/clients/${COMPANY}/documents` })
+    expect(res.statusCode).toBe(401)
+    expect(db.document.findMany).not.toHaveBeenCalled()
     await app.close()
   })
 })

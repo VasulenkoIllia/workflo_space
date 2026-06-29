@@ -12,6 +12,13 @@ import { useClientMargin } from '@/lib/margin'
 import { useClientRequisites } from '@/lib/requisites'
 import { useCompanyProjects } from '@/lib/projects'
 import { type WsCharge, useCompanyCharges } from '@/lib/billing'
+import {
+  type ClientDocument,
+  DOC_STATUS_LABEL,
+  DOC_TYPE_LABEL,
+  openDocumentPdf,
+  useClientDocuments,
+} from '@/lib/documents'
 import { isoDay } from '@/lib/finance'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 
@@ -82,6 +89,7 @@ export function ClientDetailPage() {
     { id: 'overview', label: 'Огляд' },
     { id: 'projects', label: 'Проєкти' },
     { id: 'finance', label: 'Фінанси' },
+    { id: 'docs', label: 'Документи' },
     { id: 'requisites', label: 'Реквізити' },
   ]
   const visibleTabs = isManager ? ALL_TABS.filter((t) => t.id === 'overview') : ALL_TABS
@@ -199,8 +207,87 @@ export function ClientDetailPage() {
           <MarginSection companyId={id} />
         </>
       )}
+      {safeTab === 'docs' && <DocumentsSection companyId={id} />}
       {safeTab === 'requisites' && <RequisitesSection companyId={id} />}
     </div>
+  )
+}
+
+const DOC_STATUS_COLOR: Record<string, string> = {
+  draft: 'var(--wf-fg-muted)',
+  generated: 'var(--wf-fg-subtle)',
+  sent: 'var(--wf-accent)',
+}
+
+/** Документи tab (28-Б): all of the client's documents across orders. Internal-non-manager
+ * (backend 403s managers → hidden). PDF opens via the Bearer-authed blob fetch. */
+function DocumentsSection({ companyId }: { companyId: string }) {
+  const { isManager } = useAuth()
+  const { data: docs, isLoading } = useClientDocuments(companyId, !isManager)
+  if (isManager) return null
+  if (isLoading) return <Skeleton style={{ height: 120 }} />
+  const documents = docs ?? []
+
+  const open = (d: ClientDocument) => {
+    if (!d.order) return
+    openDocumentPdf(d.order.id, d).catch(() => toast.error('Не вдалося відкрити документ'))
+  }
+
+  return (
+    <Card title="Документи" aux={`${documents.length}`}>
+      {documents.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // ще немає документів — генеруються з замовлення
+        </div>
+      ) : (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>№</th>
+              <th>Тип</th>
+              <th>Замовлення</th>
+              <th>Статус</th>
+              <th>Дата</th>
+              <th className="wfp-num">PDF</th>
+            </tr>
+          </thead>
+          <tbody>
+            {documents.map((d) => (
+              <tr key={d.id}>
+                <td className="wfp-mono">{d.number}</td>
+                <td>{DOC_TYPE_LABEL[d.type]}</td>
+                <td>
+                  {d.order ? (
+                    <Link to={`/orders/${d.order.id}`} className="wfp-link">
+                      {d.order.title}
+                    </Link>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td>
+                  <span style={{ color: DOC_STATUS_COLOR[d.status], fontSize: 13 }}>
+                    {DOC_STATUS_LABEL[d.status]}
+                  </span>
+                </td>
+                <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  {formatDate(d.generatedAt)}
+                </td>
+                <td className="wfp-num">
+                  {d.order ? (
+                    <button className="wfp-link" type="button" onClick={() => open(d)}>
+                      відкрити
+                    </button>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   )
 }
 
