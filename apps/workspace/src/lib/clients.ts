@@ -1,7 +1,27 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { OrderInternalStatus } from '@workflo/types'
+import { api } from '@/lib/api'
 import { useOrders, type WorkspaceOrder } from './orders'
 import { useCompanies } from './projects'
+
+/** GET /workspace/clients/:id/members — client (company) member roster (28-Б «Люди»).
+ * Internal-non-manager on the backend → gate the query with `enabled`. */
+export interface ClientMember {
+  profileId: string
+  name: string
+  email: string
+  role: string
+  joinedAt: string
+}
+
+export function useClientMembers(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['client-members', companyId],
+    queryFn: () => api.get<{ members: ClientMember[] }>(`/workspace/clients/${companyId}/members`),
+    enabled: companyId !== '' && enabled,
+  })
+}
 
 /**
  * Client (company) row: the agency's company registry (GET /workspace/companies —

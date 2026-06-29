@@ -112,6 +112,47 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── Agency reads a client's member roster (28-Б «Люди» tab) ───────────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/workspace/clients/:id/members',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      }
+      const members = await withTenant(async (tx) => {
+        const company = await tx.company.findFirst({
+          where: { id: request.params.id, agencyId },
+          select: { id: true },
+        })
+        if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+        return tx.companyMember.findMany({
+          where: { companyId: company.id },
+          select: {
+            role: true,
+            joinedAt: true,
+            profile: { select: { id: true, name: true, email: true } },
+          },
+          orderBy: { joinedAt: 'asc' },
+        })
+      })
+      return reply.send({
+        success: true,
+        data: {
+          members: members.map((m) => ({
+            profileId: m.profile.id,
+            name: m.profile.name,
+            email: m.profile.email,
+            role: m.role,
+            joinedAt: m.joinedAt,
+          })),
+        },
+      })
+    }
+  )
+
   // ── Agency reads a client's requisites (document readiness) ───────────────────
   fastify.get<{ Params: { id: string } }>(
     '/workspace/clients/:id/requisites',

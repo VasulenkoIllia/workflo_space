@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
-import { Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import { Avatar, Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
+import { useClientMembers } from '@/lib/clients'
 import { useClientMargin } from '@/lib/margin'
 import { useClientRequisites } from '@/lib/requisites'
 import { useCompanyProjects } from '@/lib/projects'
@@ -87,6 +88,7 @@ export function ClientDetailPage() {
   // design are backend-blocked (no per-client members/docs/vault/activity API yet) → omitted.
   const ALL_TABS = [
     { id: 'overview', label: 'Огляд' },
+    { id: 'people', label: 'Люди' },
     { id: 'projects', label: 'Проєкти' },
     { id: 'finance', label: 'Фінанси' },
     { id: 'docs', label: 'Документи' },
@@ -200,6 +202,7 @@ export function ClientDetailPage() {
         </>
       )}
 
+      {safeTab === 'people' && <PeopleSection companyId={id} />}
       {safeTab === 'projects' && <ProjectsSection companyId={id} />}
       {safeTab === 'finance' && (
         <>
@@ -346,6 +349,74 @@ function OverviewAttention({ companyId }: { companyId: string }) {
           </div>
         )}
       </div>
+    </Card>
+  )
+}
+
+const MEMBER_ROLE_LABEL: Record<string, string> = {
+  owner: 'власник',
+  member: 'учасник',
+  billing: 'білінг',
+}
+
+/** «Люди» tab (28-Б): the client company's member roster. Internal-non-manager → hidden
+ * for managers (the backend 403s them). Read-only; invites are managed in Portal by the client. */
+function PeopleSection({ companyId }: { companyId: string }) {
+  const { isManager } = useAuth()
+  const { data, isLoading } = useClientMembers(companyId, !isManager)
+  if (isManager) return null
+  if (isLoading) return <Skeleton style={{ height: 120 }} />
+  const members = data?.members ?? []
+
+  return (
+    <Card title="Люди" aux={`${members.length}`}>
+      {members.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // у компанії клієнта ще немає користувачів
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {members.map((m) => (
+            <div
+              key={m.profileId}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr 1.2fr',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 8px',
+                borderBottom: '1px solid var(--wf-border)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <Avatar name={m.name} size={28} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {m.name}
+                  </div>
+                  <div
+                    className="wfp-mono"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--wf-fg-muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {m.email}
+                  </div>
+                </div>
+              </div>
+              <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                {MEMBER_ROLE_LABEL[m.role] ?? m.role}
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
+                з {formatDate(m.joinedAt)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }
