@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button, Card, EmptyState, Skeleton } from '@workflo/ui'
-import { formatMoney } from '@/lib/format'
+import { useAuth } from '@/contexts/AuthContext'
+import { type WsCharge, useCompanyCharges } from '@/lib/billing'
+import { formatDate, formatMoney } from '@/lib/format'
 import { useClientMargin } from '@/lib/margin'
 import { useLegalEntities } from '@/lib/legalEntities'
 import {
@@ -313,6 +315,8 @@ export function ProjectDetailPage() {
         {p.billingCycle === 'manual' && <CloseCycleCard id={p.id} />}
       </div>
 
+      <ProjectChargesCard project={p} />
+
       {editing && (
         <ProjectModal
           project={p}
@@ -321,5 +325,78 @@ export function ProjectDetailPage() {
         />
       )}
     </div>
+  )
+}
+
+const CHARGE_STATUS: Record<string, { label: string; color: string }> = {
+  awaiting: { label: 'очікує', color: 'var(--wf-fg-muted)' },
+  partial: { label: 'частково', color: 'var(--wf-accent)' },
+  paid: { label: 'оплачено', color: 'var(--wf-success)' },
+  overdue: { label: 'прострочено', color: 'var(--wf-destructive)' },
+  written_off: { label: 'списано', color: 'var(--wf-fg-subtle)' },
+}
+
+/** Charges generated for this project (recurring cron / manual close). Filtered client-side
+ * from the company's charges by projectId — internal-non-manager (hidden for managers). */
+function ProjectChargesCard({ project }: { project: FinProject }) {
+  const { isManager } = useAuth()
+  const { data, isLoading } = useCompanyCharges(project.companyId, !isManager)
+  if (isManager) return null
+
+  const charges = (data?.charges ?? []).filter((c) => c.projectId === project.id)
+
+  return (
+    <Card title="Нарахування" aux={`${charges.length}`} style={{ marginTop: 18 }}>
+      {isLoading ? (
+        <Skeleton style={{ height: 80 }} />
+      ) : charges.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // ще немає нарахувань за цим проєктом
+        </div>
+      ) : (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Період</th>
+              <th>Тип</th>
+              <th>Статус</th>
+              <th>Строк</th>
+              <th className="wfp-num">Сума</th>
+            </tr>
+          </thead>
+          <tbody>
+            {charges.map((c: WsCharge) => {
+              const st = CHARGE_STATUS[c.status] ?? { label: c.status, color: 'var(--wf-fg-muted)' }
+              const draft = c.approvalStatus === 'pending'
+              return (
+                <tr key={c.id}>
+                  <td className="wfp-mono">{c.month}</td>
+                  <td className="wfp-mono" style={{ fontSize: 12 }}>
+                    {c.kind ?? '—'}
+                  </td>
+                  <td>
+                    <span style={{ color: st.color, fontSize: 13 }}>{st.label}</span>
+                    {draft && (
+                      <span
+                        className="wfp-mono"
+                        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 6 }}
+                      >
+                        (чернетка)
+                      </span>
+                    )}
+                  </td>
+                  <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                    {c.dueDate ? formatDate(c.dueDate) : '—'}
+                  </td>
+                  <td className="wfp-num">
+                    {formatMoney(Number(c.totalAmount ?? c.amount))} {c.currency}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </Card>
   )
 }
