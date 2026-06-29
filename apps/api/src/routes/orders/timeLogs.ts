@@ -85,7 +85,12 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
       await requireTeamOrder(request, request.params.orderId)
       const rows = await withTenant((tx) =>
         tx.timeLog.findMany({
-          where: { orderId: request.params.orderId },
+          // Exclude a currently-running timer (startedAt set, endedAt null) — it surfaces in
+          // the timer bar, not the logged-time list. Manual logs + stopped timers stay.
+          where: {
+            orderId: request.params.orderId,
+            OR: [{ startedAt: null }, { endedAt: { not: null } }],
+          },
           orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
           select: TIMELOG_SELECT,
         })

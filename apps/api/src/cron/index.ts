@@ -4,6 +4,7 @@ import { startIdempotencyKeySweepCron, stopIdempotencyKeySweepCron } from './ide
 import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 import { startRefreshTokenSweepCron, stopRefreshTokenSweepCron } from './refreshTokenSweep.js'
+import { startTimerAutoStopCron, stopTimerAutoStopCron } from './timerAutoStop.js'
 
 /**
  * Scheduled background jobs (Sprint 5+). They run wherever the workers run —
@@ -19,6 +20,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startLoyaltyRecalcCron(logger)
   startRefreshTokenSweepCron(logger)
   startIdempotencyKeySweepCron(logger)
+  startTimerAutoStopCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -27,4 +29,5 @@ export function stopCronJobs(): void {
   stopLoyaltyRecalcCron()
   stopRefreshTokenSweepCron()
   stopIdempotencyKeySweepCron()
+  stopTimerAutoStopCron()
 }

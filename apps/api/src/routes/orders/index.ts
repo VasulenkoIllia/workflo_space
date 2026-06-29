@@ -12,6 +12,7 @@ import internalTasksRoute from './internalTasks.js'
 import listOrdersRoute from './listOrders.js'
 import submitOrderApprovalRoute from './submitOrderApproval.js'
 import timeLogsRoute from './timeLogs.js'
+import timerRoute from './timer.js'
 import transitionOrderStatusRoute from './transitionOrderStatus.js'
 import updateOrderRoute from './updateOrder.js'
 
@@ -31,6 +32,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(commentsRoute)
   await fastify.register(commentsStreamRoute)
   await fastify.register(timeLogsRoute)
+  await fastify.register(timerRoute)
   await fastify.register(activityRoute)
 }
 

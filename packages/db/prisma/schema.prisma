@@ -355,28 +355,35 @@ model InternalTask {
 }
 
 model TimeLog {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   agencyId           String
   orderId            String
-  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   executorId         String
-  executor           Profile  @relation(fields: [executorId], references: [id])
-  hours              Decimal  @db.Decimal(5, 2)
+  executor           Profile   @relation(fields: [executorId], references: [id])
+  hours              Decimal   @db.Decimal(5, 2)
   comment            String?
-  date               DateTime @db.Date
+  date               DateTime  @db.Date
+  // 02-orders T2 (фінд.#7): таймерна модель поверх ручного hours. startedAt set + endedAt null
+  // = таймер біжить (1 активний на виконавця — серіалізується advisory-lock у сервісі, НЕ БД-
+  // констрейнтом, щоб не ламати drift-gate). Обидва null = звичайний ручний запис (back-compat).
+  startedAt          DateTime? @db.Timestamptz(3)
+  endedAt            DateTime? @db.Timestamptz(3)
   // П5/П7 (P-5): снапшот резолвнутих ставок у МОМЕНТ логування — стабільна історія
   // маржі при зміні ставок. costRateUsd — собівартість години в USD за курсом на дату.
-  clientRateSnapshot Decimal? @db.Decimal(10, 2) // дохід/год (Project.clientHourlyRate; 0 для zeroBilled)
-  costRateSnapshot   Decimal? @db.Decimal(10, 2) // собівартість/год (каскад §2.3)
+  clientRateSnapshot Decimal?  @db.Decimal(10, 2) // дохід/год (Project.clientHourlyRate; 0 для zeroBilled)
+  costRateSnapshot   Decimal?  @db.Decimal(10, 2) // собівартість/год (каскад §2.3)
   costCurrency       String? // валюта costRateSnapshot
-  costRateUsd        Decimal? @db.Decimal(10, 2) // собівартість/год у USD (курс на дату, П7)
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  agency             Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  costRateUsd        Decimal?  @db.Decimal(10, 2) // собівартість/год у USD (курс на дату, П7)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  agency             Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId])
   @@index([executorId])
   @@index([date])
+  // active-timer lookup: the running row per executor (endedAt IS NULL)
+  @@index([executorId, endedAt])
   @@map("time_logs")
 }
 
