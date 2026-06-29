@@ -53,6 +53,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             updatedAt: true,
             company: { select: { id: true, name: true } },
             assignee: { select: { id: true, name: true } },
+            project: { select: { id: true, name: true, billingModel: true } },
             stages: {
               select: { id: true, title: true, description: true, status: true, position: true },
               orderBy: { position: 'asc' },
@@ -108,6 +109,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             cancelledReason: order.cancelledReason,
             company: order.company,
             assignee: order.assignee,
+            project: order.project,
           },
         },
       })

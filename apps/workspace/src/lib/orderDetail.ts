@@ -44,6 +44,7 @@ export interface WorkspaceOrderDetail {
   updatedAt: string
   company?: { id: string; name: string } | null
   assignee?: { id: string; name: string } | null
+  project?: { id: string; name: string; billingModel: string } | null
   stages: OrderStage[]
 }
 

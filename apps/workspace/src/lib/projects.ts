@@ -42,6 +42,37 @@ export function useProjects() {
   })
 }
 
+/** Project estimate (02-Б, P-6): spec lines + reconciliation vs the subscription hour cap. */
+export interface EstimateLine {
+  id: string
+  serviceId: string | null
+  name: string
+  hours: string
+  amount: string | null
+  orderId: string | null
+  position: number
+}
+export interface EstimateSummary {
+  lines: EstimateLine[]
+  totalHours: string
+  includedHoursCap: string | null
+  withinCap: boolean
+  remainingHours: string | null
+}
+
+/** GET /workspace/projects/:id/estimate-lines — the project's spec. Internal-non-manager
+ * + billing module on the backend → gate the query with `enabled`. */
+export function useProjectEstimate(projectId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['project-estimate', projectId],
+    queryFn: () =>
+      api
+        .get<{ estimate: EstimateSummary }>(`/workspace/projects/${projectId}/estimate-lines`)
+        .then((r) => r.estimate),
+    enabled: !!projectId && enabled,
+  })
+}
+
 /** Projects for one client (company) — backend filters by `companyId` query. */
 export function useCompanyProjects(companyId: string, enabled = true) {
   return useQuery({

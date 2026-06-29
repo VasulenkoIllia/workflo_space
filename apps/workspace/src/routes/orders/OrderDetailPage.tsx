@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
+import { useProjectEstimate } from '@/lib/projects'
 import {
   useActivity,
   useCommentStream,
@@ -105,14 +107,16 @@ export function OrderDetailPage() {
             onChange={setTab}
             items={[
               { id: 'chat', label: 'Чат' },
-              { id: 'files', label: 'Файли' },
               { id: 'time', label: 'Час' },
+              { id: 'spec', label: 'Специфікація' },
+              { id: 'files', label: 'Файли' },
               { id: 'docs', label: 'Документи' },
             ]}
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
-          {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'time' && <TimeTab orderId={order.id} />}
+          {tab === 'spec' && <SpecTab project={order.project} />}
+          {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'docs' && <DocumentsTab orderId={order.id} />}
         </div>
 
@@ -124,6 +128,16 @@ export function OrderDetailPage() {
                   <div className="wfp-side-k">компанія</div>
                   <div className="wfp-side-v">{order.company.name}</div>
                 </div>
+                {order.project && (
+                  <div className="wfp-side-row">
+                    <div className="wfp-side-k">проєкт</div>
+                    <div className="wfp-side-v">
+                      <Link to={`/projects/${order.project.id}`} className="wfp-link">
+                        {order.project.name}
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -190,6 +204,91 @@ export function OrderDetailPage() {
         </aside>
       </div>
     </div>
+  )
+}
+
+/** Специфікація tab (02-Б, P-6): the order's project estimate — spec lines + reconciliation
+ * vs the subscription hour cap. Estimate lives at the project level (internal-non-manager). */
+function SpecTab({ project }: { project?: WorkspaceOrderDetail['project'] }) {
+  const { isManager } = useAuth()
+  const { data: est, isLoading, isError } = useProjectEstimate(project?.id, !isManager)
+
+  if (!project) {
+    return (
+      <EmptyState
+        title="Без проєкту"
+        description="Замовлення не привʼязане до фін-проєкту — специфікація ведеться на рівні проєкту."
+      />
+    )
+  }
+  if (isManager) {
+    return (
+      <EmptyState
+        title="Немає доступу"
+        description="Специфікація доступна власнику та виконавцям."
+      />
+    )
+  }
+  if (isLoading) return <Skeleton style={{ height: 160 }} />
+  if (isError || !est) {
+    return (
+      <EmptyState title="Не вдалося завантажити специфікацію" description="Спробуйте оновити." />
+    )
+  }
+
+  return (
+    <Card
+      title="Специфікація"
+      aux={`${est.totalHours} год`}
+      actions={
+        <Link to={`/projects/${project.id}`} className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
+          проєкт →
+        </Link>
+      }
+    >
+      {est.includedHoursCap != null && (
+        <div
+          className="wfp-mono"
+          style={{
+            fontSize: 12,
+            marginBottom: 12,
+            color: est.withinCap ? 'var(--wf-fg-muted)' : 'var(--wf-destructive)',
+          }}
+        >
+          {est.totalHours} / {est.includedHoursCap} год включено
+          {est.remainingHours != null &&
+            (est.withinCap
+              ? ` · залишок ${est.remainingHours}`
+              : ` · перевищення ${est.remainingHours.replace('-', '')}`)}
+        </div>
+      )}
+      {est.lines.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // специфікацію ще не складено — додайте рядки на екрані проєкту
+        </div>
+      ) : (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Послуга</th>
+              <th className="wfp-num">Години</th>
+              <th className="wfp-num">Сума</th>
+            </tr>
+          </thead>
+          <tbody>
+            {est.lines.map((l) => (
+              <tr key={l.id}>
+                <td>{l.name}</td>
+                <td className="wfp-num">{Number(l.hours)}</td>
+                <td className="wfp-num">
+                  {l.amount != null ? formatMoney(Number(l.amount)) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   )
 }
 
