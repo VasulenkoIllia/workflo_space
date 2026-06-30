@@ -6,6 +6,9 @@ import {
   updateInternalTaskSchema,
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { z } from 'zod'
+import { requireActiveAgency } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
 
@@ -43,7 +46,51 @@ async function loadTaskOfOrder(taskId: string, orderId: string) {
   return task
 }
 
+const BOARD_SELECT = {
+  id: true,
+  title: true,
+  status: true,
+  assigneeId: true,
+  position: true,
+  updatedAt: true,
+  order: { select: { id: true, title: true } },
+  assignee: { select: { id: true, name: true } },
+} as const
+
+const boardQuerySchema = z.object({
+  assigneeId: z.string().min(1).optional(),
+  status: z.enum(['todo', 'in_progress', 'done']).optional(),
+})
+
 const internalTasksRoute: FastifyPluginAsync = (fastify) => {
+  // ── Global task board (02-Е / workspace-board.jsx, фінд.#8) — all tasks across the
+  // agency's orders. Internal team (DnD moves reuse the per-order PATCH, which the board
+  // calls with each task's own orderId). Optional assignee/status filters. ──────────────
+  fastify.get(
+    '/workspace/tasks',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isInternalTeam(user)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
+      }
+      const q = boardQuerySchema.parse(request.query)
+      const tasks = await withTenant((tx) =>
+        tx.internalTask.findMany({
+          where: {
+            agencyId,
+            ...(q.assigneeId ? { assigneeId: q.assigneeId } : {}),
+            ...(q.status ? { status: q.status } : {}),
+          },
+          orderBy: [{ status: 'asc' }, { position: 'asc' }, { updatedAt: 'desc' }],
+          select: BOARD_SELECT,
+        })
+      )
+      return reply.send({ success: true, data: { tasks } })
+    }
+  )
+
   fastify.get<{ Params: { orderId: string } }>(
     '/orders/:orderId/tasks',
     { preHandler: [fastify.authenticate] },

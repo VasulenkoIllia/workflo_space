@@ -24,6 +24,7 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
 
   { group: 'Робота', roles: 'om' },
   { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },
+  { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
 
   { group: 'Клієнти', roles: 'om' },
   {

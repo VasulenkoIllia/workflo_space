@@ -22,6 +22,43 @@ export function useOrderTasks(orderId: string) {
   })
 }
 
+/** A task on the global board (фінд.#8) — carries its order + assignee for cross-order context. */
+export interface BoardTask {
+  id: string
+  title: string
+  status: TaskStatus
+  assigneeId: string | null
+  position: number
+  order: { id: string; title: string }
+  assignee: { id: string; name: string } | null
+}
+
+/** GET /workspace/tasks — all agency tasks across orders. Internal team. */
+export function useAllTasks(filters: { assigneeId?: string; status?: TaskStatus } = {}) {
+  const qs = new URLSearchParams()
+  if (filters.assigneeId) qs.set('assigneeId', filters.assigneeId)
+  if (filters.status) qs.set('status', filters.status)
+  const suffix = qs.toString()
+  return useQuery({
+    queryKey: ['ws-tasks', filters.assigneeId ?? '', filters.status ?? ''],
+    queryFn: () => api.get<{ tasks: BoardTask[] }>(`/workspace/tasks${suffix ? `?${suffix}` : ''}`),
+  })
+}
+
+/** Move a board task to another column. Reuses the per-order PATCH (the board knows each
+ * task's orderId), then refreshes the board. */
+export function useMoveBoardTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, id, status }: { orderId: string; id: string; status: TaskStatus }) =>
+      api.patch<{ task: OrderTask }>(`/orders/${orderId}/tasks/${id}`, { status }),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
+      void qc.invalidateQueries({ queryKey: key(vars.orderId) })
+    },
+  })
+}
+
 export function useCreateTask(orderId: string) {
   const qc = useQueryClient()
   return useMutation({
