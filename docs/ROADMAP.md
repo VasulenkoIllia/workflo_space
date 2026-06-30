@@ -55,6 +55,8 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Reports — план-факт годин (19/12-ПЛАН-ФАКТ).** Природне продовження T2 (таймер дає реальні години). Бек: `services/hoursReport.ts` (`computeHoursReport` — за період: оцінка `Order.estimatedHours` vs факт Σ`TimeLog` по замовленнях + Σ по виконавцях + variance; running-таймери виключено) + owner-only `GET /workspace/reports/hours(.csv)` (6 тестів `hoursReport.test.ts`). Фронт: nav «Звіти» (owner) + `ReportsPage` (`/reports`) — період (YTD), стати план/факт/відхилення, таблиці по замовленнях (variance кольором) + по виконавцях, Експорт CSV. Гейт: type-check 23·lint 14·build 14·test (api **543** unit + 151 gated). Coverage 19 «план-факт» MISS→🟢IMPL. _(RISK: план = оцінка замовлення, не capacity-норма×тижні — той рівень потребує поля capacity.)_
+
 - **Харден T2 — real-PG інтеграційний тест** (`apps/api/tests/integration/timer.test.ts`, gated `RUN_DB_TESTS=1`, 3 кейси, **прогнано на throwaway PG16**): доводить те, що mock не може — `pg_advisory_xact_lock` серіалізує **20 конкурентних стартів → рівно 1 running** (19 авто-стоплені, total=20); stop фіналізує + другий stop = no-op; auto-stop капить >8год timer рівно на 8год і прибирає з running. Закріплює найризикованіше зі збудованого без нового продуктового рішення. Гейт: type-check 23·lint 14·build 14·test (api 537 unit + **151** gated).
 
 - **Портал «Немає активної компанії» (фінд.#4)** — route-рівень `CompanyGate` огортає company-scoped портал-маршрути → грейсфул empty-state замість 400. _(деталі у «Знахідки» #4)_
