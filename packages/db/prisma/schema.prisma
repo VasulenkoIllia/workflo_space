@@ -387,6 +387,35 @@ model TimeLog {
   @@map("time_logs")
 }
 
+// Lead/CRM (module 26). Tenant-scoped (RLS via agencyId). Plain-String FKs (assignee/company/
+// convertedOrder) per project convention (no back-relations); set companyId+convertedOrderId on
+// convert→order. Pipeline stage = LeadStatus enum (fixed-stage MVP).
+model Lead {
+  id               String     @id @default(uuid())
+  agencyId         String
+  name             String // client/company or deal name
+  contactName      String?
+  email            String?
+  phone            String?
+  source           String? // free: 'website'|'referral'|'telegram'|... (like Project.type)
+  status           LeadStatus @default(new)
+  estimatedValue   Decimal?   @db.Decimal(12, 2)
+  currency         String     @default("USD")
+  notes            String?
+  assigneeId       String? // Profile (no relation, convention)
+  companyId        String? // set on convert
+  convertedOrderId String? // set on convert
+  lostReason       String?
+  position         Int        @default(0)
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  agency           Agency     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId])
+  @@index([agencyId, status])
+  @@map("leads")
+}
+
 model Service {
   id              String   @id @default(uuid())
   agencyId        String?
@@ -933,6 +962,7 @@ model Agency {
   projects             Project[] // 05-ПРОЕКТИ (S5.6 P-1)
   estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
+  leads                Lead[] // 26 (CRM)
 
   @@index([planId])
   @@map("agencies")
@@ -1104,6 +1134,16 @@ enum InternalTaskStatus {
   todo
   in_progress
   done
+}
+
+// Leads/CRM pipeline (module 26). Fixed stages MVP; custom per-agency pipelines = later.
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  proposal
+  won
+  lost
 }
 
 enum ChargeStatus {

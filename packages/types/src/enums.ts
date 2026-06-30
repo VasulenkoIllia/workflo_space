@@ -115,6 +115,16 @@ export enum InternalTaskStatus {
   DONE = 'done',
 }
 
+/** Leads/CRM pipeline stage (module 26). */
+export enum LeadStatus {
+  NEW = 'new',
+  CONTACTED = 'contacted',
+  QUALIFIED = 'qualified',
+  PROPOSAL = 'proposal',
+  WON = 'won',
+  LOST = 'lost',
+}
+
 // ─── Billing ────────────────────────────────────────────────────────────────
 export enum BillingType {
   FIXED = 'fixed',

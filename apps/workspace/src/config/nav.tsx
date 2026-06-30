@@ -34,6 +34,7 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     href: '/clients',
     roles: 'om',
   },
+  { id: 'leads', label: 'Ліди', icon: <Icon name="users" />, href: '/leads', roles: 'om' },
 
   { group: 'Фінанси', roles: 'o' },
   { id: 'billing', label: 'Рахунки', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },

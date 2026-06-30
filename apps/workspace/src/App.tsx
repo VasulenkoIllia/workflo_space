@@ -21,6 +21,7 @@ import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
+import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
 import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
 import { ServicesPage } from '@/routes/services/ServicesPage'
 import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
@@ -75,6 +76,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner', 'manager', 'executor']}>
               <TaskBoardPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/leads"
+          element={
+            <RoleRoute allow={['owner', 'manager']}>
+              <LeadBoardPage />
             </RoleRoute>
           }
         />
