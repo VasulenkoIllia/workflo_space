@@ -12,6 +12,7 @@ const db = {
   },
   company: { findFirst: vi.fn() },
   order: { create: vi.fn() },
+  $executeRaw: vi.fn().mockResolvedValue(1),
 }
 
 vi.mock('@workflo/db', () => ({
@@ -193,6 +194,20 @@ describe('PATCH /workspace/leads/:id', () => {
       payload: {},
     })
     expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('refuses to set status=won directly — won only via convert (400)', async () => {
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/workspace/leads/lead-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'won' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(db.lead.findFirst).not.toHaveBeenCalled()
+    expect(db.lead.update).not.toHaveBeenCalled()
     await app.close()
   })
 })

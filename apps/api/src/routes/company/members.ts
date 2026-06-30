@@ -60,6 +60,9 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
           select: { id: true },
         })
         if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+        // Serialize concurrent role/remove ops on this company's members so the last-owner
+        // count→write guard can't be raced into an owner-less (orphaned) company (audit MEDIUM).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`companyMembers:${companyId}`}))`
 
         const current = await tx.companyMember.findUnique({
           where: MEMBER_KEY(companyId, profileId),
@@ -123,6 +126,9 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
           select: { id: true },
         })
         if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+        // Serialize concurrent role/remove ops on this company's members so the last-owner
+        // count→write guard can't be raced into an owner-less (orphaned) company (audit MEDIUM).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`companyMembers:${companyId}`}))`
 
         const current = await tx.companyMember.findUnique({
           where: MEMBER_KEY(companyId, profileId),

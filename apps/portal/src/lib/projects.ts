@@ -14,6 +14,7 @@ export interface ClientProject {
   includedHoursCap: string | null
   paymentTermsDays: number | null
   active: boolean
+  createdAt: string
 }
 
 export function usePortalProjects() {

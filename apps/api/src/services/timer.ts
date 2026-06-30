@@ -33,7 +33,13 @@ export function elapsedHours(startedAt: Date, endedAt: Date): number {
   return Math.max(0, Math.min(MAX_DECIMAL_HOURS, h))
 }
 
-const dateOnly = (d: Date): Date => new Date(d.toISOString().slice(0, 10))
+/** The business-day a moment falls on. Uses the agency business timezone (Kyiv — consistent
+ * with the NBU/currency cron and UA-only product) so a timer started 00:00–03:00 local isn't
+ * mis-dated to the previous UTC day. Stored as UTC-midnight of that day, matching the manual
+ * time-log convention (`new Date('YYYY-MM-DD')`). Per-agency TZ is future (SaaS). */
+const BUSINESS_TZ = 'Europe/Kyiv'
+const dateOnly = (d: Date): Date =>
+  new Date(new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ }).format(d))
 
 /** Serialize start/stop for one executor so concurrent calls can't double-run. */
 async function lockExecutor(tx: Prisma.TransactionClient, executorId: string): Promise<void> {
@@ -141,10 +147,13 @@ export async function autoStopStaleTimers(
   const cutoff = new Date(args.now.getTime() - maxHours * 3_600_000)
   const stale = await tx.timeLog.findMany({
     where: { startedAt: { not: null, lt: cutoff }, endedAt: null },
-    select: { id: true, startedAt: true },
+    select: { id: true, startedAt: true, executorId: true },
   })
   for (const t of stale) {
     if (!t.startedAt) continue
+    // Take the same per-executor lock start/stop use, so the sweep can't race a user-initiated
+    // stop/start on this executor's row (last-writer-wins on endedAt/hours).
+    await lockExecutor(tx, t.executorId)
     const endedAt = new Date(t.startedAt.getTime() + maxHours * 3_600_000)
     await finalize(tx, t.id, t.startedAt, endedAt, `авто-стоп: таймер ${maxHours} год`)
   }

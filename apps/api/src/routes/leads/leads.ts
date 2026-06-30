@@ -148,6 +148,15 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const agencyId = assertTeam(request.user)
       const input = updateSchema.parse(request.body)
+      // «won» is an outcome of conversion (which creates the linked Order), never a free stage
+      // move — otherwise a drag-to-won leaves status=won with no order/company (audit HIGH).
+      if (input.status === LeadStatus.WON) {
+        throw new AppError(
+          ApiErrorCode.VALIDATION_ERROR,
+          'Лід стає «виграно» лише через конвертацію в замовлення',
+          400
+        )
+      }
       const lead = await withTenant(async (tx) => {
         const existing = await tx.lead.findFirst({
           where: { id: request.params.id, agencyId },
@@ -183,6 +192,9 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
       const agencyId = assertTeam(request.user)
       const input = convertSchema.parse(request.body)
       const result = await tenantTransaction(prisma, async (tx) => {
+        // Serialize concurrent converts of the same lead (double-click / retry) so the
+        // idempotency check can't be raced into two orphaned Orders (audit MEDIUM).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`lead:${request.params.id}`}))`
         const lead = await tx.lead.findFirst({
           where: { id: request.params.id, agencyId },
           select: { id: true, name: true, convertedOrderId: true },

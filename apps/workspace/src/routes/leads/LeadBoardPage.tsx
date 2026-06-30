@@ -38,6 +38,12 @@ export function LeadBoardPage() {
   const drop = (status: LeadStatus, lead: Lead) => {
     setOver(null)
     if (lead.status === status) return
+    // «Виграно» means converting to an order (creates the linked Order) — route the drop through
+    // the convert modal instead of a bare status PATCH (which the backend rejects anyway).
+    if (status === 'won') {
+      if (!lead.convertedOrderId) setConverting(lead)
+      return
+    }
     update.mutate(
       { id: lead.id, status },
       { onError: () => toast.error('Не вдалося перемістити лід') }

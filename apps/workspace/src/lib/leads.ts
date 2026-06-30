@@ -50,10 +50,26 @@ export function useCreateLead() {
   })
 }
 
+/** Fields the update endpoint accepts (mirrors the backend .strict() schema; no `won` here —
+ * that goes through convert). estimatedValue is sent as a number. */
+export interface LeadUpdateInput {
+  id: string
+  name?: string
+  contactName?: string | null
+  email?: string | null
+  phone?: string | null
+  source?: string | null
+  status?: Exclude<LeadStatus, 'won'>
+  estimatedValue?: number | null
+  notes?: string | null
+  assigneeId?: string | null
+  lostReason?: string | null
+}
+
 export function useUpdateLead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...body }: Partial<Lead> & { id: string }) =>
+    mutationFn: ({ id, ...body }: LeadUpdateInput) =>
       api.patch<{ lead: Lead }>(`/workspace/leads/${id}`, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-leads'] }),
   })

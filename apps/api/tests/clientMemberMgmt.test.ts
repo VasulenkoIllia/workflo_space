@@ -6,6 +6,7 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 const db = {
   company: { findFirst: vi.fn() },
   companyMember: { findUnique: vi.fn(), count: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  $executeRaw: vi.fn().mockResolvedValue(1),
 }
 
 vi.mock('@workflo/db', () => ({
