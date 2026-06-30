@@ -10,6 +10,15 @@ import { type Prisma } from '@workflo/db'
 
 const ROUND2 = (n: number): number => Math.round(n * 100) / 100
 
+/** Fallback weekly capacity when a member has no explicit norm set (AgencyMember.weeklyCapacityHours). */
+export const DEFAULT_WEEKLY_CAPACITY = 40
+
+/** Inclusive whole-day span of the window expressed in weeks (≥ small positive). */
+function windowWeeks(from: string, to: string): number {
+  const days = (new Date(to).getTime() - new Date(from).getTime()) / 86_400_000 + 1
+  return Math.max(days, 1) / 7
+}
+
 export interface HoursReportOrderRow {
   orderId: string
   title: string
@@ -24,6 +33,10 @@ export interface HoursReportExecutorRow {
   executorId: string
   name: string
   loggedHours: number
+  /** capacity norm for the window: (weeklyCapacityHours ?? default) × weeks. */
+  capacityHours: number
+  /** loggedHours / capacityHours × 100 (null when capacity is 0). */
+  utilizationPct: number | null
 }
 
 export interface HoursReport {
@@ -95,6 +108,8 @@ export async function computeHoursReport(
         executorId: r.executorId,
         name: r.executor?.name ?? '—',
         loggedHours: ROUND2(h),
+        capacityHours: 0,
+        utilizationPct: null,
       })
     }
   }
@@ -108,7 +123,26 @@ export async function computeHoursReport(
     return o
   })
   byOrder.sort((a, b) => b.loggedHours - a.loggedHours)
-  const byExecutor = [...execs.values()].sort((a, b) => b.loggedHours - a.loggedHours)
+
+  // Capacity utilization: норма (weeklyCapacityHours ?? default) × weeks-in-window.
+  const weeks = windowWeeks(from, to)
+  const members = await tx.agencyMember.findMany({
+    where: { agencyId },
+    select: { profileId: true, weeklyCapacityHours: true },
+  })
+  const capByProfile = new Map(members.map((m) => [m.profileId, m.weeklyCapacityHours]))
+  const byExecutor = [...execs.values()]
+    .map((e) => {
+      const weekly = capByProfile.get(e.executorId) ?? DEFAULT_WEEKLY_CAPACITY
+      const capacityHours = ROUND2(weekly * weeks)
+      return {
+        ...e,
+        capacityHours,
+        utilizationPct:
+          capacityHours > 0 ? Math.round((e.loggedHours / capacityHours) * 100) : null,
+      }
+    })
+    .sort((a, b) => b.loggedHours - a.loggedHours)
 
   return {
     from,
@@ -142,7 +176,8 @@ export function hoursReportToCsv(r: HoursReport): string {
   lines.push(
     ['РАЗОМ', '', r.totals.estimatedHours, r.totals.loggedHours, r.totals.variance].join(',')
   )
-  lines.push('', 'Виконавець,Факт (год)')
-  for (const e of r.byExecutor) lines.push([esc(e.name), e.loggedHours].join(','))
+  lines.push('', 'Виконавець,Факт (год),Норма (год),Завантаження (%)')
+  for (const e of r.byExecutor)
+    lines.push([esc(e.name), e.loggedHours, e.capacityHours, e.utilizationPct ?? ''].join(','))
   return lines.join('\n')
 }

@@ -170,6 +170,8 @@ export function ReportsPage() {
                   <tr>
                     <th>Виконавець</th>
                     <th className="wfp-num">Факт</th>
+                    <th className="wfp-num">Норма</th>
+                    <th className="wfp-num">Завантаження</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -177,6 +179,22 @@ export function ReportsPage() {
                     <tr key={e.executorId}>
                       <td>{e.name}</td>
                       <td className="wfp-num">{e.loggedHours} год</td>
+                      <td className="wfp-num" style={{ color: 'var(--wf-fg-muted)' }}>
+                        {Math.round(e.capacityHours)} год
+                      </td>
+                      <td
+                        className="wfp-num"
+                        style={{
+                          color:
+                            e.utilizationPct == null
+                              ? 'var(--wf-fg-muted)'
+                              : e.utilizationPct > 100
+                                ? 'var(--wf-destructive)'
+                                : 'var(--wf-accent)',
+                        }}
+                      >
+                        {e.utilizationPct == null ? '—' : `${e.utilizationPct}%`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

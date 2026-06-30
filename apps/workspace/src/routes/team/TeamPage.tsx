@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { useTeam, type TeamMember } from '@/lib/payouts'
+import { useSetCapacity, useTeam, type TeamMember } from '@/lib/payouts'
 import { formatDate } from '@/lib/format'
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/
@@ -17,6 +18,7 @@ const ROLE_LABEL: Record<string, string> = {
 /** Owner — agency team: invite executors + roster with roles, join dates and (owner-only) rates. */
 export function TeamPage() {
   const [email, setEmail] = useState('')
+  const { isOwner } = useAuth()
   const { data, isLoading } = useTeam()
   const members = data?.members ?? []
 
@@ -75,7 +77,7 @@ export function TeamPage() {
         ) : (
           <div style={{ display: 'grid', gap: 2 }}>
             {members.map((m) => (
-              <MemberRow key={m.profileId} member={m} />
+              <MemberRow key={m.profileId} member={m} canEdit={isOwner} />
             ))}
           </div>
         )}
@@ -84,13 +86,34 @@ export function TeamPage() {
   )
 }
 
-function MemberRow({ member }: { member: TeamMember }) {
+function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }) {
   const rate = member.rate
+  const setCapacity = useSetCapacity()
+  const [cap, setCap] = useState(member.weeklyCapacityHours?.toString() ?? '')
+
+  const saveCapacity = () => {
+    const trimmed = cap.trim()
+    const next = trimmed === '' ? null : Number(trimmed)
+    if (next === (member.weeklyCapacityHours ?? null)) return
+    if (next != null && (!Number.isFinite(next) || next < 0 || next > 168)) {
+      toast.error('Норма: 0–168 год/тиж')
+      setCap(member.weeklyCapacityHours?.toString() ?? '')
+      return
+    }
+    setCapacity.mutate(
+      { profileId: member.profileId, weeklyCapacityHours: next },
+      {
+        onSuccess: () => toast.success('Норму збережено'),
+        onError: () => toast.error('Не вдалося зберегти норму'),
+      }
+    )
+  }
+
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '2fr 1fr 1.4fr auto',
+        gridTemplateColumns: '2fr 1fr 1.2fr 1.1fr auto',
         alignItems: 'center',
         gap: 12,
         padding: '10px 8px',
@@ -122,6 +145,37 @@ function MemberRow({ member }: { member: TeamMember }) {
       <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
         з {formatDate(member.joinedAt)}
       </span>
+      {canEdit ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            onBlur={saveCapacity}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+            inputMode="numeric"
+            placeholder="40"
+            title="Норма годин/тиждень"
+            style={{
+              width: 48,
+              background: 'var(--wf-surface)',
+              color: 'var(--wf-fg)',
+              border: '1px solid var(--wf-border)',
+              borderRadius: 'var(--wf-radius)',
+              padding: '4px 6px',
+              fontSize: 12,
+            }}
+          />
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            год/тиж
+          </span>
+        </span>
+      ) : (
+        <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
+          {member.weeklyCapacityHours != null ? `${member.weeklyCapacityHours} год/тиж` : '—'}
+        </span>
+      )}
       <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
         {rate
           ? `${rate.monthlySalary ? `${Number(rate.monthlySalary)} ${rate.currency}/міс` : '—'}${

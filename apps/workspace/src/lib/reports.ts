@@ -14,6 +14,8 @@ export interface HoursReportExecutorRow {
   executorId: string
   name: string
   loggedHours: number
+  capacityHours: number
+  utilizationPct: number | null
 }
 export interface HoursReport {
   from: string

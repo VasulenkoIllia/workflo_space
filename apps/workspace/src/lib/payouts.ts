@@ -33,6 +33,8 @@ export interface TeamMember {
   name: string
   email: string
   joinedAt: string
+  /** weekly capacity norm (12-ПЛАН-ФАКТ); null → agency default in the hours report. */
+  weeklyCapacityHours: number | null
   rate: TeamRate | null
 }
 
@@ -82,6 +84,21 @@ export function useSetRate() {
   return useMutation({
     mutationFn: ({ executorId, ...body }: RateInput) =>
       api.post(`/workspace/executors/${executorId}/rates`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
+  })
+}
+
+/** PATCH a member's weekly capacity norm (owner-only, 12-ПЛАН-ФАКТ). */
+export function useSetCapacity() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      weeklyCapacityHours,
+    }: {
+      profileId: string
+      weeklyCapacityHours: number | null
+    }) => api.patch(`/workspace/executors/${profileId}/capacity`, { weeklyCapacityHours }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
   })
 }

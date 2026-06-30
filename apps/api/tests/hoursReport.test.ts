@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
-const db = { timeLog: { findMany: vi.fn() } }
+const db = { timeLog: { findMany: vi.fn() }, agencyMember: { findMany: vi.fn() } }
 
 vi.mock('@workflo/db', () => ({
   prisma: db,
@@ -65,12 +65,17 @@ async function authed(claims: unknown) {
   return { app, token: app.jwt.sign(claims as object) }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  db.agencyMember.findMany.mockResolvedValue([]) // default: every member on the default norm
+})
 afterEach(() => vi.clearAllMocks())
 
 describe('computeHoursReport — aggregation', () => {
   it('rolls up logged vs estimate per order + per executor with variance', async () => {
     db.timeLog.findMany.mockResolvedValue(ROWS)
+    // e1 has an explicit 20h/week norm; e2 falls back to the default (40h/week).
+    db.agencyMember.findMany.mockResolvedValue([{ profileId: 'e1', weeklyCapacityHours: 20 }])
     const r = await computeHoursReport(db as never, {
       agencyId: AGENCY,
       from: '2026-06-01',
@@ -98,8 +103,16 @@ describe('computeHoursReport — aggregation', () => {
     const o2 = r.byOrder.find((o) => o.orderId === 'o2')!
     expect(o2).toMatchObject({ loggedHours: 2, estimatedHours: null, variance: null })
 
-    expect(r.byExecutor.find((e) => e.executorId === 'e1')!.loggedHours).toBe(5)
-    expect(r.byExecutor.find((e) => e.executorId === 'e2')!.loggedHours).toBe(4)
+    const e1 = r.byExecutor.find((e) => e.executorId === 'e1')!
+    const e2 = r.byExecutor.find((e) => e.executorId === 'e2')!
+    expect(e1.loggedHours).toBe(5)
+    expect(e2.loggedHours).toBe(4)
+    // capacity = norm × weeks (window 06-01..06-30 inclusive = 30 days = 30/7 weeks)
+    const weeks = 30 / 7
+    expect(e1.capacityHours).toBeCloseTo(20 * weeks, 1) // explicit 20h/week
+    expect(e2.capacityHours).toBeCloseTo(40 * weeks, 1) // default 40h/week
+    expect(e1.utilizationPct).toBe(Math.round((5 / (20 * weeks)) * 100))
+    expect(e2.utilizationPct).toBe(Math.round((4 / (40 * weeks)) * 100))
     // only o1 contributes an estimate
     expect(r.totals).toEqual({ estimatedHours: 10, loggedHours: 9, variance: -1 })
   })
@@ -118,12 +131,20 @@ describe('computeHoursReport — aggregation', () => {
           variance: -3,
         },
       ],
-      byExecutor: [{ executorId: 'e1', name: 'Іван', loggedHours: 5 }],
+      byExecutor: [
+        {
+          executorId: 'e1',
+          name: 'Іван',
+          loggedHours: 5,
+          capacityHours: 171.43,
+          utilizationPct: 3,
+        },
+      ],
       totals: { estimatedHours: 10, loggedHours: 7, variance: -3 },
     })
     expect(csv).toContain('Замовлення,Проєкт,Оцінка (год),Факт (год),Відхилення (год)')
-    expect(csv).toContain('Виконавець,Факт (год)')
-    expect(csv).toContain('"Іван",5')
+    expect(csv).toContain('Виконавець,Факт (год),Норма (год),Завантаження (%)')
+    expect(csv).toContain('"Іван",5,171.43,3')
   })
 })
 

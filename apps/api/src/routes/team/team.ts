@@ -1,8 +1,14 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+import { writeAuditAsync } from '../../services/audit.js'
+
+const capacitySchema = z.object({
+  weeklyCapacityHours: z.number().int().min(0).max(168).nullable(),
+})
 
 /**
  * GET /workspace/team (S5-04) — agency members with their profile and current
@@ -26,6 +32,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             profileId: true,
             role: true,
             createdAt: true,
+            weeklyCapacityHours: true,
             profile: { select: { name: true, email: true } },
           },
           orderBy: { createdAt: 'asc' },
@@ -56,6 +63,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             name: m.profile.name,
             email: m.profile.email,
             joinedAt: m.createdAt,
+            weeklyCapacityHours: m.weeklyCapacityHours,
             rate: rate
               ? {
                   monthlySalary: rate.monthlySalary ? rate.monthlySalary.toFixed(2) : null,
@@ -68,6 +76,42 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
       },
     })
   })
+
+  // ── Set a member's weekly capacity norm (owner-only, 12-ПЛАН-ФАКТ) ─────────────
+  fastify.patch<{ Params: { id: string } }>(
+    '/workspace/executors/:id/capacity',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = capacitySchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isAgencyOwner(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції', 403)
+      }
+      const updated = await withTenant(async (tx) => {
+        const member = await tx.agencyMember.findUnique({
+          where: { agencyId_profileId: { agencyId, profileId: request.params.id } },
+          select: { id: true },
+        })
+        if (!member) throw new AppError(ApiErrorCode.NOT_FOUND, 'Учасника не знайдено', 404)
+        return tx.agencyMember.update({
+          where: { agencyId_profileId: { agencyId, profileId: request.params.id } },
+          data: { weeklyCapacityHours: input.weeklyCapacityHours },
+          select: { profileId: true, weeklyCapacityHours: true },
+        })
+      })
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'team.capacity_set',
+        resourceType: 'agency_member',
+        resourceId: request.params.id,
+        result: 'allowed',
+        metadata: { weeklyCapacityHours: input.weeklyCapacityHours },
+      })
+      return reply.send({ success: true, data: { member: updated } })
+    }
+  )
 
   return Promise.resolve()
 }

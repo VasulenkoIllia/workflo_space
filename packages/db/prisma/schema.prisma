@@ -939,13 +939,16 @@ model Agency {
 }
 
 model AgencyMember {
-  id        String           @id @default(uuid())
-  agencyId  String
-  agency    Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  profileId String
-  profile   Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  role      AgencyMemberRole @default(executor)
-  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  id                  String           @id @default(uuid())
+  agencyId            String
+  agency              Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId           String
+  profile             Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role                AgencyMemberRole @default(executor)
+  // 12-ПЛАН-ФАКТ (capacity norm): planned billable hours per week for this member.
+  // null → the agency default (DEFAULT_WEEKLY_CAPACITY) is used in the hours report.
+  weeklyCapacityHours Int?
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
 
   @@unique([agencyId, profileId])
   @@index([agencyId])
