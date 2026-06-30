@@ -197,15 +197,15 @@
 
 > Спеці: [`modules/26-leads.md`](modules/26-leads.md) + [`modules/27-integrations.md`](modules/27-integrations.md). API — design-independent (backend-фаза); екрани (канбан, settings/integrations) — у фронтенд-прохід. **Phase 1** = мінімум власника: форма клієнта + наші webhooks + Telegram-ліди.
 
-| ID      | Задача                                                                                                                                                                | Модуль  | Статус    |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
-| LEAD-1  | `Lead`+`LeadPipeline`/`LeadStage`/`LeadActivity` міграція + дефолт-воронка в `provisionAgency()`                                                                      | [26]    | ⬜        |
-| LEAD-2  | Leads API: CRUD + move-stage + assign + convert→Company + pipeline-config + SSE-дошка + notify `leads.new_lead`                                                       | [26]    | ⬜        |
-| INT-1   | `ApiKey` (per-agency Bearer-auth-шлях + scopes) + **Inbound Lead API** `POST /v1/leads` (spam/rate/CORS/idempotency) → Lead(website_form)                             | [27]    | ⬜        |
-| INT-2   | **Outbound webhooks**: `WebhookEndpoint`/`WebhookDelivery` + outbox handler `webhook.fanout`+`webhook.deliver` (HMAC `X-Workflo-Signature`); події order/payment/lead | [27]    | ⬜        |
-| INT-3   | Telegram-адаптер як джерело лідів (бот уже є, 15) → Lead(telegram)                                                                                                    | [27/15] | ⬜        |
-| INT-P2  | Meta (IG/FB Lead Ads + Messenger), WhatsApp, TikTok, embeddable-widget, inbound email→lead                                                                            | [27]    | ⬜ P2     |
-| GROW-UI | Канбан лідів + `/settings/integrations` (ключі/webhooks/канали) — у фронтенд-прохід                                                                                   | [26/27] | ⏸️ design |
+| ID      | Задача                                                                                                                                                                                                       | Модуль  | Статус       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------------ |
+| LEAD-1  | `Lead` модель + `LeadStatus` enum (фіксовані стадії MVP) + RLS міграція `20260630_leads` — ✅ (custom pipelines/`LeadStage`/`LeadActivity` table → пізніше)                                                  | [26]    | ✅ (MVP)     |
+| LEAD-2  | Leads API: CRUD + move-stage + convert→Order(+company link) ✅ (`routes/leads`, 14 тестів, advisory-lock convert). ⬜ pipeline-config · SSE-дошка · notify `leads.new_lead` · UTM/lost-аналітика → дозбудова | [26]    | 🔄 (ядро ✅) |
+| INT-1   | `ApiKey` (per-agency Bearer-auth-шлях + scopes) + **Inbound Lead API** `POST /v1/leads` (spam/rate/CORS/idempotency) → Lead(website_form)                                                                    | [27]    | ⬜           |
+| INT-2   | **Outbound webhooks**: `WebhookEndpoint`/`WebhookDelivery` + outbox handler `webhook.fanout`+`webhook.deliver` (HMAC `X-Workflo-Signature`); події order/payment/lead                                        | [27]    | ⬜           |
+| INT-3   | Telegram-адаптер як джерело лідів (бот уже є, 15) → Lead(telegram)                                                                                                                                           | [27/15] | ⬜           |
+| INT-P2  | Meta (IG/FB Lead Ads + Messenger), WhatsApp, TikTok, embeddable-widget, inbound email→lead                                                                                                                   | [27]    | ⬜ P2        |
+| GROW-UI | Канбан лідів + `/settings/integrations` (ключі/webhooks/канали) — у фронтенд-прохід                                                                                                                          | [26/27] | ⏸️ design    |
 
 > **SaaS-вписування:** усе per-agency (ApiKey/WebhookEndpoint/IntegrationConnection/ліди) → конфіг у white-label-воркспейсі (`SAAS_CONFIG.md`); ліміти інтеграцій — через quota-seam (SAAS.md F2).
 

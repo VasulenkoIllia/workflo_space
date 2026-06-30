@@ -24,6 +24,53 @@
 
 ---
 
+## 🧪 ПЕРЕД ТЕСТУВАННЯМ — стан і на що звернути увагу (2026-07-01)
+
+> Після великої Фаза-B сесії (28 зрізів) + наскрізного 3-агентного аудиту
+> ([`AUDIT_2026-07.md`](AUDIT_2026-07.md), 0 crit/high, усі знахідки виправлені). **Гілка `dev`
+> зелена; CI деплоїть на `dev-*.workflo.space`.** Це чек-лист власнику на ручний прохід.
+
+**✅ Готове до тесту (backend+UI, на staging):**
+
+- **Картка клієнта 360°** `/clients/:id` — таби Огляд(стати+замовлення+«потребує уваги») · Люди
+  (ростер + owner: роль/видалити) · Проєкти · Фінанси(лояльність+override / маржа YTD) ·
+  Документи(PDF) · Реквізити(read + agency edit-on-behalf). Manager бачить лише Огляд.
+- **Таймер часу (T2)** — глобальний floating-bar (live HH:MM:SS, «Стоп») + «Засікти час» у
+  замовленні (таб «Час»); 1 активний на виконавця; авто-стоп 8год. _Тест: старт на A, старт на
+  B (A авто-стопиться), стоп — час пишеться; перевір дату логу (бізнес-день Києва)._
+- **Звіти** `/reports` (owner) — план-факт годин: оцінка vs факт по замовленнях + завантаження
+  по виконавцях (норма редагується в `/team`, дефолт 40 год/тиж) + CSV.
+- **Глобальна «Дошка задач»** `/board` — задачі всіх замовлень, DnD між колонками, фільтр «мої».
+- **Ліди** `/leads` (owner/manager) — канбан 6 стадій, DnD, «+ Лід», **конвертація → замовлення**
+  (drag у «Виграно» = відкриває конвертацію). _Тест: створити → перетягти стадіями → конвертувати
+  на компанію → перевір, що зʼявилось замовлення._
+- **Портал клієнта** — `/projects` (умови співпраці read-only); грейсфул empty-state, якщо
+  акаунт без компанії (більше не червона 500).
+- **Лендінг** — homepage + /services /about /contact /blog /cases + SEO (canonical/OG/sitemap).
+
+**⚠️ На що звернути увагу (свідомі межі, НЕ баги):**
+
+- **Лендінг — UA лише; EN-i18n + структуру відкладено** (рішення власника — переклади/структура
+  зміняться). Не тестувати EN.
+- **Нові екрани — субсети дизайну** (деталі в [`AUDIT_2026-07.md`](AUDIT_2026-07.md) §Дизайн):
+  Leads без detail-сторінки/пайплайн-редактора/UTM/% конверсії; Reports без 4-рівневого розрізу;
+  дошка без per-team-boards. Це by-design, не дефекти.
+- **Картка 360° — 7-й таб «Секрети» (vault) НЕ збудовано** (окремий модуль 17).
+- **Фронт перевірявся type-check/lint/build** (фронт-тести не пишемо за рішенням власника) —
+  ручний прохід вживу потрібен саме тут.
+- **Багато екранів backend-blocked** (documents-EU-PDF, calendar, support, in-app-нотиф-feed
+  rich) — заглушки by-design; вести [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md) на проході.
+
+**📌 Що варто доробити далі (черга після тесту):**
+
+1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
+2. **Leads-добудова** — lead-detail, lost-reason при drag у «Втрачено», UTM з contact-форми, % конверсії.
+3. **Vault/Секрети (модуль 17)** — 7-й таб картки 360° (новий модуль + шифрування).
+4. **Reset-password on-behalf · invite client member** (member-mgmt write — email-флоу).
+5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
+
+---
+
 ## 🔧 Зараз у роботі
 
 - **S6 ✅ ядро закрито** (Documents + Notifications + Bot, на staging). Власник — **легкий sanity-тач** незворотних флоу (документ → надіслати → клієнт отримав + нотифікація; Telegram-лінк), НЕ вичерпний поштучний тест.
@@ -54,6 +101,8 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **🔎 Наскрізний аудит сесії + ремедіація (2026-07-01, `f64c67b`).** 3-агентний аудит (security·typescript·code) діфу `8656538..a24409d` → `docs/AUDIT_2026-07.md`. 0 crit/high security. Виправлено: HIGH timer-`dateOnly` UTC→Europe/Kyiv бізнес-день; HIGH lead drag-to-won обходив convert (бек-гард + фронт→convert-модалка); MED last-owner + lead-convert TOCTOU (per-company/per-lead advisory-lock); LOW cron auto-stop lock; nits (ClientProject.createdAt, useUpdateLead тип). Регресій 0. Гейт: api **572**+151 gated·types 104·3 міграції drift-free (перевірено `migrate deploy` на real-PG).
 
 - **Leads / CRM (модуль 26) — ядро.** Був design-only (нуль коду). Міграція `20260630_leads` (drift-free verified): `Lead` модель + `LeadStatus` enum (new/contacted/qualified/proposal/won/lost) + RLS (wf*in_tenant) + TS-enum+drift-guard. Бек: `routes/leads/leads.ts` — board (`GET /workspace/leads?status=`) · create · update (stage/fields/assignee/lost-reason) · **convert→client Order** (lock-guard «вже конвертовано» 409, company-tenant 404, лінкує companyId+convertedOrderId+won) · delete. Internal-team, tenant-scoped, audited. 14 route-тестів. Фронт: nav «Ліди» (om) + `/leads` `LeadBoardPage` — 6-стадійний DnD-канбан + create-modal + convert-modal (пікер компанії) + delete. Гейт: type-check 23·lint 14·build 14·test (api **571** unit + 151 gated · types 104). *(MVP: фіксовані стадії; custom-pipelines/UTM/lost-аналітика — пізніше.)\_
 
