@@ -9,6 +9,7 @@ import {
   updateProjectSchema,
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
@@ -391,6 +392,65 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
         metadata: { ...input, created: result.created },
       })
       return reply.send({ success: true, data: result })
+    }
+  )
+
+  // ── Portal: the client's read-only view of their own projects (#6) ────────────
+  // Client-safe subset of the billing terms they agreed to — no internal fields
+  // (legal entity, contract doc, advance gate, approver, cycle anchors).
+  const CLIENT_PROJECT_SELECT = {
+    id: true,
+    name: true,
+    type: true,
+    billingModel: true,
+    currency: true,
+    abonAmount: true,
+    clientHourlyRate: true,
+    billingCycle: true,
+    includedHoursCap: true,
+    paymentTermsDays: true,
+    active: true,
+    createdAt: true,
+  } satisfies Prisma.ProjectSelect
+
+  fastify.get(
+    '/portal/projects',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      const companyId = user.activeCompanyId
+      if (!companyId) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Немає активної компанії', 400)
+      }
+      if (!(await moduleEnabled(agencyId, 'billing'))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Модуль білінгу вимкнено', 403)
+      }
+      if (!can(user, 'billing.view', { agencyId, companyId })) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до білінгу', 403)
+      }
+      const rows = await withTenant((tx) =>
+        tx.project.findMany({
+          where: { agencyId, companyId },
+          orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
+          select: CLIENT_PROJECT_SELECT,
+        })
+      )
+      const projects = rows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        billingModel: p.billingModel,
+        currency: p.currency,
+        abonAmount: dec(p.abonAmount),
+        clientHourlyRate: dec(p.clientHourlyRate),
+        billingCycle: p.billingCycle,
+        includedHoursCap: dec(p.includedHoursCap),
+        paymentTermsDays: p.paymentTermsDays,
+        active: p.active,
+        createdAt: p.createdAt.toISOString(),
+      }))
+      return reply.send({ success: true, data: { projects } })
     }
   )
 
