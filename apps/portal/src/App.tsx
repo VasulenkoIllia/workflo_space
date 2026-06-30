@@ -4,6 +4,7 @@ import { RegisterPage } from '@/routes/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { CompanyGate } from '@/components/CompanyGate'
 import { AppLayout } from '@/layouts/AppLayout'
 import { OrdersPage } from '@/routes/orders/OrdersPage'
 import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
@@ -34,15 +35,19 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/orders/new" element={<OrderCreatePage />} />
-        <Route path="/orders/:id" element={<OrderDetailPage />} />
-        <Route path="/billing" element={<BillingPage />} />
-        <Route path="/wallet" element={<WalletPage />} />
+        {/* Company-scoped screens — gated so a no-company account gets a soft empty state
+            (фінд.#4) instead of a 400. */}
+        <Route element={<CompanyGate />}>
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/new" element={<OrderCreatePage />} />
+          <Route path="/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/billing" element={<BillingPage />} />
+          <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/loyalty" element={<LoyaltyPage />} />
+          <Route path="/referrals" element={<ReferralsPage />} />
+          <Route path="/team" element={<TeamPage />} />
+        </Route>
         <Route path="/documents" element={<Placeholder title="Документи" />} />
-        <Route path="/loyalty" element={<LoyaltyPage />} />
-        <Route path="/referrals" element={<ReferralsPage />} />
-        <Route path="/team" element={<TeamPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/inbox" element={<InboxPage />} />
