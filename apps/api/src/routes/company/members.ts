@@ -1,9 +1,11 @@
 import { prisma, tenantTransaction } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
+import { ApiErrorCode, AppError, INVITE_TTL_MS } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { sendCompanyMemberInviteEmail } from '../../services/inviteEmail.js'
 
 /**
  * Agency-side management of a CLIENT company's members (28-Б «Люди»). Acting on a client's
@@ -22,6 +24,7 @@ const MEMBER_SELECT = {
 } as const
 
 const roleSchema = z.object({ role: z.enum(['owner', 'member']) }).strict()
+const inviteSchema = z.object({ email: z.string().email() }).strict()
 
 type MemberRow = {
   role: string
@@ -37,6 +40,103 @@ const toDto = (m: MemberRow) => ({
 })
 
 const clientMembersRoute: FastifyPluginAsync = (fastify) => {
+  // ── Invite a new member to a client company (agency owner, on-behalf) ──────────
+  // The self-service path (POST /company/members/invite) is gated on the CLIENT company's
+  // owner; this is the agency-side entry so the servicing agency can add a client contact
+  // without the client having to invite themselves. Reuses the same Invite plumbing +
+  // portal accept flow (acceptInvite → CompanyMember role='member').
+  fastify.post<{ Params: { id: string } }>(
+    '/workspace/clients/:id/members/invite',
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      const { email: rawEmail } = inviteSchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isAgencyOwner(user, agencyId)) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Лише власник агенції може запрошувати користувачів клієнта',
+          403
+        )
+      }
+      const companyId = request.params.id
+      const email = rawEmail.toLowerCase().trim()
+
+      // Tenant-guard: the company must belong to the active agency (404 otherwise) —
+      // same isolation as the role/remove ops above.
+      const company = await prisma.company.findFirst({
+        where: { id: companyId, agencyId },
+        select: { id: true, name: true },
+      })
+      if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+
+      // Don't re-invite someone who's already a member.
+      const existingProfile = await prisma.profile.findUnique({
+        where: { email },
+        select: { id: true },
+      })
+      if (existingProfile) {
+        const alreadyMember = await prisma.companyMember.findUnique({
+          where: MEMBER_KEY(companyId, existingProfile.id),
+          select: { companyId: true },
+        })
+        if (alreadyMember) {
+          throw new AppError(ApiErrorCode.CONFLICT, 'Користувач уже є членом компанії', 409)
+        }
+      }
+
+      // Supersede prior pending invites + issue the new one atomically (mirrors the
+      // self-service path) so a double-submit can't leave two live invites for the email.
+      const invite = await tenantTransaction(prisma, async (tx) => {
+        await tx.invite.updateMany({
+          where: { email, type: 'company_member', companyId, usedAt: null },
+          data: { usedAt: new Date() },
+        })
+        return tx.invite.create({
+          data: {
+            email,
+            token: generateOpaqueToken(),
+            type: 'company_member',
+            companyId,
+            invitedById: user.sub,
+            expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+          },
+          select: { id: true, token: true, expiresAt: true },
+        })
+      })
+
+      const inviter = await prisma.profile.findUnique({
+        where: { id: user.sub },
+        select: { name: true },
+      })
+      const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+      sendCompanyMemberInviteEmail(request.log, {
+        to: email,
+        inviterName: inviter?.name ?? 'Workflo',
+        companyName: company.name,
+        acceptUrl: `${portalUrl}/invite/${invite.token}`,
+      })
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'company.member_invited',
+        resourceType: 'company',
+        resourceId: companyId,
+        result: 'allowed',
+        metadata: { email, inviteId: invite.id, onBehalf: true },
+      })
+
+      return reply.status(201).send({
+        success: true,
+        data: { inviteId: invite.id, email, companyId, expiresAt: invite.expiresAt },
+      })
+    }
+  )
+
   // ── Change a client member's role (owner ↔ member) ────────────────────────────
   fastify.patch<{ Params: { id: string; profileId: string } }>(
     '/workspace/clients/:id/members/:profileId',

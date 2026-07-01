@@ -33,6 +33,20 @@ export function useUpdateClientMemberRole(companyId: string) {
   })
 }
 
+/** POST invite — agency owner adds a member to a client company on-behalf (28-Б).
+ * Sends a portal invite email; the row appears once the invitee accepts. */
+export function useInviteClientMember(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) =>
+      api.post<{ inviteId: string; email: string; expiresAt: string }>(
+        `/workspace/clients/${companyId}/members/invite`,
+        { email }
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-members', companyId] }),
+  })
+}
+
 /** DELETE member — agency owner only. Backend refuses removing the last owner (409). */
 export function useRemoveClientMember(companyId: string) {
   const qc = useQueryClient()

@@ -2,13 +2,18 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
-import { Avatar, Button, Card, EmptyState, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import { Avatar, Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
-import { useClientMembers, useRemoveClientMember, useUpdateClientMemberRole } from '@/lib/clients'
+import {
+  useClientMembers,
+  useInviteClientMember,
+  useRemoveClientMember,
+  useUpdateClientMemberRole,
+} from '@/lib/clients'
 import { useClientMargin } from '@/lib/margin'
 import {
   type ClientRequisitesInput,
@@ -370,12 +375,31 @@ function PeopleSection({ companyId }: { companyId: string }) {
   const { data, isLoading } = useClientMembers(companyId, !isManager)
   const setRole = useUpdateClientMemberRole(companyId)
   const remove = useRemoveClientMember(companyId)
+  const invite = useInviteClientMember(companyId)
+  const [inviting, setInviting] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
   if (isManager) return null
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const members = data?.members ?? []
 
   const changeRole = (profileId: string, role: 'owner' | 'member') =>
     setRole.mutate({ profileId, role }, { onError: () => toast.error('Не вдалося змінити роль') })
+
+  const sendInvite = () => {
+    const email = inviteEmail.trim()
+    if (email === '') {
+      toast.error('Вкажіть email')
+      return
+    }
+    invite.mutate(email, {
+      onSuccess: () => {
+        toast.success('Запрошення надіслано')
+        setInviteEmail('')
+        setInviting(false)
+      },
+      onError: () => toast.error('Не вдалося запросити — можливо, вже учасник'),
+    })
+  }
 
   const removeMember = (profileId: string, name: string) => {
     if (!window.confirm(`Видалити ${name} з компанії клієнта?`)) return
@@ -387,6 +411,39 @@ function PeopleSection({ companyId }: { companyId: string }) {
 
   return (
     <Card title="Люди" aux={`${members.length}`}>
+      {isOwner && (
+        <div style={{ marginBottom: members.length ? 12 : 8 }}>
+          {inviting ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 220, flex: 1 }}>
+                <Input
+                  label="Email нового учасника"
+                  type="email"
+                  value={inviteEmail}
+                  placeholder="person@client.com"
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <Button variant="primary" loading={invite.isPending} onClick={sendInvite}>
+                Надіслати
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setInviting(false)
+                  setInviteEmail('')
+                }}
+              >
+                Скасувати
+              </Button>
+            </div>
+          ) : (
+            <Button variant="secondary" onClick={() => setInviting(true)}>
+              + Запросити учасника
+            </Button>
+          )}
+        </div>
+      )}
       {members.length === 0 ? (
         <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
           // у компанії клієнта ще немає користувачів
