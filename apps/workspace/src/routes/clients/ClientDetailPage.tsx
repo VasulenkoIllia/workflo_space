@@ -15,6 +15,14 @@ import {
   useResetClientMemberPassword,
   useUpdateClientMemberRole,
 } from '@/lib/clients'
+import {
+  type Credential,
+  useCreateCredential,
+  useCredentials,
+  useDeleteCredential,
+  useRevealCredential,
+  useRevokeCredential,
+} from '@/lib/credentials'
 import { useClientMargin } from '@/lib/margin'
 import {
   type ClientRequisitesInput,
@@ -72,7 +80,7 @@ export function ClientDetailPage() {
   const firstId = orders[0]?.id ?? ''
   const { data: sample } = useOrder(firstId)
   const name = sample?.company?.name ?? `Клієнт · ${id.slice(0, 8)}`
-  const { isManager } = useAuth()
+  const { isManager, isOwner } = useAuth()
   const [tab, setTab] = useState('overview')
 
   if (isLoading) return <Skeleton style={{ height: 280 }} />
@@ -93,18 +101,22 @@ export function ClientDetailPage() {
   ).length
   const totalValue = orders.reduce((s, o) => s + (o.totalAmount ?? 0), 0)
 
-  // Projects/Finance/Requisites are internal-non-manager on the backend → a manager sees
-  // only Огляд (the rest would 403). People/Документи/Секрети/Активність tabs from the
-  // design are backend-blocked (no per-client members/docs/vault/activity API yet) → omitted.
+  // Projects/Finance/Requisites/Секрети are internal-non-manager on the backend → a manager
+  // sees only Огляд (the rest would 403). «Секрети» (vault, module 17) is owner-only. The
+  // Активність tab from the design stays backend-blocked (no per-client activity API yet).
   const ALL_TABS = [
     { id: 'overview', label: 'Огляд' },
     { id: 'people', label: 'Люди' },
     { id: 'projects', label: 'Проєкти' },
     { id: 'finance', label: 'Фінанси' },
     { id: 'docs', label: 'Документи' },
+    { id: 'secrets', label: 'Секрети' },
     { id: 'requisites', label: 'Реквізити' },
   ]
-  const visibleTabs = isManager ? ALL_TABS.filter((t) => t.id === 'overview') : ALL_TABS
+  const visibleTabs = isManager
+    ? ALL_TABS.filter((t) => t.id === 'overview')
+    : // «Секрети» is owner-only (executors don't reach this page; the vault API 403s non-owners).
+      ALL_TABS.filter((t) => t.id !== 'secrets' || isOwner)
   const safeTab = visibleTabs.some((t) => t.id === tab) ? tab : 'overview'
 
   return (
@@ -221,6 +233,7 @@ export function ClientDetailPage() {
         </>
       )}
       {safeTab === 'docs' && <DocumentsSection companyId={id} />}
+      {safeTab === 'secrets' && <SecretsSection companyId={id} />}
       {safeTab === 'requisites' && <RequisitesSection companyId={id} />}
     </div>
   )
@@ -367,6 +380,312 @@ const MEMBER_ROLE_LABEL: Record<string, string> = {
   owner: 'власник',
   member: 'учасник',
   billing: 'білінг',
+}
+
+/** «Секрети» tab (module 17 vault): agency-OWNER-only. Envelope-encrypted client credentials —
+ * the list is metadata-only; «показати» fetches the plaintext once (never cached) and auto-hides
+ * after 20s so it isn't left on screen. */
+function SecretsSection({ companyId }: { companyId: string }) {
+  const { data, isLoading } = useCredentials(companyId)
+  const create = useCreateCredential(companyId)
+  const reveal = useRevealCredential(companyId)
+  const revoke = useRevokeCredential(companyId)
+  const del = useDeleteCredential(companyId)
+  const [adding, setAdding] = useState(false)
+
+  if (isLoading) return <Skeleton style={{ height: 160 }} />
+  const creds = data?.credentials ?? []
+
+  const doRevoke = (c: Credential) => {
+    if (!window.confirm(`Відкликати секрет «${c.label}»? Reveal стане недоступним.`)) return
+    revoke.mutate(c.id, {
+      onSuccess: () => toast.success('Секрет відкликано'),
+      onError: () => toast.error('Не вдалося відкликати'),
+    })
+  }
+  const doDelete = (c: Credential) => {
+    if (!window.confirm(`Назавжди видалити секрет «${c.label}»?`)) return
+    del.mutate(c.id, {
+      onSuccess: () => toast.success('Секрет видалено'),
+      onError: () => toast.error('Не вдалося видалити'),
+    })
+  }
+
+  return (
+    <Card title="Секрети" aux={`${creds.length}`}>
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 12 }}
+      >
+        // зашифровані доступи клієнта (AES-256-GCM). Пароль показується одноразово й не кешується.
+      </div>
+      {adding ? (
+        <AddCredentialForm create={create} onDone={() => setAdding(false)} />
+      ) : (
+        <Button variant="secondary" onClick={() => setAdding(true)}>
+          + Додати секрет
+        </Button>
+      )}
+      <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+        {creds.length === 0 && !adding ? (
+          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            // секретів ще немає
+          </div>
+        ) : (
+          creds.map((c) => (
+            <CredentialRow
+              key={c.id}
+              c={c}
+              reveal={reveal}
+              onRevoke={doRevoke}
+              onDelete={doDelete}
+            />
+          ))
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function CredentialRow({
+  c,
+  reveal,
+  onRevoke,
+  onDelete,
+}: {
+  c: Credential
+  reveal: ReturnType<typeof useRevealCredential>
+  onRevoke: (c: Credential) => void
+  onDelete: (c: Credential) => void
+}) {
+  const [shown, setShown] = useState<string | null>(null)
+
+  const doReveal = () => {
+    reveal.mutate(c.id, {
+      onSuccess: (r) => {
+        setShown(r.secret)
+        window.setTimeout(() => setShown(null), 20000) // auto-hide plaintext
+      },
+      onError: () => toast.error('Не вдалося показати секрет'),
+    })
+  }
+  const copy = () => {
+    if (shown == null) return
+    void navigator.clipboard?.writeText(shown)
+    toast.success('Скопійовано')
+  }
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        padding: '10px 12px',
+        opacity: c.revoked ? 0.55 : 1,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+          alignItems: 'baseline',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 500 }}>
+            {c.label}
+            {c.service && (
+              <span
+                className="wfp-mono"
+                style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
+              >
+                {c.service}
+              </span>
+            )}
+            {c.revoked && (
+              <span
+                className="wfp-mono"
+                style={{ fontSize: 11, color: 'var(--wf-destructive)', marginLeft: 8 }}
+              >
+                відкликано
+              </span>
+            )}
+          </div>
+          {(c.username || c.url) && (
+            <div
+              className="wfp-mono"
+              style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 2 }}
+            >
+              {c.username ?? ''}
+              {c.username && c.url ? ' · ' : ''}
+              {c.url ?? ''}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+          {!c.revoked && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12 }}
+              disabled={reveal.isPending}
+              onClick={doReveal}
+            >
+              показати
+            </button>
+          )}
+          {!c.revoked && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12 }}
+              onClick={() => onRevoke(c)}
+            >
+              відкликати
+            </button>
+          )}
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
+            onClick={() => onDelete(c)}
+          >
+            видалити
+          </button>
+        </div>
+      </div>
+      {shown != null && (
+        <div
+          style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}
+        >
+          <code
+            style={{
+              background: 'var(--wf-surface)',
+              border: '1px solid var(--wf-border)',
+              borderRadius: 'var(--wf-radius)',
+              padding: '4px 8px',
+              fontSize: 13,
+              wordBreak: 'break-all',
+            }}
+          >
+            {shown}
+          </code>
+          <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={copy}>
+            копіювати
+          </button>
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}
+            onClick={() => setShown(null)}
+          >
+            сховати
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AddCredentialForm({
+  create,
+  onDone,
+}: {
+  create: ReturnType<typeof useCreateCredential>
+  onDone: () => void
+}) {
+  const [f, setF] = useState({
+    label: '',
+    service: '',
+    url: '',
+    username: '',
+    secret: '',
+    notes: '',
+  })
+  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
+
+  const submit = () => {
+    if (f.label.trim() === '') {
+      toast.error('Вкажіть назву')
+      return
+    }
+    if (f.secret === '') {
+      toast.error('Вкажіть секрет')
+      return
+    }
+    create.mutate(
+      {
+        label: f.label.trim(),
+        service: f.service.trim() || null,
+        url: f.url.trim() || null,
+        username: f.username.trim() || null,
+        secret: f.secret,
+        notes: f.notes.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Секрет додано')
+          onDone()
+        },
+        onError: () => toast.error('Не вдалося додати'),
+      }
+    )
+  }
+
+  return (
+    <div
+      style={{
+        border: '1px dashed var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        padding: 12,
+        display: 'grid',
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gap: 10,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        }}
+      >
+        <Input
+          label="Назва"
+          value={f.label}
+          placeholder="Bitrix24 admin"
+          onChange={(e) => set('label', e.target.value)}
+        />
+        <Input
+          label="Сервіс"
+          value={f.service}
+          placeholder="bitrix24 / ftp / …"
+          onChange={(e) => set('service', e.target.value)}
+        />
+        <Input label="URL" value={f.url} onChange={(e) => set('url', e.target.value)} />
+        <Input label="Логін" value={f.username} onChange={(e) => set('username', e.target.value)} />
+      </div>
+      <Input
+        label="Секрет / пароль"
+        type="password"
+        value={f.secret}
+        onChange={(e) => set('secret', e.target.value)}
+      />
+      <Input
+        label="Нотатки (без секретів)"
+        value={f.notes}
+        onChange={(e) => set('notes', e.target.value)}
+      />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button variant="primary" loading={create.isPending} onClick={submit}>
+          Зберегти
+        </Button>
+        <Button variant="ghost" onClick={onDone}>
+          Скасувати
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 /** «Люди» tab (28-Б): the client company's member roster. Internal-non-manager → hidden for

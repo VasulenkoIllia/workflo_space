@@ -1,0 +1,73 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+
+/** Credentials Vault (module 17) — agency-side. Metadata only; the secret value is revealed
+ * one-shot via a dedicated endpoint (never cached). Owner-only on the backend. */
+export interface Credential {
+  id: string
+  label: string
+  service: string | null
+  url: string | null
+  username: string | null
+  notes: string | null
+  revoked: boolean
+  revokedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CredentialInput {
+  label: string
+  service?: string | null
+  url?: string | null
+  username?: string | null
+  secret: string
+  notes?: string | null
+}
+
+export function useCredentials(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['client-credentials', companyId],
+    queryFn: () =>
+      api.get<{ credentials: Credential[] }>(`/workspace/clients/${companyId}/credentials`),
+    enabled: companyId !== '' && enabled,
+  })
+}
+
+export function useCreateCredential(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CredentialInput) =>
+      api.post<{ credential: Credential }>(`/workspace/clients/${companyId}/credentials`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] }),
+  })
+}
+
+/** Reveal one secret. Deliberately NOT cached — returns the plaintext for one-shot display. */
+export function useRevealCredential(companyId: string) {
+  return useMutation({
+    mutationFn: (credId: string) =>
+      api.post<{ secret: string }>(
+        `/workspace/clients/${companyId}/credentials/${credId}/reveal`,
+        {}
+      ),
+  })
+}
+
+export function useRevokeCredential(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (credId: string) =>
+      api.post(`/workspace/clients/${companyId}/credentials/${credId}/revoke`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] }),
+  })
+}
+
+export function useDeleteCredential(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (credId: string) =>
+      api.delete(`/workspace/clients/${companyId}/credentials/${credId}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] }),
+  })
+}

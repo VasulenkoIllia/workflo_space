@@ -14,11 +14,15 @@ const requiredProductionEnvSchema = z.object({
 //   - CORS_ALLOWED_ORIGINS: falls back to the workflo prod defaults (config/origins.ts);
 //     set it for any non-default deployment so CORS + the /auth/refresh CSRF guard match
 //   - SENTRY_DSN: error monitoring stays off until set (observability/sentry.ts)
+//   - CREDENTIALS_KEK_BASE64: 32-byte base64 KEK for the credentials vault (module 17). Absent →
+//     vault endpoints 503 (feature off); the rest of the API is unaffected. Generate with
+//     `openssl rand -base64 32`.
 const RECOMMENDED_PRODUCTION_VARS = [
   'SMTP_HOST',
   'PORTAL_URL',
   'CORS_ALLOWED_ORIGINS',
   'SENTRY_DSN',
+  'CREDENTIALS_KEK_BASE64',
 ] as const
 
 export function validateRuntimeEnv() {

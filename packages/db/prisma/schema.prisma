@@ -50,6 +50,7 @@ model Profile {
   agencyMemberships      AgencyMember[]
   orderChatReads         OrderChatRead[]
   projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
+  credentialsCreated     CredentialVault[]     @relation("CredentialCreatedBy") // 17
 
   @@index([role])
   @@map("profiles")
@@ -163,6 +164,7 @@ model Company {
   walletTransactions WalletTransaction[]
   loyaltyHistory     LoyaltyTierHistory[]
   projects           Project[] // 05-ПРОЕКТИ (S5.6 P-1)
+  credentials        CredentialVault[] // 17-CREDENTIALS
   agency             Agency               @relation(fields: [agencyId], references: [id])
 
   @@unique([agencyId, slug])
@@ -414,6 +416,39 @@ model Lead {
   @@index([agencyId])
   @@index([agencyId, status])
   @@map("leads")
+}
+
+// 17-CREDENTIALS: envelope-encrypted secrets bound to a client company.
+// AES-256-GCM; per-record DEK wrapped by a platform KEK held in env (CREDENTIALS_KEK_BASE64) —
+// never in the DB, so a table leak alone ≠ credential compromise. Plain metadata (label/service/
+// url/username/notes) is queryable; only the secret value is ciphertext. Access: agency OWNER
+// only (executors never), enforced in the route; RLS scopes by agencyId like every tenant table.
+model CredentialVault {
+  id                String    @id @default(uuid())
+  agencyId          String
+  companyId         String
+  label             String // "Bitrix24 admin", "FTP клієнта" — plain
+  service           String? // "bitrix24"|"ftp"|"wordpress"|... — filter/icon
+  url               String? // login URL — plain
+  username          String? // plain (preview without reveal)
+  encryptedDek      Bytes // DEK wrapped by KEK (AES-256-GCM)
+  dekIv             Bytes // 12-byte IV for DEK wrap
+  dekAuthTag        Bytes // 16-byte GCM tag for DEK wrap
+  ciphertext        Bytes // secret encrypted with DEK
+  ciphertextIv      Bytes // 12-byte IV for ciphertext
+  ciphertextAuthTag Bytes // 16-byte GCM tag for ciphertext
+  notes             String? // plain notes (no secrets!)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  createdById       String
+  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy         Profile   @relation("CredentialCreatedBy", fields: [createdById], references: [id])
+
+  @@index([agencyId])
+  @@index([companyId, revokedAt])
+  @@map("credential_vault")
 }
 
 model Service {
@@ -963,6 +998,7 @@ model Agency {
   estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
   leads                Lead[] // 26 (CRM)
+  credentials          CredentialVault[] // 17-CREDENTIALS
 
   @@index([planId])
   @@map("agencies")
