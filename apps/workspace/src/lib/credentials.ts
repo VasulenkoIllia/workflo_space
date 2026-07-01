@@ -71,3 +71,51 @@ export function useDeleteCredential(companyId: string) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] }),
   })
 }
+
+// ── Global vault (17-ГЛОБАЛ): all secrets across the agency's clients ────────────────
+export interface GlobalCredential extends Credential {
+  companyId: string
+  companyName: string
+}
+
+export function useGlobalVault() {
+  return useQuery({
+    queryKey: ['ws-vault'],
+    queryFn: () => api.get<{ credentials: GlobalCredential[] }>('/workspace/vault'),
+  })
+}
+
+/** Reveal from the global list — routes back to the per-company endpoint. Not cached. */
+export function useRevealGlobal() {
+  return useMutation({
+    mutationFn: ({ companyId, credId }: { companyId: string; credId: string }) =>
+      api.post<{ secret: string }>(
+        `/workspace/clients/${companyId}/credentials/${credId}/reveal`,
+        {}
+      ),
+  })
+}
+
+export function useRevokeGlobal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ companyId, credId }: { companyId: string; credId: string }) =>
+      api.post(`/workspace/clients/${companyId}/credentials/${credId}/revoke`, {}),
+    onSuccess: (_r, { companyId }) => {
+      void qc.invalidateQueries({ queryKey: ['ws-vault'] })
+      void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] })
+    },
+  })
+}
+
+export function useDeleteGlobal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ companyId, credId }: { companyId: string; credId: string }) =>
+      api.delete(`/workspace/clients/${companyId}/credentials/${credId}`),
+    onSuccess: (_r, { companyId }) => {
+      void qc.invalidateQueries({ queryKey: ['ws-vault'] })
+      void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] })
+    },
+  })
+}

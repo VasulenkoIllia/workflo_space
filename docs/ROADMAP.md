@@ -61,10 +61,11 @@
 - **Нові екрани — субсети дизайну** (деталі в [`AUDIT_2026-07.md`](AUDIT_2026-07.md) §Дизайн):
   Leads без detail-сторінки/пайплайн-редактора/UTM/% конверсії; Reports без 4-рівневого розрізу;
   дошка без per-team-boards. Це by-design, не дефекти.
-- **Картка 360° — 7-й таб «Секрети» (vault) — MVP збудовано** (модуль 17, agency-side):
-  список/додати/показати(reveal)/відкликати/видалити, envelope AES-256-GCM (KEK у env).
-  Відкладено: 2FA-challenge на reveal, executor scoped-share, нагадування про ротацію, portal
-  self-service, глобальний крос-клієнтський список. **Reveal деградує до 503 без `CREDENTIALS_KEK_BASE64`.**
+- **Vault/Секрети (модуль 17) — MVP збудовано** (agency-side): картка 360° таб «Секрети» +
+  глобальний екран `/vault` (owner-only, усі клієнти, фільтри клієнт/сервіс/пошук). CRUD +
+  reveal, envelope AES-256-GCM (KEK у env). Відкладено: 2FA-challenge на reveal, executor
+  scoped-share, нагадування про ротацію, portal self-service, типізовані шаблони, журнал
+  доступів клієнту. **Reveal/create деградують до 503 без `CREDENTIALS_KEK_BASE64`.**
 - **Фронт перевірявся type-check/lint/build** (фронт-тести не пишемо за рішенням власника) —
   ручний прохід вживу потрібен саме тут.
 - **Багато екранів backend-blocked** (documents-EU-PDF, calendar, support, in-app-нотиф-feed
@@ -74,7 +75,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії; лишок: пайплайн-редактор, UTM з contact-форми, activity-timeline.
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP збудовано. Лишок: 2FA на reveal, executor-share, ротація-нагадування, portal self-service (17-А), глобальний список (17-ГЛОБАЛ), типізовані шаблони (17-Д), журнал доступів клієнту (17-Б).
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ, `/vault`, owner-only, фільтри клієнт/сервіс/пошук). Лишок: 2FA на reveal, executor-share, ротація-нагадування, portal self-service (17-А), типізовані шаблони (17-Д), журнал доступів клієнту (17-Б).
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 

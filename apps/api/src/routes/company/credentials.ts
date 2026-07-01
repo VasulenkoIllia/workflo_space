@@ -79,6 +79,41 @@ async function assertOwnerCompany(user: AccessClaims, companyId: string) {
 }
 
 const credentialsRoute: FastifyPluginAsync = (fastify) => {
+  // ── Global vault (17-ГЛОБАЛ): all secrets across the agency's clients, metadata only ──
+  // Same table + reveal path, just an agency-wide view; each row carries its companyId so the
+  // client-side reveal/revoke/delete can route back to the per-company endpoints. Owner-only.
+  fastify.get(
+    '/workspace/vault',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = requireActiveAgency(request.user)
+      if (!isAgencyOwner(request.user, agencyId)) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Лише власник агенції має доступ до секретів',
+          403
+        )
+      }
+      const rows = await withTenant((tx) =>
+        tx.credentialVault.findMany({
+          where: { agencyId },
+          select: { ...LIST_SELECT, companyId: true, company: { select: { name: true } } },
+          orderBy: [{ revokedAt: 'asc' }, { createdAt: 'desc' }],
+        })
+      )
+      return reply.send({
+        success: true,
+        data: {
+          credentials: rows.map((r) => ({
+            ...toDto(r),
+            companyId: r.companyId,
+            companyName: r.company.name,
+          })),
+        },
+      })
+    }
+  )
+
   // ── List (metadata only, no plaintext) ────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/workspace/clients/:id/credentials',

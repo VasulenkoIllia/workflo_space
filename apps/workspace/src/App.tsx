@@ -23,6 +23,7 @@ import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
 import { LeadDetailPage } from '@/routes/leads/LeadDetailPage'
+import { VaultPage } from '@/routes/vault/VaultPage'
 import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
 import { ServicesPage } from '@/routes/services/ServicesPage'
 import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
@@ -101,6 +102,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner', 'manager']}>
               <ClientsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/vault"
+          element={
+            <RoleRoute allow={['owner']}>
+              <VaultPage />
             </RoleRoute>
           }
         />

@@ -112,6 +112,37 @@ describe('GET /workspace/clients/:id/credentials — list', () => {
   })
 })
 
+describe('GET /workspace/vault — global (17-ГЛОБАЛ)', () => {
+  it('owner lists secrets across clients with company name, no plaintext', async () => {
+    db.credentialVault.findMany.mockResolvedValue([
+      { ...metaRow, companyId: COMPANY, company: { name: 'Acme' } },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/vault',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const c = res.json().data.credentials[0]
+    expect(c).toMatchObject({ id: CRED, companyId: COMPANY, companyName: 'Acme' })
+    expect(JSON.stringify(res.json())).not.toMatch(/ciphertext|encryptedDek|secret/)
+    await app.close()
+  })
+
+  it('executor is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/vault',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(db.credentialVault.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
 describe('POST /workspace/clients/:id/credentials — create', () => {
   it('encrypts the secret before storing (no plaintext persisted)', async () => {
     db.company.findFirst.mockResolvedValue({ id: COMPANY })
