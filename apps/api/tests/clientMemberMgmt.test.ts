@@ -8,6 +8,7 @@ const db = {
   companyMember: { findUnique: vi.fn(), count: vi.fn(), update: vi.fn(), delete: vi.fn() },
   profile: { findUnique: vi.fn() },
   invite: { updateMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn() },
+  passwordResetToken: { create: vi.fn().mockResolvedValue({ id: 'prt-1' }) },
   $executeRaw: vi.fn().mockResolvedValue(1),
 }
 
@@ -21,6 +22,8 @@ vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
 const sendCompanyMemberInviteEmail = vi.fn()
 vi.mock('../src/services/inviteEmail.js', () => ({ sendCompanyMemberInviteEmail }))
+const dispatchNotification = vi.fn()
+vi.mock('../src/services/notifications.js', () => ({ dispatchNotification }))
 
 const { buildApp } = await import('../src/app.js')
 
@@ -255,6 +258,87 @@ describe('POST /workspace/clients/:id/members/invite — invite on-behalf', () =
       payload: { email: 'not-an-email' },
     })
     expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+})
+
+describe('POST /workspace/clients/:id/members/:profileId/reset-password — on-behalf', () => {
+  const resetUrl = `/workspace/clients/${COMPANY}/members/${TARGET}/reset-password`
+
+  it('owner triggers a reset for an active member (200 + token + notification)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.companyMember.findUnique.mockResolvedValue({
+      profile: { id: TARGET, email: 's@x.com', isActive: true },
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: resetUrl,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(db.passwordResetToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ email: 's@x.com' }) })
+    )
+    expect(dispatchNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ profileId: TARGET, event: 'auth.password_reset' })
+    )
+    await app.close()
+  })
+
+  it('is a silent no-op for an inactive member (200, no token/notification)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.companyMember.findUnique.mockResolvedValue({
+      profile: { id: TARGET, email: 's@x.com', isActive: false },
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: resetUrl,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(db.passwordResetToken.create).not.toHaveBeenCalled()
+    expect(dispatchNotification).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('is 404 when the profile is not a member of this company', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.companyMember.findUnique.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: resetUrl,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(db.passwordResetToken.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('is 404 for a company in another tenant', async () => {
+    db.company.findFirst.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: resetUrl,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('a non-owner (executor) is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: resetUrl,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(db.company.findFirst).not.toHaveBeenCalled()
     await app.close()
   })
 })

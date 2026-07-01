@@ -5,7 +5,10 @@ import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { dispatchNotification } from '../../services/notifications.js'
 import { sendCompanyMemberInviteEmail } from '../../services/inviteEmail.js'
+
+const RESET_TTL_MS = 60 * 60 * 1000 // 1h — matches POST /auth/forgot-password
 
 /**
  * Agency-side management of a CLIENT company's members (28-Б «Люди»). Acting on a client's
@@ -133,6 +136,73 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
       return reply.status(201).send({
         success: true,
         data: { inviteId: invite.id, email, companyId, expiresAt: invite.expiresAt },
+      })
+    }
+  )
+
+  // ── Trigger a password-reset email for a client member (agency owner, on-behalf) ──
+  // Reuses the standard forgot-password machinery (PasswordResetToken + auth.password_reset
+  // notification). The agency never sees or sets the password — the member completes the reset
+  // from their own inbox; this just kicks off the flow when a client contact is locked out.
+  fastify.post<{ Params: { id: string; profileId: string } }>(
+    '/workspace/clients/:id/members/:profileId/reset-password',
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isAgencyOwner(user, agencyId)) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Лише власник агенції може скидати пароль користувача клієнта',
+          403
+        )
+      }
+      const { id: companyId, profileId } = request.params
+
+      const company = await prisma.company.findFirst({
+        where: { id: companyId, agencyId },
+        select: { id: true },
+      })
+      if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+
+      // The target must actually be a member of THIS client company (not just any profile) —
+      // closes a cross-company reset-trigger IDOR.
+      const membership = await prisma.companyMember.findUnique({
+        where: MEMBER_KEY(companyId, profileId),
+        select: { profile: { select: { id: true, email: true, isActive: true } } },
+      })
+      if (!membership) throw new AppError(ApiErrorCode.NOT_FOUND, 'Користувача не знайдено', 404)
+
+      const { id: pid, email, isActive } = membership.profile
+      if (isActive) {
+        const token = generateOpaqueToken()
+        await prisma.passwordResetToken.create({
+          data: { email, token, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
+        })
+        const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+        dispatchNotification(request.log, {
+          profileId: pid,
+          event: 'auth.password_reset',
+          vars: { resetUrl: `${portalUrl}/reset-password?token=${encodeURIComponent(token)}` },
+        })
+      }
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'auth.password_reset_requested',
+        resourceType: 'profile',
+        resourceId: profileId,
+        result: 'allowed',
+        metadata: { onBehalf: true, companyId },
+      })
+
+      return reply.status(200).send({
+        success: true,
+        data: { message: 'Лист для скидання пароля надіслано користувачу.' },
       })
     }
   )

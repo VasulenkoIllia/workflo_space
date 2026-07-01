@@ -12,6 +12,7 @@ import {
   useClientMembers,
   useInviteClientMember,
   useRemoveClientMember,
+  useResetClientMemberPassword,
   useUpdateClientMemberRole,
 } from '@/lib/clients'
 import { useClientMargin } from '@/lib/margin'
@@ -376,6 +377,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
   const setRole = useUpdateClientMemberRole(companyId)
   const remove = useRemoveClientMember(companyId)
   const invite = useInviteClientMember(companyId)
+  const resetPw = useResetClientMemberPassword(companyId)
   const [inviting, setInviting] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   if (isManager) return null
@@ -406,6 +408,14 @@ function PeopleSection({ companyId }: { companyId: string }) {
     remove.mutate(profileId, {
       onSuccess: () => toast.success('Користувача видалено'),
       onError: () => toast.error('Не вдалося — можливо, це останній власник'),
+    })
+  }
+
+  const resetPassword = (profileId: string, name: string) => {
+    if (!window.confirm(`Надіслати ${name} лист для скидання пароля?`)) return
+    resetPw.mutate(profileId, {
+      onSuccess: () => toast.success('Лист для скидання пароля надіслано'),
+      onError: () => toast.error('Не вдалося надіслати'),
     })
   }
 
@@ -510,15 +520,26 @@ function PeopleSection({ companyId }: { companyId: string }) {
               </span>
 
               {isOwner && (
-                <button
-                  type="button"
-                  className="wfp-link"
-                  style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
-                  disabled={remove.isPending}
-                  onClick={() => removeMember(m.profileId, m.name)}
-                >
-                  видалити
-                </button>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="wfp-link"
+                    style={{ fontSize: 12 }}
+                    disabled={resetPw.isPending}
+                    onClick={() => resetPassword(m.profileId, m.name)}
+                  >
+                    скинути пароль
+                  </button>
+                  <button
+                    type="button"
+                    className="wfp-link"
+                    style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
+                    disabled={remove.isPending}
+                    onClick={() => removeMember(m.profileId, m.name)}
+                  >
+                    видалити
+                  </button>
+                </div>
               )}
             </div>
           ))}

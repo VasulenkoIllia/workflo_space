@@ -47,6 +47,15 @@ export function useInviteClientMember(companyId: string) {
   })
 }
 
+/** POST reset-password — agency owner triggers a reset email for a locked-out client member
+ * (28-Б). The agency never sees/sets the password; the member completes it from their inbox. */
+export function useResetClientMemberPassword(companyId: string) {
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      api.post(`/workspace/clients/${companyId}/members/${profileId}/reset-password`, {}),
+  })
+}
+
 /** DELETE member — agency owner only. Backend refuses removing the last owner (409). */
 export function useRemoveClientMember(companyId: string) {
   const qc = useQueryClient()
