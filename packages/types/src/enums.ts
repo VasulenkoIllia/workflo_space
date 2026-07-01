@@ -365,6 +365,9 @@ export enum ApiErrorCode {
   CONFLICT = 'CONFLICT',
   RATE_LIMITED = 'RATE_LIMITED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+  // Step-up auth needed before the action (e.g. re-enter password to reveal a vault secret).
+  // Returned with HTTP 403 so the API client does NOT treat it as a session-expiry 401.
+  STEP_UP_REQUIRED = 'STEP_UP_REQUIRED',
 }
 
 // ─── Departments (CRUD table, not enum — see modules/12) ────────────────────

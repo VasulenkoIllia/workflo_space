@@ -5,11 +5,14 @@ import { Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import {
   type GlobalCredential,
+  hasValidRevealGrant,
+  STEP_UP_REQUIRED,
   useDeleteGlobal,
   useGlobalVault,
   useRevealGlobal,
   useRevokeGlobal,
 } from '@/lib/credentials'
+import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 
 /** Global credentials vault (module 17-ГЛОБАЛ) — owner-only. Every client's secrets on one
  * screen with client/service/search filters. Same envelope-encrypted store as the 360° tab;
@@ -24,6 +27,7 @@ export function VaultPage() {
   const [company, setCompany] = useState('')
   const [service, setService] = useState('')
   const [showRevoked, setShowRevoked] = useState(false)
+  const [stepUpRetry, setStepUpRetry] = useState<(() => void) | null>(null)
 
   const all = useMemo(() => data?.credentials ?? [], [data])
 
@@ -164,6 +168,7 @@ export function VaultPage() {
                     reveal={reveal}
                     onRevoke={doRevoke}
                     onDelete={doDelete}
+                    onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
                   />
                 ))}
               </div>
@@ -171,6 +176,15 @@ export function VaultPage() {
           </Card>
         </>
       )}
+      <VaultStepUpModal
+        open={stepUpRetry !== null}
+        onClose={() => setStepUpRetry(null)}
+        onSuccess={() => {
+          const retry = stepUpRetry
+          setStepUpRetry(null)
+          retry?.()
+        }}
+      />
     </div>
   )
 }
@@ -180,15 +194,17 @@ function VaultRow({
   reveal,
   onRevoke,
   onDelete,
+  onNeedStepUp,
 }: {
   c: GlobalCredential
   reveal: ReturnType<typeof useRevealGlobal>
   onRevoke: (c: GlobalCredential) => void
   onDelete: (c: GlobalCredential) => void
+  onNeedStepUp: (retry: () => void) => void
 }) {
   const [shown, setShown] = useState<string | null>(null)
 
-  const doReveal = () => {
+  const runReveal = () => {
     reveal.mutate(
       { companyId: c.companyId, credId: c.id },
       {
@@ -196,9 +212,19 @@ function VaultRow({
           setShown(r.secret)
           window.setTimeout(() => setShown(null), 20000) // auto-hide plaintext
         },
-        onError: () => toast.error('Не вдалося показати секрет'),
+        onError: (err) => {
+          if ((err as { code?: string }).code === STEP_UP_REQUIRED) {
+            onNeedStepUp(runReveal)
+            return
+          }
+          toast.error('Не вдалося показати секрет')
+        },
       }
     )
+  }
+  const doReveal = () => {
+    if (hasValidRevealGrant()) runReveal()
+    else onNeedStepUp(runReveal)
   }
   const copy = () => {
     if (shown == null) return

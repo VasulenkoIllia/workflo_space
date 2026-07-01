@@ -14,6 +14,7 @@ const db = {
     deleteMany: vi.fn(),
   },
   auditLog: { findMany: vi.fn() },
+  profile: { findUnique: vi.fn() },
 }
 
 vi.mock('@workflo/db', () => ({
@@ -24,9 +25,13 @@ vi.mock('@workflo/db', () => ({
 }))
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
+const verifyPassword = vi.fn()
+vi.mock('../src/auth/password.js', () => ({ verifyPassword }))
 
 const { buildApp } = await import('../src/app.js')
 const { encryptSecret, getKek } = await import('../src/services/credentialCrypto.js')
+const { issueRevealGrant } = await import('../src/services/vaultGrant.js')
+const GRANT = () => issueRevealGrant(OWNER.sub).grant
 
 const AGENCY = 'agency-1'
 const COMPANY = 'company-1'
@@ -201,7 +206,7 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
     return { id: CRED, revokedAt, ...encryptSecret(secret, kek) }
   }
 
-  it('returns the decrypted secret + Cache-Control no-store', async () => {
+  it('returns the decrypted secret + Cache-Control no-store (with a valid grant)', async () => {
     db.company.findFirst.mockResolvedValue({ id: COMPANY })
     db.credentialVault.findFirst.mockResolvedValue(encRow('s3cr3t-пароль'))
     const { app, token } = await authed(OWNER)
@@ -209,10 +214,40 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
       method: 'POST',
       url: `${base}/${CRED}/reveal`,
       headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.secret).toBe('s3cr3t-пароль')
     expect(res.headers['cache-control']).toBe('no-store')
+    await app.close()
+  })
+
+  it('without a step-up grant → 403 STEP_UP_REQUIRED (no decrypt)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('STEP_UP_REQUIRED')
+    expect(db.credentialVault.findFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a grant minted for another profile is rejected (403)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: issueRevealGrant('someone-else').grant },
+    })
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 
@@ -224,6 +259,7 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
       method: 'POST',
       url: `${base}/${CRED}/reveal`,
       headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
     })
     expect(res.statusCode).toBe(409)
     await app.close()
@@ -237,11 +273,86 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
       method: 'POST',
       url: `${base}/${CRED}/reveal`,
       headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
     })
     expect(res.statusCode).toBe(404)
     await app.close()
   })
 })
+
+describe('POST /workspace/vault/step-up — password re-entry', () => {
+  it('correct password → 200 + grant', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'correct horse' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(typeof res.json().data.grant).toBe('string')
+    expect(res.headers['cache-control']).toBe('no-store')
+    await app.close()
+  })
+
+  it('wrong password → 401', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(false)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'nope' },
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('executor is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'x' },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('a step-up grant actually unlocks reveal end-to-end', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
+    const { app, token } = await authed(OWNER)
+    const stepUp = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'correct horse' },
+    })
+    const grant = stepUp.json().data.grant
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRowStandalone('unlocked'))
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.secret).toBe('unlocked')
+    await app.close()
+  })
+})
+
+// helper reused by the end-to-end step-up test (outside the reveal describe scope)
+function encRowStandalone(secret: string) {
+  const kek = getKek()!
+  return { id: CRED, revokedAt: null, ...encryptSecret(secret, kek) }
+}
 
 describe('GET …/:credId/audit — access journal (17-Б)', () => {
   it('owner sees reveal/change history with actor + ip', async () => {

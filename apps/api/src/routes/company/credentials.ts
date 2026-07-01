@@ -1,11 +1,13 @@
-import { withTenant } from '@workflo/db'
+import { prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { verifyPassword } from '../../auth/password.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { decryptSecret, encryptSecret, requireKek } from '../../services/credentialCrypto.js'
+import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.js'
 
 /**
  * Credentials Vault (module 17) — agency-side. Envelope-encrypted secrets bound to a CLIENT
@@ -25,6 +27,8 @@ const createSchema = z
     notes: z.string().trim().max(2000).optional(),
   })
   .strict()
+
+const stepUpSchema = z.object({ password: z.string().min(1).max(200) }).strict()
 
 // Plain metadata only — never the ciphertext or envelope bytes.
 const LIST_SELECT = {
@@ -111,6 +115,51 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
           })),
         },
       })
+    }
+  )
+
+  // ── Step-up: re-enter password → short-lived reveal grant (2FA-on-reveal) ──────
+  // Owner re-proves identity; success mints a 5-min grant the reveal endpoint requires. A
+  // borrowed session alone can't exfiltrate plaintext without the password. Rate-limited to
+  // blunt password guessing.
+  fastify.post(
+    '/workspace/vault/step-up',
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      const agencyId = requireActiveAgency(request.user)
+      if (!isAgencyOwner(request.user, agencyId)) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Лише власник агенції має доступ до секретів',
+          403
+        )
+      }
+      const { password } = stepUpSchema.parse(request.body)
+
+      const profile = await prisma.profile.findUnique({
+        where: { id: request.user.sub },
+        select: { passwordHash: true },
+      })
+      const ok = profile ? await verifyPassword(password, profile.passwordHash) : false
+      if (!ok) {
+        writeAuditAsync(request.log, {
+          actorId: request.user.sub,
+          agencyId,
+          action: 'credentials.step_up_failed',
+          resourceType: 'profile',
+          resourceId: request.user.sub,
+          result: 'denied',
+          metadata: { ip: request.ip },
+        })
+        throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Невірний пароль', 401)
+      }
+
+      const { grant, expiresAt } = issueRevealGrant(request.user.sub)
+      void reply.header('Cache-Control', 'no-store')
+      return reply.send({ success: true, data: { grant, expiresAt } })
     }
   )
 
@@ -224,6 +273,17 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { id: companyId, credId } = request.params
       const agencyId = await assertOwnerCompany(request.user, companyId)
+
+      // Step-up gate (2FA-on-reveal): a live password grant is required before any decrypt.
+      // 403 (not 401) so the API client doesn't mistake it for session-expiry and refresh/logout.
+      const { grant } = (request.body ?? {}) as { grant?: string }
+      if (!verifyRevealGrant(grant, request.user.sub)) {
+        throw new AppError(
+          ApiErrorCode.STEP_UP_REQUIRED,
+          'Підтвердьте пароль, щоб показати секрет',
+          403
+        )
+      }
       const kek = requireKek()
 
       const row = await withTenant((tx) =>

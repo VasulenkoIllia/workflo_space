@@ -17,6 +17,8 @@ import {
 } from '@/lib/clients'
 import {
   type Credential,
+  hasValidRevealGrant,
+  STEP_UP_REQUIRED,
   useCreateCredential,
   useCredentialAudit,
   useCredentials,
@@ -24,6 +26,7 @@ import {
   useRevealCredential,
   useRevokeCredential,
 } from '@/lib/credentials'
+import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 import { useClientMargin } from '@/lib/margin'
 import {
   type ClientRequisitesInput,
@@ -393,6 +396,7 @@ function SecretsSection({ companyId }: { companyId: string }) {
   const revoke = useRevokeCredential(companyId)
   const del = useDeleteCredential(companyId)
   const [adding, setAdding] = useState(false)
+  const [stepUpRetry, setStepUpRetry] = useState<(() => void) | null>(null)
 
   if (isLoading) return <Skeleton style={{ height: 160 }} />
   const creds = data?.credentials ?? []
@@ -441,10 +445,20 @@ function SecretsSection({ companyId }: { companyId: string }) {
               reveal={reveal}
               onRevoke={doRevoke}
               onDelete={doDelete}
+              onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
             />
           ))
         )}
       </div>
+      <VaultStepUpModal
+        open={stepUpRetry !== null}
+        onClose={() => setStepUpRetry(null)}
+        onSuccess={() => {
+          const retry = stepUpRetry
+          setStepUpRetry(null)
+          retry?.()
+        }}
+      />
     </Card>
   )
 }
@@ -463,25 +477,38 @@ function CredentialRow({
   reveal,
   onRevoke,
   onDelete,
+  onNeedStepUp,
 }: {
   companyId: string
   c: Credential
   reveal: ReturnType<typeof useRevealCredential>
   onRevoke: (c: Credential) => void
   onDelete: (c: Credential) => void
+  onNeedStepUp: (retry: () => void) => void
 }) {
   const [shown, setShown] = useState<string | null>(null)
   const [showLog, setShowLog] = useState(false)
   const audit = useCredentialAudit(companyId, c.id, showLog)
 
-  const doReveal = () => {
+  const runReveal = () => {
     reveal.mutate(c.id, {
       onSuccess: (r) => {
         setShown(r.secret)
         window.setTimeout(() => setShown(null), 20000) // auto-hide plaintext
       },
-      onError: () => toast.error('Не вдалося показати секрет'),
+      onError: (err) => {
+        // Grant expired between the check and the call → prompt for password, then retry.
+        if ((err as { code?: string }).code === STEP_UP_REQUIRED) {
+          onNeedStepUp(runReveal)
+          return
+        }
+        toast.error('Не вдалося показати секрет')
+      },
     })
+  }
+  const doReveal = () => {
+    if (hasValidRevealGrant()) runReveal()
+    else onNeedStepUp(runReveal)
   }
   const copy = () => {
     if (shown == null) return

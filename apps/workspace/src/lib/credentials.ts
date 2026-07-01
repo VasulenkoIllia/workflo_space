@@ -1,6 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
+/** Error code the reveal endpoint returns (HTTP 403) when a step-up grant is required. */
+export const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED'
+
+// ── Reveal step-up grant (2FA-on-reveal) ────────────────────────────────────────────
+// A short-lived password grant, shared in-memory across both vault surfaces so the owner
+// isn't re-prompted for every secret within the 5-min window. Never persisted.
+let revealGrant: { grant: string; expMs: number } | null = null
+const SKEW_MS = 5_000 // treat as expired a bit early to avoid a server-side reject race
+
+export function setRevealGrant(grant: string, expiresAt: string): void {
+  revealGrant = { grant, expMs: new Date(expiresAt).getTime() }
+}
+export function getRevealGrant(): string | null {
+  if (revealGrant && revealGrant.expMs - SKEW_MS > Date.now()) return revealGrant.grant
+  revealGrant = null
+  return null
+}
+export function hasValidRevealGrant(): boolean {
+  return getRevealGrant() !== null
+}
+
+/** Step-up: exchange the owner's password for a reveal grant (stored in-memory on success). */
+export function useVaultStepUp() {
+  return useMutation({
+    mutationFn: (password: string) =>
+      api.post<{ grant: string; expiresAt: string }>('/workspace/vault/step-up', { password }),
+    onSuccess: (r) => setRevealGrant(r.grant, r.expiresAt),
+  })
+}
+
 /** Credentials Vault (module 17) — agency-side. Metadata only; the secret value is revealed
  * one-shot via a dedicated endpoint (never cached). Owner-only on the backend. */
 export interface Credential {
@@ -66,14 +96,14 @@ export function useCredentialAudit(companyId: string, credId: string, enabled: b
   })
 }
 
-/** Reveal one secret. Deliberately NOT cached — returns the plaintext for one-shot display. */
+/** Reveal one secret. Deliberately NOT cached — returns the plaintext for one-shot display.
+ * Attaches the current step-up grant; a missing/expired grant → 403 STEP_UP_REQUIRED. */
 export function useRevealCredential(companyId: string) {
   return useMutation({
     mutationFn: (credId: string) =>
-      api.post<{ secret: string }>(
-        `/workspace/clients/${companyId}/credentials/${credId}/reveal`,
-        {}
-      ),
+      api.post<{ secret: string }>(`/workspace/clients/${companyId}/credentials/${credId}/reveal`, {
+        grant: getRevealGrant(),
+      }),
   })
 }
 
@@ -112,10 +142,9 @@ export function useGlobalVault() {
 export function useRevealGlobal() {
   return useMutation({
     mutationFn: ({ companyId, credId }: { companyId: string; credId: string }) =>
-      api.post<{ secret: string }>(
-        `/workspace/clients/${companyId}/credentials/${credId}/reveal`,
-        {}
-      ),
+      api.post<{ secret: string }>(`/workspace/clients/${companyId}/credentials/${credId}/reveal`, {
+        grant: getRevealGrant(),
+      }),
   })
 }
 
