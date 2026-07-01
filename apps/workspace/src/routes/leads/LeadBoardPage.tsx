@@ -44,11 +44,30 @@ export function LeadBoardPage() {
       if (!lead.convertedOrderId) setConverting(lead)
       return
     }
+    // «Втрачено» — capture the reason (CRM lost-reason tracking); Cancel aborts the move.
+    if (status === 'lost') {
+      const reason = window.prompt(`Причина втрати ліда «${lead.name}»?`, lead.lostReason ?? '')
+      if (reason === null) return
+      update.mutate(
+        { id: lead.id, status, lostReason: reason.trim() || null },
+        { onError: () => toast.error('Не вдалося перемістити лід') }
+      )
+      return
+    }
     update.mutate(
       { id: lead.id, status },
       { onError: () => toast.error('Не вдалося перемістити лід') }
     )
   }
+
+  // Pipeline stats from the current set (design: active count + conversion %).
+  const activeCount = leads.filter((l) => l.status !== 'won' && l.status !== 'lost').length
+  const wonCount = leads.filter((l) => l.status === 'won').length
+  const lostCount = leads.filter((l) => l.status === 'lost').length
+  const conversionPct =
+    wonCount + lostCount > 0 ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null
+  const colSum = (s: LeadStatus) =>
+    byCol(s).reduce((acc, l) => acc + (l.estimatedValue ? Number(l.estimatedValue) : 0), 0)
 
   const remove = (lead: Lead) => {
     if (!window.confirm(`Видалити лід «${lead.name}»?`)) return
@@ -62,7 +81,10 @@ export function LeadBoardPage() {
     <div>
       <div className="wfp-ph">
         <div className="wfp-ph-l">
-          <div className="wfp-ph-sub">// воронка продажів</div>
+          <div className="wfp-ph-sub">
+            // воронка продажів · {activeCount} активних
+            {conversionPct != null ? ` · конверсія ${conversionPct}%` : ''}
+          </div>
           <h1 className="wfp-ph-h1">Ліди</h1>
         </div>
         <div className="wfp-ph-r">
@@ -117,7 +139,10 @@ export function LeadBoardPage() {
                 }}
               >
                 <span>{col.label}</span>
-                <span>{byCol(col.id).length}</span>
+                <span>
+                  {byCol(col.id).length}
+                  {colSum(col.id) > 0 ? ` · $${colSum(col.id).toLocaleString('uk-UA')}` : ''}
+                </span>
               </div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {byCol(col.id).map((l) => (
@@ -142,6 +167,14 @@ export function LeadBoardPage() {
                         {l.contactName ?? ''}
                         {l.contactName && l.estimatedValue ? ' · ' : ''}
                         {l.estimatedValue ? `${Number(l.estimatedValue)} ${l.currency}` : ''}
+                      </div>
+                    )}
+                    {l.status === 'lost' && l.lostReason && (
+                      <div
+                        className="wfp-mono"
+                        style={{ fontSize: 11, color: 'var(--wf-destructive)', marginTop: 2 }}
+                      >
+                        ✕ {l.lostReason}
                       </div>
                     )}
                     <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
