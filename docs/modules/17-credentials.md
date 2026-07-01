@@ -11,7 +11,9 @@
 
 ---
 
-> 🔄 **design-v2 (2026-06-20):** доставлено **portal-secrets** — клієнтський перегляд/шеринг доступів (3 екрани: список ресурсів, reveal з 2FA, журнал доступу): [`portal-secrets.jsx`](../../design-v2/project/portal-secrets.jsx). 🔴 **бекенд greenfield** (звірено): моделі/route сейфа ще нема (цей модуль — S5+). W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+> 🔄 **design-v2 (2026-06-20):** доставлено **portal-secrets** — клієнтський перегляд/шеринг доступів (3 екрани: список ресурсів, reveal з 2FA, журнал доступу): [`portal-secrets.jsx`](../../design-v2/project/portal-secrets.jsx). Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+>
+> ✅ **UPDATE 2026-07-01 — agency-side MVP збудовано** (банер «бекенд greenfield» застарів): `CredentialVault` модель + RLS, envelope AES-256-GCM (`credentialCrypto.ts`, KEK у env), ендпоінти list/create/reveal/revoke/delete + глобальний `/vault` + per-secret журнал доступів + **step-up повторним паролем** на reveal (grant 5хв) + per-owner reveal-throttle (10/год). UI: таб «Секрети» картки 360° + екран `/vault`. **Ще НЕ збудовано:** `PUT`/inline-edit секрету (§122/§179), portal self-service (17-А) + 2FA-модал на порталі, типізовані картки (17-Д), executor-share (`CredentialShare`), нагадування про ротацію.
 
 ## Огляд
 

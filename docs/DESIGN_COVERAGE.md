@@ -58,7 +58,7 @@
 | 23 — Leave Tracking     |      12 |       0 |       0 |      12 |       0 |     2 |
 | 24 — Calendar           |      20 |       0 |       0 |      20 |       0 |     4 |
 | 25 — Wallet (Client)    |      16 |       7 |       0 |       9 |       6 |     6 |
-| 26 — Leads (CRM)        |      13 |       0 |       0 |      13 |       0 |     6 |
+| 26 — Leads (CRM)        |      13 |       3 |       0 |      10 |       0 |     6 |
 | 27 — Integrations Hub   |      14 |       0 |       0 |      14 |       0 |     5 |
 | 28 — Client Management  |      22 |       4 |       1 |      17 |       1 |     5 |
 | 29 — Support (Tickets)  |      19 |       0 |       1 |      18 |       0 |     3 |
@@ -752,6 +752,14 @@ Module 16 (Search & Filters) is largely DESIGN-only with a thin code stub. Desig
 
 ### 17 — Credentials Vault
 
+> **UPDATE 2026-07-01 — "CODE: nothing real exists" below is SUPERSEDED.** The agency-side vault
+> is now SHIPPED: `CredentialVault` model + RLS migration, `credentialCrypto.ts` (envelope
+> AES-256-GCM), `apps/api/src/routes/company/credentials.ts` (list/create/reveal/revoke/delete +
+> global `/vault` list + per-secret access journal + password step-up), the 360° «Секрети» tab
+> (`SecretRow`) and the `/vault` screen. **Still MISS:** portal self-service + portal 2FA modal
+> (17-А), typed secret cards/templates (17-Д), executor scoped-share, rotation reminders. The
+> table rows (759/763) and ROADMAP reflect this; the prose below is retained for design-history.
+
 Module 17 is a clean case of design-ahead, code-greenfield, docs-stale. DESIGN: design-v2 actually covers the module well across four files — PortalSecrets + Reveal2FAModal + PortalAddSecretModal (portal-secrets.jsx, all 3 portal screens incl. an access journal), C360Secrets + AddSecretModal (workspace-client360-tabs.jsx, typed cards + journal), WorkspaceVault (workspace-content.jsx, the global /vault screen with filters/search/stats), and an older flat ClientCreds (workspace-clients.jsx). CODE: nothing real exists — portal /secrets is the generic Placeholder (App.tsx:50, nav.tsx:28), workspace has no /vault route and ClientDetailPage has no Secrets tab (it's a bare orders list), there is no API route under apps/api/src, and no CredentialVault/CredentialShare model in schema.prisma (only an audit_logs comment mentions credential reveals). So every screen is MISSING/PLACEHOLDER and all conformance is NA. DOCS: DESIGN_SYSTEM.md §5.13.2 (line 549) and modules/17-credentials.md line 12 correctly call the backend greenfield/zero. The drift is concentrated in DESIGN_SPEC_FULL.md §17: its 'Що перевірити' notes #1/#3/#4/#5 and several Мокап-file columns are stale — they say the global vault, the access journal, the Portal secrets screen and the typed 17-Д cards are 'not drawn / nav-only / on no surface', but all of them now exist in design-v2 (the spec text predates the design-v2 delivery that the module doc's line-12 banner already records, and its 'Релевантні файли' still points at the old design/ bundle). The only genuine remaining design gap (already correctly noted) is the reveal flow's countdown/autohide/429 states and a missing 2FA modal on the Workspace side.
 
 | Екран                                                        | Дизайн-файл                        | ДизСтатус | Бекенд | Маршрут                      | Код     | Відп.   | Нотатки                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -1035,6 +1043,13 @@ Module 25's core ledger slice is genuinely shipped: Portal /wallet (WalletPage.t
 - 🟡 `doc-error` — Export-statement row (25-Г) describes the drawn button as «Виписка PDF» on both WalletPor… → **Only WalletPortal has a button labeled «Виписка PDF»; the WalletAdminCompanies mockup button is labeled «Експорт», not «Виписка PDF» — a minor mislab…** _(docs/DESIGN_SPEC_FULL.md:1831)_
 
 ### 26 — Leads (CRM)
+
+> **UPDATE 2026-07-01 — narrative below is SUPERSEDED (pre-build).** Module 26 is now partially
+> SHIPPED: `Lead` model + `LeadStatus` enum (`schema.prisma`), leads API
+> (`apps/api/src/routes/leads/leads.ts` — CRUD + convert-to-order, advisory-locked idempotency),
+> `/leads` kanban (A1) + `/leads/:id` detail (A2: edit/notes/convert/delete) + convert modal (A3),
+> and the leads nav entry (`nav.tsx`). **Still MISS:** pipeline editor (A4), UTM capture on the
+> contact form (C1), per-lead activity-timeline (needs `LeadActivity`). See ROADMAP §queue-2.
 
 Module 26 (Leads/CRM) is DESIGN-ONLY: zero code, zero backend. The design-v2 mockup `design-v2/project/workspace-leads.jsx` (439 lines) is rich and covers A1 kanban board (LeadsBoard), A2 lead detail (LeadDetail), A3 convert modal incl. the 26-A "first project in one step" extension (LeadConvertModal), A4 pipeline editor (LeadsPipelines), and B1 the shared WfSource source-icon set — all present and token-based (--wf-\* CSS vars, no hardcoded hex in layout; stage/source brand colors are intentional data values). C1 contact form exists in landing-marketing.jsx but is a plain contact form with NO UTM hidden fields / honeypot / Turnstile, so its "extend" claim overstates the mockup. On the CODE side there is nothing: no `/leads`, `/leads/:id`, or `/settings/leads/pipelines` route in apps/workspace (App.tsx catch-all redirects to `/`), no leads route file, no nav entry (only a comment in nav.tsx:15), no Lead/LeadPipeline/LeadStage/LeadActivity model in prisma schema, and no leads API route (only a stray `'leads'` string in apps/api/src/saas/limits.ts:15 QuotaResource enum). TRACKER.md confirms the whole module is unstarted: LEAD-1/LEAD-2 (and inbound INT-1/INT-3) are all ⬜, GROW-UI is ⏸️ design. DESIGN_SPEC_FULL statuses (РОЗШИР for A1-A4) describe design-intent layered on the design bundle, not code readiness — there is no code base to "extend." The main doc-level drifts: (1) the DESIGN_SYSTEM §5.13.2 "17-module readiness matrix" omits the leads module entirely (no row), and (2) the module's "Релевантні файли" footer in DESIGN_SPEC_FULL points to the old `design-v2/project/workspace-leads.jsx` path while the canonical bundle is `design-v2/`.
 
