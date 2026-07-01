@@ -75,7 +75,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії; лишок: пайплайн-редактор, UTM з contact-форми, activity-timeline.
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ, `/vault`, owner-only, фільтри клієнт/сервіс/пошук). Лишок: 2FA на reveal, executor-share, ротація-нагадування, portal self-service (17-А), типізовані шаблони (17-Д), журнал доступів клієнту (17-Б).
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б, per-secret, поверх audit_logs). Лишок: 2FA на reveal, executor-share, ротація-нагадування, portal self-service (17-А), типізовані шаблони (17-Д), журнал доступів **клієнту** (17-Б portal-side).
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 

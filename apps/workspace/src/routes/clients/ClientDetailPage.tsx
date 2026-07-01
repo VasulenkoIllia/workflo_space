@@ -18,6 +18,7 @@ import {
 import {
   type Credential,
   useCreateCredential,
+  useCredentialAudit,
   useCredentials,
   useDeleteCredential,
   useRevealCredential,
@@ -435,6 +436,7 @@ function SecretsSection({ companyId }: { companyId: string }) {
           creds.map((c) => (
             <CredentialRow
               key={c.id}
+              companyId={companyId}
               c={c}
               reveal={reveal}
               onRevoke={doRevoke}
@@ -447,18 +449,30 @@ function SecretsSection({ companyId }: { companyId: string }) {
   )
 }
 
+const CRED_ACTION_LABEL: Record<string, string> = {
+  'credentials.created': 'створено',
+  'credentials.revealed': 'показано',
+  'credentials.revoked': 'відкликано',
+  'credentials.deleted': 'видалено',
+  'credentials.updated': 'змінено',
+}
+
 function CredentialRow({
+  companyId,
   c,
   reveal,
   onRevoke,
   onDelete,
 }: {
+  companyId: string
   c: Credential
   reveal: ReturnType<typeof useRevealCredential>
   onRevoke: (c: Credential) => void
   onDelete: (c: Credential) => void
 }) {
   const [shown, setShown] = useState<string | null>(null)
+  const [showLog, setShowLog] = useState(false)
+  const audit = useCredentialAudit(companyId, c.id, showLog)
 
   const doReveal = () => {
     reveal.mutate(c.id, {
@@ -548,6 +562,14 @@ function CredentialRow({
           <button
             type="button"
             className="wfp-link"
+            style={{ fontSize: 12, color: showLog ? 'var(--wf-accent)' : undefined }}
+            onClick={() => setShowLog((v) => !v)}
+          >
+            журнал
+          </button>
+          <button
+            type="button"
+            className="wfp-link"
             style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
             onClick={() => onDelete(c)}
           >
@@ -582,6 +604,33 @@ function CredentialRow({
           >
             сховати
           </button>
+        </div>
+      )}
+      {showLog && (
+        <div style={{ marginTop: 8, borderTop: '1px dashed var(--wf-border)', paddingTop: 8 }}>
+          {audit.isLoading ? (
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              // завантаження журналу…
+            </div>
+          ) : (audit.data?.entries.length ?? 0) === 0 ? (
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              // ще не було дій
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 3 }}>
+              {audit.data?.entries.map((e) => (
+                <div
+                  key={e.id}
+                  className="wfp-mono"
+                  style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}
+                >
+                  {formatDate(e.createdAt)} · {CRED_ACTION_LABEL[e.action] ?? e.action} ·{' '}
+                  {e.actorName ?? '—'}
+                  {e.ip ? ` · ${e.ip}` : ''}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

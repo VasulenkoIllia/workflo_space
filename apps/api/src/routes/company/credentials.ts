@@ -132,6 +132,44 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── Access journal for one secret (17-Б, owner-facing) ─────────────────────────
+  // Read-only over audit_logs (credentials.* actions already carry actor + IP). Answers
+  // "хто з команди і коли відкривав/змінював цей секрет". No new store — RLS-scoped.
+  fastify.get<{ Params: { id: string; credId: string } }>(
+    '/workspace/clients/:id/credentials/:credId/audit',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { id: companyId, credId } = request.params
+      await assertOwnerCompany(request.user, companyId)
+      const rows = await withTenant((tx) =>
+        tx.auditLog.findMany({
+          where: { resourceType: 'credential', resourceId: credId },
+          select: {
+            id: true,
+            action: true,
+            result: true,
+            createdAt: true,
+            actorId: true,
+            actor: { select: { name: true } },
+            metadata: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      )
+      const entries = rows.map((r) => ({
+        id: r.id,
+        action: r.action,
+        result: r.result,
+        actorId: r.actorId,
+        actorName: r.actor?.name ?? null,
+        ip: (r.metadata as { ip?: string } | null)?.ip ?? null,
+        createdAt: r.createdAt,
+      }))
+      return reply.send({ success: true, data: { entries } })
+    }
+  )
+
   // ── Create (encrypts the secret before store) ──────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/workspace/clients/:id/credentials',

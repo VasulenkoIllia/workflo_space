@@ -13,6 +13,7 @@ const db = {
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
   },
+  auditLog: { findMany: vi.fn() },
 }
 
 vi.mock('@workflo/db', () => ({
@@ -238,6 +239,52 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('GET …/:credId/audit — access journal (17-Б)', () => {
+  it('owner sees reveal/change history with actor + ip', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.auditLog.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        action: 'credentials.revealed',
+        result: 'allowed',
+        createdAt: new Date('2026-02-01T10:00:00Z'),
+        actorId: OWNER.sub,
+        actor: { name: 'Ілля' },
+        metadata: { ip: '1.2.3.4', companyId: COMPANY },
+      },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.entries[0]).toMatchObject({
+      action: 'credentials.revealed',
+      actorName: 'Ілля',
+      ip: '1.2.3.4',
+    })
+    expect(db.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { resourceType: 'credential', resourceId: CRED },
+      })
+    )
+    await app.close()
+  })
+
+  it('executor is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 })

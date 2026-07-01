@@ -43,6 +43,29 @@ export function useCreateCredential(companyId: string) {
   })
 }
 
+/** One entry of a secret's access journal (17-Б, owner-facing). */
+export interface CredentialAuditEntry {
+  id: string
+  action: string
+  result: string
+  actorId: string | null
+  actorName: string | null
+  ip: string | null
+  createdAt: string
+}
+
+/** Access journal for one secret — «хто і коли відкривав/змінював». Lazy (enabled on expand). */
+export function useCredentialAudit(companyId: string, credId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['client-credential-audit', companyId, credId],
+    queryFn: () =>
+      api.get<{ entries: CredentialAuditEntry[] }>(
+        `/workspace/clients/${companyId}/credentials/${credId}/audit`
+      ),
+    enabled: enabled && companyId !== '' && credId !== '',
+  })
+}
+
 /** Reveal one secret. Deliberately NOT cached — returns the plaintext for one-shot display. */
 export function useRevealCredential(companyId: string) {
   return useMutation({
