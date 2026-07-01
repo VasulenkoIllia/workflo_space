@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ApiErrorCode } from '@workflo/types'
 import { api } from '@/lib/api'
 
-/** Error code the reveal endpoint returns (HTTP 403) when a step-up grant is required. */
-export const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED'
+/** Error code the reveal endpoint returns (HTTP 403) when a step-up grant is required.
+ * Bound to the shared enum so it can't drift from the API. */
+export const STEP_UP_REQUIRED: string = ApiErrorCode.STEP_UP_REQUIRED
 
 // ── Reveal step-up grant (2FA-on-reveal) ────────────────────────────────────────────
 // A short-lived password grant, shared in-memory across both vault surfaces so the owner
@@ -93,17 +95,6 @@ export function useCredentialAudit(companyId: string, credId: string, enabled: b
         `/workspace/clients/${companyId}/credentials/${credId}/audit`
       ),
     enabled: enabled && companyId !== '' && credId !== '',
-  })
-}
-
-/** Reveal one secret. Deliberately NOT cached — returns the plaintext for one-shot display.
- * Attaches the current step-up grant; a missing/expired grant → 403 STEP_UP_REQUIRED. */
-export function useRevealCredential(companyId: string) {
-  return useMutation({
-    mutationFn: (credId: string) =>
-      api.post<{ secret: string }>(`/workspace/clients/${companyId}/credentials/${credId}/reveal`, {
-        grant: getRevealGrant(),
-      }),
   })
 }
 

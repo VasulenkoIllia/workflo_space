@@ -1,25 +1,22 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import {
   type GlobalCredential,
-  hasValidRevealGrant,
-  STEP_UP_REQUIRED,
   useDeleteGlobal,
   useGlobalVault,
-  useRevealGlobal,
   useRevokeGlobal,
 } from '@/lib/credentials'
+import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
+import { formatDate } from '@/lib/format'
 
 /** Global credentials vault (module 17-ГЛОБАЛ) — owner-only. Every client's secrets on one
  * screen with client/service/search filters. Same envelope-encrypted store as the 360° tab;
  * reveal/revoke/delete route back to the per-company endpoints via each row's companyId. */
 export function VaultPage() {
   const { data, isLoading } = useGlobalVault()
-  const reveal = useRevealGlobal()
   const revoke = useRevokeGlobal()
   const del = useDeleteGlobal()
 
@@ -162,13 +159,14 @@ export function VaultPage() {
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {filtered.map((c) => (
-                  <VaultRow
+                  <SecretRow
                     key={c.id}
-                    c={c}
-                    reveal={reveal}
-                    onRevoke={doRevoke}
-                    onDelete={doDelete}
+                    cred={c}
+                    onRevoke={() => doRevoke(c)}
+                    onDelete={() => doDelete(c)}
                     onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
+                    showCompanyLink
+                    formatDate={formatDate}
                   />
                 ))}
               </div>
@@ -185,162 +183,6 @@ export function VaultPage() {
           retry?.()
         }}
       />
-    </div>
-  )
-}
-
-function VaultRow({
-  c,
-  reveal,
-  onRevoke,
-  onDelete,
-  onNeedStepUp,
-}: {
-  c: GlobalCredential
-  reveal: ReturnType<typeof useRevealGlobal>
-  onRevoke: (c: GlobalCredential) => void
-  onDelete: (c: GlobalCredential) => void
-  onNeedStepUp: (retry: () => void) => void
-}) {
-  const [shown, setShown] = useState<string | null>(null)
-
-  const runReveal = () => {
-    reveal.mutate(
-      { companyId: c.companyId, credId: c.id },
-      {
-        onSuccess: (r) => {
-          setShown(r.secret)
-          window.setTimeout(() => setShown(null), 20000) // auto-hide plaintext
-        },
-        onError: (err) => {
-          if ((err as { code?: string }).code === STEP_UP_REQUIRED) {
-            onNeedStepUp(runReveal)
-            return
-          }
-          toast.error('Не вдалося показати секрет')
-        },
-      }
-    )
-  }
-  const doReveal = () => {
-    if (hasValidRevealGrant()) runReveal()
-    else onNeedStepUp(runReveal)
-  }
-  const copy = () => {
-    if (shown == null) return
-    void navigator.clipboard?.writeText(shown)
-    toast.success('Скопійовано')
-  }
-
-  return (
-    <div
-      style={{
-        border: '1px solid var(--wf-border)',
-        borderRadius: 'var(--wf-radius)',
-        padding: '10px 12px',
-        opacity: c.revoked ? 0.55 : 1,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 12,
-          alignItems: 'baseline',
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 500 }}>
-            {c.label}
-            {c.service && (
-              <span
-                className="wfp-mono"
-                style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
-              >
-                {c.service}
-              </span>
-            )}
-            {c.revoked && (
-              <span
-                className="wfp-mono"
-                style={{ fontSize: 11, color: 'var(--wf-destructive)', marginLeft: 8 }}
-              >
-                відкликано
-              </span>
-            )}
-          </div>
-          <div
-            className="wfp-mono"
-            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 2 }}
-          >
-            <Link to={`/clients/${c.companyId}`} className="wfp-link">
-              {c.companyName}
-            </Link>
-            {c.username ? ` · ${c.username}` : ''}
-            {c.url ? ` · ${c.url}` : ''}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-          {!c.revoked && (
-            <button
-              type="button"
-              className="wfp-link"
-              style={{ fontSize: 12 }}
-              disabled={reveal.isPending}
-              onClick={doReveal}
-            >
-              показати
-            </button>
-          )}
-          {!c.revoked && (
-            <button
-              type="button"
-              className="wfp-link"
-              style={{ fontSize: 12 }}
-              onClick={() => onRevoke(c)}
-            >
-              відкликати
-            </button>
-          )}
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
-            onClick={() => onDelete(c)}
-          >
-            видалити
-          </button>
-        </div>
-      </div>
-      {shown != null && (
-        <div
-          style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}
-        >
-          <code
-            style={{
-              background: 'var(--wf-surface)',
-              border: '1px solid var(--wf-border)',
-              borderRadius: 'var(--wf-radius)',
-              padding: '4px 8px',
-              fontSize: 13,
-              wordBreak: 'break-all',
-            }}
-          >
-            {shown}
-          </code>
-          <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={copy}>
-            копіювати
-          </button>
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}
-            onClick={() => setShown(null)}
-          >
-            сховати
-          </button>
-        </div>
-      )}
     </div>
   )
 }

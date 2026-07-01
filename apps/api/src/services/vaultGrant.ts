@@ -43,7 +43,9 @@ export function verifyRevealGrant(
   profileId: string,
   now: number = Date.now()
 ): boolean {
-  if (!grant) return false
+  // Guard non-string bodies (e.g. `{ grant: 123 }`) — the route casts request.body, so a
+  // truthy non-string would otherwise reach .split() and throw a 500 instead of a clean reject.
+  if (typeof grant !== 'string' || grant === '') return false
   const parts = grant.split('|')
   if (parts.length !== 3) return false
   const [pid, expStr, mac] = parts

@@ -17,15 +17,12 @@ import {
 } from '@/lib/clients'
 import {
   type Credential,
-  hasValidRevealGrant,
-  STEP_UP_REQUIRED,
   useCreateCredential,
-  useCredentialAudit,
   useCredentials,
   useDeleteCredential,
-  useRevealCredential,
   useRevokeCredential,
 } from '@/lib/credentials'
+import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 import { useClientMargin } from '@/lib/margin'
 import {
@@ -392,7 +389,6 @@ const MEMBER_ROLE_LABEL: Record<string, string> = {
 function SecretsSection({ companyId }: { companyId: string }) {
   const { data, isLoading } = useCredentials(companyId)
   const create = useCreateCredential(companyId)
-  const reveal = useRevealCredential(companyId)
   const revoke = useRevokeCredential(companyId)
   const del = useDeleteCredential(companyId)
   const [adding, setAdding] = useState(false)
@@ -438,14 +434,13 @@ function SecretsSection({ companyId }: { companyId: string }) {
           </div>
         ) : (
           creds.map((c) => (
-            <CredentialRow
+            <SecretRow
               key={c.id}
-              companyId={companyId}
-              c={c}
-              reveal={reveal}
-              onRevoke={doRevoke}
-              onDelete={doDelete}
+              cred={{ ...c, companyId }}
+              onRevoke={() => doRevoke(c)}
+              onDelete={() => doDelete(c)}
               onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
+              formatDate={formatDate}
             />
           ))
         )}
@@ -460,207 +455,6 @@ function SecretsSection({ companyId }: { companyId: string }) {
         }}
       />
     </Card>
-  )
-}
-
-const CRED_ACTION_LABEL: Record<string, string> = {
-  'credentials.created': 'створено',
-  'credentials.revealed': 'показано',
-  'credentials.revoked': 'відкликано',
-  'credentials.deleted': 'видалено',
-  'credentials.updated': 'змінено',
-}
-
-function CredentialRow({
-  companyId,
-  c,
-  reveal,
-  onRevoke,
-  onDelete,
-  onNeedStepUp,
-}: {
-  companyId: string
-  c: Credential
-  reveal: ReturnType<typeof useRevealCredential>
-  onRevoke: (c: Credential) => void
-  onDelete: (c: Credential) => void
-  onNeedStepUp: (retry: () => void) => void
-}) {
-  const [shown, setShown] = useState<string | null>(null)
-  const [showLog, setShowLog] = useState(false)
-  const audit = useCredentialAudit(companyId, c.id, showLog)
-
-  const runReveal = () => {
-    reveal.mutate(c.id, {
-      onSuccess: (r) => {
-        setShown(r.secret)
-        window.setTimeout(() => setShown(null), 20000) // auto-hide plaintext
-      },
-      onError: (err) => {
-        // Grant expired between the check and the call → prompt for password, then retry.
-        if ((err as { code?: string }).code === STEP_UP_REQUIRED) {
-          onNeedStepUp(runReveal)
-          return
-        }
-        toast.error('Не вдалося показати секрет')
-      },
-    })
-  }
-  const doReveal = () => {
-    if (hasValidRevealGrant()) runReveal()
-    else onNeedStepUp(runReveal)
-  }
-  const copy = () => {
-    if (shown == null) return
-    void navigator.clipboard?.writeText(shown)
-    toast.success('Скопійовано')
-  }
-
-  return (
-    <div
-      style={{
-        border: '1px solid var(--wf-border)',
-        borderRadius: 'var(--wf-radius)',
-        padding: '10px 12px',
-        opacity: c.revoked ? 0.55 : 1,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 12,
-          alignItems: 'baseline',
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 500 }}>
-            {c.label}
-            {c.service && (
-              <span
-                className="wfp-mono"
-                style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
-              >
-                {c.service}
-              </span>
-            )}
-            {c.revoked && (
-              <span
-                className="wfp-mono"
-                style={{ fontSize: 11, color: 'var(--wf-destructive)', marginLeft: 8 }}
-              >
-                відкликано
-              </span>
-            )}
-          </div>
-          {(c.username || c.url) && (
-            <div
-              className="wfp-mono"
-              style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 2 }}
-            >
-              {c.username ?? ''}
-              {c.username && c.url ? ' · ' : ''}
-              {c.url ?? ''}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-          {!c.revoked && (
-            <button
-              type="button"
-              className="wfp-link"
-              style={{ fontSize: 12 }}
-              disabled={reveal.isPending}
-              onClick={doReveal}
-            >
-              показати
-            </button>
-          )}
-          {!c.revoked && (
-            <button
-              type="button"
-              className="wfp-link"
-              style={{ fontSize: 12 }}
-              onClick={() => onRevoke(c)}
-            >
-              відкликати
-            </button>
-          )}
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: showLog ? 'var(--wf-accent)' : undefined }}
-            onClick={() => setShowLog((v) => !v)}
-          >
-            журнал
-          </button>
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
-            onClick={() => onDelete(c)}
-          >
-            видалити
-          </button>
-        </div>
-      </div>
-      {shown != null && (
-        <div
-          style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}
-        >
-          <code
-            style={{
-              background: 'var(--wf-surface)',
-              border: '1px solid var(--wf-border)',
-              borderRadius: 'var(--wf-radius)',
-              padding: '4px 8px',
-              fontSize: 13,
-              wordBreak: 'break-all',
-            }}
-          >
-            {shown}
-          </code>
-          <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={copy}>
-            копіювати
-          </button>
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}
-            onClick={() => setShown(null)}
-          >
-            сховати
-          </button>
-        </div>
-      )}
-      {showLog && (
-        <div style={{ marginTop: 8, borderTop: '1px dashed var(--wf-border)', paddingTop: 8 }}>
-          {audit.isLoading ? (
-            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-              // завантаження журналу…
-            </div>
-          ) : (audit.data?.entries.length ?? 0) === 0 ? (
-            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-              // ще не було дій
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: 3 }}>
-              {audit.data?.entries.map((e) => (
-                <div
-                  key={e.id}
-                  className="wfp-mono"
-                  style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}
-                >
-                  {formatDate(e.createdAt)} · {CRED_ACTION_LABEL[e.action] ?? e.action} ·{' '}
-                  {e.actorName ?? '—'}
-                  {e.ip ? ` · ${e.ip}` : ''}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   )
 }
 

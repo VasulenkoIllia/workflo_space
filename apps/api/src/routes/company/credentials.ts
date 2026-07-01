@@ -30,6 +30,13 @@ const createSchema = z
 
 const stepUpSchema = z.object({ password: z.string().min(1).max(200) }).strict()
 
+// Per-owner reveal throttle (module 17 §133): 10 reveals / hour, keyed on the owner (not IP, which
+// would lock out co-located owners). Counted over the owner's own committed reveal audit rows;
+// best-effort (audit writes are async, so a sub-second burst may slip a couple past the cap — fine
+// for a slow-exfil guard, and step-up already blocks reveal without the password).
+const REVEAL_MAX_PER_WINDOW = 10
+const REVEAL_WINDOW_MS = 60 * 60 * 1000
+
 // Plain metadata only — never the ciphertext or envelope bytes.
 const LIST_SELECT = {
   id: true,
@@ -190,6 +197,13 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { id: companyId, credId } = request.params
       await assertOwnerCompany(request.user, companyId)
+      // The secret must belong to THIS company (else an owner could read the journal of a
+      // credential from another of their client companies by pairing an owned companyId with a
+      // foreign credId). Mirrors the reveal/revoke/delete existence check.
+      const cred = await withTenant((tx) =>
+        tx.credentialVault.findFirst({ where: { id: credId, companyId }, select: { id: true } })
+      )
+      if (!cred) throw new AppError(ApiErrorCode.NOT_FOUND, 'Секрет не знайдено', 404)
       const rows = await withTenant((tx) =>
         tx.auditLog.findMany({
           where: { resourceType: 'credential', resourceId: credId },
@@ -261,29 +275,52 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
-  // ── Reveal (decrypt one secret; rate-limited + audit-logged, never cached) ──────
+  // ── Reveal (decrypt one secret; owner-throttled + audit-logged, never cached) ───
   fastify.post<{ Params: { id: string; credId: string } }>(
     '/workspace/clients/:id/credentials/:credId/reveal',
-    {
-      preHandler: [fastify.authenticate],
-      // Coarse IP-based throttle against bulk exfiltration; precise per-(owner,company)
-      // keying is a follow-up (rate-limit runs before authenticate, so no request.user yet).
-      config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
-    },
+    { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { id: companyId, credId } = request.params
       const agencyId = await assertOwnerCompany(request.user, companyId)
 
       // Step-up gate (2FA-on-reveal): a live password grant is required before any decrypt.
       // 403 (not 401) so the API client doesn't mistake it for session-expiry and refresh/logout.
-      const { grant } = (request.body ?? {}) as { grant?: string }
-      if (!verifyRevealGrant(grant, request.user.sub)) {
+      const { grant } = (request.body ?? {}) as { grant?: unknown }
+      if (!verifyRevealGrant(typeof grant === 'string' ? grant : null, request.user.sub)) {
         throw new AppError(
           ApiErrorCode.STEP_UP_REQUIRED,
           'Підтвердьте пароль, щоб показати секрет',
           403
         )
       }
+
+      // Per-owner reveal throttle (anti-exfil) — keyed on the owner, not IP.
+      const revealsThisWindow = await withTenant((tx) =>
+        tx.auditLog.count({
+          where: {
+            actorId: request.user.sub,
+            action: 'credentials.revealed',
+            createdAt: { gte: new Date(Date.now() - REVEAL_WINDOW_MS) },
+          },
+        })
+      )
+      if (revealsThisWindow >= REVEAL_MAX_PER_WINDOW) {
+        writeAuditAsync(request.log, {
+          actorId: request.user.sub,
+          agencyId,
+          action: 'credentials.reveal_rate_limited',
+          resourceType: 'credential',
+          resourceId: credId,
+          result: 'denied',
+          metadata: { companyId, ip: request.ip },
+        })
+        throw new AppError(
+          ApiErrorCode.RATE_LIMITED,
+          'Забагато переглядів секретів. Спробуйте за годину.',
+          429
+        )
+      }
+
       const kek = requireKek()
 
       const row = await withTenant((tx) =>

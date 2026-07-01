@@ -73,6 +73,14 @@ export function encryptSecret(plaintext: string, kek: Buffer): EncryptedRecord {
 
 /** Decrypt an envelope record back to plaintext. Throws on tamper / wrong KEK (GCM auth). */
 export function decryptSecret(rec: EncryptedRecord, kek: Buffer): string {
+  // Defense-in-depth: reject structurally malformed records up front (GCM would also throw,
+  // but this gives a precise error if the row were ever corrupted outside encryptSecret()).
+  if (rec.dekIv.length !== IV_LEN || rec.ciphertextIv.length !== IV_LEN) {
+    throw new Error('credentialCrypto: bad IV length')
+  }
+  if (rec.dekAuthTag.length !== 16 || rec.ciphertextAuthTag.length !== 16) {
+    throw new Error('credentialCrypto: bad GCM auth-tag length')
+  }
   const dekDecipher = createDecipheriv('aes-256-gcm', kek, rec.dekIv)
   dekDecipher.setAuthTag(rec.dekAuthTag)
   const dek = Buffer.concat([dekDecipher.update(rec.encryptedDek), dekDecipher.final()])

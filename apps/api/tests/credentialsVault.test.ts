@@ -13,7 +13,7 @@ const db = {
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
   },
-  auditLog: { findMany: vi.fn() },
+  auditLog: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
   profile: { findUnique: vi.fn() },
 }
 
@@ -237,6 +237,36 @@ describe('POST …/:credId/reveal — decrypt one secret', () => {
     await app.close()
   })
 
+  it('a non-string grant is rejected as 403, not a 500 (hardened body cast)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: 12345 },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('STEP_UP_REQUIRED')
+    await app.close()
+  })
+
+  it('throttles at 10 reveals/hour per owner → 429 (no decrypt)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.auditLog.count.mockResolvedValueOnce(10) // already at the cap this window
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(429)
+    expect(db.credentialVault.findFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('a grant minted for another profile is rejected (403)', async () => {
     db.company.findFirst.mockResolvedValue({ id: COMPANY })
     db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
@@ -357,6 +387,7 @@ function encRowStandalone(secret: string) {
 describe('GET …/:credId/audit — access journal (17-Б)', () => {
   it('owner sees reveal/change history with actor + ip', async () => {
     db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue({ id: CRED })
     db.auditLog.findMany.mockResolvedValue([
       {
         id: 'a1',
@@ -385,6 +416,20 @@ describe('GET …/:credId/audit — access journal (17-Б)', () => {
         where: { resourceType: 'credential', resourceId: CRED },
       })
     )
+    await app.close()
+  })
+
+  it('404 when the credId does not belong to this company (no cross-company journal leak)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(null) // cred belongs to another company
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(db.auditLog.findMany).not.toHaveBeenCalled()
     await app.close()
   })
 
