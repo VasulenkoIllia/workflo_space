@@ -42,11 +42,24 @@ export function useLeads(status?: LeadStatus) {
   })
 }
 
+export function useLead(id: string) {
+  return useQuery({
+    queryKey: ['ws-lead', id],
+    queryFn: () => api.get<{ lead: Lead }>(`/workspace/leads/${id}`).then((r) => r.lead),
+    enabled: id !== '',
+  })
+}
+
+function invalidateLeads(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['ws-leads'] })
+  void qc.invalidateQueries({ queryKey: ['ws-lead'] })
+}
+
 export function useCreateLead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: LeadInput) => api.post<{ lead: Lead }>('/workspace/leads', body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-leads'] }),
+    onSuccess: () => invalidateLeads(qc),
   })
 }
 
@@ -71,7 +84,7 @@ export function useUpdateLead() {
   return useMutation({
     mutationFn: ({ id, ...body }: LeadUpdateInput) =>
       api.patch<{ lead: Lead }>(`/workspace/leads/${id}`, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-leads'] }),
+    onSuccess: () => invalidateLeads(qc),
   })
 }
 
@@ -83,7 +96,7 @@ export function useConvertLead() {
         companyId,
         ...(title ? { title } : {}),
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-leads'] }),
+    onSuccess: () => invalidateLeads(qc),
   })
 }
 
@@ -91,6 +104,6 @@ export function useDeleteLead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.delete(`/workspace/leads/${id}`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-leads'] }),
+    onSuccess: () => invalidateLeads(qc),
   })
 }

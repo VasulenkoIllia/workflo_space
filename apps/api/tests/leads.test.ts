@@ -124,6 +124,36 @@ describe('GET /workspace/leads', () => {
   })
 })
 
+describe('GET /workspace/leads/:id', () => {
+  it('returns a single lead scoped to the agency', async () => {
+    db.lead.findFirst.mockResolvedValue(leadRow())
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads/lead-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.lead.id).toBe('lead-1')
+    expect(db.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'lead-1', agencyId: AGENCY } })
+    )
+    await app.close()
+  })
+
+  it('is 404 for a lead in another tenant', async () => {
+    db.lead.findFirst.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads/lead-x',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
 describe('POST /workspace/leads', () => {
   it('creates a lead (201, agency-bound, USD default)', async () => {
     db.lead.create.mockResolvedValue(leadRow({ name: 'New deal' }))

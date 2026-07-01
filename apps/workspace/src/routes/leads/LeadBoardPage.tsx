@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
@@ -158,7 +159,13 @@ export function LeadBoardPage() {
                       cursor: 'grab',
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{l.name}</div>
+                    <Link
+                      to={`/leads/${l.id}`}
+                      className="wfp-link"
+                      style={{ fontSize: 13, fontWeight: 500 }}
+                    >
+                      {l.name}
+                    </Link>
                     {(l.contactName || l.estimatedValue) && (
                       <div
                         className="wfp-mono"

@@ -102,7 +102,7 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
-- **Leads-дозбудова (пост-аудит).** Закрив нотатку аудиту (drag→«Втрачено» губив причину): drag у «Втрачено» тепер запитує причину (`window.prompt`, Cancel скасовує), причина показується на картці «✕ …». + суми угод по колонках (`$Σ estimatedValue`) + активні/**конверсія %** у хедері (won/(won+lost)). Frontend-only (бек уже приймав `lostReason`). Гейт 55/55. _Лишок Leads: lead-detail-сторінка, пайплайн-редактор, UTM-захоплення з contact-форми._
+- **Leads-дозбудова (пост-аудит).** Закрив нотатку аудиту (drag→«Втрачено» губив причину): drag у «Втрачено» тепер запитує причину (`window.prompt`, Cancel скасовує), причина показується на картці «✕ …». + суми угод по колонках (`$Σ estimatedValue`) + активні/**конверсія %** у хедері (won/(won+lost)). Frontend-only (бек уже приймав `lostReason`). Гейт 55/55. **+ lead-detail сторінка** `/leads/:id` (новий `GET /workspace/leads/:id` +2 тести; редактор усіх полів + нотатки + стадія + inline-конвертація/видалення; клік на назві картки → деталь). _Лишок Leads: пайплайн-редактор, UTM-захоплення з contact-форми, per-lead activity-timeline (потребує `LeadActivity`)._
 
 - **🔎 Наскрізний аудит сесії + ремедіація (2026-07-01, `f64c67b`).** 3-агентний аудит (security·typescript·code) діфу `8656538..a24409d` → `docs/AUDIT_2026-07.md`. 0 crit/high security. Виправлено: HIGH timer-`dateOnly` UTC→Europe/Kyiv бізнес-день; HIGH lead drag-to-won обходив convert (бек-гард + фронт→convert-модалка); MED last-owner + lead-convert TOCTOU (per-company/per-lead advisory-lock); LOW cron auto-stop lock; nits (ClientProject.createdAt, useUpdateLead тип). Регресій 0. Гейт: api **572**+151 gated·types 104·3 міграції drift-free (перевірено `migrate deploy` на real-PG).
 

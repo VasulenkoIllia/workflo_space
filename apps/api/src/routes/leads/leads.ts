@@ -104,6 +104,20 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── Detail (single lead) ──────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/workspace/leads/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = assertTeam(request.user)
+      const lead = await withTenant((tx) =>
+        tx.lead.findFirst({ where: { id: request.params.id, agencyId }, select: LEAD_SELECT })
+      )
+      if (!lead) throw new AppError(ApiErrorCode.NOT_FOUND, 'Лід не знайдено', 404)
+      return reply.send({ success: true, data: { lead: toDto(lead) } })
+    }
+  )
+
   // ── Create ────────────────────────────────────────────────────────────────────
   fastify.post(
     '/workspace/leads',
