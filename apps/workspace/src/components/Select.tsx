@@ -4,11 +4,13 @@ export function Select({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
+  disabled?: boolean
 }) {
   return (
     <label style={{ display: 'grid', gap: 4 }}>
@@ -18,6 +20,7 @@ export function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         style={{
           background: 'var(--wf-surface)',
           color: 'var(--wf-fg)',
@@ -25,6 +28,7 @@ export function Select({
           borderRadius: 'var(--wf-radius)',
           padding: '8px 10px',
           fontSize: 14,
+          ...(disabled ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
         }}
       >
         {options.map((o) => (

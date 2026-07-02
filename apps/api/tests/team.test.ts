@@ -45,6 +45,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     auditLog: { create: auditLogCreate },
     referralSettings: { findUnique: referralSettingsFindUnique },
     company: { findMany: companyFindMany },
+    // rates POST / zero-cost PATCH беруть advisory lock перед close/create вікна
+    $executeRaw: (() => Promise.resolve(1)) as unknown,
   }
   return {
     prisma,

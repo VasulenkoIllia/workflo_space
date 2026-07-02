@@ -1,5 +1,5 @@
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
+import { ApiErrorCode, AppError, updateMemberRoleSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
@@ -42,6 +42,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
           select: {
             executorId: true,
             monthlySalary: true,
+            hourlyRate: true,
             commissionPercent: true,
             currency: true,
             zeroCostDefault: true,
@@ -68,6 +69,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             rate: rate
               ? {
                   monthlySalary: rate.monthlySalary ? rate.monthlySalary.toFixed(2) : null,
+                  hourlyRate: rate.hourlyRate ? rate.hourlyRate.toFixed(2) : null,
                   commissionPercent: rate.commissionPercent.toString(),
                   currency: rate.currency,
                   zeroCostDefault: rate.zeroCostDefault,
@@ -110,6 +112,52 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
         resourceId: request.params.id,
         result: 'allowed',
         metadata: { weeklyCapacityHours: input.weeklyCapacityHours },
+      })
+      return reply.send({ success: true, data: { member: updated } })
+    }
+  )
+
+  // ── Change a member's role (owner-only, 12-EDITMEMBER) ─────────────────────────
+  // Targets are manager/executor only (schema-enforced), and an OWNER row cannot be
+  // touched here at all — demoting the last owner would lock the agency out;
+  // ownership transfer is a separate deliberate flow, not a roster edit.
+  fastify.patch<{ Params: { id: string } }>(
+    '/workspace/executors/:id/role',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = updateMemberRoleSchema.parse(request.body)
+      const user = request.user
+      const agencyId = requireActiveAgency(user)
+      if (!isAgencyOwner(user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції', 403)
+      }
+      const updated = await withTenant(async (tx) => {
+        const member = await tx.agencyMember.findUnique({
+          where: { agencyId_profileId: { agencyId, profileId: request.params.id } },
+          select: { id: true, role: true },
+        })
+        if (!member) throw new AppError(ApiErrorCode.NOT_FOUND, 'Учасника не знайдено', 404)
+        if (member.role === 'owner') {
+          throw new AppError(
+            ApiErrorCode.CONFLICT,
+            'Роль власника змінюється лише передачею власності',
+            409
+          )
+        }
+        return tx.agencyMember.update({
+          where: { agencyId_profileId: { agencyId, profileId: request.params.id } },
+          data: { role: input.role },
+          select: { profileId: true, role: true },
+        })
+      })
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId,
+        action: 'team.role_set',
+        resourceType: 'agency_member',
+        resourceId: request.params.id,
+        result: 'allowed',
+        metadata: { role: input.role },
       })
       return reply.send({ success: true, data: { member: updated } })
     }

@@ -22,6 +22,8 @@ export interface Payout {
 
 export interface TeamRate {
   monthlySalary: string | null
+  /** Базова собівартість години (каскад маржі §2.3) — НЕ клієнтська ставка. */
+  hourlyRate: string | null
   commissionPercent: string
   currency: string
   /** «без собівартості» (22/P-5): весь дохід проєктів людини = дохід агенції. */
@@ -43,6 +45,7 @@ export interface TeamMember {
 export interface RateInput {
   executorId: string
   monthlySalary?: number
+  hourlyRate?: number
   commissionPercent?: number
   currency?: string
   hireDate?: string
@@ -98,6 +101,16 @@ export function useSetRate() {
   return useMutation({
     mutationFn: ({ executorId, ...body }: RateInput) =>
       api.post(`/workspace/executors/${executorId}/rates`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
+  })
+}
+
+/** PATCH роль учасника (owner-only, 12-EDITMEMBER): manager/executor; owner-рядок — 409. */
+export function useSetRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, role }: { profileId: string; role: 'manager' | 'executor' }) =>
+      api.patch(`/workspace/executors/${profileId}/role`, { role }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
   })
 }

@@ -1,10 +1,19 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Avatar, Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
+import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { useSetCapacity, useSetZeroCost, useTeam, type TeamMember } from '@/lib/payouts'
+import {
+  num,
+  useSetCapacity,
+  useSetRate,
+  useSetRole,
+  useSetZeroCost,
+  useTeam,
+  type TeamMember,
+} from '@/lib/payouts'
 import { formatDate } from '@/lib/format'
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/
@@ -15,11 +24,12 @@ const ROLE_LABEL: Record<string, string> = {
   executor: 'виконавець',
 }
 
-/** Owner — agency team: invite executors + roster with roles, join dates and (owner-only) rates. */
+/** Owner — agency team: invite executors + roster; усі правки учасника — в EditMemberModal. */
 export function TeamPage() {
   const [email, setEmail] = useState('')
   const { isOwner } = useAuth()
   const { data, isLoading } = useTeam()
+  const [editing, setEditing] = useState<TeamMember | null>(null)
   const members = data?.members ?? []
 
   const invite = useMutation({
@@ -77,50 +87,27 @@ export function TeamPage() {
         ) : (
           <div style={{ display: 'grid', gap: 2 }}>
             {members.map((m) => (
-              <MemberRow key={m.profileId} member={m} canEdit={isOwner} />
+              <MemberRow key={m.profileId} member={m} canEdit={isOwner} onEdit={setEditing} />
             ))}
           </div>
         )}
       </Card>
+
+      {editing && <EditMemberModal member={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }
 
-function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }) {
+function MemberRow({
+  member,
+  canEdit,
+  onEdit,
+}: {
+  member: TeamMember
+  canEdit: boolean
+  onEdit: (m: TeamMember) => void
+}) {
   const rate = member.rate
-  const setCapacity = useSetCapacity()
-  const setZeroCost = useSetZeroCost()
-  const [cap, setCap] = useState(member.weeklyCapacityHours?.toString() ?? '')
-
-  const toggleZeroCost = () => {
-    const next = !(rate?.zeroCostDefault ?? false)
-    setZeroCost.mutate(
-      { profileId: member.profileId, zeroCostDefault: next },
-      {
-        onSuccess: () =>
-          toast.success(next ? 'Без собівартості: увімкнено' : 'Собівартість враховується'),
-        onError: () => toast.error('Не вдалося змінити прапорець'),
-      }
-    )
-  }
-
-  const saveCapacity = () => {
-    const trimmed = cap.trim()
-    const next = trimmed === '' ? null : Number(trimmed)
-    if (next === (member.weeklyCapacityHours ?? null)) return
-    if (next != null && (!Number.isFinite(next) || next < 0 || next > 168)) {
-      toast.error('Норма: 0–168 год/тиж')
-      setCap(member.weeklyCapacityHours?.toString() ?? '')
-      return
-    }
-    setCapacity.mutate(
-      { profileId: member.profileId, weeklyCapacityHours: next },
-      {
-        onSuccess: () => toast.success('Норму збережено'),
-        onError: () => toast.error('Не вдалося зберегти норму'),
-      }
-    )
-  }
 
   return (
     <div
@@ -156,45 +143,17 @@ function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }
         {ROLE_LABEL[member.role] ?? member.role}
       </span>
       <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
-        з {formatDate(member.joinedAt)}
+        з {formatDate(member.joinedAt)} ·{' '}
+        {member.weeklyCapacityHours != null
+          ? `${member.weeklyCapacityHours} год/тиж`
+          : '40 год/тиж'}
       </span>
-      {canEdit ? (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input
-            value={cap}
-            onChange={(e) => setCap(e.target.value)}
-            onBlur={saveCapacity}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            }}
-            inputMode="numeric"
-            placeholder="40"
-            title="Норма годин/тиждень"
-            style={{
-              width: 48,
-              background: 'var(--wf-surface)',
-              color: 'var(--wf-fg)',
-              border: '1px solid var(--wf-border)',
-              borderRadius: 'var(--wf-radius)',
-              padding: '4px 6px',
-              fontSize: 12,
-            }}
-          />
-          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-            год/тиж
-          </span>
-        </span>
-      ) : (
-        <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
-          {member.weeklyCapacityHours != null ? `${member.weeklyCapacityHours} год/тиж` : '—'}
-        </span>
-      )}
       <span
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-end',
-          gap: 4,
+          gap: 2,
         }}
       >
         <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
@@ -204,23 +163,224 @@ function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }
               }`
             : '—'}
         </span>
-        {canEdit ? (
-          <button
-            type="button"
-            className="wfp-pill"
-            data-on={rate?.zeroCostDefault ?? false}
-            disabled={setZeroCost.isPending}
-            onClick={toggleZeroCost}
-            title="Весь дохід проєктів цієї людини = дохід агенції (собівартість 0 у маржі)"
-          >
-            без собівартості
-          </button>
-        ) : rate?.zeroCostDefault ? (
-          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        {rate?.zeroCostDefault && (
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
             без собівартості
           </span>
-        ) : null}
+        )}
       </span>
+      {canEdit ? (
+        <Button size="sm" variant="ghost" onClick={() => onEdit(member)}>
+          Редагувати
+        </Button>
+      ) : (
+        <span />
+      )}
     </div>
+  )
+}
+
+/**
+ * 12-EDITMEMBER (design workspace-admin.jsx EditMemberModal, чесний субсет без
+ * підрозділів/керівника — їх нема в API): роль + компенсація + норма + zeroCost
+ * в ОДНОМУ місці. Save виконує лише мутації змінених груп: роль (PATCH role),
+ * компенсація (POST rates → нове вікно), норма (PATCH capacity), прапорець
+ * (PATCH zero-cost).
+ */
+function EditMemberModal({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+  const rate = member.rate
+  const isOwnerRow = member.role === 'owner'
+  const setRole = useSetRole()
+  const setRate = useSetRate()
+  const setCapacity = useSetCapacity()
+  const setZeroCost = useSetZeroCost()
+
+  const [role, setRoleValue] = useState(member.role)
+  const [salary, setSalary] = useState(rate?.monthlySalary ?? '')
+  const [hourly, setHourly] = useState(rate?.hourlyRate ?? '')
+  const [commission, setCommission] = useState(rate?.commissionPercent ?? '')
+  const [currency, setCurrency] = useState(rate?.currency ?? 'USD')
+  const [capacity, setCapacityValue] = useState(member.weeklyCapacityHours?.toString() ?? '')
+  const [zeroCost, setZeroCostValue] = useState(rate?.zeroCostDefault ?? false)
+  const [saving, setSaving] = useState(false)
+
+  const compChanged =
+    (num(salary || null) ?? null) !== (num(rate?.monthlySalary ?? null) ?? null) ||
+    (num(hourly || null) ?? null) !== (num(rate?.hourlyRate ?? null) ?? null) ||
+    (num(commission || null) ?? null) !== (num(rate?.commissionPercent ?? null) ?? null) ||
+    currency !== (rate?.currency ?? 'USD')
+  const compEmpty = !(Number(salary) > 0) && !(Number(commission) > 0) && !(Number(hourly) > 0)
+  const capParsed = capacity.trim() === '' ? null : Number(capacity)
+  const capInvalid =
+    capParsed != null && (!Number.isFinite(capParsed) || capParsed < 0 || capParsed > 168)
+
+  const save = async () => {
+    if (capInvalid || (compChanged && compEmpty)) return
+    setSaving(true)
+    // СТРОГО послідовно: rates-POST і zero-cost-PATCH обидва закривають/відкривають
+    // вікно ExecutorRate — паралельний виклик може лишити ДВА відкриті вікна (гонка
+    // read→close→create). Порядок: спершу компенсація (переносить старий прапорець),
+    // потім прапорець (закриє щойно створене вікно, якщо змінився).
+    const jobs: (() => Promise<unknown>)[] = []
+    if (!isOwnerRow && role !== member.role && (role === 'manager' || role === 'executor')) {
+      jobs.push(() => setRole.mutateAsync({ profileId: member.profileId, role }))
+    }
+    if (compChanged && !compEmpty) {
+      jobs.push(() =>
+        setRate.mutateAsync({
+          executorId: member.profileId,
+          ...(Number(salary) > 0 ? { monthlySalary: Number(salary) } : {}),
+          ...(Number(hourly) > 0 ? { hourlyRate: Number(hourly) } : {}),
+          ...(Number(commission) > 0 ? { commissionPercent: Number(commission) } : {}),
+          currency,
+        })
+      )
+    }
+    if (zeroCost !== (rate?.zeroCostDefault ?? false)) {
+      jobs.push(() =>
+        setZeroCost.mutateAsync({ profileId: member.profileId, zeroCostDefault: zeroCost })
+      )
+    }
+    if (capParsed !== (member.weeklyCapacityHours ?? null)) {
+      jobs.push(() =>
+        setCapacity.mutateAsync({ profileId: member.profileId, weeklyCapacityHours: capParsed })
+      )
+    }
+    if (jobs.length === 0) {
+      setSaving(false)
+      onClose()
+      return
+    }
+    try {
+      for (const job of jobs) await job()
+      toast.success('Зміни збережено')
+      onClose()
+    } catch {
+      toast.error('Не всі зміни збереглися — перевірте значення')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={member.name}
+      aux="edit member"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={saving}
+            disabled={capInvalid || (compChanged && compEmpty)}
+            onClick={() => void save()}
+          >
+            Зберегти
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: -6 }}
+        >
+          {member.email} · з {formatDate(member.joinedAt)}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <Select
+              label="Роль"
+              value={role}
+              onChange={setRoleValue}
+              disabled={isOwnerRow}
+              options={
+                isOwnerRow
+                  ? [{ value: 'owner', label: 'власник' }]
+                  : [
+                      { value: 'executor', label: 'виконавець' },
+                      { value: 'manager', label: 'менеджер' },
+                    ]
+              }
+            />
+            {isOwnerRow && (
+              <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                // роль власника — лише передачею власності
+              </div>
+            )}
+          </div>
+          <Input
+            label="Норма, год/тиж"
+            type="number"
+            placeholder="40"
+            value={capacity}
+            onChange={(e) => setCapacityValue(e.target.value)}
+            error={capInvalid ? '0–168' : undefined}
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <Input
+            label="Оклад / міс"
+            type="number"
+            value={salary}
+            onChange={(e) => setSalary(e.target.value)}
+          />
+          <Input
+            label="Собівартість, $/год"
+            type="number"
+            value={hourly}
+            onChange={(e) => setHourly(e.target.value)}
+          />
+          <Input
+            label="Комісія, %"
+            type="number"
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+          />
+        </div>
+        <Select
+          label="Валюта"
+          value={currency}
+          onChange={setCurrency}
+          options={['USD', 'UAH', 'EUR'].map((c) => ({ value: c, label: c }))}
+        />
+        {compChanged && (
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            // зміна компенсації відкриє нове вікно ставки (історія зберігається)
+          </div>
+        )}
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            cursor: 'pointer',
+            padding: '10px 12px',
+            border: '1px solid var(--wf-border)',
+            borderRadius: 'var(--wf-radius)',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={zeroCost}
+            onChange={(e) => setZeroCostValue(e.target.checked)}
+            style={{ marginTop: 2, accentColor: 'var(--wf-accent)' }}
+          />
+          <span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Без собівартості (zeroCost)</span>
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              весь дохід проєктів цієї людини = дохід агенції
+            </div>
+          </span>
+        </label>
+      </div>
+    </Modal>
   )
 }

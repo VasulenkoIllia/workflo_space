@@ -22,6 +22,9 @@ export const periodString = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expecte
 export const createExecutorRateSchema = z
   .object({
     monthlySalary: money.nullish(),
+    // Базова собівартість години (rateResolution каскад §2.3 fallback) — НЕ клієнтська
+    // ставка і (поки) не входить у payout (S5-D6 відкладено).
+    hourlyRate: money.nullish(),
     commissionPercent: z.number().finite().min(0).max(100).optional(),
     currency: z.enum(['USD', 'UAH', 'EUR']).optional(),
     hireDate: z
@@ -30,10 +33,17 @@ export const createExecutorRateSchema = z
       .optional(),
   })
   .strict()
-  .refine((d) => d.monthlySalary != null || d.commissionPercent != null, {
+  .refine((d) => d.monthlySalary != null || d.commissionPercent != null || d.hourlyRate != null, {
     message: 'Потрібна ставка або комісія',
   })
 export type CreateExecutorRateInput = z.infer<typeof createExecutorRateSchema>
+
+/**
+ * PATCH /workspace/executors/:id/role (12-EDITMEMBER). Роль власника цим шляхом НЕ
+ * змінюється (передача власності — окремий флоу), тому цілі — лише manager/executor.
+ */
+export const updateMemberRoleSchema = z.object({ role: z.enum(['manager', 'executor']) }).strict()
+export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>
 
 /** POST /workspace/team/payouts/generate — one executor or the whole team for a period. */
 export const generatePayoutSchema = z.object({

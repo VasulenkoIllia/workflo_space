@@ -11,6 +11,7 @@ const zeroCostSchema = z.object({ zeroCostDefault: z.boolean() })
 interface RateRow {
   id: string
   monthlySalary: Prisma.Decimal | null
+  hourlyRate: Prisma.Decimal | null
   commissionPercent: Prisma.Decimal
   currency: string
   effectiveFrom: Date
@@ -22,6 +23,7 @@ interface RateRow {
 const RATE_SELECT = {
   id: true,
   monthlySalary: true,
+  hourlyRate: true,
   commissionPercent: true,
   currency: true,
   effectiveFrom: true,
@@ -34,6 +36,7 @@ function toDto(r: RateRow) {
   return {
     id: r.id,
     monthlySalary: r.monthlySalary ? r.monthlySalary.toFixed(2) : null,
+    hourlyRate: r.hourlyRate ? r.hourlyRate.toFixed(2) : null,
     commissionPercent: r.commissionPercent.toString(),
     currency: r.currency,
     effectiveFrom: r.effectiveFrom,
@@ -108,6 +111,10 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
 
       const rate = await tenantTransaction(prisma, async (tx) => {
         await assertAgencyMember(tx, agencyId, executorId)
+        // Serialize window close/create per executor: a concurrent rates-POST and
+        // zero-cost-PATCH would otherwise BOTH read the same open window and leave
+        // TWO open ones (verified live) — same advisory-lock pattern as timer/leads.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`rates:${agencyId}:${executorId}`}))`
         // Carry the zero-cost flag across salary changes — a new window must not
         // silently reset «без собівартості» (22/P-5) set via the zero-cost toggle.
         const open = await tx.executorRate.findFirst({
@@ -124,6 +131,7 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
             agencyId,
             executorId,
             monthlySalary: input.monthlySalary ?? null,
+            hourlyRate: input.hourlyRate ?? null,
             commissionPercent: input.commissionPercent ?? 0,
             currency: input.currency ?? 'USD',
             effectiveFrom: now,
@@ -172,9 +180,11 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
 
       const rate = await tenantTransaction(prisma, async (tx) => {
         await assertAgencyMember(tx, agencyId, executorId)
+        // Same lock as POST /rates — see the comment there (two open windows race).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`rates:${agencyId}:${executorId}`}))`
         const open = await tx.executorRate.findFirst({
           where: { agencyId, executorId, effectiveUntil: null },
-          select: { ...RATE_SELECT, hourlyRate: true },
+          select: RATE_SELECT,
         })
         // No-op when the flag already matches — don't churn rate windows.
         if (open && open.zeroCostDefault === input.zeroCostDefault) return open

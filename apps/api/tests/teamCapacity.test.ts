@@ -115,3 +115,64 @@ describe('PATCH /workspace/executors/:id/capacity', () => {
     await app.close()
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('PATCH /workspace/executors/:id/role (12-EDITMEMBER)', () => {
+  const roleUrl = `/workspace/executors/${TARGET}/role`
+  const patchRole = (
+    app: Awaited<ReturnType<typeof authed>>['app'],
+    token: string | null,
+    body: unknown
+  ) =>
+    app.inject({
+      method: 'PATCH',
+      url: roleUrl,
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      payload: body as object,
+    })
+
+  it('owner promotes an executor to manager', async () => {
+    db.agencyMember.findUnique.mockResolvedValue({ id: 'am1', role: 'executor' })
+    db.agencyMember.update.mockResolvedValue({ profileId: TARGET, role: 'manager' })
+    const { app, token } = await authed(OWNER)
+    const res = await patchRole(app, token, { role: 'manager' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.member.role).toBe('manager')
+    expect(db.agencyMember.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { role: 'manager' } })
+    )
+    await app.close()
+  })
+
+  it('refuses to touch an OWNER row (409) — ownership transfer is a separate flow', async () => {
+    db.agencyMember.findUnique.mockResolvedValue({ id: 'am1', role: 'owner' })
+    const { app, token } = await authed(OWNER)
+    const res = await patchRole(app, token, { role: 'executor' })
+    expect(res.statusCode).toBe(409)
+    expect(db.agencyMember.update).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('rejects role=owner in the body (400, schema)', async () => {
+    const { app, token } = await authed(OWNER)
+    const res = await patchRole(app, token, { role: 'owner' })
+    expect(res.statusCode).toBe(400)
+    expect(db.agencyMember.findUnique).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a non-owner is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await patchRole(app, token, { role: 'manager' })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('404 for an unknown member', async () => {
+    db.agencyMember.findUnique.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await patchRole(app, token, { role: 'manager' })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
