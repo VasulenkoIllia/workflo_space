@@ -74,7 +74,7 @@ export function renderDocumentHtml(d: DocumentRenderData): string {
   .mono { font-family: 'SFMono-Regular', 'Menlo', monospace; }
   .brand { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1c1917; padding-bottom: 14px; }
   .brand-name { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
-  .brand-dot { color: #84cc16; }
+  .brand-dot { color: #A3D90D; } /* --wf-accent (light) — not tailwind lime-500 */
   .brand-sub { color: #78716c; font-size: 11px; margin-top: 2px; }
   .doctype { text-align: right; }
   .doctype-l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #78716c; }

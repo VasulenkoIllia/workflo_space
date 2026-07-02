@@ -4,6 +4,7 @@ import { ImageResponse } from 'next/og'
 // ASCII-only text on purpose: ImageResponse's embedded font covers Latin, so the build needs
 // no dynamic font download — keeps CI network-free. Cyrillic/glyphs would trigger a fetch that
 // fails offline, so the brand copy here stays Latin.
+// Colors = design-v2 --wf-* tokens, dark theme: accent #C5F82A on stone-950 #0c0a09.
 export const alt = 'workflo.space — automations for teams that outgrew Excel'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -24,14 +25,14 @@ export default function OgImage() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 30 }}>
-        <span style={{ color: '#84cc16' }}>&gt;_</span>
+        <span style={{ color: '#C5F82A' }}>&gt;_</span>
         <span style={{ color: '#a8a29e' }}>~/illia/workflo</span>
         <span style={{ color: '#57534e' }}>|</span>
         <span style={{ color: '#a8a29e' }}>zsh</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 34, color: '#84cc16' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 34, color: '#C5F82A' }}>
           <span style={{ color: '#a8a29e' }}>$</span>
           <span style={{ marginLeft: 16 }}>cat workflo.space</span>
         </div>
@@ -53,7 +54,7 @@ export default function OgImage() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 28 }}>
-        <span style={{ color: '#84cc16' }}>workflo.space</span>
+        <span style={{ color: '#C5F82A' }}>workflo.space</span>
         <span style={{ color: '#78716c' }}>Lutsk, Ukraine</span>
       </div>
     </div>,

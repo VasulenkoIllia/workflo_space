@@ -126,6 +126,12 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **A0 бренд вихідних артефактів — ЗАКРИТО (2026-07-02).** З'ясовано: палітру листів уже виправлено
+  `a7209f9` (22.06, stone+lime) — Трек-A0 у PHASE2_PLAN був doc-drift. Доробано хвости: PDF
+  `brand-dot` і landing **OG-образ** сиділи на tailwind `#84cc16` замість токенів → `#A3D90D`
+  (light) / `#C5F82A` (dark OG). OG перевірено скріном (preview). Гейт: templates+landing+
+  notifications зелені. `grep #84cc16` по репо = 0. UPDATE-нотатки в DESIGN_COVERAGE (3 місця).
+
 - **🛠 Інфра/докс-зріз за аудитом 2026-07-02 (DevOps 7/10 · архітектура 8/10 · доки 6.5/10 → фікси).**
   Закрито 3 критичні знахідки: (1) **RLS/vault прокинуто в прод**: `packages/db` тепер читає
   `DATABASE_APP_URL` (app-роль лише для web; migrate/worker лишаються owner) + compose staging/prod
