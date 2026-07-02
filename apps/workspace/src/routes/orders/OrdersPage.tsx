@@ -236,6 +236,7 @@ function CreateOrderModal({
   const [priority, setPriority] = useState<OrderPriority>(OrderPriority.MEDIUM)
   const [projectId, setProjectId] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [requireApproval, setRequireApproval] = useState(false)
 
   const titleInvalid = title.trim().length < 3
   const companyProjects = (projects.data?.projects ?? []).filter((p) => p.companyId === companyId)
@@ -251,6 +252,9 @@ function CreateOrderModal({
         priority,
         projectId: projectId || null,
         dueDate: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : undefined,
+        // Explicit override only when checked — unchecked leaves the P-11 cascade
+        // (проєкт → компанія → агенція) to decide, NOT force-off.
+        requiresApproval: requireApproval || undefined,
       },
       { onSuccess: (res) => navigate(`/orders/${res.order.id}`) }
     )
@@ -337,6 +341,30 @@ function CreateOrderModal({
             ...companyProjects.map((p) => ({ value: p.id, label: p.name })),
           ]}
         />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            cursor: 'pointer',
+            padding: '10px 12px',
+            border: '1px solid var(--wf-border)',
+            borderRadius: 'var(--wf-radius)',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={requireApproval}
+            onChange={(e) => setRequireApproval(e.target.checked)}
+            style={{ marginTop: 2, accentColor: 'var(--wf-accent)' }}
+          />
+          <span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Погодження оцінки клієнтом (02-А)</span>
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              вимкнено → за налаштуванням проєкту/клієнта/агенції
+            </div>
+          </span>
+        </label>
         {create.isError && (
           <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
             Не вдалося створити — перевірте поля (дедлайн має бути в майбутньому).

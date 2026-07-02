@@ -73,6 +73,9 @@ export interface CreateWorkspaceOrderInput {
   priority?: OrderPriority
   projectId?: string | null
   dueDate?: string
+  /** 02-А explicit override: true → оцінку погоджує клієнт перед стартом. Omitted →
+   * P-11 каскад (проєкт → компанія → агенція) вирішує сам. */
+  requiresApproval?: boolean
 }
 
 export function useCreateOrder() {
