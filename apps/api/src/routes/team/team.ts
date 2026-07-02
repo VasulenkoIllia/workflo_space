@@ -44,6 +44,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             monthlySalary: true,
             commissionPercent: true,
             currency: true,
+            zeroCostDefault: true,
           },
         }),
       ])
@@ -69,6 +70,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
                   monthlySalary: rate.monthlySalary ? rate.monthlySalary.toFixed(2) : null,
                   commissionPercent: rate.commissionPercent.toString(),
                   currency: rate.currency,
+                  zeroCostDefault: rate.zeroCostDefault,
                 }
               : null,
           }

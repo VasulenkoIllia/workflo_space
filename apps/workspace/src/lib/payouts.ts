@@ -24,6 +24,8 @@ export interface TeamRate {
   monthlySalary: string | null
   commissionPercent: string
   currency: string
+  /** «без собівартості» (22/P-5): весь дохід проєктів людини = дохід агенції. */
+  zeroCostDefault: boolean
 }
 
 /** GET /workspace/team — roster with each member's current rate (rate null unless owner). */
@@ -84,6 +86,19 @@ export function useSetRate() {
   return useMutation({
     mutationFn: ({ executorId, ...body }: RateInput) =>
       api.post(`/workspace/executors/${executorId}/rates`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
+  })
+}
+
+/**
+ * PATCH «без собівартості» (owner-only, 22/P-5). Server-side this closes the open
+ * ExecutorRate window and opens a new one with the flag — compensation values carry over.
+ */
+export function useSetZeroCost() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, zeroCostDefault }: { profileId: string; zeroCostDefault: boolean }) =>
+      api.patch(`/workspace/executors/${profileId}/zero-cost`, { zeroCostDefault }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-team'] }),
   })
 }

@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { useSetCapacity, useTeam, type TeamMember } from '@/lib/payouts'
+import { useSetCapacity, useSetZeroCost, useTeam, type TeamMember } from '@/lib/payouts'
 import { formatDate } from '@/lib/format'
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/
@@ -89,7 +89,20 @@ export function TeamPage() {
 function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }) {
   const rate = member.rate
   const setCapacity = useSetCapacity()
+  const setZeroCost = useSetZeroCost()
   const [cap, setCap] = useState(member.weeklyCapacityHours?.toString() ?? '')
+
+  const toggleZeroCost = () => {
+    const next = !(rate?.zeroCostDefault ?? false)
+    setZeroCost.mutate(
+      { profileId: member.profileId, zeroCostDefault: next },
+      {
+        onSuccess: () =>
+          toast.success(next ? 'Без собівартості: увімкнено' : 'Собівартість враховується'),
+        onError: () => toast.error('Не вдалося змінити прапорець'),
+      }
+    )
+  }
 
   const saveCapacity = () => {
     const trimmed = cap.trim()
@@ -176,12 +189,37 @@ function MemberRow({ member, canEdit }: { member: TeamMember; canEdit: boolean }
           {member.weeklyCapacityHours != null ? `${member.weeklyCapacityHours} год/тиж` : '—'}
         </span>
       )}
-      <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
-        {rate
-          ? `${rate.monthlySalary ? `${Number(rate.monthlySalary)} ${rate.currency}/міс` : '—'}${
-              Number(rate.commissionPercent) ? ` · ${Number(rate.commissionPercent)}%` : ''
-            }`
-          : '—'}
+      <span
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 4,
+        }}
+      >
+        <span className="wfp-mono" style={{ fontSize: 12, textAlign: 'right' }}>
+          {rate
+            ? `${rate.monthlySalary ? `${Number(rate.monthlySalary)} ${rate.currency}/міс` : '—'}${
+                Number(rate.commissionPercent) ? ` · ${Number(rate.commissionPercent)}%` : ''
+              }`
+            : '—'}
+        </span>
+        {canEdit ? (
+          <button
+            type="button"
+            className="wfp-pill"
+            data-on={rate?.zeroCostDefault ?? false}
+            disabled={setZeroCost.isPending}
+            onClick={toggleZeroCost}
+            title="Весь дохід проєктів цієї людини = дохід агенції (собівартість 0 у маржі)"
+          >
+            без собівартості
+          </button>
+        ) : rate?.zeroCostDefault ? (
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            без собівартості
+          </span>
+        ) : null}
       </span>
     </div>
   )

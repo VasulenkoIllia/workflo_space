@@ -272,6 +272,134 @@ describe('executor rates', () => {
 })
 
 // ════════════════════════════════════════════════════════════════════════════
+describe('PATCH /workspace/executors/:id/zero-cost (22/P-5)', () => {
+  const url = `/workspace/executors/${EXEC_ID}/zero-cost`
+  const OPEN_RATE = {
+    id: 'r1',
+    monthlySalary: null as unknown,
+    hourlyRate: null,
+    commissionPercent: null as unknown,
+    currency: 'EUR',
+    effectiveFrom: new Date('2026-06-01T00:00:00Z'),
+    effectiveUntil: null,
+    hireDate: null,
+    zeroCostDefault: false,
+  }
+  beforeEach(() => {
+    OPEN_RATE.monthlySalary = Dec('2000.00')
+    OPEN_RATE.commissionPercent = Dec('5.00')
+  })
+
+  it('owner flips the flag: closes the window, compensation values carry over', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateFindFirst.mockResolvedValue(OPEN_RATE)
+    rateUpdateMany.mockResolvedValue({ count: 1 })
+    rateCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({ ...OPEN_RATE, id: 'r2', ...data })
+    )
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { zeroCostDefault: true },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.rate.zeroCostDefault).toBe(true)
+    // the old open window was closed, the new one carries the values
+    expect(rateUpdateMany).toHaveBeenCalledOnce()
+    const created = rateCreate.mock.calls[0][0].data
+    expect(created.monthlySalary).toEqual(OPEN_RATE.monthlySalary)
+    expect(created.commissionPercent).toEqual(OPEN_RATE.commissionPercent)
+    expect(created.currency).toBe('EUR')
+    expect(created.zeroCostDefault).toBe(true)
+    await app.close()
+  })
+
+  it('no-op when the flag already matches (no window churn)', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateFindFirst.mockResolvedValue({ ...OPEN_RATE, zeroCostDefault: true })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { zeroCostDefault: true },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(rateUpdateMany).not.toHaveBeenCalled()
+    expect(rateCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('no open window → creates a fresh row with defaults + the flag', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateFindFirst.mockResolvedValue(null)
+    rateUpdateMany.mockResolvedValue({ count: 0 })
+    rateCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({ ...OPEN_RATE, id: 'r3', ...data })
+    )
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { zeroCostDefault: true },
+    })
+    expect(res.statusCode).toBe(200)
+    const created = rateCreate.mock.calls[0][0].data
+    expect(created.monthlySalary).toBeNull()
+    expect(created.currency).toBe('USD')
+    expect(created.zeroCostDefault).toBe(true)
+    await app.close()
+  })
+
+  it('non-owner cannot flip the flag (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { zeroCostDefault: true },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('404 when the executor is not an agency member', async () => {
+    memberFindUnique.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { zeroCostDefault: false },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('POST /rates carries the zero-cost flag into the new window (no silent reset)', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateFindFirst.mockResolvedValue({ zeroCostDefault: true })
+    rateUpdateMany.mockResolvedValue({ count: 1 })
+    rateCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({ ...OPEN_RATE, id: 'r4', ...data })
+    )
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/executors/${EXEC_ID}/rates`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { monthlySalary: 3000 },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(rateCreate.mock.calls[0][0].data.zeroCostDefault).toBe(true)
+    await app.close()
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
 describe('payout workflow', () => {
   function draftPayout(over: Record<string, unknown> = {}) {
     return {
