@@ -53,7 +53,7 @@ const BOARD_SELECT = {
   assigneeId: true,
   position: true,
   updatedAt: true,
-  order: { select: { id: true, title: true } },
+  order: { select: { id: true, title: true, estimatedHours: true } },
   assignee: { select: { id: true, name: true } },
 } as const
 
@@ -76,8 +76,8 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
       }
       const q = boardQuerySchema.parse(request.query)
-      const tasks = await withTenant((tx) =>
-        tx.internalTask.findMany({
+      const tasks = await withTenant(async (tx) => {
+        const rows = await tx.internalTask.findMany({
           where: {
             agencyId,
             ...(q.assigneeId ? { assigneeId: q.assigneeId } : {}),
@@ -86,7 +86,33 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           orderBy: [{ status: 'asc' }, { position: 'asc' }, { updatedAt: 'desc' }],
           select: BOARD_SELECT,
         })
-      )
+        // Per-order logged hours for the est-vs-actual mini-bar on the cards. Hours
+        // live on the ORDER (TimeLog has no task link — see workspace-board-task.jsx
+        // rollup canon), so every card of an order shares its bar. Finalized entries
+        // only — a running timer's hours aren't final yet (same rule as hoursReport).
+        const orderIds = [...new Set(rows.map((t) => t.order.id))]
+        const sums = orderIds.length
+          ? await tx.timeLog.groupBy({
+              by: ['orderId'],
+              where: {
+                agencyId,
+                orderId: { in: orderIds },
+                OR: [{ startedAt: null }, { endedAt: { not: null } }],
+              },
+              _sum: { hours: true },
+            })
+          : []
+        const loggedByOrder = new Map(sums.map((s) => [s.orderId, Number(s._sum.hours ?? 0)]))
+        return rows.map((t) => ({
+          ...t,
+          order: {
+            id: t.order.id,
+            title: t.order.title,
+            estimatedHours: t.order.estimatedHours != null ? Number(t.order.estimatedHours) : null,
+            loggedHours: loggedByOrder.get(t.order.id) ?? 0,
+          },
+        }))
+      })
       return reply.send({ success: true, data: { tasks } })
     }
   )

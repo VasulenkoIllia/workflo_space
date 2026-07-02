@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
-const db = { internalTask: { findMany: vi.fn() } }
+const db = { internalTask: { findMany: vi.fn() }, timeLog: { groupBy: vi.fn() } }
 
 vi.mock('@workflo/db', () => ({
   prisma: db,
@@ -41,7 +41,7 @@ const TASK = {
   assigneeId: 'exec-1',
   position: 0,
   updatedAt: new Date('2026-06-29T00:00:00Z'),
-  order: { id: 'o1', title: 'Замовлення A' },
+  order: { id: 'o1', title: 'Замовлення A', estimatedHours: '40' },
   assignee: { id: 'exec-1', name: 'Іван' },
 }
 
@@ -51,7 +51,10 @@ async function authed(claims: unknown) {
   return { app, token: app.jwt.sign(claims as object) }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  db.timeLog.groupBy.mockResolvedValue([])
+})
 afterEach(() => vi.clearAllMocks())
 
 describe('GET /workspace/tasks — global board', () => {
@@ -69,6 +72,34 @@ describe('GET /workspace/tasks — global board', () => {
     expect(tasks[0]).toMatchObject({ id: 't1', order: { id: 'o1' }, assignee: { name: 'Іван' } })
     expect(db.internalTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { agencyId: AGENCY } })
+    )
+    await app.close()
+  })
+
+  it('maps per-order logged hours onto cards (finalized entries only, no running timer)', async () => {
+    db.internalTask.findMany.mockResolvedValue([
+      TASK,
+      { ...TASK, id: 't2', order: { id: 'o2', title: 'B', estimatedHours: null } },
+    ])
+    db.timeLog.groupBy.mockResolvedValue([{ orderId: 'o1', _sum: { hours: '12.5' } }])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/tasks',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const tasks = res.json().data.tasks
+    expect(tasks[0].order).toMatchObject({ id: 'o1', estimatedHours: 40, loggedHours: 12.5 })
+    expect(tasks[1].order).toMatchObject({ id: 'o2', estimatedHours: null, loggedHours: 0 })
+    // running timers excluded — the same finalized-only rule as hoursReport
+    expect(db.timeLog.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          orderId: { in: ['o1', 'o2'] },
+          OR: [{ startedAt: null }, { endedAt: { not: null } }],
+        }),
+      })
     )
     await app.close()
   })

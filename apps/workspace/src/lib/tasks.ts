@@ -22,14 +22,16 @@ export function useOrderTasks(orderId: string) {
   })
 }
 
-/** A task on the global board (фінд.#8) — carries its order + assignee for cross-order context. */
+/** A task on the global board (фінд.#8) — carries its order + assignee for cross-order context.
+ * Hours live on the ORDER (TimeLog has no task link), so every card of an order shares the
+ * same est-vs-actual bar; loggedHours counts finalized entries only (running timer excluded). */
 export interface BoardTask {
   id: string
   title: string
   status: TaskStatus
   assigneeId: string | null
   position: number
-  order: { id: string; title: string }
+  order: { id: string; title: string; estimatedHours: number | null; loggedHours: number }
   assignee: { id: string; name: string } | null
 }
 

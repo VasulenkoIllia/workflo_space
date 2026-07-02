@@ -11,6 +11,52 @@ const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'done', label: 'Готово' },
 ]
 
+/** Est-vs-actual mini-bar of the card's ORDER (годин на задачі нема — rollup у замовлення,
+ * канон workspace-board-task.jsx). Без оцінки → лише факт годин; без годин узагалі → нічого. */
+function OrderHoursBar({ order }: { order: BoardTask['order'] }) {
+  const { estimatedHours: est, loggedHours: logged } = order
+  if (est == null || est <= 0) {
+    if (logged <= 0) return null
+    return (
+      <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        {logged} год · без оцінки
+      </div>
+    )
+  }
+  const pct = (logged / est) * 100
+  const over = pct > 100
+  return (
+    <div
+      style={{ marginTop: 6 }}
+      title={`Замовлення: ${logged} з ${est} год (${Math.round(pct)}%)`}
+    >
+      <div
+        className="wfp-mono"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: 10,
+          color: 'var(--wf-fg-muted)',
+          marginBottom: 3,
+        }}
+      >
+        <span>
+          {logged}/{est} год
+        </span>
+        <span style={over ? { color: 'var(--wf-destructive)' } : undefined}>
+          {Math.round(pct)}%
+        </span>
+      </div>
+      <div className="wfp-est-bar" style={{ height: 3 }}>
+        <div
+          className={`wfp-est-bar-fill${over ? ' wfp-est-bar-fill--over' : ''}`}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 /** Global task board (02-Е / workspace-board.jsx, фінд.#8) — every internal task across the
  * agency's orders, grouped by status. Drag a card between columns to move it (reuses the
  * per-order PATCH). Filter to «мої». */
@@ -146,6 +192,7 @@ export function TaskBoardPage() {
                         {t.assignee?.name ?? '—'}
                       </span>
                     </div>
+                    <OrderHoursBar order={t.order} />
                   </div>
                 ))}
               </div>
