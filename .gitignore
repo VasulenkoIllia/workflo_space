@@ -8,6 +8,7 @@ build/
 .next/
 .turbo/
 storybook-static/
+*.tsbuildinfo
 
 # Environment
 .env

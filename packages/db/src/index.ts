@@ -1,7 +1,14 @@
 import { type Prisma, PrismaClient } from '@prisma/client'
 import { tenantStore } from './tenantContext.js'
 
-export const prisma: PrismaClient = new PrismaClient()
+// RLS activation (ADR-007 activation checklist, step 1): when DATABASE_APP_URL is
+// set the shared client connects as the restricted `workflo_app` role, so the F4
+// policies actually apply (superuser/owner connections bypass RLS). Processes that
+// must keep the owner connection — migrate deploy, seed, the dedicated worker —
+// simply don't set DATABASE_APP_URL in their environment.
+export const prisma: PrismaClient = new PrismaClient(
+  process.env.DATABASE_APP_URL ? { datasourceUrl: process.env.DATABASE_APP_URL } : undefined
+)
 
 /**
  * RLS-correct interactive transaction (F4 / ADR-007). Sets the tenant GUC ONCE on

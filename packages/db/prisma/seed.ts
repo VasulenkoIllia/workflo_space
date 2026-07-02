@@ -68,13 +68,30 @@ async function ensurePaymentSettings(agencyId: string) {
   })
 }
 
+// Staging deploys run this seed inside the api container (NODE_ENV=production) and
+// dev-api/dev-portal are internet-reachable — seeding there with the well-known
+// defaults would publish working owner credentials. Fail closed instead: in
+// production builds every SEED_*_PASSWORD must come from the server .env (compose
+// passes them through). Empty string counts as unset — compose substitutes `${VAR:-}`.
+function requireSeedPassword(name: string, devFallback: string): string {
+  const value = process.env[name]
+  if (value) return value
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `Seed refused: ${name} is not set. Staging/production must never seed accounts ` +
+        `with the default passwords — set ${name} in the server .env.`
+    )
+  }
+  return devFallback
+}
+
 async function main() {
   console.log('🌱 Seeding database...')
 
-  const ownerEmail = process.env.SEED_OWNER_EMAIL ?? DEFAULT_OWNER_EMAIL
-  const ownerPassword = process.env.SEED_OWNER_PASSWORD ?? DEFAULT_OWNER_PASSWORD
-  const executorPassword = process.env.SEED_EXECUTOR_PASSWORD ?? DEFAULT_EXECUTOR_PASSWORD
-  const clientPassword = process.env.SEED_CLIENT_PASSWORD ?? DEFAULT_CLIENT_PASSWORD
+  const ownerEmail = process.env.SEED_OWNER_EMAIL || DEFAULT_OWNER_EMAIL
+  const ownerPassword = requireSeedPassword('SEED_OWNER_PASSWORD', DEFAULT_OWNER_PASSWORD)
+  const executorPassword = requireSeedPassword('SEED_EXECUTOR_PASSWORD', DEFAULT_EXECUTOR_PASSWORD)
+  const clientPassword = requireSeedPassword('SEED_CLIENT_PASSWORD', DEFAULT_CLIENT_PASSWORD)
 
   const owner = await prisma.profile.upsert({
     where: { email: ownerEmail },

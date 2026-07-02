@@ -167,6 +167,17 @@ services:
       RUN_WORKERS_INLINE: ${RUN_WORKERS_INLINE:-true}
       APP_VERSION: ${API_TAG:-sha-initial}
       DATABASE_URL: ${DATABASE_URL_PROD:?DATABASE_URL_PROD is required}
+      # RLS activation (ADR-007): set DATABASE_APP_URL_PROD (workflo_app role) and flip
+      # RLS_ENFORCED_PROD=true in the server .env — no redeploy of this file needed.
+      # migrate/worker deliberately keep the owner URL (DDL / cross-tenant drain).
+      # NOTE: with inline workers (RUN_WORKERS_INLINE=true) the drain also runs as
+      # workflo_app — fine while wf_in_tenant is permissive-on-unset + bypass GUC;
+      # move to the `workers` profile before any deny-on-unset hardening.
+      DATABASE_APP_URL: ${DATABASE_APP_URL_PROD:-}
+      RLS_ENFORCED: ${RLS_ENFORCED_PROD:-false}
+      # Credentials vault (module 17): 32-byte base64 KEK (`openssl rand -base64 32`).
+      # Absent → vault endpoints return 503, the rest of the API is unaffected.
+      CREDENTIALS_KEK_BASE64: ${CREDENTIALS_KEK_BASE64_PROD:-}
       JWT_SECRET: ${JWT_SECRET_PROD:?JWT_SECRET_PROD is required}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS_PROD:-https://workflo.space,https://portal.workflo.space,https://work.workflo.space}
       PORTAL_URL: ${PORTAL_URL_PROD:-https://portal.workflo.space}
@@ -228,6 +239,10 @@ services:
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # No DATABASE_APP_URL here — the worker keeps the owner connection and drains
+      # ALL tenants by design (ADR-007 activation checklist, step 3). RLS_ENFORCED is
+      # passed only so worker.ts logs its owner-connection reminder on the flip.
+      RLS_ENFORCED: ${RLS_ENFORCED_PROD:-false}
       DATABASE_URL: ${DATABASE_URL_PROD:?DATABASE_URL_PROD is required}
       JWT_SECRET: ${JWT_SECRET_PROD:?JWT_SECRET_PROD is required}
       PORTAL_URL: ${PORTAL_URL_PROD:-https://portal.workflo.space}

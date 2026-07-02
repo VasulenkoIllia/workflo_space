@@ -55,7 +55,7 @@ The hard data dependencies:
 2. **Schema migration `s5_00_financial_core`** — all net-new models + column deltas in ONE reviewed migration (so downstream tasks don't each fight Prisma). _(blocks everything DB-touching)_
 3. **S5-03a** ExchangeRate read service + НБУ cron (`amountUsd` snapshots need this). _(parallel-safe with S5-01 once migration lands)_
 
-**WAVE B — Payments core (sequential after A)** 4. **S5-02** Billing summary + charges read + `POST payments` (idempotent) + advance settlement. _(consumes S5-01 + ExchangeRate; root of money graph)_ 5. **S5-03b** Services CRUD + assign + recurring-charges cron (pg_cron + Node companion). _(needs CompanyService deltas; independent of S5-02 write path → can parallelize with #4 after migration)_
+**WAVE B — Payments core (sequential after A)** 4. **S5-02** Billing summary + charges read + `POST payments` (idempotent) + advance settlement. _(consumes S5-01 + ExchangeRate; root of money graph)_ 5. **S5-03b** Services CRUD + assign + recurring-charges cron (pg*cron + Node companion). *(needs CompanyService deltas; independent of S5-02 write path → can parallelize with #4 after migration)\_
 
 **WAVE C — Ledgers (after payments exist)** 6. **S5-05** `WalletTransaction` ledger + `walletCredit`/`walletDebit` (FOR UPDATE, invariant). _(pure bonus ledger; depends only on migration + Company.bonusBalance)_ 7. **S5-07** Money-account: `PaymentAllocation` + `moneyBalance` + charge states. _(depends on S5-02 payments + S5-03 charges)_ 8. **S5-06** Referral accrual → walletCredit + `ReferralSettings`. _(depends on S5-05 walletCredit + Payment confirmation hook from S5-02)_
 

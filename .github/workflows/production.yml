@@ -126,16 +126,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Sync runtime manifests
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7 — pinned by SHA (SSH key access)
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: 'docker-compose.production.yml,infra/maintenance/**,infra/postgres/**'
+          # scripts/ — the manual rollback + healthcheck live ON the server; without
+          # syncing them here a rollback.sh fix in the repo never reaches the box.
+          source: 'docker-compose.production.yml,infra/maintenance/**,infra/postgres/**,scripts/rollback.sh,scripts/healthcheck.sh'
           target: '${{ env.RUNTIME_ROOT }}/production'
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — third-party action with HETZNER_SSH_KEY access: pin by SHA, not moving tag
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
@@ -333,7 +335,7 @@ jobs:
       # AR-05: record the tag as last-known-good ONLY after verification passed,
       # so a failed first deploy can never poison the rollback bookkeeping.
       - name: Record verified deploy
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — third-party action with HETZNER_SSH_KEY access: pin by SHA, not moving tag
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
@@ -357,7 +359,7 @@ jobs:
 
       - name: Auto rollback on failure
         if: failure()
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — third-party action with HETZNER_SSH_KEY access: pin by SHA, not moving tag
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
@@ -379,4 +381,8 @@ jobs:
             export BOT_TAG=$prev_tag
             export GITHUB_REPOSITORY_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-            compose up -d
+            # --wait: a rollback onto crashing containers must fail this job loudly,
+            # not report success. The schema stays forward — expand/contract discipline
+            # (ENGINEERING_STANDARDS → "Migration discipline") is what keeps the old
+            # image compatible; restore-from-backup remains the manual escape hatch.
+            compose up -d --wait --wait-timeout 180

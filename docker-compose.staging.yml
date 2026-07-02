@@ -102,6 +102,16 @@ services:
       - traefik.http.routers.workflo-portal-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-portal-staging.priority=10000
       - traefik.http.services.workflo-portal-staging.loadbalancer.server.port=8080
+      # Team-only staging portal (seeded client account) — /health carve-out mirrors
+      # the api router so the CI verify job keeps its 200 check.
+      - traefik.http.middlewares.workflo-portal-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
+      - traefik.http.routers.workflo-portal-staging.middlewares=workflo-portal-staging-ipwhitelist
+      - traefik.http.routers.workflo-portal-staging-health.rule=Host(`dev-portal.workflo.space`) && Path(`/health`)
+      - traefik.http.routers.workflo-portal-staging-health.entrypoints=websecure
+      - traefik.http.routers.workflo-portal-staging-health.tls=true
+      - traefik.http.routers.workflo-portal-staging-health.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-portal-staging-health.priority=10001
+      - traefik.http.routers.workflo-portal-staging-health.service=workflo-portal-staging
     healthcheck:
       test: ['CMD', 'wget', '-qO', '/dev/null', 'http://127.0.0.1:8080/health']
       interval: 30s
@@ -161,6 +171,21 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APP_VERSION: ${API_TAG:-sha-initial}
       DATABASE_URL: ${DATABASE_URL_STAGING:?DATABASE_URL_STAGING is required}
+      # RLS activation (ADR-007): set DATABASE_APP_URL_STAGING (workflo_app role) and
+      # flip RLS_ENFORCED_STAGING=true in the server .env. Staging soaks the flip for
+      # a sprint before production (ENGINEERING_STANDARDS → "RLS rollout").
+      DATABASE_APP_URL: ${DATABASE_APP_URL_STAGING:-}
+      RLS_ENFORCED: ${RLS_ENFORCED_STAGING:-false}
+      # Credentials vault (module 17): 32-byte base64 KEK; absent → vault 503.
+      CREDENTIALS_KEK_BASE64: ${CREDENTIALS_KEK_BASE64_STAGING:-}
+      # The deploy step seeds via `compose run api ... seed`, which only sees THIS
+      # environment. The seed fails closed in production builds when passwords are
+      # unset (no Admin123! fallback on an internet-reachable stack) — so these must
+      # be set in the server .env for the seed step to succeed.
+      SEED_OWNER_EMAIL: ${SEED_OWNER_EMAIL:-}
+      SEED_OWNER_PASSWORD: ${SEED_OWNER_PASSWORD:-}
+      SEED_EXECUTOR_PASSWORD: ${SEED_EXECUTOR_PASSWORD:-}
+      SEED_CLIENT_PASSWORD: ${SEED_CLIENT_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET_STAGING:?JWT_SECRET_STAGING is required}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS_STAGING:-https://dev.workflo.space,https://dev-portal.workflo.space,https://dev-work.workflo.space}
       PORTAL_URL: ${PORTAL_URL_STAGING:-https://dev-portal.workflo.space}
@@ -187,6 +212,18 @@ services:
       - traefik.http.routers.workflo-api-staging.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-api-staging.priority=10000
       - traefik.http.services.workflo-api-staging.loadbalancer.server.port=4000
+      # Team-only staging API (same TEAM_IPS as workspace) — the seeded demo accounts
+      # must not be reachable from the open internet. /health stays public on its own
+      # router (higher priority, no middleware) so the CI verify job keeps its honest
+      # 200 check from GitHub runners.
+      - traefik.http.middlewares.workflo-api-staging-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
+      - traefik.http.routers.workflo-api-staging.middlewares=workflo-api-staging-ipwhitelist
+      - traefik.http.routers.workflo-api-staging-health.rule=Host(`dev-api.workflo.space`) && Path(`/health`)
+      - traefik.http.routers.workflo-api-staging-health.entrypoints=websecure
+      - traefik.http.routers.workflo-api-staging-health.tls=true
+      - traefik.http.routers.workflo-api-staging-health.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
+      - traefik.http.routers.workflo-api-staging-health.priority=10001
+      - traefik.http.routers.workflo-api-staging-health.service=workflo-api-staging
     healthcheck:
       test:
         [

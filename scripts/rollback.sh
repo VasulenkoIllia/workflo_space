@@ -4,6 +4,10 @@ set -euo pipefail
 PROD_DIR="${PROD_DIR:-/var/www/srv/workflo/production}"
 ENV_FILE="${ENV_FILE:-$PROD_DIR/.env}"
 COMPOSE_FILE="${COMPOSE_FILE:-$PROD_DIR/docker-compose.production.yml}"
+# MUST match PRODUCTION_COMPOSE_PROJECT in .github/workflows/production.yml — without
+# it compose derives the project from the directory name and `up` starts a SECOND
+# stack with conflicting Traefik labels instead of rolling back the running one.
+PROJECT_NAME="${PROJECT_NAME:-workflo-production}"
 TARGET_TAG="${1:-}"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -42,10 +46,17 @@ export API_TAG="$TARGET_TAG"
 export BOT_TAG="$TARGET_TAG"
 
 cd "$PROD_DIR"
-docker compose -f "$COMPOSE_FILE" pull
-docker compose -f "$COMPOSE_FILE" up -d
+
+compose() {
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
+compose pull
+# --wait: fail loudly if the rolled-back services never become healthy — a rollback
+# that "completed" onto crashing containers is worse than a failed one.
+compose up -d --wait --wait-timeout 180
 
 echo "$CURRENT_TAG" >"$PREVIOUS_DEPLOY_FILE"
 echo "$TARGET_TAG" >"$LAST_DEPLOY_FILE"
 
-echo "Rollback completed."
+echo "Rollback completed. Verify: ./scripts/healthcheck.sh --env production"
