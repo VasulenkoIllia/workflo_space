@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { Card, EmptyState, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
 import { type HoursReport, useHoursReport } from '@/lib/reports'
+import { type ExportTable } from '@/lib/exportTable'
+import { ExportButtons } from '@/components/ExportButtons'
 
 /** Colour for a plan-vs-actual variance: over estimate = destructive, under/at = accent. */
 function varianceColor(v: number | null): string | undefined {
@@ -12,25 +14,29 @@ function varianceColor(v: number | null): string | undefined {
 const fmtH = (n: number | null): string => (n == null ? '—' : `${n} год`)
 const fmtVar = (v: number | null): string => (v == null ? '—' : `${v > 0 ? '+' : ''}${v} год`)
 
-function buildCsv(r: HoursReport): string {
-  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
-  const lines = ['Замовлення,Проєкт,Оцінка,Факт,Відхилення']
-  for (const o of r.byOrder)
-    lines.push(
-      [
-        esc(o.title),
-        esc(o.projectName ?? '—'),
-        o.estimatedHours ?? '',
-        o.loggedHours,
-        o.variance ?? '',
-      ].join(',')
-    )
-  lines.push(
-    ['РАЗОМ', '', r.totals.estimatedHours, r.totals.loggedHours, r.totals.variance].join(',')
-  )
-  lines.push('', 'Виконавець,Факт')
-  for (const e of r.byExecutor) lines.push([esc(e.name), e.loggedHours].join(','))
-  return lines.join('\n')
+/** Two tables → two XLSX sheets (orders plan-vs-actual + per-executor hours). */
+function buildHoursTables(r: HoursReport): ExportTable[] {
+  return [
+    {
+      sheet: 'Замовлення',
+      headers: ['Замовлення', 'Проєкт', 'Оцінка', 'Факт', 'Відхилення'],
+      rows: [
+        ...r.byOrder.map((o) => [
+          o.title,
+          o.projectName ?? '—',
+          o.estimatedHours,
+          o.loggedHours,
+          o.variance,
+        ]),
+        ['РАЗОМ', null, r.totals.estimatedHours, r.totals.loggedHours, r.totals.variance],
+      ],
+    },
+    {
+      sheet: 'Виконавці',
+      headers: ['Виконавець', 'Факт'],
+      rows: r.byExecutor.map((e) => [e.name, e.loggedHours]),
+    },
+  ]
 }
 
 const dateInput = (value: string, onChange: (v: string) => void) => (
@@ -59,16 +65,6 @@ export function ReportsPage() {
   const [to, setTo] = useState(range.to)
   const { data, isLoading } = useHoursReport(from, to)
 
-  const exportCsv = () => {
-    if (!data) return
-    const url = URL.createObjectURL(new Blob([buildCsv(data)], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `hours_${from}_${to}.csv`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  }
-
   return (
     <div>
       <div className="wfp-ph">
@@ -84,15 +80,13 @@ export function ReportsPage() {
           —
         </span>
         {dateInput(to, setTo)}
-        <button
-          type="button"
-          className="wfp-link wfp-mono"
-          style={{ marginLeft: 'auto', fontSize: 12 }}
-          onClick={exportCsv}
-          disabled={!data || data.byOrder.length === 0}
-        >
-          Експорт CSV
-        </button>
+        <span style={{ marginLeft: 'auto' }}>
+          <ExportButtons
+            getTables={() => buildHoursTables(data as HoursReport)}
+            filename={`hours_${from}_${to}`}
+            disabled={!data || data.byOrder.length === 0}
+          />
+        </span>
       </div>
 
       {isLoading ? (

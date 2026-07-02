@@ -5,6 +5,8 @@ import { isoDay } from '@/lib/finance'
 import { useCompanies } from '@/lib/projects'
 import { useTeam } from '@/lib/payouts'
 import { num, useAllClientMargins } from '@/lib/margin'
+import { type ExportTable } from '@/lib/exportTable'
+import { ExportButtons } from '@/components/ExportButtons'
 
 type Group = 'clients' | 'projects' | 'executors'
 
@@ -132,57 +134,62 @@ interface Row {
   paidPct: number
 }
 
-/** CSV for the active tab — mirrors the on-screen table (19-Б «експорт на кожному звіті»). */
-function buildMarginCsv(
+const r2 = (n: number) => Number(n.toFixed(2))
+const r1 = (n: number) => Number(n.toFixed(1))
+
+/** Export table for the active tab — mirrors the on-screen table (19-Б). */
+function buildMarginTable(
   group: Group,
   rows: Row[],
   execRows: ExecRow[],
   nameOf: (id: string) => string,
   totals: { rev: number; cost: number; margin: number; marginPct: number; paidPct: number }
-): string {
-  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
+): ExportTable {
   if (group === 'executors') {
     const totalHours = execRows.reduce((s, r) => s + r.hours, 0)
     const totalCost = execRows.reduce((s, r) => s + r.cost, 0)
-    const lines = ['Виконавець,Години,Собівартість USD,% собівартості']
-    for (const r of execRows)
-      lines.push(
-        [esc(nameOf(r.executorId)), r.hours.toFixed(1), r.cost.toFixed(2), r.pct.toFixed(0)].join(
-          ','
-        )
-      )
-    lines.push(['РАЗОМ', totalHours.toFixed(1), totalCost.toFixed(2), '100'].join(','))
-    return lines.join('\n')
+    return {
+      sheet: 'За виконавцями',
+      headers: ['Виконавець', 'Години', 'Собівартість USD', '% собівартості'],
+      rows: [
+        ...execRows.map((r) => [nameOf(r.executorId), r1(r.hours), r2(r.cost), Math.round(r.pct)]),
+        ['РАЗОМ', r1(totalHours), r2(totalCost), 100],
+      ],
+    }
   }
-  const head =
-    group === 'clients'
-      ? 'Клієнт,Дохід USD,Собівартість USD,Маржа USD,Маржа %,Оплачено %'
-      : 'Проєкт,Клієнт,Дохід USD,Собівартість USD,Маржа USD,Маржа %,Оплачено %'
-  const lines = [head]
-  for (const r of rows) {
-    const cells = [
-      esc(r.name),
-      ...(group === 'projects' ? [esc(r.sub ?? '—')] : []),
-      r.revenue.toFixed(2),
-      r.cost.toFixed(2),
-      r.margin.toFixed(2),
-      r.marginPct.toFixed(1),
-      r.paidPct.toFixed(0),
-    ]
-    lines.push(cells.join(','))
+  const projects = group === 'projects'
+  return {
+    sheet: projects ? 'За проєктами' : 'За клієнтами',
+    headers: [
+      projects ? 'Проєкт' : 'Клієнт',
+      ...(projects ? ['Клієнт'] : []),
+      'Дохід USD',
+      'Собівартість USD',
+      'Маржа USD',
+      'Маржа %',
+      'Оплачено %',
+    ],
+    rows: [
+      ...rows.map((r) => [
+        r.name,
+        ...(projects ? [r.sub ?? '—'] : []),
+        r2(r.revenue),
+        r2(r.cost),
+        r2(r.margin),
+        r1(r.marginPct),
+        Math.round(r.paidPct),
+      ]),
+      [
+        'РАЗОМ',
+        ...(projects ? [null] : []),
+        r2(totals.rev),
+        r2(totals.cost),
+        r2(totals.margin),
+        r1(totals.marginPct),
+        Math.round(totals.paidPct),
+      ],
+    ],
   }
-  lines.push(
-    [
-      'РАЗОМ',
-      ...(group === 'projects' ? [''] : []),
-      totals.rev.toFixed(2),
-      totals.cost.toFixed(2),
-      totals.margin.toFixed(2),
-      totals.marginPct.toFixed(1),
-      totals.paidPct.toFixed(0),
-    ].join(',')
-  )
-  return lines.join('\n')
 }
 
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
@@ -313,17 +320,6 @@ export function MarginPage() {
   const noClients = !companies.isLoading && (companies.data?.companies.length ?? 0) === 0
   const exportEmpty = isExec ? execRows.length === 0 : rows.length === 0
 
-  const exportCsv = () => {
-    if (exportEmpty) return
-    const csv = buildMarginCsv(group, rows, execRows, nameOf, totals)
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `margin_${group}_${from}_${to}.csv`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  }
-
   return (
     <div>
       <div
@@ -344,15 +340,11 @@ export function MarginPage() {
           {dateInput(from, setFrom)}
           <span style={{ color: 'var(--wf-fg-muted)' }}>—</span>
           {dateInput(to, setTo)}
-          <button
-            type="button"
-            className="wfp-link wfp-mono"
-            style={{ fontSize: 12 }}
-            onClick={exportCsv}
+          <ExportButtons
+            getTables={() => buildMarginTable(group, rows, execRows, nameOf, totals)}
+            filename={`margin_${group}_${from}_${to}`}
             disabled={loading || exportEmpty}
-          >
-            Експорт CSV
-          </button>
+          />
         </div>
       </div>
 

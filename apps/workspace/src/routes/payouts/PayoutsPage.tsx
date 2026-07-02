@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { ExportButtons } from '@/components/ExportButtons'
+import { type ExportTable } from '@/lib/exportTable'
 import { formatMoney } from '@/lib/format'
 import {
   num,
@@ -146,28 +148,29 @@ function PayoutRow({ p, name }: { p: Payout; name: string }) {
   )
 }
 
-/** CSV of the period's payouts — mirrors the list (19-Б). Totals per currency, not mixed. */
-function buildPayoutsCsv(list: Payout[], nameOf: (id: string) => string): string {
-  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
-  const lines = ['Виконавець,Оклад,Комісія,Реф-бонус,Разом,Валюта,Статус']
+/** Export table of the period's payouts (19-Б). Totals per currency, not mixed. */
+function buildPayoutsTable(list: Payout[], nameOf: (id: string) => string): ExportTable {
+  const rows: ExportTable['rows'] = []
   const byCurrency = new Map<string, number>()
   for (const p of list) {
-    lines.push(
-      [
-        esc(nameOf(p.executorId)),
-        p.baseSalary,
-        p.commissionAmount,
-        p.referralBonusAmount,
-        p.total,
-        p.currency,
-        STATUS[p.status].label,
-      ].join(',')
-    )
+    rows.push([
+      nameOf(p.executorId),
+      num(p.baseSalary),
+      num(p.commissionAmount),
+      num(p.referralBonusAmount),
+      num(p.total),
+      p.currency,
+      STATUS[p.status].label,
+    ])
     byCurrency.set(p.currency, (byCurrency.get(p.currency) ?? 0) + (num(p.total) ?? 0))
   }
   for (const [currency, total] of byCurrency)
-    lines.push([`РАЗОМ ${currency}`, '', '', '', total.toFixed(2), currency, ''].join(','))
-  return lines.join('\n')
+    rows.push([`РАЗОМ ${currency}`, null, null, null, Number(total.toFixed(2)), currency, null])
+  return {
+    sheet: 'Виплати',
+    headers: ['Виконавець', 'Оклад', 'Комісія', 'Реф-бонус', 'Разом', 'Валюта', 'Статус'],
+    rows,
+  }
 }
 
 const MONTHS_UK = [
@@ -210,18 +213,6 @@ export function PayoutsPage() {
 
   const list = payouts.data?.payouts ?? []
   const members = team.data?.members ?? []
-
-  const exportCsv = () => {
-    if (list.length === 0) return
-    const url = URL.createObjectURL(
-      new Blob([buildPayoutsCsv(list, nameOf)], { type: 'text/csv;charset=utf-8' })
-    )
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `payouts_${period}.csv`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  }
 
   return (
     <div>
@@ -290,15 +281,11 @@ export function PayoutsPage() {
               ›
             </button>
           </div>
-          <button
-            type="button"
-            className="wfp-link wfp-mono"
-            style={{ fontSize: 12 }}
-            onClick={exportCsv}
+          <ExportButtons
+            getTables={() => buildPayoutsTable(list, nameOf)}
+            filename={`payouts_${period}`}
             disabled={payouts.isLoading || list.length === 0}
-          >
-            Експорт CSV
-          </button>
+          />
           <Button
             variant="primary"
             size="sm"

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
 import { Donut, type DonutSegment } from '@/components/Donut'
+import { ExportButtons } from '@/components/ExportButtons'
 import { LineChart } from '@/components/LineChart'
 import { Select } from '@/components/Select'
+import { type ExportTable } from '@/lib/exportTable'
 import { catColor, catLabel, EXPENSE_CAT } from '@/lib/expenseCategories'
 import { formatDate, formatMoney } from '@/lib/format'
 import { useTeam } from '@/lib/payouts'
@@ -233,9 +235,10 @@ export function FinancePage() {
   )
 
   const periodLabel = period === 12 ? '12 міс' : `${period} міс`
-  const exportPnlCsv = () => {
-    const head = ['Місяць', 'Дохід', 'Витрати', 'Зарплата', 'Чистий', 'Маржа%']
-    const lines = monthly.points.map((pt) => {
+  const pnlTable = (): ExportTable => ({
+    sheet: 'P&L',
+    headers: ['Місяць', 'Дохід', 'Витрати', 'Зарплата', 'Чистий', 'Маржа%'],
+    rows: monthly.points.map((pt) => {
       const d = pt.data
       return [
         pt.month,
@@ -243,17 +246,10 @@ export function FinancePage() {
         num(d?.expensesUsd) ?? 0,
         num(d?.salaryUsd) ?? 0,
         num(d?.netProfitUsd) ?? 0,
-        d?.marginPct ?? '',
-      ].join(',')
-    })
-    const csv = [head.join(','), ...lines].join('\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pnl-${period}m.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+        d?.marginPct != null ? Number(d.marginPct) : null,
+      ]
+    }),
+  })
   const periodSeg = (
     <div className="wfp-od-tabs" role="tablist">
       {([3, 6, 12] as const).map((m) => (
@@ -319,9 +315,11 @@ export function FinancePage() {
             // P&L, витрати та тренд агенції
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={exportPnlCsv}>
-          Експорт CSV
-        </Button>
+        <ExportButtons
+          getTables={pnlTable}
+          filename={`pnl-${period}m`}
+          disabled={monthly.points.length === 0}
+        />
       </div>
 
       <Tabs
