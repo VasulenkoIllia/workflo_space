@@ -132,6 +132,59 @@ interface Row {
   paidPct: number
 }
 
+/** CSV for the active tab — mirrors the on-screen table (19-Б «експорт на кожному звіті»). */
+function buildMarginCsv(
+  group: Group,
+  rows: Row[],
+  execRows: ExecRow[],
+  nameOf: (id: string) => string,
+  totals: { rev: number; cost: number; margin: number; marginPct: number; paidPct: number }
+): string {
+  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`
+  if (group === 'executors') {
+    const totalHours = execRows.reduce((s, r) => s + r.hours, 0)
+    const totalCost = execRows.reduce((s, r) => s + r.cost, 0)
+    const lines = ['Виконавець,Години,Собівартість USD,% собівартості']
+    for (const r of execRows)
+      lines.push(
+        [esc(nameOf(r.executorId)), r.hours.toFixed(1), r.cost.toFixed(2), r.pct.toFixed(0)].join(
+          ','
+        )
+      )
+    lines.push(['РАЗОМ', totalHours.toFixed(1), totalCost.toFixed(2), '100'].join(','))
+    return lines.join('\n')
+  }
+  const head =
+    group === 'clients'
+      ? 'Клієнт,Дохід USD,Собівартість USD,Маржа USD,Маржа %,Оплачено %'
+      : 'Проєкт,Клієнт,Дохід USD,Собівартість USD,Маржа USD,Маржа %,Оплачено %'
+  const lines = [head]
+  for (const r of rows) {
+    const cells = [
+      esc(r.name),
+      ...(group === 'projects' ? [esc(r.sub ?? '—')] : []),
+      r.revenue.toFixed(2),
+      r.cost.toFixed(2),
+      r.margin.toFixed(2),
+      r.marginPct.toFixed(1),
+      r.paidPct.toFixed(0),
+    ]
+    lines.push(cells.join(','))
+  }
+  lines.push(
+    [
+      'РАЗОМ',
+      ...(group === 'projects' ? [''] : []),
+      totals.rev.toFixed(2),
+      totals.cost.toFixed(2),
+      totals.margin.toFixed(2),
+      totals.marginPct.toFixed(1),
+      totals.paidPct.toFixed(0),
+    ].join(',')
+  )
+  return lines.join('\n')
+}
+
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
   const color =
     tone === 'warn' ? 'var(--wf-warning)' : tone === 'accent' ? 'var(--wf-accent)' : 'var(--wf-fg)'
@@ -258,6 +311,18 @@ export function MarginPage() {
 
   const loading = companies.isLoading || all.isLoading
   const noClients = !companies.isLoading && (companies.data?.companies.length ?? 0) === 0
+  const exportEmpty = isExec ? execRows.length === 0 : rows.length === 0
+
+  const exportCsv = () => {
+    if (exportEmpty) return
+    const csv = buildMarginCsv(group, rows, execRows, nameOf, totals)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `margin_${group}_${from}_${to}.csv`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
 
   return (
     <div>
@@ -279,6 +344,15 @@ export function MarginPage() {
           {dateInput(from, setFrom)}
           <span style={{ color: 'var(--wf-fg-muted)' }}>—</span>
           {dateInput(to, setTo)}
+          <button
+            type="button"
+            className="wfp-link wfp-mono"
+            style={{ fontSize: 12 }}
+            onClick={exportCsv}
+            disabled={loading || exportEmpty}
+          >
+            Експорт CSV
+          </button>
         </div>
       </div>
 
