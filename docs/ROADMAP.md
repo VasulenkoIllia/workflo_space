@@ -30,6 +30,17 @@
 > ([`AUDIT_2026-07.md`](AUDIT_2026-07.md), 0 crit/high, усі знахідки виправлені). **Гілка `dev`
 > зелена; CI деплоїть на `dev-*.workflo.space`.** Це чек-лист власнику на ручний прохід.
 
+**🔧 ПЕРЕД НАСТУПНИМ ДЕПЛОЄМ — оновити server `.env` (інфра-зріз 02.07). Повний ранбук з командами: [`SERVER_UPDATE_2026-07.md`](SERVER_UPDATE_2026-07.md):**
+
+- `SEED_OWNER_PASSWORD` (+`SEED_EXECUTOR_PASSWORD`, `SEED_CLIENT_PASSWORD`) у staging `.env` —
+  сід тепер **відмовляється** сіяти дефолтний `Admin123!` на NODE_ENV=production (fail-closed;
+  крок non-fatal — деплой пройде, але акаунти не засіються). Наявним акаунтам сід пароль
+  НЕ перезаписує — за потреби змінити вручну.
+- `CREDENTIALS_KEK_BASE64_STAGING` / `_PROD` — інакше vault 503.
+- `TEAM_IPS` тепер гейтить і **dev-api + dev-portal** (не лише workspace); `/health` лишився
+  публічним для CI-verify. Якщо тестуєш з нового IP — додай його в `TEAM_IPS`.
+- RLS-флip (коли настане час, staging-соак першим): `DATABASE_APP_URL_STAGING` + `RLS_ENFORCED_STAGING=true`.
+
 **✅ Готове до тесту (backend+UI, на staging):**
 
 - **Картка клієнта 360°** `/clients/:id` — таби Огляд(стати+замовлення+«потребує уваги») · Люди
@@ -40,7 +51,7 @@
   учасника» → лист-інвайт на портал; прийняти інвайт → зʼявляється в ростері як «учасник».
   «Скинути пароль» → користувач отримує лист скидання (сам задає новий, агенція його не бачить).
   «Секрети» → додати секрет → «показати» (розшифровує, авто-ховається 20с) → відкликати/видалити.
-  ⚠️ потребує `CREDENTIALS_KEK_BASE64` у staging-env (`openssl rand -base64 32`), інакше reveal 503._
+  ⚠️ потребує `CREDENTIALS_KEK_BASE64_STAGING` у server `.env` (compose прокидає в контейнер; 02.07) (`openssl rand -base64 32`), інакше reveal 503._
 - **Таймер часу (T2)** — глобальний floating-bar (live HH:MM:SS, «Стоп») + «Засікти час» у
   замовленні (таб «Час»); 1 активний на виконавця; авто-стоп 8год. _Тест: старт на A, старт на
   B (A авто-стопиться), стоп — час пишеться; перевір дату логу (бізнес-день Києва)._
@@ -114,6 +125,20 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **🛠 Інфра/докс-зріз за аудитом 2026-07-02 (DevOps 7/10 · архітектура 8/10 · доки 6.5/10 → фікси).**
+  Закрито 3 критичні знахідки: (1) **RLS/vault прокинуто в прод**: `packages/db` тепер читає
+  `DATABASE_APP_URL` (app-роль лише для web; migrate/worker лишаються owner) + compose staging/prod
+  прокидає `RLS_ENFORCED`/`DATABASE_APP_URL`/`CREDENTIALS_KEK_BASE64` — раніше CI гейтив RLS, який
+  у проді фізично не міг увімкнутись; (2) **rollback.sh** — `--project-name workflo-production`
+  (без нього піднімав ДРУГИЙ конфліктний стек) + `up --wait`; (3) **seed fail-closed** на
+  NODE*ENV=production без `SEED*\*\_PASSWORD`+ staging api/portal під`TEAM_IPS`-whitelist
+(`/health`carve-out для CI). Додатково: appleboy actions запінено по SHA (INFRA-SEC1 частково);
+авто-rollback у production.yml тепер`--wait`(не рапортує успіх на падаючих контейнерах);`tsconfig.tsbuildinfo` знято з git (+`.gitignore`); доки: README-індекс перезібрано (ROADMAP =
+start here, секція «Аудити»-lineage, чесний CRON-рядок), TRACKER позначено історичним знімком
+з вказівником сюди, S4/S5-доки → `archive/`, AGENTS.md отримав Workflo-канон блок. Гейт:
+type-check/lint/test db+api зелені (624 unit), обидва compose `config` валідні. Запис —
+[`AUDIT_2026-07.md`](AUDIT_2026-07.md) раунд 3.
 
 - **Leads-дозбудова (пост-аудит).** Закрив нотатку аудиту (drag→«Втрачено» губив причину): drag у «Втрачено» тепер запитує причину (`window.prompt`, Cancel скасовує), причина показується на картці «✕ …». + суми угод по колонках (`$Σ estimatedValue`) + активні/**конверсія %** у хедері (won/(won+lost)). Frontend-only (бек уже приймав `lostReason`). Гейт 55/55. **+ lead-detail сторінка** `/leads/:id` (новий `GET /workspace/leads/:id` +2 тести; редактор усіх полів + нотатки + стадія + inline-конвертація/видалення; клік на назві картки → деталь). _Лишок Leads: пайплайн-редактор, UTM-захоплення з contact-форми, per-lead activity-timeline (потребує `LeadActivity`)._
 

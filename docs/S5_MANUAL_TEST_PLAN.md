@@ -2,7 +2,7 @@
 
 > Що і як протестувати з реалізованого фінансового ядра. S5 — **backend-only** (UI для білінгу — окремий фронт-спринт), тож тестуємо через **API** (curl / Postman / Insomnia). S0-S4 (auth, orders, chat, portal/workspace UI) тестуються через браузер як і раніше.
 >
-> Перед стартом — звір [`SERVER_UPDATE_S5.md`](SERVER_UPDATE_S5.md) (міграція застосована, крони inline, для UAH є `ExchangeRate`).
+> Перед стартом — звір [`SERVER_UPDATE_S5.md`](archive/SERVER_UPDATE_S5.md) (міграція застосована, крони inline, для UAH є `ExchangeRate`).
 >
 > Позначення: ✅ очікуваний результат · ⛔ негативний кейс (має дати помилку).
 

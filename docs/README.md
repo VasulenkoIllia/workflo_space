@@ -1,6 +1,6 @@
 # WORKFLO.SPACE — Документація
 
-> Версія: 1.0 | Оновлено: 2 червня 2026
+> Версія: 1.1 | Оновлено: 2 липня 2026
 > **Головний індекс проекту. Всі зміни вносяться спочатку сюди, потім у відповідний модульний документ.**
 
 ---
@@ -10,16 +10,17 @@
 > Читай в цьому порядку — кожен документ будує знання на попередньому.
 
 ```
-1. docs/README.md               ← цей файл, огляд проекту (5 хв)
-2. docs/CONCEPT_v2.md           ← що будуємо і навіщо (15 хв)
-3. docs/ENGINEERING_STANDARDS.md ← API-стандарти; DB-канон → packages/db/prisma/schema.prisma (20 хв)
-4. docs/FRONTEND_STANDARDS.md   ← frontend стек, auth flow, компоненти (20 хв)
-5. docs/MONOREPO_SCAFFOLD.md    ← файлова структура, .env.example (10 хв)
-6. docs/TRACKER.md              ← поточний спринт і твоя задача (5 хв)
-7. docs/modules/XX-*.md         ← тільки модуль на який призначено (10 хв)
+1. docs/README.md                ← цей файл, огляд проекту (5 хв)
+2. docs/ROADMAP.md               ← 🧭 ПУЛЬТ: черга зрізів + «Готово нещодавно» + карта доків (5 хв)
+3. docs/CONCEPT_v2.md            ← що будуємо і навіщо (15 хв)
+4. docs/ENGINEERING_STANDARDS.md ← API-стандарти + §8 Definition of Done; DB-канон → schema.prisma (20 хв)
+5. docs/FRONTEND_STANDARDS.md    ← frontend стек, auth flow, компоненти (20 хв)
+6. docs/MONOREPO_SCAFFOLD.md     ← файлова структура, .env.example (10 хв)
+7. docs/DESIGN_COVERAGE.md       ← канон реального стану коду — звірка перед будь-якою роботою
+8. docs/modules/XX-*.md          ← тільки модуль на який призначено (10 хв)
 ```
 
-Після цього — запускай локально (`turbo dev`) і стартуй з задачі в поточному спринті.
+Після цього — запускай локально (`turbo dev`) і бери верхній зріз черги з `ROADMAP.md`.
 
 ---
 
@@ -48,6 +49,7 @@ turbo dev
 
 | Документ                                             | Що містить                                                                                                                                                                                        |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ROADMAP.md](ROADMAP.md)                             | 🧭 **ПУЛЬТ (start here)** — черга зрізів, «Готово нещодавно», pre-test чек-листи. Єдине місце правди про «зараз»                                                                                  |
 | [CONCEPT_v2.md](CONCEPT_v2.md)                       | Продуктова концепція, бізнес-логіка, фінансова модель                                                                                                                                             |
 | [INFRASTRUCTURE.md](INFRASTRUCTURE.md)               | Docker, CI/CD, Traefik, backup, rollback, моніторинг                                                                                                                                              |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)     | ⚠️ Історичний план + §3 tsconfig/eslint · §7 Turbo · §8 Migrations · §11 онбординг. §4/§5/§6/§10 → вказівники (канон: schema.prisma/SPEC/TRACKER/seed)                                            |
@@ -63,8 +65,8 @@ turbo dev
 | [design-v2/](../design-v2/)                          | Локальний знімок канону дизайну (HTML/CSS/JS-прототип). **Живий канон** — claude.ai-проєкт «workflo.space» (через `DesignSync`). Розрив дизайн↔код — у [DESIGN_GAP_AUDIT.md](DESIGN_GAP_AUDIT.md) |
 | [MONOREPO_SCAFFOLD.md](MONOREPO_SCAFFOLD.md)         | Точна файлова структура всіх apps і packages + .env.example                                                                                                                                       |
 | [GIT_WORKFLOW.md](GIT_WORKFLOW.md)                   | Гілки, commit conventions, PR процес, деплой, hotfix                                                                                                                                              |
-| [CRON_JOBS.md](CRON_JOBS.md)                         | Всі 8 cron задач (Node.js + pg_cron): код, розклад, логіка                                                                                                                                        |
-| [TRACKER.md](TRACKER.md)                             | Трекер прогресу: блок **«СТАН ЗАРАЗ»** (готово/далі/відкладено) + спринти S0–S14 + **черга хардену модулів**                                                                                      |
+| [CRON_JOBS.md](CRON_JOBS.md)                         | Cron-задачі: специфікація/логіка. ⚠️ Канон переліку й розкладів — `apps/api/src/cron/index.ts` (док відстає)                                                                                      |
+| [TRACKER.md](TRACKER.md)                             | Історія спринтів S0–S14 + харден-черга. **«Стан зараз» → ROADMAP.md**; знімок у TRACKER заморожено 21.06                                                                                          |
 | [MODULE_HARDENING.md](MODULE_HARDENING.md)           | 🔒 **Коли і як прицільно тестувати+полірувати готовий модуль:** 3-гейт тригер · DoD-чекліст · механіка проходу · 3 хвилі                                                                          |
 | [README.md](README.md)                               | **Цей файл** — глобальний індекс                                                                                                                                                                  |
 
@@ -81,18 +83,37 @@ turbo dev
 | [LEGAL/](LEGAL/README.md)    | Privacy/ToS/DPA/subprocessors — заглушки до юриста (**draft**)     |
 | [LIFECYCLE.md](LIFECYCLE.md) | §8 Agency-lifecycle: suspend/export/delete (SaaS)                  |
 
+### Аудити (ремедіаційна петля: аудит → фікси → ре-аудит)
+
+> Хронологія lineage — найсвіжіший перший, кожен спирається на попередній як базову лінію.
+> Конвенція імен нових аудитів: `AUDIT_YYYY-MM[-topic].md`.
+
+| Аудит                                                          | Дата     | Скоуп                                                                  |
+| -------------------------------------------------------------- | -------- | ---------------------------------------------------------------------- |
+| [AUDIT_2026-07.md](AUDIT_2026-07.md)                           | 07-01/02 | Фаза-B сесія (28 зрізів) + vault + інфра/докс — 3 раунди з ремедіацією |
+| [AUDIT_INFRA_DEVOPS_2026-06.md](AUDIT_INFRA_DEVOPS_2026-06.md) | 06-26    | сервер/деплой/DR — диспозиція в `BACKLOG.md` (INFRA-блок)              |
+| [DESIGN_GAP_AUDIT.md](DESIGN_GAP_AUDIT.md)                     | 06-24    | розрив дизайн ↔ код                                                    |
+| [AUDIT_S5.6_2026-06.md](AUDIT_S5.6_2026-06.md)                 | 06-21    | S5.6 «Фінансова модель 2.0»                                            |
+| [AUDIT_FULL_2026-06.md](AUDIT_FULL_2026-06.md)                 | 06-11    | повний аудит кодбази (базова лінія)                                    |
+| [archive/S5_AUDIT.md](archive/S5_AUDIT.md)                     | 06-09    | S5 фін-ядро (заархівовано)                                             |
+| [AUDIT_S0_S2.md](AUDIT_S0_S2.md)                               | 06-01    | ранній S0–S2                                                           |
+
 ### Архів / історичне (НЕ джерело істини)
 
 > Чинний канон завжди: `SPEC.md` + `TRACKER.md` + `schema.prisma` + код.
 
 **Переміщено в [`docs/archive/`](archive/README.md)** (заморожено):
 
-| Документ                                           | Чим замінено                                |
-| -------------------------------------------------- | ------------------------------------------- |
-| [archive/CONCEPT_v1.md](archive/CONCEPT_v1.md)     | CONCEPT_v2.md                               |
-| [archive/S0_RUNBOOK.md](archive/S0_RUNBOOK.md)     | INFRASTRUCTURE.md (S0 закрито)              |
-| [archive/MODULE_AUDIT.md](archive/MODULE_AUDIT.md) | SPEC.md / schema.prisma (історичний знімок) |
-| [archive/AUDIT_S0_S1.md](archive/AUDIT_S0_S1.md)   | AUDIT_S0_S2.md                              |
+| Документ                                                   | Чим замінено                                |
+| ---------------------------------------------------------- | ------------------------------------------- |
+| [archive/CONCEPT_v1.md](archive/CONCEPT_v1.md)             | CONCEPT_v2.md                               |
+| [archive/S0_RUNBOOK.md](archive/S0_RUNBOOK.md)             | INFRASTRUCTURE.md (S0 закрито)              |
+| [archive/MODULE_AUDIT.md](archive/MODULE_AUDIT.md)         | SPEC.md / schema.prisma (історичний знімок) |
+| [archive/AUDIT_S0_S1.md](archive/AUDIT_S0_S1.md)           | AUDIT_S0_S2.md                              |
+| [archive/S4_TEST_PLAN.md](archive/S4_TEST_PLAN.md)         | виконаний спринт-план тестування S4         |
+| [archive/S5_PLAN.md](archive/S5_PLAN.md)                   | TRACKER.md (S5 закрито)                     |
+| [archive/S5_AUDIT.md](archive/S5_AUDIT.md)                 | AUDIT_FULL_2026-06.md / AUDIT_2026-07.md    |
+| [archive/SERVER_UPDATE_S5.md](archive/SERVER_UPDATE_S5.md) | виконаний серверний чек-лист S5             |
 
 **Лишаються в `docs/` із банером** (історичні, але ще корисні як довідка):
 
@@ -137,7 +158,7 @@ turbo dev
 | [28](modules/28-client-management.md) | Client Management   | Workspace, API          | P1        |
 | [29](modules/29-support.md)           | Support (tickets)   | Portal, Workspace, API  | P1        |
 
-> Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `TRACKER.md` (КОЛИ). Архітектурні рішення — `adr/` (001-007). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — `archive/AUDIT_S0_S1.md` (історичний) / `AUDIT_S0_S2.md`.
+> Джерело істини для статусу/порядку — `SPEC.md` (ЩО) + `ROADMAP.md` (черга). Архітектурні рішення — `adr/` (001-008). SaaS — `SAAS.md` + `SAAS_CONFIG.md`. Борг — `BACKLOG.md`; аудити — секція «Аудити» вище.
 
 ---
 
@@ -248,12 +269,13 @@ packages/
 
 ## ПРАВИЛА РОБОТИ З ДОКУМЕНТАЦІЄЮ
 
-1. **Зміна в продукті** → спочатку оновити відповідний module doc → потім CONCEPT_v2.md якщо змінюється бізнес-логіка → потім `packages/db/prisma/schema.prisma` якщо змінюється DB → потім TRACKER.md
+1. **Зміна в продукті** → спочатку оновити відповідний module doc → потім CONCEPT_v2.md якщо змінюється бізнес-логіка → потім `packages/db/prisma/schema.prisma` якщо змінюється DB → потім `ROADMAP.md` (черга)
 2. **Новий модуль** → створити `docs/modules/XX-name.md` → додати в цей README.md в таблицю
 3. **Зміна DB schema** → оновити `packages/db/prisma/schema.prisma` (канон) → написати міграцію `packages/db/prisma/migrations/`
 4. **Зміна API endpoint** → оновити `modules/XX-name.md` (канон ендпоінтів) + `SPEC.md` за потреби
-5. **Завершена задача** → оновити `TRACKER.md` статус
+5. **Завершений зріз** → DoD §8 (`ENGINEERING_STANDARDS.md`): оновити `ROADMAP.md` («Готово нещодавно») + `DESIGN_COVERAGE.md` (рядок екрана)
 6. **Ніколи не вносити зміни хаотично** — завжди через відповідний документ
+7. **Сесійний аудит** → запис у `AUDIT_YYYY-MM.md` + doc-drift-чек: дата в хедері цього README, лічильники (crons ↔ `apps/api/src/cron/index.ts`, ADR ↔ `adr/`, моделі ↔ `schema.prisma`)
 
 ---
 

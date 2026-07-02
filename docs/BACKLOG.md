@@ -19,7 +19,7 @@
 - [ops] **INFRA-DR1 disaster-recovery бекапів (P0):** `restore.sh` + щомісячний restore-drill (gunzip останнього дампу в throwaway-БД, assert row-counts, звіт у Telegram); активувати офсайт **restic** (код є, сховище ні); `--clean --if-exists` у денні дампи; **змонтувати + бекапити uploads** (`STORAGE_TYPE=local` + нема volume → файли клієнтів губляться при recreate). Перетворює «втрата боксу = кінець» на виміряний RTO. ~1.5–2 дні. (created: 2026-06-26)
 - [ops] **INFRA-DR2 infrastructure-as-code (P0):** Ansible/cloud-init на сервер (Docker, Traefik, pg_cron, backup-cron, `.env`-скелет) — зараз 0 IaC, сервер «pet», rebuild = ручна археологія. ~1–2 дні. (created: 2026-06-26)
 - [ops] **INFRA-OBS1 моніторинг/алертинг (P1)** — _розширює [ops] OPS-D1_: увімкнути Sentry (`SENTRY_DSN` порожній на проді); UptimeRobot на `/ready`; **notify-on-failure** крок у деплой-воркфлоу (через наш Telegram-бот) — зараз навіть провал авто-rollback тихий. ~1 день. (created: 2026-06-26)
-- [sec] **INFRA-SEC1 supply-chain пайплайну (P0):** пін усіх third-party екшенів на commit-SHA + Dependabot (`appleboy/ssh-action@v1`, `scp-action@v0.1.7` тримають **prod SSH-ключ** на floating-тегу) + SSH host-key fingerprint (зараз TOFU). ~0.5 дня. (created: 2026-06-26)
+- [sec] **INFRA-SEC1 supply-chain пайплайну (P0):** _(02.07: appleboy ssh/scp запінено по SHA — лишились Dependabot + host-key fingerprint)_ пін усіх third-party екшенів на commit-SHA + Dependabot (`appleboy/ssh-action@v1`, `scp-action@v0.1.7` тримають **prod SSH-ключ** на floating-тегу) + SSH host-key fingerprint (зараз TOFU). ~0.5 дня. (created: 2026-06-26)
 - [sec] **INFRA-SEC2 edge-hardening (P1):** Traefik security-headers (HSTS/X-Frame-Options/CSP) + `rateLimit` middleware + явний `tls.options minVersion`; ті ж headers у nginx SPA-конфіги. Зараз edge має лише cert+redirect. ~0.5 дня. (created: 2026-06-26)
 - [ci] **INFRA-OPS1 staging-rollback + health→/ready (P1):** портувати prod-патерн `verify`+`if:failure()`+`.previous_deploy` у `staging.yml` (зараз staging без rollback → застрягає); перенаправити post-deploy health з `/health` (liveness) на `/ready` (DB-backed) → API без БД фейлить гейт. ~0.5 дня. (created: 2026-06-26)
 - [docs] **INFRA-DOC1 серверні рунбуки (P1):** `OPS_RUNBOOK.md` (deploy-stuck / DB-down / ротація секрету / severity+escalation) + `DISASTER_RECOVERY.md` (rebuild з нуля, RTO-drill); виправити `INFRASTRUCTURE.md §5` (застаріла на 2 покоління: inline-`docker run` міграції замість `migrate`-сервісу) + мертві шляхи `infra/scripts/...` (канон `scripts/`); ADR-009 на топологію деплою. ~1 день. (created: 2026-06-26)
@@ -57,7 +57,7 @@
 
 - [ci] **CI-D1 affected-only Docker build** (LOW, ~1–1.5 хв на дрібних змінах): build-матриця staging/prod білдить ВСІ 5 образів (`landing/portal/workspace/api/bot`) щоразу, навіть якщо змінився лише `api`. Не баг — Docker layer-cache (`type=gha`) робить незмінні білди швидкими, матриця паралельна, незнижуваний пол ~3 хв (push GHCR → pull → migrate-контейнер → recreate → health `sleep`). Опт: фільтрувати матрицю за зміненими апками — `turbo run build --filter='...[HEAD^1]'` (visited-packages) або `dorny/paths-filter@v3` per-app → skip незмінні. Тригер: коли деплої почнуть муляти або зросте к-сть апок. (created: 2026-06-09)
 
-## 🧮 S5 follow-ups (аудит 9.06.2026 — `S5_AUDIT.md`)
+## 🧮 S5 follow-ups (аудит 9.06.2026 — `archive/S5_AUDIT.md`)
 
 > Реальні баги/security вже виправлено (коміти `6941cd3`/`586d0bd`). Нижче — свідомо відкладена косметика/perf, БЕЗ баг-ризику (дублі коректні).
 
