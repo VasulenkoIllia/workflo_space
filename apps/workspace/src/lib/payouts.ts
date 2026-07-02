@@ -55,6 +55,18 @@ export function useTeam() {
   })
 }
 
+/**
+ * GET /workspace/team/payouts без періоду — всі періоди. Не-власнику сервер віддає
+ * ЛИШЕ його рядки (self-scope) — профіль «Заробіток» їде на цьому. Власник на своєму
+ * профілі фільтрує по executorId клієнтськи.
+ */
+export function useMyPayouts() {
+  return useQuery({
+    queryKey: ['ws-payouts', 'mine'],
+    queryFn: () => api.get<{ payouts: Payout[] }>('/workspace/team/payouts'),
+  })
+}
+
 export function usePayouts(period: string) {
   return useQuery({
     queryKey: ['ws-payouts', period],

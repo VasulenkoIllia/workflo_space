@@ -523,6 +523,32 @@ describe('payout workflow', () => {
     expect(payoutFindMany.mock.calls[0][0].where.period).toBe('2026-06')
     await app.close()
   })
+
+  it('a non-owner executor lists ONLY their own payouts (compensation is owner-only)', async () => {
+    payoutFindMany.mockResolvedValue([])
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/team/payouts',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(payoutFindMany.mock.calls[0][0].where.executorId).toBe(EXECUTOR.sub)
+    await app.close()
+  })
+
+  it('the owner lists the whole team (no executor scope)', async () => {
+    payoutFindMany.mockResolvedValue([])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/team/payouts',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(payoutFindMany.mock.calls[0][0].where.executorId).toBeUndefined()
+    await app.close()
+  })
 })
 
 // ════════════════════════════════════════════════════════════════════════════

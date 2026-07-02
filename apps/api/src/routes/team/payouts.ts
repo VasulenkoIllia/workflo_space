@@ -71,9 +71,12 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
+      // Compensation is owner-only across the team (same principle as GET /workspace/team):
+      // a non-owner sees ONLY their own payouts — profile «Заробіток» rides this scope.
+      const ownScope = isAgencyOwner(user, agencyId) ? {} : { executorId: user.sub }
       const rows = await withTenant((tx) =>
         tx.executorPayout.findMany({
-          where: { agencyId, ...(query.period ? { period: query.period } : {}) },
+          where: { agencyId, ...ownScope, ...(query.period ? { period: query.period } : {}) },
           select: PAYOUT_SELECT,
           orderBy: [{ period: 'desc' }, { executorId: 'asc' }],
         })
