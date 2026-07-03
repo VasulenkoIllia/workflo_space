@@ -149,7 +149,13 @@
   / Завершити всі інші). Revoke гасить refresh — пристрій вилітає на наступному оновленні
   (≤15 хв access-TTL). +6 тестів (api 663). Вживу: 2 логіни з різними UA → список/бейдж ок,
   revoke → 404 на повтор, revoke-others зніс 39 висячих dev-сесій; UI-клік зніс 3 (скрін).
-  Далі: portal-картка сесій, OAuth, email-verify.
+  Далі: OAuth, email-verify.
+- **Portal security-паритет (S9 tail) — ЗАКРИТО (2026-07-04).** Portal /settings тепер має
+  повний набір workspace: «Безпека · пароль» (було) + «Безпека · 2FA» (QR/ключ/резервні коди,
+  disable паролем) + «Безпека · активні сесії» (бейдж «поточна», Завершити / всі інші).
+  Той самий бек, нові lib/twoFactor.ts + lib/sessions.ts у порталі, qrcode лінивим чанком.
+  Вживу через прев'ю: client@ setup→enable (тост, 10 кодів)→disable паролем; revoke-others
+  зніс 5 висячих сесій. Гейти 7/7.
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,
