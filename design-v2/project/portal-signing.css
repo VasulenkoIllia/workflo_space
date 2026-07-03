@@ -1,0 +1,143 @@
+/* portal-signing.css — workflo.space client document-signing workflow.
+ * Round 4 · G12. Portal (client) context — review → sign / reject /
+ * request-changes → signed-state + audit trail, plus a mobile variant.
+ * Reuses wfp-* (portal) + wfd-* (PDF document) vocabularies; adds wfs-*.
+ */
+
+.wfs { display: flex; flex-direction: column; min-height: 0; }
+
+/* ── viewport toggle (desktop ⇄ mobile demo) ── */
+.wfs-vp { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--wf-border); border-radius: 8px; }
+.wfs-vp button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--wf-fg-muted); font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+}
+.wfs-vp button[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); }
+
+/* ── pending-signature inbox card (entry point) ── */
+.wfs-pending {
+  display: grid; grid-template-columns: 52px 1fr auto; gap: 16px; align-items: center;
+  padding: 18px 20px; border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--wf-accent) 55%, var(--wf-border));
+  background: color-mix(in oklab, var(--wf-accent) 7%, var(--wf-surface));
+  position: relative; overflow: hidden;
+}
+.wfs-pending::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--wf-accent-bg); }
+.wfs-pending-ic {
+  width: 52px; height: 52px; border-radius: 12px; background: var(--wf-surface);
+  border: 1px solid var(--wf-border); display: flex; align-items: center; justify-content: center; color: var(--wf-fg);
+}
+.wfs-pending-k { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wf-fg-muted); display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.wfs-pending-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--wf-accent-bg); }
+.wfs-pending-t { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.wfs-pending-m { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-secondary); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.wfs-pending-m .wfp-doc-type-pill { vertical-align: middle; }
+
+/* ── Review screen ── */
+.wfs-review { display: flex; flex-direction: column; }
+.wfs-review-bar {
+  display: flex; align-items: center; gap: 14px; padding: 0 0 16px; flex-shrink: 0;
+}
+.wfs-back { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-secondary); border: 1px solid var(--wf-border); border-radius: 7px; padding: 6px 11px; background: var(--wf-surface); }
+.wfs-review-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wfs-review-h { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.wfs-review-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); }
+
+.wfs-doc-pane {
+  border: 1px solid var(--wf-border); border-radius: 12px;
+  background: var(--wf-subtle); padding: 28px; display: flex; justify-content: center; align-items: flex-start;
+  overflow-x: auto;
+}
+.wfs-doc-pane .wfd-page { zoom: 0.84; box-shadow: 0 6px 30px rgba(0,0,0,.12); }
+.wfs-doc-scale { transform-origin: top center; }
+
+/* sticky action bar under the document */
+.wfs-actionbar {
+  position: sticky; bottom: 12px; z-index: 10;
+  margin-top: 14px; display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border: 1px solid var(--wf-border); border-radius: 12px;
+  background: color-mix(in oklab, var(--wf-surface) 92%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 28px color-mix(in oklab, var(--wf-fg) 12%, transparent);
+}
+.wfs-actionbar-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wfs-actionbar-k { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wf-fg-muted); }
+.wfs-actionbar-v { font-size: 14px; font-weight: 600; }
+.wfs-actionbar-actions { display: flex; gap: 8px; }
+.wfp-root .wfp-btn--sign { background: var(--wf-accent-bg); color: var(--wf-on-accent); border-color: var(--wf-accent-bg); font-weight: 600; }
+.wfp-root .wfp-btn--danger-soft { color: var(--wf-destructive); border-color: color-mix(in oklab, var(--wf-destructive) 35%, var(--wf-border)); }
+
+/* ── Signed state ── */
+.wfs-signed-banner {
+  display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: center;
+  padding: 18px 20px; border-radius: 12px; margin-bottom: 16px;
+  border: 1px solid color-mix(in oklab, var(--wf-success) 40%, var(--wf-border));
+  background: color-mix(in oklab, var(--wf-success) 9%, var(--wf-surface));
+}
+.wfs-signed-ic { width: 48px; height: 48px; border-radius: 50%; background: var(--wf-success); color: #fff; display: flex; align-items: center; justify-content: center; }
+.wfs-signed-t { font-size: 16px; font-weight: 600; }
+.wfs-signed-s { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-secondary); margin-top: 3px; }
+.wfs-signed-actions { display: flex; gap: 8px; }
+
+/* audit trail */
+.wfs-audit { border: 1px solid var(--wf-border); border-radius: 12px; overflow: hidden; }
+.wfs-audit-h { padding: 12px 16px; border-bottom: 1px solid var(--wf-border); font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wf-fg-muted); background: var(--wf-subtle); }
+.wfs-audit-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--wf-border); }
+.wfs-audit-row:last-child { border-bottom: 0; }
+.wfs-audit-dot { width: 9px; height: 9px; border-radius: 50%; margin: 0 auto; background: var(--wf-fg-subtle); }
+.wfs-audit-dot[data-k="signed"] { background: var(--wf-success); }
+.wfs-audit-dot[data-k="sent"], .wfs-audit-dot[data-k="viewed"] { background: var(--wf-accent-bg); }
+.wfs-audit-c-t { font-size: 13px; }
+.wfs-audit-c-s { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); margin-top: 1px; }
+.wfs-audit-ts { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); text-align: right; white-space: nowrap; }
+
+/* ── Modals (extend wfp-modal) ── */
+.wfs-modal-lead { font-size: 13.5px; color: var(--wf-fg-secondary); line-height: 1.5; margin-bottom: 16px; }
+
+/* signature preview (Caveat) */
+.wfs-sigprev {
+  border: 1px dashed var(--wf-border-strong); border-radius: 12px; background: var(--wf-subtle);
+  padding: 20px; text-align: center; position: relative; margin-bottom: 16px;
+}
+.wfs-sigprev-l { position: absolute; top: 10px; left: 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wf-fg-muted); }
+.wfs-sigprev-name { font-family: 'Caveat', cursive; font-size: 46px; line-height: 1; color: var(--wf-fg); }
+.wfs-sigprev-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 10px; }
+
+/* consent checkbox */
+.wfs-check { display: flex; align-items: flex-start; gap: 11px; padding: 13px 14px; border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-surface); cursor: pointer; }
+.wfs-check-box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--wf-border-strong); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: transparent; transition: all .12s; }
+.wfs-check[data-on="true"] .wfs-check-box { background: var(--wf-accent-bg); border-color: var(--wf-accent-bg); color: var(--wf-on-accent); }
+.wfs-check-t { font-size: 13px; line-height: 1.45; color: var(--wf-fg-secondary); }
+
+/* SMS-PIN for critical docs */
+.wfs-pin-wrap { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--wf-border); }
+.wfs-pin-l { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
+.wfs-pin { display: flex; gap: 8px; }
+.wfs-pin-cell { width: 42px; height: 50px; border-radius: 9px; border: 1px solid var(--wf-border); background: var(--wf-surface); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; color: var(--wf-fg); }
+.wfs-pin-cell[data-filled="true"] { border-color: var(--wf-fg); }
+.wfs-pin-cell[data-active="true"] { border-color: var(--wf-accent); box-shadow: 0 0 0 3px var(--wf-accent-soft); }
+
+/* request-changes editor */
+.wfs-chg { display: flex; flex-direction: column; gap: 10px; }
+.wfs-chg-row { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: start; padding: 12px; border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-surface); }
+.wfs-chg-sec { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-accent); background: var(--wf-accent-soft); padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+.wfs-chg-input { width: 100%; border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--wf-fg); resize: none; min-height: 38px; }
+.wfs-chg-input:focus { outline: 0; }
+.wfs-chg-input::placeholder { color: var(--wf-fg-subtle); }
+.wfs-chg-del { color: var(--wf-fg-subtle); background: none; border: 0; padding: 2px; }
+.wfs-chg-add { display: inline-flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-accent); background: none; border: 1px dashed var(--wf-border-strong); border-radius: 9px; padding: 10px; justify-content: center; }
+.wfs-textarea { width: 100%; min-height: 92px; border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-surface); padding: 12px 14px; font: inherit; font-size: 13.5px; color: var(--wf-fg); resize: vertical; }
+.wfs-textarea:focus { outline: 0; border-color: var(--wf-accent); }
+.wfs-textarea::placeholder { color: var(--wf-fg-subtle); }
+
+/* confirm countdown button */
+.wfs-countdown { position: relative; overflow: hidden; }
+.wfs-countdown[disabled] { opacity: 0.55; cursor: default; }
+
+/* ── Mobile variant ── */
+.wfs-m { display: flex; flex-direction: column; height: 100%; background: var(--wf-bg); }
+.wfs-m-doc { flex: 1; min-height: 0; overflow: auto; background: var(--wf-subtle); padding: 14px; display: flex; justify-content: center; align-items: flex-start; }
+.wfs-m-doc .wfd-page { zoom: 0.46; min-height: auto; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+.wfs-m-bar { flex-shrink: 0; display: flex; gap: 10px; padding: 12px 14px 24px; border-top: 1px solid var(--wf-border); background: var(--wf-bg); }
+.wfs-m-sheet-h { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+.wfs-m-sheet-sub { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); margin-bottom: 16px; }

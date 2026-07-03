@@ -1,0 +1,124 @@
+/* avatar-icons.css — thematic glyph avatars for workflo.space.
+ * Two families: team ROLES (designer / developer / devops / pm / qa / ai …)
+ * and CLIENT / industry types (logistics / retail / fintech / food …).
+ * Terminal-mono aesthetic, restrained oklch tint palette, lime as the hero.
+ * Prefix: wfa- (workflo avatar). All colour via tokens / oklch so dark works.
+ */
+
+.wfa {
+  --wfa-tint: var(--wf-fg);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  border-radius: 11px;                 /* tile by default — terminal feel */
+  background: color-mix(in oklab, var(--wfa-tint) 13%, var(--wf-bg));
+  color: var(--wfa-tint);
+  border: 1px solid color-mix(in oklab, var(--wfa-tint) 26%, transparent);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.wfa svg { width: 52%; height: 52%; display: block; }
+
+/* circle variant */
+.wfa[data-shape="circle"] { border-radius: 50%; }
+
+/* filled (solid) treatment — for primary / current user */
+.wfa[data-fill="solid"] {
+  background: var(--wfa-tint);
+  color: var(--wf-bg);
+  border-color: var(--wfa-tint);
+}
+.wfa[data-fill="solid"][data-tint="lime"] { color: #0A0A0A; }
+
+/* faint corner bracket — subtle terminal flourish */
+.wfa[data-bracket="true"]::before,
+.wfa[data-bracket="true"]::after {
+  content: "";
+  position: absolute;
+  width: 7px; height: 7px;
+  border: 1.5px solid color-mix(in oklab, var(--wfa-tint) 55%, transparent);
+  opacity: .55;
+}
+.wfa[data-bracket="true"]::before { top: 4px; left: 4px; border-right: 0; border-bottom: 0; }
+.wfa[data-bracket="true"]::after  { bottom: 4px; right: 4px; border-left: 0; border-top: 0; }
+
+/* status dot (online / away) */
+.wfa-status {
+  position: absolute;
+  right: -2px; bottom: -2px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--wf-bg);
+  background: var(--wf-fg-muted);
+}
+.wfa-status[data-on="online"] { background: var(--wf-success, #1F8A5B); }
+.wfa-status[data-on="busy"]   { background: var(--wf-warning, #D97706); }
+.wfa-status[data-on="off"]    { background: var(--wf-fg-subtle); }
+
+/* sizes */
+.wfa[data-size="xs"] { width: 24px; height: 24px; border-radius: 7px; }
+.wfa[data-size="sm"] { width: 32px; height: 32px; border-radius: 9px; }
+.wfa[data-size="lg"] { width: 60px; height: 60px; border-radius: 15px; }
+.wfa[data-size="xl"] { width: 84px; height: 84px; border-radius: 20px; }
+.wfa[data-size="xs"][data-shape="circle"],
+.wfa[data-size="sm"][data-shape="circle"],
+.wfa[data-size="lg"][data-shape="circle"],
+.wfa[data-size="xl"][data-shape="circle"] { border-radius: 50%; }
+
+/* ── curated tint palette (oklch, muted, on-brand) ── */
+.wfa[data-tint="lime"]   { --wfa-tint: var(--wf-accent); }
+.wfa[data-tint="ink"]    { --wfa-tint: var(--wf-fg); }
+.wfa[data-tint="ocean"]  { --wfa-tint: oklch(0.58 0.11 235); }
+.wfa[data-tint="violet"] { --wfa-tint: oklch(0.56 0.13 295); }
+.wfa[data-tint="amber"]  { --wfa-tint: oklch(0.64 0.13 65); }
+.wfa[data-tint="rose"]   { --wfa-tint: oklch(0.6 0.14 18); }
+.wfa[data-tint="teal"]   { --wfa-tint: oklch(0.58 0.09 185); }
+.wfa[data-tint="sand"]   { --wfa-tint: oklch(0.6 0.05 90); }
+
+/* ── stacked glyph avatars (kanban / tables — overlap with bg ring) ── */
+.wfp-av-stack--glyph { display: inline-flex; align-items: center; }
+.wfp-av-stack--glyph .wfa { margin-left: -7px; border: 2px solid var(--wf-bg); box-sizing: content-box; }
+.wfp-av-stack--glyph .wfa:first-child { margin-left: 0; }
+.wfp-av-stack--glyph .wfp-av--more { margin-left: -7px; border: 2px solid var(--wf-bg); z-index: 1; position: relative; }
+
+/* ── brandbook catalog grid ── */
+.wfa-cat { display: flex; flex-direction: column; gap: 30px; }
+.wfa-cat-group-h {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--wf-fg-muted); margin-bottom: 14px;
+  display: flex; align-items: baseline; gap: 10px;
+}
+.wfa-cat-group-h strong { color: var(--wf-fg); font-weight: 600; font-size: 14px; }
+.wfa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 14px;
+}
+.wfa-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 18px 12px;
+  border: 1px solid var(--wf-border); border-radius: 12px;
+  background: var(--wf-bg);
+  text-align: center;
+}
+.wfa-cell-label { font-size: 12.5px; font-weight: 500; color: var(--wf-fg); }
+.wfa-cell-id { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); }
+
+/* usage row — avatar + name + role line, as it appears in product */
+.wfa-use { display: flex; flex-direction: column; gap: 12px; }
+.wfa-use-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border: 1px solid var(--wf-border); border-radius: 10px;
+  background: var(--wf-bg);
+}
+.wfa-use-name { font-size: 14px; font-weight: 500; color: var(--wf-fg); }
+.wfa-use-role { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); margin-top: 1px; }
+.wfa-use-tag {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: var(--wf-fg-muted);
+  padding: 2px 8px; border: 1px dashed var(--wf-border); border-radius: 5px;
+}

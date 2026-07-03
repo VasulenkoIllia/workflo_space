@@ -1,0 +1,194 @@
+/* onboarding.css — first-run wizard for a new workspace owner.
+ * Terminal-mono aesthetic; industry + role selection uses the WfAvatar glyphs.
+ * Prefix: wfo- (workflo onboarding). All colour via --wf-* tokens.
+ */
+
+.wfob {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 720px;
+  background: var(--wf-bg);
+  border: 1px solid var(--wf-border);
+  border-radius: 16px;
+  overflow: hidden;
+  font-family: 'Geist', system-ui, sans-serif;
+}
+
+/* ── left rail: brand + stepper ── */
+.wfob-rail {
+  background: color-mix(in oklab, var(--wf-fg) 3%, var(--wf-bg));
+  border-right: 1px solid var(--wf-border);
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+}
+.wfob-brand {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--wf-fg); margin-bottom: 6px;
+}
+.wfob-brand .dot { color: var(--wf-accent); }
+.wfob-brand-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-bottom: 34px; }
+
+.wfob-steps { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.wfob-step {
+  display: flex; align-items: center; gap: 13px;
+  padding: 12px 12px; border-radius: 10px;
+  cursor: pointer; transition: background .12s;
+}
+.wfob-step:hover { background: color-mix(in oklab, var(--wf-fg) 3%, transparent); }
+.wfob-step-num {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--wf-border); color: var(--wf-fg-muted);
+  background: var(--wf-bg);
+}
+.wfob-step[data-state="active"] { background: color-mix(in oklab, var(--wf-accent) 9%, transparent); }
+.wfob-step[data-state="active"] .wfob-step-num { background: var(--wf-accent); color: #0A0A0A; border-color: var(--wf-accent); }
+.wfob-step[data-state="done"] .wfob-step-num { background: var(--wf-fg); color: var(--wf-bg); border-color: var(--wf-fg); }
+.wfob-step-l { min-width: 0; }
+.wfob-step-t { font-size: 13.5px; font-weight: 500; color: var(--wf-fg); }
+.wfob-step[data-state="todo"] .wfob-step-t { color: var(--wf-fg-muted); }
+.wfob-step-s { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-subtle); margin-top: 1px; }
+
+.wfob-rail-foot {
+  margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--wf-border);
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); line-height: 1.6;
+}
+.wfob-progress-track { height: 4px; border-radius: 2px; background: color-mix(in oklab, var(--wf-fg) 10%, transparent); overflow: hidden; margin-bottom: 10px; }
+.wfob-progress-fill { height: 100%; background: var(--wf-accent); border-radius: 2px; transition: width .3s; }
+
+/* ── right: step body ── */
+.wfob-body { padding: 44px 48px; display: flex; flex-direction: column; min-width: 0; }
+.wfob-eyebrow {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-muted);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.wfob-eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--wf-accent); }
+.wfob-h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; color: var(--wf-fg); margin: 0 0 8px; text-wrap: pretty; }
+.wfob-lead { font-size: 15px; line-height: 1.6; color: var(--wf-fg-secondary); margin: 0 0 30px; max-width: 56ch; text-wrap: pretty; }
+
+.wfob-form { display: flex; flex-direction: column; gap: 20px; flex: 1; }
+.wfob-field { display: flex; flex-direction: column; gap: 8px; max-width: 460px; }
+.wfob-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-muted); }
+.wfob-input {
+  padding: 12px 15px; border: 1px solid var(--wf-border); border-radius: 9px;
+  background: var(--wf-bg); color: var(--wf-fg);
+  font-family: 'Geist', sans-serif; font-size: 14.5px;
+}
+.wfob-input:focus { outline: none; border-color: var(--wf-accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--wf-accent) 18%, transparent); }
+.wfob-input::placeholder { color: var(--wf-fg-subtle); }
+.wfob-hint { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-subtle); }
+
+/* picker grid (industry / role tiles) */
+.wfob-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 11px; max-width: 660px; }
+.wfob-pick {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px 12px; border: 1px solid var(--wf-border); border-radius: 12px;
+  background: var(--wf-bg); cursor: pointer; transition: border-color .12s, background .12s;
+}
+.wfob-pick:hover { border-color: var(--wf-border-strong); }
+.wfob-pick[data-on="true"] {
+  border-color: var(--wf-accent);
+  background: color-mix(in oklab, var(--wf-accent) 7%, transparent);
+}
+.wfob-pick-label { font-size: 12.5px; font-weight: 500; color: var(--wf-fg); }
+
+/* team invite rows */
+.wfob-team { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
+.wfob-team-row {
+  display: grid; grid-template-columns: auto 1fr 150px auto; gap: 12px; align-items: center;
+  padding: 11px 14px; border: 1px solid var(--wf-border); border-radius: 11px; background: var(--wf-bg);
+}
+.wfob-team-name { font-size: 13.5px; font-weight: 500; color: var(--wf-fg); }
+.wfob-team-mail { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 1px; }
+.wfob-role-select {
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  padding: 6px 10px; border: 1px solid var(--wf-border); border-radius: 7px;
+  background: color-mix(in oklab, var(--wf-fg) 3%, transparent); color: var(--wf-fg);
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.wfob-team-add {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px dashed var(--wf-border); border-radius: 11px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--wf-fg-muted);
+  cursor: pointer; max-width: 560px;
+}
+.wfob-team-add:hover { border-color: var(--wf-accent); color: var(--wf-fg); }
+
+/* channel cards */
+.wfob-channels { display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
+.wfob-channel {
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; align-items: center;
+  padding: 16px 18px; border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-bg);
+}
+.wfob-channel-ico {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--wf-fg) 5%, transparent); color: var(--wf-fg);
+}
+.wfob-channel-t { font-size: 14px; font-weight: 500; color: var(--wf-fg); }
+.wfob-channel-s { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 2px; }
+
+/* toggle */
+.wfob-toggle { width: 42px; height: 24px; border-radius: 999px; background: color-mix(in oklab, var(--wf-fg) 14%, transparent); position: relative; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.wfob-toggle[data-on="true"] { background: var(--wf-accent); }
+.wfob-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--wf-bg); transition: transform .15s; }
+.wfob-toggle[data-on="true"]::after { transform: translateX(18px); }
+
+/* done step */
+.wfob-done { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.wfob-done-check {
+  width: 64px; height: 64px; border-radius: 18px; margin-bottom: 20px;
+  background: color-mix(in oklab, var(--wf-accent) 16%, transparent); color: var(--wf-accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.wfob-summary {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--wf-border);
+  border: 1px solid var(--wf-border); border-radius: 12px; overflow: hidden;
+  margin: 8px 0 24px; max-width: 560px; width: 100%;
+}
+.wfob-summary-cell { background: var(--wf-bg); padding: 16px 18px; display: flex; align-items: center; gap: 12px; }
+.wfob-summary-k { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); }
+.wfob-summary-v { font-size: 14px; font-weight: 500; color: var(--wf-fg); }
+
+/* footer nav */
+.wfob-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--wf-border);
+}
+.wfob-skip { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-muted); cursor: pointer; }
+.wfob-skip:hover { color: var(--wf-fg); }
+.wfob-foot-r { display: flex; gap: 10px; align-items: center; }
+
+@container wfp (max-width: 880px) {
+  .wfob { grid-template-columns: 1fr; min-height: 0; }
+  /* rail → horizontal compact stepper on top instead of vanishing */
+  .wfob-rail {
+    flex-direction: row; align-items: center; gap: 8px;
+    border-right: 0; border-bottom: 1px solid var(--wf-border);
+    padding: 12px 16px; overflow-x: auto;
+  }
+  .wfob-brand, .wfob-brand-sub, .wfob-rail-foot { display: none; }
+  .wfob-steps { flex-direction: row; gap: 6px; flex: 1 0 auto; }
+  .wfob-step { padding: 7px 9px; gap: 9px; flex: 0 0 auto; }
+  /* show only the numbered node; the active step also reveals its label */
+  .wfob-step-l { display: none; }
+  .wfob-step[data-state="active"] .wfob-step-l { display: block; }
+  .wfob-body { padding: 28px 22px; }
+}
+
+@container wfp (max-width: 560px) {
+  .wfob-body { padding: 22px 16px; }
+  .wfob-h1 { font-size: 24px; }
+  .wfob-lead { font-size: 14px; margin-bottom: 22px; }
+  .wfob-picker { grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); }
+  /* team & channel rows stack their controls */
+  .wfob-team-row { grid-template-columns: 1fr auto; gap: 8px 10px; }
+  .wfob-team-row > :nth-child(3) { grid-column: 1 / -1; }
+  .wfob-foot { flex-wrap: wrap; gap: 12px; }
+  .wfob-foot-r { width: 100%; }
+  .wfob-foot-r .wfp-btn, .wfob-foot-r .wfob-btn { flex: 1 1 auto; justify-content: center; }
+}
+

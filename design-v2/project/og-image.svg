@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#FAFAF9"></rect>
+
+  <rect x="80" y="80" width="1040" height="470" rx="12" fill="#FFFFFF" stroke="#E7E5E4" stroke-width="1.5"></rect>
+
+  <rect x="80" y="80" width="1040" height="44" rx="12" fill="#F5F5F4"></rect>
+  <rect x="80" y="116" width="1040" height="8" fill="#F5F5F4"></rect>
+  <circle cx="108" cy="102" r="6" fill="#ff5f57"></circle>
+  <circle cx="128" cy="102" r="6" fill="#febc2e"></circle>
+  <circle cx="148" cy="102" r="6" fill="#28c840"></circle>
+  <text x="600" y="107" text-anchor="middle" font-family="JetBrains Mono, ui-monospace" font-size="13" fill="#78716C">~/illia/workflo — bash</text>
+
+
+  <text x="120" y="200" font-family="JetBrains Mono, ui-monospace" font-size="18" fill="#0C0A09" font-weight="600">  /\_/\</text>
+  <text x="120" y="222" font-family="JetBrains Mono, ui-monospace" font-size="18" fill="#0C0A09" font-weight="600"> ( <tspan fill="#A3D90D">●</tspan>.o )</text>
+  <text x="120" y="244" font-family="JetBrains Mono, ui-monospace" font-size="18" fill="#0C0A09" font-weight="600">  &gt; ^ &lt;</text>
+
+
+  <text x="120" y="300" font-family="JetBrains Mono, ui-monospace" font-size="16" fill="#0C0A09">
+    <tspan fill="#A3D90D" font-weight="500">illia</tspan>
+    <tspan fill="#A8A29E">@</tspan>
+    <tspan fill="#44403C">workflo</tspan>
+    <tspan fill="#A8A29E">:</tspan>
+    <tspan fill="#A3D90D" font-weight="500">~</tspan>
+    <tspan dx="6" font-weight="600">$</tspan>
+    <tspan dx="6">./hello.sh</tspan>
+  </text>
+
+
+  <text x="120" y="370" font-family="JetBrains Mono, ui-monospace" font-size="40" fill="#0C0A09" font-weight="600">
+    <tspan fill="#A3D90D" font-weight="500">&gt; </tspan>Я Ілля. Будую автоматизації
+  </text>
+  <text x="120" y="416" font-family="JetBrains Mono, ui-monospace" font-size="40" fill="#0C0A09" font-weight="600">
+    <tspan fill="#A3D90D" font-weight="500">&gt; </tspan>для команд, що виросли з Excel.
+    <tspan fill="#A3D90D">▮</tspan>
+  </text>
+
+
+  <text x="120" y="455" font-family="JetBrains Mono, ui-monospace" font-size="14" fill="#78716C">// Lutsk · Ukraine · 6 years building product</text>
+
+
+  <rect x="120" y="478" width="200" height="34" rx="6" fill="#C5F82A"></rect>
+  <text x="220" y="500" text-anchor="middle" font-family="JetBrains Mono, ui-monospace" font-size="13" fill="#0C0A09" font-weight="500">[ Обговорити проєкт → ]</text>
+
+
+  <rect x="80" y="510" width="1040" height="40" fill="#F5F5F4"></rect>
+  <text x="100" y="535" font-family="JetBrains Mono, ui-monospace" font-size="11" fill="#78716C">
+    <tspan fill="#A3D90D">●</tspan>
+    <tspan dx="6">main · UTF-8 · LF · lime · 5 readers · 47/hr</tspan>
+  </text>
+  <text x="1100" y="535" text-anchor="end" font-family="JetBrains Mono, ui-monospace" font-size="11" fill="#78716C">built in lutsk · 2026</text>
+
+
+  <text x="600" y="595" text-anchor="middle" font-family="Geist, system-ui" font-size="16" fill="#44403C" font-weight="600">workflo<tspan fill="#A3D90D">.</tspan>space</text>
+</svg>

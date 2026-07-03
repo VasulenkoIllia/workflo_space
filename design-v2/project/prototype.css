@@ -1,0 +1,123 @@
+/* prototype.css — interactive prototype shell: top product-switcher bar + stage.
+ * Terminal aesthetic, lime accent. Prefix: proto- */
+
+.proto-root {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: #0A0A0A;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── top switcher bar ── */
+.proto-bar {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 16px;
+  height: 52px; padding: 0 16px;
+  background: #0C0A09; border-bottom: 1px solid #27272A;
+  position: relative; z-index: 10;
+}
+.proto-brand { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #FAFAF9; letter-spacing: -0.01em; }
+.proto-brand .dot { color: #C5F82A; }
+.proto-brand-tag { font-size: 9.5px; color: #78716C; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 7px; border: 1px solid #27272A; border-radius: 999px; }
+
+.proto-tabs { display: flex; gap: 4px; margin-left: 8px; }
+.proto-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 15px; border-radius: 8px; cursor: pointer;
+  font-size: 12.5px; color: #A8A29E; background: none; border: 1px solid transparent;
+  transition: color .14s, background .14s, border-color .14s;
+}
+.proto-tab:hover { color: #FAFAF9; background: #161616; }
+.proto-tab[data-on="true"] { color: #0A0A0A; background: #C5F82A; border-color: #C5F82A; font-weight: 600; }
+.proto-tab-glyph { font-size: 13px; opacity: .8; }
+.proto-tab[data-on="true"] .proto-tab-glyph { opacity: 1; }
+
+.proto-spacer { flex: 1; }
+
+.proto-controls { display: flex; align-items: center; gap: 8px; }
+.proto-ctl {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 7px; cursor: pointer;
+  font-size: 11.5px; color: #A8A29E; background: #161616; border: 1px solid #27272A;
+}
+.proto-ctl:hover { color: #FAFAF9; border-color: #3F3F46; }
+.proto-seg { display: inline-flex; border: 1px solid #27272A; border-radius: 7px; overflow: hidden; }
+.proto-seg button {
+  padding: 6px 11px; font-family: inherit; font-size: 11.5px; cursor: pointer;
+  background: #161616; color: #A8A29E; border: 0; border-right: 1px solid #27272A;
+}
+.proto-seg button:last-child { border-right: 0; }
+.proto-seg button[data-on="true"] { background: #C5F82A; color: #0A0A0A; font-weight: 600; }
+.proto-swatches { display: inline-flex; gap: 5px; }
+.proto-sw { width: 18px; height: 18px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; }
+.proto-sw[data-on="true"] { border-color: #FAFAF9; }
+
+/* hint pill */
+.proto-hint { font-size: 10.5px; color: #57534E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
+/* hide the hint before it can collide with the right-side controls */
+@media (max-width: 1180px) { .proto-hint { display: none; } }
+
+/* ── stage ── */
+.proto-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.proto-stage[data-app="landing"] { overflow: auto; }
+.proto-stage[data-scroll="true"] { overflow: auto; }
+.proto-stage > .wfp-root,
+.proto-stage > .wf-root { height: 100%; }
+
+/* entrance when switching apps */
+@keyframes proto-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.proto-stage-inner { height: 100%; animation: proto-fade .28s ease both; }
+
+/* per-screen transition inside portal/workspace (keyed by active nav id) */
+@keyframes proto-screen-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.proto-screen { animation: proto-screen-in .34s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .proto-stage-inner, .proto-screen { animation: none; }
+}
+
+/* overlay host (⌘K / bell) */
+.proto-ovl {
+  position: absolute; inset: 0; z-index: 80;
+  animation: proto-fade .18s ease both;
+}
+.proto-ovl-bell {
+  position: absolute; top: 60px; right: 24px;
+}
+
+/* components tab scrolls */
+.proto-stage[data-app="components"] { overflow: auto; background: #FAFAF9; }
+.proto-stage[data-app="components"] .proto-stage-inner { height: auto; min-height: 100%; }
+
+/* mobile workspace tab — center the phone on a dark stage */
+.proto-stage[data-app="mobile"] { overflow: auto; background:
+  radial-gradient(circle at 50% 30%, #1a1a1a, #0A0A0A 70%); }
+.proto-stage[data-app="mobile"] .proto-stage-inner { height: 100%; }
+.proto-mobile-stage {
+  height: 100%; display: flex; flex-direction: column; align-items: stretch;
+  padding: 16px 20px 20px; box-sizing: border-box; gap: 12px;
+}
+.proto-mobile-switch {
+  display: flex; gap: 4px; align-self: center; flex-shrink: 0;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; padding: 3px;
+}
+.proto-mobile-switch button {
+  border: 0; background: transparent; color: #A8A29E; cursor: pointer;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
+  padding: 6px 16px; border-radius: 7px; letter-spacing: -0.01em;
+}
+.proto-mobile-switch button[data-on="true"] { background: #C5F82A; color: #0C0A09; font-weight: 600; }
+.proto-mobile-frame { flex: 1; min-height: 0; }
+
+/* missing-screen fallback */
+.proto-missing {
+  display: flex; align-items: center; justify-content: center; height: 100%;
+  color: #78716C; font-size: 13px; background: var(--wf-bg, #0A0A0A);
+}
+
+/* mobile: stack tabs */
+@media (max-width: 720px) {
+  .proto-brand-tag, .proto-hint { display: none; }
+  .proto-tab { padding: 7px 10px; }
+  .proto-controls { gap: 5px; }
+}

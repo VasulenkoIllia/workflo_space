@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>workflo.space — Ілля · автоматизація + AI-агенти</title>
+  <meta name="description" content="Ілля з Луцька будує автоматизації для команд, що виросли з Excel. Telegram-боти, AI-агенти, інтеграції, кастомні CRM. 12 проєктів. 7 компаній. 4 роки." />
+  <meta property="og:title" content="workflo.space — Ілля · автоматизація для команд що виросли з Excel" />
+  <meta property="og:description" content="Будую Telegram-ботів, AI-агентів, внутрішні портали та інтеграції. 12 проєктів, 7 компаній, 4 роки досвіду." />
+  <meta property="og:image" content="og-image.svg" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Favicon — inline SVG, ASCII cat W -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230C0A09'/%3E%3Ctext x='16' y='15' font-family='Menlo,monospace' font-size='10' font-weight='700' text-anchor='middle' fill='%23C5F82A'%3E%2F%5C_%2F%5C%3C/text%3E%3Ctext x='16' y='25' font-family='Menlo,monospace' font-size='9' font-weight='700' text-anchor='middle' fill='%23FAFAF9'%3E(%E2%97%8F.o)%3C/text%3E%3C/svg%3E" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=JetBrains+Mono:wght@400..600&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles-responsive.css" />
+  <link rel="stylesheet" href="landing-pages.css" />
+  <link rel="stylesheet" href="eco-nav.css" />
+  <link rel="stylesheet" href="avatar-icons.css" />
+  <link rel="stylesheet" href="polish.css" />
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #f0eee9; }
+    body { font-family: 'Geist', system-ui, sans-serif; }
+  </style>
+
+  <script>
+    // One-shot reset of the DesignCanvas pan/zoom state if it ever drifts
+    // off-screen and leaves the user staring at a blank background. Gated
+    // by a version flag so it only fires once per bump.
+    (function () {
+      var FLAG = 'dc-reset:v4';
+      try {
+        if (!localStorage.getItem(FLAG)) {
+          Object.keys(localStorage).forEach(function (k) {
+            if (k.indexOf('dc-viewport:') === 0) localStorage.removeItem(k);
+          });
+          localStorage.setItem(FLAG, '1');
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script src="pages-data.js"></script>
+  <script src="landing-pages.js"></script>
+  <script src="landing-marketing-data.js"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="cats.jsx"></script>
+  <script type="text/babel" src="wordmark.jsx"></script>
+  <script type="text/babel" src="terminal-extras.jsx"></script>
+  <script type="text/babel" src="terminal-variant.jsx"></script>
+  <script type="text/babel" src="terminal-pages.jsx"></script>
+  <script type="text/babel" src="landing-blog.jsx"></script>
+  <script type="text/babel" src="landing-cases.jsx"></script>
+  <script type="text/babel" src="landing-marketing.jsx"></script>
+  <script type="text/babel" src="landing-booking.jsx"></script>
+  <script type="text/babel" src="landing-pricing.jsx"></script>
+  <script type="text/babel" src="eco-nav.jsx"></script>
+  <script type="text/babel" src="avatar-icons.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+/* polish.css — shared aesthetic polish layer for the whole workflo.space
+ * ecosystem (loaded LAST on both landing + product). Adds a unified depth +
+ * interaction vocabulary WITHOUT touching markup or hiding content:
+ *   · resting elevation for flat containers
+ *   · one hover-lift language for clickable cards/rows
+ *   · accent scan-indicator on table-row hover
+ *   · refined focus rings + button press feedback
+ * Every rule is transition/shadow based — nothing here can hide content.
+ * Honours prefers-reduced-motion.
+ */
+
+/* ── resting elevation for the main flat container ── */
+.wfp-card {
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--wf-fg) 4%, transparent),
+    0 1px 0 color-mix(in oklab, var(--wf-fg) 2%, transparent);
+  transition: box-shadow .18s ease, border-color .18s ease;
+}
+
+/* ── one hover-lift language for clickable list-cards ──
+ * Targets the interactive rows/cards that previously only shifted border.
+ */
+.wfv-item,
+.wfc-case,
+.wfs-svc-card,
+.wfp-co-row,
+.wfp-dept-card {
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  will-change: transform;
+}
+.wfv-item:hover,
+.wfc-case:hover,
+.wfs-svc-card:hover,
+.wfp-co-row:hover,
+.wfp-dept-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--wf-accent) 45%, var(--wf-border-strong));
+  box-shadow:
+    0 4px 18px -6px color-mix(in oklab, var(--wf-fg) 22%, transparent),
+    0 1px 0 color-mix(in oklab, var(--wf-fg) 3%, transparent);
+}
+
+/* landing clickable cards — unify the hover shadow with product (they already
+ * lift; we just enrich the shadow so depth reads the same across surfaces) */
+.wf-tm-svc-card:hover,
+.wf-tm-case-card:hover,
+.wf-tm-contact-channel:hover {
+  box-shadow:
+    0 6px 22px -8px color-mix(in oklab, var(--wf-fg) 24%, transparent),
+    0 1px 0 color-mix(in oklab, var(--wf-fg) 3%, transparent);
+}
+
+/* ── table rows: accent scan-indicator on hover for better tracking ── */
+.wfp-table tbody tr { position: relative; }
+.wfp-table tbody tr td:first-child { box-shadow: inset 0 0 0 transparent; transition: box-shadow .14s ease; }
+.wfp-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--wf-accent);
+}
+
+/* ── buttons: subtle press feedback (where not already animated) ── */
+.wfp-btn { transition: background .14s ease, border-color .14s ease, color .14s ease, transform .08s ease; }
+.wfp-btn:active { transform: translateY(1px); }
+.wf-tm-btn { transition: background .14s ease, border-color .14s ease, color .14s ease, transform .08s ease; }
+.wf-tm-btn:active { transform: translateY(1px); }
+
+/* ── icon buttons: gentle hover tint ── */
+.wfp-iconbtn { transition: background .14s ease, color .14s ease, border-color .14s ease; }
+
+/* ── overlays: lift dropdowns/toasts a touch more for true float ── */
+.wfn { transition: box-shadow .18s ease; }
+.wft { transition: transform .16s ease, box-shadow .16s ease; }
+.wft:hover { transform: translateY(-1px); }
+
+/* ── respect reduced-motion: kill transforms, keep colour transitions ── */
+@media (prefers-reduced-motion: reduce) {
+  .wfv-item, .wfc-case, .wfs-svc-card, .wfp-co-row, .wfp-dept-card,
+  .wfp-btn, .wf-tm-btn, .wft {
+    transition: border-color .16s ease, box-shadow .16s ease, background .14s ease, color .14s ease;
+  }
+  .wfv-item:hover, .wfc-case:hover, .wfs-svc-card:hover, .wfp-co-row:hover,
+  .wfp-dept-card:hover, .wfp-btn:active, .wf-tm-btn:active, .wft:hover {
+    transform: none;
+  }
+  .wf-skel { animation: none; }
+}
+
+/* ── Skeleton loaders (brief §11: skeletons, not spinners) ── */
+.wf-skel {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--wf-fg) 7%, var(--wf-bg));
+  border-radius: 6px;
+}
+.wf-skel::after {
+  content: "";
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--wf-fg) 5%, transparent), transparent);
+  animation: wf-skel-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes wf-skel-shimmer { 100% { transform: translateX(100%); } }
+.wf-skel--line { height: 11px; border-radius: 4px; }
+.wf-skel--line.is-sm { height: 9px; }
+.wf-skel--title { height: 18px; border-radius: 5px; }
+.wf-skel--chip { height: 20px; width: 64px; border-radius: 999px; }
+.wf-skel--circle { border-radius: 50%; }
+.wf-skel--btn { height: 32px; width: 110px; border-radius: 6px; }
+
+.wf-skel-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border: 1px solid var(--wf-border); border-radius: 10px;
+  background: var(--wf-bg); margin-bottom: 8px;
+}
+.wf-skel-row-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.wf-skel-card {
+  border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-bg);
+  padding: 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.wf-skel-stat {
+  border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-bg);
+  padding: 16px; display: flex; flex-direction: column; gap: 10px;
+}

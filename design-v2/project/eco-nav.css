@@ -1,0 +1,128 @@
+/* eco-nav.css — shared top navigation across the workflo.space ecosystem.
+ * One bar on every surface (landing · portal · workspace · documents · brandbook)
+ * so the whole project reads as a single product. Self-contained: depends only
+ * on the --wf-* tokens from styles.css (resolved via the .wf-root wrapper that
+ * EcoNav renders), NOT on product-styles.css — so it works on the landing too.
+ */
+
+.eco-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 22px;
+  background:
+    linear-gradient(to bottom, color-mix(in oklab, var(--wf-bg) 94%, transparent), color-mix(in oklab, var(--wf-bg) 86%, transparent));
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid var(--wf-border);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+/* hairline accent glow riding the bottom border */
+.eco-nav::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(to right, transparent, color-mix(in oklab, var(--wf-accent) 55%, transparent) 18%, color-mix(in oklab, var(--wf-accent) 55%, transparent) 82%, transparent);
+  opacity: .5;
+  pointer-events: none;
+}
+
+.eco-nav-mark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.eco-nav-mark-name {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--wf-fg);
+  text-decoration: none;
+}
+.eco-nav-mark-name .eco-dot { color: var(--wf-accent); }
+.eco-nav-mark-sub {
+  font-size: 10.5px;
+  color: var(--wf-fg-subtle);
+}
+
+.eco-nav-tabs { display: flex; align-items: center; gap: 6px; }
+
+.eco-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  color: var(--wf-fg-secondary);
+  cursor: pointer;
+  background: var(--wf-bg);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.eco-tab::before { content: "[ "; color: var(--wf-fg-subtle); margin-right: -3px; }
+.eco-tab::after  { content: " ]"; color: var(--wf-fg-subtle); margin-left: -3px; }
+.eco-tab:hover {
+  color: var(--wf-fg);
+  border-color: color-mix(in oklab, var(--wf-accent) 50%, var(--wf-border-strong));
+  transform: translateY(-1px);
+}
+.eco-tab:hover::before, .eco-tab:hover::after { color: var(--wf-accent); }
+.eco-tab[data-on="true"] {
+  background: var(--wf-fg);
+  color: var(--wf-bg);
+  border-color: var(--wf-fg);
+  box-shadow: 0 2px 12px -4px color-mix(in oklab, var(--wf-fg) 50%, transparent);
+}
+.eco-tab[data-on="true"]:hover { transform: translateY(-1px); }
+.eco-tab[data-on="true"]::before,
+.eco-tab[data-on="true"]::after { color: var(--wf-accent); }
+
+.eco-tab-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--wf-accent);
+  flex-shrink: 0;
+}
+
+.eco-nav-aux {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--wf-fg-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.eco-nav-aux::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--wf-accent);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--wf-accent) 70%, transparent);
+  animation: eco-pulse 2.4s ease-out infinite;
+  flex-shrink: 0;
+}
+@keyframes eco-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--wf-accent) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 5px color-mix(in oklab, var(--wf-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--wf-accent) 0%, transparent); }
+}
+
+/* tighten on narrow viewports — hide the aux note and the wordmark sub */
+@media (max-width: 760px) {
+  .eco-nav { padding: 10px 14px; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+  .eco-nav::-webkit-scrollbar { display: none; }
+  .eco-nav-aux, .eco-nav-mark-sub { display: none; }
+  .eco-tab { padding: 6px 11px; }
+}
