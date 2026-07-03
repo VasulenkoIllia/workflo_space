@@ -5,6 +5,8 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 const orderFindUnique = vi.fn()
 const commentFindFirst = vi.fn()
 const commentUpdate = vi.fn()
+const commentUpdateMany = vi.fn()
+const commentFindMany = vi.fn()
 const commentFindUniqueOrThrow = vi.fn()
 const reactionUpsert = vi.fn()
 const reactionDeleteMany = vi.fn()
@@ -17,6 +19,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     orderComment: {
       findFirst: commentFindFirst,
       update: commentUpdate,
+      updateMany: commentUpdateMany,
+      findMany: commentFindMany,
       findUniqueOrThrow: commentFindUniqueOrThrow,
     },
     commentReaction: { upsert: reactionUpsert, deleteMany: reactionDeleteMany },
@@ -52,6 +56,13 @@ const OWNER = {
   sub: 'owner-1',
   role: 'owner' as const,
   agencyMemberships: [{ agencyId: AGENCY, role: 'owner' as const }],
+}
+const CLIENT = {
+  ...EXECUTOR,
+  sub: 'client-1',
+  role: 'client' as const,
+  agencyMemberships: [],
+  memberships: [{ companyId: 'company-1', role: 'owner' as const }],
 }
 
 const FULL_ROW = {
@@ -243,6 +254,75 @@ describe('reactions', () => {
       profileId: 'exec-1',
       emoji: '👍',
     })
+    await app.close()
+  })
+})
+
+describe('pin (03-Г)', () => {
+  it('team pins a message; client gets 403', async () => {
+    commentFindFirst.mockResolvedValue({ id: 'c1' })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/order-1/comments/c1/pin',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(commentUpdate.mock.calls[0][0].data.pinnedAt).toBeInstanceOf(Date)
+    await app.close()
+
+    const { app: app2, token: token2 } = await authed(CLIENT)
+    const res2 = await app2.inject({
+      method: 'POST',
+      url: '/orders/order-1/comments/c1/pin',
+      headers: { authorization: `Bearer ${token2}` },
+    })
+    expect(res2.statusCode).toBe(403)
+    await app2.close()
+  })
+
+  it('unpin clears pinnedAt (scoped updateMany)', async () => {
+    commentUpdateMany.mockResolvedValue({ count: 1 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/orders/order-1/comments/c1/pin',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(commentUpdateMany.mock.calls[0][0].data).toMatchObject({
+      pinnedAt: null,
+      pinnedById: null,
+    })
+    await app.close()
+  })
+})
+
+describe('search (03-В)', () => {
+  it('client search is leak-guarded to public comments', async () => {
+    commentFindMany.mockResolvedValue([])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/comments/search?q=оцінка',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(commentFindMany.mock.calls[0][0].where).toMatchObject({
+      isInternal: false,
+      content: { contains: 'оцінка', mode: 'insensitive' },
+    })
+    await app.close()
+  })
+
+  it('rejects a 1-char query (400)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/comments/search?q=а',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
     await app.close()
   })
 })

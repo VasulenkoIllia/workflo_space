@@ -49,6 +49,8 @@ export interface ChatComment {
   mentions?: string[]
   /** S10 реакції: агрегат {emoji, count, mine, names} (канон 03-C). */
   reactions?: ReactionAgg[]
+  /** 03-Г pin: закріплено командою (клієнт бачить, не керує). */
+  pinnedAt?: string | null
 }
 
 export interface ReactionAgg {
@@ -72,6 +74,8 @@ export interface ChatParticipant {
 
 export interface CommentsResult {
   comments: ChatComment[]
+  /** 03-Г: секція «Закріплене» (може містити старші за сторінку повідомлення). */
+  pinned?: ChatComment[]
   meta: {
     hasMore: boolean
     unreadCount: number
@@ -186,6 +190,31 @@ export function useToggleReaction(id: string) {
             emoji: input.emoji,
           }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+  })
+}
+
+/** Pin/unpin (03-Г) — лише команда (бек енфорсить 403 для клієнта). */
+export function usePinComment(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { commentId: string; pinned: boolean }) =>
+      input.pinned
+        ? api.delete(`/orders/${id}/comments/${input.commentId}/pin`)
+        : api.post(`/orders/${id}/comments/${input.commentId}/pin`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+  })
+}
+
+/** Пошук по коментарях ЦЬОГО замовлення (03-В), від 2 символів. */
+export function useSearchComments(id: string, q: string) {
+  return useQuery({
+    queryKey: [...orderKeys.comments(id), 'search', q] as const,
+    queryFn: () =>
+      api
+        .get<{ results: ChatComment[] }>(`/orders/${id}/comments/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.results),
+    enabled: id !== '' && q.trim().length >= 2,
+    staleTime: 10_000,
   })
 }
 

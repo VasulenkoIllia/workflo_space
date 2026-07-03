@@ -345,6 +345,10 @@ model OrderComment {
   // S10 @mention: profile-ids згаданих учасників (сервер валідовує видимість:
   // клієнта не можна згадати у внутрішній нотатці). Масив, не relation.
   mentionIds  String[]       @default([])
+  // 03-Г pin: ТЗ/реквізити/домовленості зверху чату. Пінить owner/команда;
+  // клієнт бачить (публічні). null = не закріплено.
+  pinnedAt    DateTime?      @db.Timestamptz(3)
+  pinnedById  String?
   createdAt   DateTime       @default(now()) @db.Timestamptz(3)
   // editedAt = ФАКТ правки (показ «(відредаговано)»); updatedAt — технічний (канон 03-B).
   editedAt    DateTime?      @db.Timestamptz(3)
@@ -357,6 +361,7 @@ model OrderComment {
   @@index([agencyId])
   @@index([orderId, createdAt])
   @@index([orderId, isInternal])
+  @@index([orderId, pinnedAt])
   @@index([authorId])
   @@index([replyToId])
   @@map("order_comments")

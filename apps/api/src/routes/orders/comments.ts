@@ -37,6 +37,8 @@ export const COMMENT_SELECT = {
   },
   // S10 @mention: ids згаданих учасників (валідовані на create).
   mentionIds: true,
+  // 03-Г pin: закріплення (null = ні).
+  pinnedAt: true,
   // S10 реакції (канон 03-C): агрегуються серіалізатором у {emoji, count, mine, names}.
   reactions: {
     select: { emoji: true, profileId: true, profile: { select: { name: true } } },
@@ -62,6 +64,7 @@ type RawComment = {
   attachments?: { id: string; filename: string; mimeType: string; sizeBytes: number }[]
   mentionIds?: string[]
   reactions?: { emoji: string; profileId: string; profile?: { name: string } | null }[]
+  pinnedAt?: Date | null
 }
 
 /** Strip the raw memberships and expose only `author.kind` (team if the author is an agency
@@ -99,6 +102,7 @@ export function serializeComment(
     attachments: c.attachments ?? [],
     mentions: c.mentionIds ?? [],
     reactions: aggregateReactions(c.reactions ?? [], viewerId),
+    pinnedAt: c.pinnedAt ?? null,
   }
 }
 
@@ -135,7 +139,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       // One tenant tx (F4 RLS scope): read the unread-marker first to build the
       // unread filter, then the page + unread count — a consistent snapshot, and
       // sequential awaits (Prisma interactive tx forbids concurrent queries).
-      const { read, rows, unreadCount, reads } = await withTenant(async (tx) => {
+      const { read, rows, unreadCount, reads, pinned } = await withTenant(async (tx) => {
         const read = await tx.orderChatRead.findUnique({
           where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
           select: { lastReadAt: true },
@@ -160,7 +164,19 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
           where: { orderId: access.orderId, profileId: { not: user.sub } },
           select: { profileId: true, lastReadAt: true, profile: { select: { name: true } } },
         })
-        return { read, rows, unreadCount, reads }
+        // 03-Г: секція «Закріплене» — окремо від сторінки (пін може бути старшим за неї).
+        const pinned = await tx.orderComment.findMany({
+          where: {
+            orderId: access.orderId,
+            deletedAt: null,
+            pinnedAt: { not: null },
+            ...(access.isInternal ? {} : { isInternal: false }),
+          },
+          orderBy: { pinnedAt: 'desc' },
+          take: 20,
+          select: COMMENT_SELECT,
+        })
+        return { read, rows, unreadCount, reads, pinned }
       })
       const hasMore = rows.length > q.limit
       const page = (hasMore ? rows.slice(0, q.limit) : rows).reverse() // ascending
@@ -169,6 +185,9 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
         success: true,
         data: {
           comments: page.map((c) =>
+            serializeComment(c, access.agencyId, access.isInternal, user.sub)
+          ),
+          pinned: pinned.map((c) =>
             serializeComment(c, access.agencyId, access.isInternal, user.sub)
           ),
           meta: {

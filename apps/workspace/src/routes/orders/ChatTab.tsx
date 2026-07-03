@@ -20,6 +20,8 @@ import { REACTION_EMOJIS } from '@workflo/types'
 import {
   sendTyping,
   useDeleteComment,
+  usePinComment,
+  useSearchComments,
   useToggleReaction,
   useUpdateComment,
   type TypingMarker,
@@ -264,6 +266,90 @@ function TypingRow({ orderId }: { orderId: string }) {
   )
 }
 
+/** Секція «Закріплене» (03-Г): згорнутий список зверху чату. */
+function PinnedSection({
+  pinned,
+  canPin,
+  onUnpin,
+}: {
+  pinned: ChatComment[]
+  canPin: boolean
+  onUnpin: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  if (pinned.length === 0) return null
+  return (
+    <div
+      style={{
+        border: '1px solid var(--wf-border)',
+        borderRadius: 8,
+        padding: '6px 10px',
+        marginBottom: 8,
+        background: 'color-mix(in oklab, var(--wf-accent) 4%, transparent)',
+      }}
+    >
+      <button
+        type="button"
+        className="wfp-mono"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          color: 'var(--wf-fg-muted)',
+          padding: 0,
+        }}
+      >
+        📌 закріплене · {pinned.length} {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+          {pinned.map((c) => (
+            <div
+              key={c.id}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12 }}
+            >
+              <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                {formatDateTime(c.createdAt)}
+              </span>
+              <span style={{ fontWeight: 600 }}>{c.author.name}:</span>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {c.content}
+              </span>
+              {canPin && (
+                <button
+                  type="button"
+                  title="Відкріпити"
+                  onClick={() => onUnpin(c.id)}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: 'var(--wf-fg-muted)',
+                    padding: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ChatTab({ orderId }: { orderId: string }) {
   const { user, isOwner } = useAuth()
   const myId = user?.profile.id
@@ -273,7 +359,11 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const update = useUpdateComment(orderId)
   const del = useDeleteComment(orderId)
   const react = useToggleReaction(orderId)
+  const pin = usePinComment(orderId)
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null)
+  // 03-В: пошук по коментарях замовлення (бек шукає ВСІ, не лише завантажену сторінку).
+  const [searchQ, setSearchQ] = useState('')
+  const search = useSearchComments(orderId, searchQ)
   const [text, setText] = useState('')
   const [internal, setInternal] = useState(false)
   const [onlyInternal, setOnlyInternal] = useState(false)
@@ -370,11 +460,18 @@ export function ChatTab({ orderId }: { orderId: string }) {
 
   const comments = data?.comments ?? []
   const internalCount = comments.filter((c) => c.isInternal).length
-  const shown = onlyInternal ? comments.filter((c) => c.isInternal) : comments
+  const baseShown = onlyInternal ? comments.filter((c) => c.isInternal) : comments
+  const shown = searchQ.trim().length >= 2 ? (search.data ?? []) : baseShown
+  const searching = searchQ.trim().length >= 2
   return (
     <div className="wfp-chat" ref={scrollRef}>
+      <PinnedSection
+        pinned={data?.pinned ?? []}
+        canPin
+        onUnpin={(id) => pin.mutate({ commentId: id, pinned: true })}
+      />
       {comments.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
           <FilterBtn
             label={`Усі · ${comments.length}`}
             active={!onlyInternal}
@@ -385,6 +482,29 @@ export function ChatTab({ orderId }: { orderId: string }) {
             active={onlyInternal}
             onClick={() => setOnlyInternal(true)}
           />
+          <input
+            className="wfp-chat-input-field"
+            placeholder="🔍 пошук у чаті…"
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            style={{ marginLeft: 'auto', maxWidth: 200, fontSize: 12, padding: '3px 8px' }}
+          />
+        </div>
+      )}
+      {searching && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+        >
+          // результати пошуку «{searchQ.trim()}» · {search.data?.length ?? '…'}{' '}
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 11 }}
+            onClick={() => setSearchQ('')}
+          >
+            скинути
+          </button>
         </div>
       )}
       {isLoading ? (
@@ -538,6 +658,27 @@ export function ChatTab({ orderId }: { orderId: string }) {
                         🗑
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="wfp-mono"
+                      title={c.pinnedAt ? 'Відкріпити' : 'Закріпити'}
+                      onClick={() =>
+                        pin.mutate(
+                          { commentId: c.id, pinned: !!c.pinnedAt },
+                          { onError: () => toast.error('Не вдалося') }
+                        )
+                      }
+                      style={{
+                        marginLeft: 4,
+                        fontSize: 11,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: c.pinnedAt ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+                      }}
+                    >
+                      📌
+                    </button>
                   </>
                 )}
                 <AttachmentChips items={c.attachments ?? []} />
