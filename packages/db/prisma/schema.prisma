@@ -295,42 +295,55 @@ model OrderChatRead {
 }
 
 model OrderComment {
-  id         String    @id @default(uuid())
-  agencyId   String
-  orderId    String
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  authorId   String
-  author     Profile   @relation(fields: [authorId], references: [id])
-  content    String
-  isInternal Boolean   @default(false)
-  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
-  editedAt   DateTime? @db.Timestamptz(3)
-  deletedAt  DateTime? @db.Timestamptz(3)
-  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  id          String         @id @default(uuid())
+  agencyId    String
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      Profile        @relation(fields: [authorId], references: [id])
+  content     String
+  isInternal  Boolean        @default(false)
+  // 03-чат (S10-04, зріз 03.07): reply-to — self-relation; видалення оригіналу лишає
+  // відповідь живою (SetNull → «повідомлення видалено» на фронті).
+  replyToId   String?
+  replyTo     OrderComment?  @relation("CommentReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     OrderComment[] @relation("CommentReply")
+  // Вкладення: OrderFile-и замовлення, прив'язані до цього повідомлення (03.07).
+  attachments OrderFile[]
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  editedAt    DateTime?      @db.Timestamptz(3)
+  deletedAt   DateTime?      @db.Timestamptz(3)
+  agency      Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([orderId, createdAt])
   @@index([orderId, isInternal])
   @@index([authorId])
+  @@index([replyToId])
   @@map("order_comments")
 }
 
 model OrderFile {
-  id         String    @id @default(uuid())
+  id         String        @id @default(uuid())
   agencyId   String
   orderId    String
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   uploadedBy String
-  uploader   Profile   @relation(fields: [uploadedBy], references: [id])
+  uploader   Profile       @relation(fields: [uploadedBy], references: [id])
   filename   String
   storedAs   String
   mimeType   String
   sizeBytes  Int
   sha256     String
-  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
-  deletedAt  DateTime? @db.Timestamptz(3)
-  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  // 03-чат (03.07): файл, надісланий У ЧАТІ, лінкується до повідомлення. Файл лишається
+  // звичайним OrderFile (видно в табі «Файли»); SetNull при видаленні коментаря.
+  commentId  String?
+  comment    OrderComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  deletedAt  DateTime?     @db.Timestamptz(3)
+  agency     Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@index([commentId])
   @@index([agencyId])
   @@index([orderId])
   @@map("order_files")

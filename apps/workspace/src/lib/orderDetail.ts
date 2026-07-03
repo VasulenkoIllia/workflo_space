@@ -48,6 +48,13 @@ export interface WorkspaceOrderDetail {
   stages: OrderStage[]
 }
 
+export interface CommentAttachment {
+  id: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export interface ChatComment {
   id: string
   content: string
@@ -55,6 +62,9 @@ export interface ChatComment {
   createdAt: string
   editedAt: string | null
   author: { id: string; name: string; kind: 'team' | 'client' }
+  /** null-и всередині = оригінал видалено/недоступний («повідомлення видалено»). */
+  replyTo?: { id: string; authorName: string | null; preview: string | null } | null
+  attachments?: CommentAttachment[]
 }
 
 export interface CommentsResult {
@@ -146,9 +156,17 @@ export function useTimeLogs(id: string) {
 export function usePostComment(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { content: string; isInternal?: boolean }) =>
+    mutationFn: (input: {
+      content: string
+      isInternal?: boolean
+      replyToId?: string
+      fileIds?: string[]
+    }) =>
       api.post<{ comment: ChatComment }>(`/orders/${id}/comments`, input).then((r) => r.comment),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.comments(id) })
+      void qc.invalidateQueries({ queryKey: orderKeys.files(id) })
+    },
   })
 }
 
@@ -277,7 +295,7 @@ export function markCommentsRead(id: string): Promise<unknown> {
 }
 
 /** The /content endpoint requires Bearer auth, so fetch the blob and trigger a download. */
-export async function downloadFile(file: OrderFileItem): Promise<void> {
+export async function downloadFile(file: Pick<OrderFileItem, 'id' | 'filename'>): Promise<void> {
   const token = getAccessToken()
   const res = await fetch(`${API_URL}/files/${file.id}/content`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

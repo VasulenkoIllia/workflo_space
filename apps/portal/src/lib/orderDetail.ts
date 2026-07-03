@@ -28,6 +28,13 @@ export interface OrderDetail {
   stages: OrderStage[]
 }
 
+export interface CommentAttachment {
+  id: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export interface ChatComment {
   id: string
   content: string
@@ -35,6 +42,9 @@ export interface ChatComment {
   createdAt: string
   editedAt: string | null
   author: { id: string; name: string; kind: 'team' | 'client' }
+  /** null-и всередині = оригінал видалено/недоступний («повідомлення видалено»). */
+  replyTo?: { id: string; authorName: string | null; preview: string | null } | null
+  attachments?: CommentAttachment[]
 }
 
 export interface CommentsResult {
@@ -103,14 +113,22 @@ export function useFiles(id: string) {
   })
 }
 
+export interface PostCommentInput {
+  content: string
+  replyToId?: string
+  fileIds?: string[]
+}
+
 export function usePostComment(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (content: string) =>
-      api
-        .post<{ comment: ChatComment }>(`/orders/${id}/comments`, { content })
-        .then((r) => r.comment),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+    mutationFn: (input: PostCommentInput) =>
+      api.post<{ comment: ChatComment }>(`/orders/${id}/comments`, input).then((r) => r.comment),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.comments(id) })
+      // Вкладення з'являються і в табі «Файли» (commentId — лінк, файл той самий).
+      void qc.invalidateQueries({ queryKey: orderKeys.files(id) })
+    },
   })
 }
 
@@ -155,7 +173,7 @@ export function markCommentsRead(id: string): Promise<unknown> {
 }
 
 /** The /content endpoint requires Bearer auth, so fetch the blob and trigger a download. */
-export async function downloadFile(file: OrderFileItem): Promise<void> {
+export async function downloadFile(file: Pick<OrderFileItem, 'id' | 'filename'>): Promise<void> {
   const token = getAccessToken()
   const res = await fetch(`${API_URL}/files/${file.id}/content`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -3,6 +3,7 @@ import { ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { subscribeChat } from '../../services/chatBus.js'
 import { requireOrderParticipant } from './access.js'
+import { COMMENT_SELECT, serializeComment } from './comments.js'
 
 const HEARTBEAT_MS = 30_000
 
@@ -23,16 +24,7 @@ export function closeAllChatStreams(): number {
   return count
 }
 
-const STREAM_COMMENT_SELECT = {
-  id: true,
-  content: true,
-  isInternal: true,
-  createdAt: true,
-  editedAt: true,
-  deletedAt: true,
-  // agencyMemberships are RLS-scoped to the order's agency → non-empty = internal team.
-  author: { select: { id: true, name: true, agencyMemberships: { select: { agencyId: true } } } },
-} as const
+// Live payload reuses the list/create select+serializer (comments.ts) — reply/вкладення включно.
 
 /**
  * GET /orders/:id/comments/stream — Server-Sent Events for live chat.
@@ -112,27 +104,14 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
           withTenant((tx) =>
             tx.orderComment.findUnique({
               where: { id: event.commentId },
-              select: STREAM_COMMENT_SELECT,
+              select: { ...COMMENT_SELECT, deletedAt: true },
             })
           )
         )
           .then((comment) => {
             if (!comment || comment.deletedAt) return
             if (comment.isInternal && !access.isInternal) return // leak guard (authoritative)
-            const payload = {
-              id: comment.id,
-              content: comment.content,
-              isInternal: comment.isInternal,
-              createdAt: comment.createdAt,
-              editedAt: comment.editedAt,
-              author: {
-                id: comment.author.id,
-                name: comment.author.name,
-                kind: comment.author.agencyMemberships.some((m) => m.agencyId === access.agencyId)
-                  ? 'team'
-                  : 'client',
-              },
-            }
+            const payload = serializeComment(comment, access.agencyId, access.isInternal)
             write(`id: ${event.commentId}\nevent: comment\ndata: ${JSON.stringify(payload)}\n\n`)
           })
           .catch((err: unknown) => request.log.warn({ err }, 'sse: comment fetch failed'))

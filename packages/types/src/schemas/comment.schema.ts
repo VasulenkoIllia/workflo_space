@@ -14,7 +14,17 @@ export const listCommentsQuerySchema = z.object({
  * POST /orders/:id/comments — a new chat message. `isInternal` marks a
  * team-only note; the handler force-clears it for clients (leak guard).
  */
-export const createCommentSchema = z.object({
-  content: z.string().min(1).max(10_000),
-  isInternal: z.boolean().optional().default(false),
-})
+export const createCommentSchema = z
+  .object({
+    // Порожній текст дозволений ЛИШЕ разом із вкладеннями (refine нижче).
+    content: z.string().max(10_000).default(''),
+    isInternal: z.boolean().optional().default(false),
+    // 03-чат (03.07): відповідь на повідомлення цього ж замовлення.
+    replyToId: z.string().uuid().nullish(),
+    // Вкладення: id вже завантажених OrderFile-ів цього замовлення (без commentId).
+    fileIds: z.array(z.string().uuid()).max(10).optional(),
+  })
+  .refine((d) => d.content.trim().length > 0 || (d.fileIds?.length ?? 0) > 0, {
+    message: 'Повідомлення порожнє',
+    path: ['content'],
+  })

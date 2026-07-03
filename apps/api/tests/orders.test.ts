@@ -18,6 +18,10 @@ const taskDelete = vi.fn()
 const commentFindMany = vi.fn()
 const commentCount = vi.fn()
 const commentCreate = vi.fn()
+// 03-чат (03.07): create → findUniqueOrThrow(full row); reply-гард findFirst; лінк вкладень.
+const commentFindUniqueOrThrow = vi.fn()
+const commentFindFirst = vi.fn()
+const fileUpdateMany = vi.fn()
 const chatReadFindUnique = vi.fn()
 const chatReadUpsert = vi.fn()
 const timeLogFindMany = vi.fn()
@@ -54,7 +58,10 @@ vi.mock('@workflo/db', async (importOriginal) => {
       findMany: commentFindMany,
       count: commentCount,
       create: commentCreate,
+      findUniqueOrThrow: commentFindUniqueOrThrow,
+      findFirst: commentFindFirst,
     },
+    orderFile: { updateMany: fileUpdateMany },
     orderChatRead: {
       findUnique: chatReadFindUnique,
       upsert: chatReadUpsert,
@@ -150,6 +157,13 @@ describe('POST /orders', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     auditLogCreate.mockResolvedValue({})
+    // findUniqueOrThrow віддає повний рядок створеного коментаря (echo create-мока).
+    commentFindUniqueOrThrow.mockImplementation(async () => {
+      const created = await commentCreate.mock.results.at(-1)?.value
+      return { replyTo: null, attachments: [], ...created }
+    })
+    commentFindFirst.mockResolvedValue({ id: 'parent-1' })
+    fileUpdateMany.mockResolvedValue({ count: 0 })
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -1103,6 +1117,100 @@ describe('order comments + reads (chat)', () => {
         payload: { content: 'leak?' },
       })
       expect(res.statusCode).toBe(404)
+      await app.close()
+    })
+
+    it('reply: клієнт НЕ може відповісти на internal-нотатку (гард findFirst → 400)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentFindFirst.mockResolvedValue(null) // гард не знайшов доступного оригіналу
+      const { app, token } = await authed(CLIENT)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'reply', replyToId: '11111111-1111-4111-8111-111111111111' },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(commentCreate).not.toHaveBeenCalled()
+      // клієнтський гард шукає лише публічні повідомлення цього замовлення
+      expect(commentFindFirst.mock.calls[0][0].where).toMatchObject({
+        orderId: 'order-1',
+        deletedAt: null,
+        isInternal: false,
+      })
+      await app.close()
+    })
+
+    it('reply: валідний оригінал конектиться у replyTo', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentFindFirst.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' })
+      commentCreate.mockResolvedValue({ id: 'c2', content: 'reply', isInternal: false })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'reply', replyToId: '11111111-1111-4111-8111-111111111111' },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(commentCreate.mock.calls[0][0].data.replyTo).toEqual({
+        connect: { id: '11111111-1111-4111-8111-111111111111' },
+      })
+      await app.close()
+    })
+
+    it('вкладення: fileIds лінкуються з гардами (своє замовлення, ще не привʼязані)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentCreate.mockResolvedValue({ id: 'c3', content: '', isInternal: false })
+      fileUpdateMany.mockResolvedValue({ count: 2 })
+      const fileA = '22222222-2222-4222-8222-222222222222'
+      const fileB = '33333333-3333-4333-8333-333333333333'
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: '', fileIds: [fileA, fileB] }, // attachment-only допустимо
+      })
+      expect(res.statusCode).toBe(201)
+      expect(fileUpdateMany.mock.calls[0][0]).toMatchObject({
+        where: {
+          id: { in: [fileA, fileB] },
+          orderId: 'order-1',
+          commentId: null,
+          deletedAt: null,
+        },
+        data: { commentId: 'c3' },
+      })
+      await app.close()
+    })
+
+    it('вкладення: чужий/зайнятий файл → count-мismatch → 400', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      commentCreate.mockResolvedValue({ id: 'c4', content: 'x', isInternal: false })
+      fileUpdateMany.mockResolvedValue({ count: 0 }) // гард відсіяв
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'x', fileIds: ['44444444-4444-4444-8444-444444444444'] },
+      })
+      expect(res.statusCode).toBe(400)
+      await app.close()
+    })
+
+    it('порожній текст БЕЗ вкладень → 400 (refine)', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/comments',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: '   ' },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(commentCreate).not.toHaveBeenCalled()
       await app.close()
     })
   })
