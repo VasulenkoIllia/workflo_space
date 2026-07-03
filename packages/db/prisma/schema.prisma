@@ -66,6 +66,14 @@ model RefreshToken {
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   revokedAt DateTime? @db.Timestamptz(3)
 
+  // Session identity (S9-02). familyId is stable across rotations — one familyId =
+  // one device/session; rotation carries it (and firstIssuedAt) to the new row, so
+  // the sessions UI shows a device once with its original sign-in time.
+  familyId      String   @default(uuid())
+  userAgent     String?
+  ip            String?
+  firstIssuedAt DateTime @default(now()) @db.Timestamptz(3)
+
   @@index([profileId])
   @@map("refresh_tokens")
 }

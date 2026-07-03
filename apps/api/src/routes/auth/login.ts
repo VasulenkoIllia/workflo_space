@@ -92,7 +92,10 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
         })
       }
 
-      const session = await issueSessionForProfile(reply, profile.id)
+      const session = await issueSessionForProfile(reply, profile.id, {
+        userAgent: request.headers['user-agent'] ?? null,
+        ip: request.ip,
+      })
       if (!session) throw invalidCredentials()
 
       writeAuditAsync(request.log, {

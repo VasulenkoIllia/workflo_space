@@ -177,7 +177,10 @@ const twoFactorRoute: FastifyPluginAsync = (fastify) => {
         })
         throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Невірний код 2FA', 401)
       }
-      const session = await issueSessionForProfile(reply, profileId)
+      const session = await issueSessionForProfile(reply, profileId, {
+        userAgent: request.headers['user-agent'] ?? null,
+        ip: request.ip,
+      })
       if (!session) {
         throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Обліковий запис недоступний', 401)
       }

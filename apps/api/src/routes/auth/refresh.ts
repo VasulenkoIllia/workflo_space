@@ -53,6 +53,8 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
           profileId: true,
           revokedAt: true,
           expiresAt: true,
+          familyId: true,
+          firstIssuedAt: true,
           profile: {
             select: {
               id: true,
@@ -93,7 +95,14 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         if (revoked.count === 0) {
           throw invalid()
         }
-        return issueRefreshToken(tx, stored.profileId)
+        // Same session, new token: carry the family + original sign-in time,
+        // refresh the device metadata to the current request (S9-02).
+        return issueRefreshToken(tx, stored.profileId, {
+          familyId: stored.familyId,
+          firstIssuedAt: stored.firstIssuedAt,
+          userAgent: request.headers['user-agent'] ?? null,
+          ip: request.ip,
+        })
       })
 
       const claims = buildAccessClaims({
@@ -104,6 +113,7 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         activeCompanyId,
         agencyMemberships,
         memberships,
+        sid: stored.familyId,
       })
       const accessToken = await reply.jwtSign(claims)
 

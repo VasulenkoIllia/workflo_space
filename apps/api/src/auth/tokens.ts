@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import type { PrismaClient } from '@workflo/db'
 import type { FastifyReply } from 'fastify'
 
@@ -72,6 +72,8 @@ export interface AccessClaims {
   activeCompanyId: string | null
   agencyMemberships: AgencyMembership[]
   memberships: Membership[]
+  /** Session id = refresh-token familyId (S9-02); lets /auth/sessions mark «current». */
+  sid?: string | null
 }
 
 /**
@@ -110,6 +112,7 @@ export function buildAccessClaims(params: {
   activeCompanyId: string | null
   agencyMemberships: AgencyMembership[]
   memberships: Membership[]
+  sid?: string | null
 }): AccessClaims {
   return {
     sub: params.profileId,
@@ -119,6 +122,7 @@ export function buildAccessClaims(params: {
     activeCompanyId: params.activeCompanyId,
     agencyMemberships: params.agencyMemberships,
     memberships: params.memberships,
+    sid: params.sid ?? null,
   }
 }
 
@@ -133,6 +137,16 @@ export function hashRefreshToken(raw: string): string {
   return createHash('sha256').update(raw).digest('hex')
 }
 
+/** Device/session metadata stored on the refresh row (S9-02 sessions list). */
+export interface SessionMeta {
+  userAgent?: string | null
+  ip?: string | null
+  /** Carried across rotations — omit on a fresh login (a new family starts). */
+  familyId?: string
+  /** Original sign-in time; carried across rotations. Defaults to now. */
+  firstIssuedAt?: Date
+}
+
 /**
  * Create an opaque refresh token row and return its RAW value (the DB stores only
  * the sha256 digest — AR-31). Opaque (not a JWT) so it can be revoked server-side
@@ -141,15 +155,25 @@ export function hashRefreshToken(raw: string): string {
  */
 export async function issueRefreshToken(
   tx: Pick<PrismaClient, 'refreshToken'>,
-  profileId: string
-): Promise<{ token: string; expiresAt: Date }> {
+  profileId: string,
+  meta: SessionMeta = {}
+): Promise<{ token: string; expiresAt: Date; familyId: string }> {
   const expiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000)
   // High-entropy opaque token (256 bits). base64url so it's cookie-safe.
   const token = randomBytes(32).toString('base64url')
+  const familyId = meta.familyId ?? randomUUID()
   await tx.refreshToken.create({
-    data: { profileId, token: hashRefreshToken(token), expiresAt },
+    data: {
+      profileId,
+      token: hashRefreshToken(token),
+      expiresAt,
+      familyId,
+      userAgent: meta.userAgent ?? null,
+      ip: meta.ip ?? null,
+      firstIssuedAt: meta.firstIssuedAt ?? new Date(),
+    },
   })
-  return { token, expiresAt }
+  return { token, expiresAt, familyId }
 }
 
 function cookieDomain(): string | undefined {

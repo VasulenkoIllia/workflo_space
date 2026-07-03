@@ -69,6 +69,8 @@ const switchAgencyRoute: FastifyPluginAsync = (fastify) => {
         activeCompanyId,
         agencyMemberships,
         memberships,
+        // Same device/session — preserve the session id from the current token.
+        sid: request.user.sid ?? null,
       })
       const accessToken = await reply.jwtSign(claims)
 

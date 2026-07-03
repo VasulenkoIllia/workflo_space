@@ -6,6 +6,7 @@ import {
   coercePermissions,
   issueRefreshToken,
   type Membership,
+  type SessionMeta,
   setRefreshCookie,
 } from '../../auth/tokens.js'
 
@@ -25,7 +26,8 @@ export interface SessionResponse {
  */
 export async function issueSessionForProfile(
   reply: FastifyReply,
-  profileId: string
+  profileId: string,
+  meta: SessionMeta = {}
 ): Promise<SessionResponse | null> {
   const profile = await prisma.profile.findUnique({
     where: { id: profileId },
@@ -64,6 +66,10 @@ export async function issueSessionForProfile(
       ? pickActiveAgencyId(agencyMemberships, profile.lastActiveAgencyId)
       : memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId) ?? null
 
+  // Refresh row first — its familyId is the session id (sid) inside the access token.
+  const refresh = await issueRefreshToken(prisma, profile.id, meta)
+  setRefreshCookie(reply, refresh.token)
+
   const claims = buildAccessClaims({
     profileId: profile.id,
     email: profile.email,
@@ -72,11 +78,9 @@ export async function issueSessionForProfile(
     activeCompanyId,
     agencyMemberships,
     memberships,
+    sid: refresh.familyId,
   })
   const accessToken = await reply.jwtSign(claims)
-
-  const refresh = await issueRefreshToken(prisma, profile.id)
-  setRefreshCookie(reply, refresh.token)
 
   return {
     accessToken,

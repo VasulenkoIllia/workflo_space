@@ -42,6 +42,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
         companySlug: string
         agencyId: string
         refreshToken: string
+        sessionId: string
       }
 
       try {
@@ -91,7 +92,10 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             data: buildDefaultPreferenceRows(settings.id),
           })
 
-          const refresh = await issueRefreshToken(tx, profile.id)
+          const refresh = await issueRefreshToken(tx, profile.id, {
+            userAgent: request.headers['user-agent'] ?? null,
+            ip: request.ip,
+          })
 
           return {
             profileId: profile.id,
@@ -100,6 +104,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
             companySlug: company.slug,
             agencyId,
             refreshToken: refresh.token,
+            sessionId: refresh.familyId,
           }
         })
       } catch (err) {
@@ -123,6 +128,7 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
         activeCompanyId: result.companyId,
         agencyMemberships: [],
         memberships,
+        sid: result.sessionId,
       })
       const accessToken = await reply.jwtSign(claims)
 

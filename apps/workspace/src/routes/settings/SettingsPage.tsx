@@ -3,7 +3,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button, Card, EmptyState, Icon, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatDateTime } from '@/lib/format'
+import {
+  describeUserAgent,
+  useRevokeOtherSessions,
+  useRevokeSession,
+  useSessions,
+} from '@/lib/sessions'
 import {
   useTwoFactorDisable,
   useTwoFactorEnable,
@@ -888,6 +894,101 @@ function SecuritySection() {
   )
 }
 
+/**
+ * Активні сесії (S9-02): одна картка на живий пристрій (refresh-token family).
+ * Revoke гасить refresh-токен — пристрій вилетить на найближчому оновленні
+ * сесії (до 15 хв, поки живе access-токен).
+ */
+function SessionsSection() {
+  const { data, isLoading } = useSessions()
+  const revoke = useRevokeSession()
+  const revokeOthers = useRevokeOtherSessions()
+  const sessions = data?.sessions ?? []
+  const others = sessions.filter((s) => !s.current)
+
+  return (
+    <Card title="Безпека · активні сесії">
+      {isLoading ? (
+        <Skeleton style={{ height: 80 }} />
+      ) : sessions.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>Немає активних сесій.</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 12px',
+                border: '1px solid var(--wf-border)',
+                borderRadius: 8,
+              }}
+            >
+              <Icon name={s.current ? 'lock' : 'globe'} size={16} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                  <span style={{ fontWeight: 600 }}>{describeUserAgent(s.userAgent)}</span>
+                  {s.current && (
+                    <span
+                      className="wfp-mono"
+                      style={{
+                        fontSize: 10,
+                        padding: '1px 6px',
+                        borderRadius: 999,
+                        border: '1px solid var(--wf-accent)',
+                        color: 'var(--wf-accent)',
+                      }}
+                    >
+                      поточна
+                    </span>
+                  )}
+                </div>
+                <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  {s.ip ?? '—'} · вхід {formatDateTime(s.signedInAt)} · активність{' '}
+                  {formatDateTime(s.lastActiveAt)}
+                </div>
+              </div>
+              {!s.current && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={revoke.isPending && revoke.variables === s.id}
+                  onClick={() =>
+                    revoke.mutate(s.id, {
+                      onSuccess: () => toast.success('Сесію завершено'),
+                      onError: () => toast.error('Не вдалося завершити сесію'),
+                    })
+                  }
+                >
+                  Завершити
+                </Button>
+              )}
+            </div>
+          ))}
+          {others.length > 0 && (
+            <div>
+              <Button
+                variant="ghost"
+                loading={revokeOthers.isPending}
+                onClick={() =>
+                  revokeOthers.mutate(undefined, {
+                    onSuccess: (r) => toast.success(`Завершено сесій: ${r.revoked}`),
+                    onError: () => toast.error('Не вдалося завершити сесії'),
+                  })
+                }
+              >
+                Завершити всі інші ({others.length})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 /** Одноразовий показ резервних кодів (копіювати/зберегти). */
 function BackupCodesBox({ codes }: { codes: string[] }) {
   return (
@@ -944,6 +1045,7 @@ export function SettingsPage() {
 
       <div style={{ display: 'grid', gap: 18 }}>
         <SecuritySection />
+        <SessionsSection />
         <LegalEntitiesSection />
         {payment.isLoading ? (
           <Skeleton style={{ height: 200 }} />

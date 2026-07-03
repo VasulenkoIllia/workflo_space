@@ -139,6 +139,17 @@
   backup-login→reuse-401 (curl), і UI setup+enable (скрін QR + резервні коди). **Portal 2FA-крок
   теж закрито (2026-07-03)** — той самий challenge-бек, перевірено вживу через прев'ю (пароль →
   код → кабінет). sessions/OAuth/email-verify — далі по S9.
+- **Активні сесії (S9-02) — ЗАКРИТО (2026-07-03).** Сесія = family refresh-токенів: ротація
+  переносить `familyId` + `firstIssuedAt` на новий рядок, тож живі рядки = живі пристрої;
+  access-токен несе `sid=familyId` → бек знає «поточну». RefreshToken += userAgent/ip (login,
+  register, 2fa-verify пишуть; ротація освіжає). Роути: GET /auth/sessions,
+  DELETE /auth/sessions/:id (404 на чужу/відкликану), POST /auth/sessions/revoke-others
+  (400 на legacy-токен без sid — інакше вбив би й себе). Workspace /settings: картка
+  «Безпека · активні сесії» (браузер·ОС з UA, ip, вхід/активність, бейдж «поточна», Завершити
+  / Завершити всі інші). Revoke гасить refresh — пристрій вилітає на наступному оновленні
+  (≤15 хв access-TTL). +6 тестів (api 663). Вживу: 2 логіни з різними UA → список/бейдж ок,
+  revoke → 404 на повтор, revoke-others зніс 39 висячих dev-сесій; UI-клік зніс 3 (скрін).
+  Далі: portal-картка сесій, OAuth, email-verify.
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,
