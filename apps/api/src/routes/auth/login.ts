@@ -1,16 +1,11 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, loginSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { loadAgencyMemberships, pickActiveAgencyId } from '../../auth/memberships.js'
 import { verifyPassword } from '../../auth/password.js'
-import {
-  buildAccessClaims,
-  coercePermissions,
-  issueRefreshToken,
-  type Membership,
-  setRefreshCookie,
-} from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { isEnabled } from '../../services/twoFactor.js'
+import { issueSessionForProfile } from './session.js'
+import { signChallenge } from './twoFactor.js'
 
 // Fixed bcrypt hash of a random string. Compared against when the account is
 // not found so response timing doesn't reveal whether an email is registered.
@@ -79,45 +74,26 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
         throw invalidCredentials()
       }
 
-      const memberRows = await prisma.companyMember.findMany({
-        where: { profileId: profile.id },
-        select: {
-          companyId: true,
-          role: true,
-          permissions: true,
-          company: { select: { name: true, slug: true, agencyId: true } },
-        },
-        orderBy: { joinedAt: 'asc' },
-      })
+      // 2FA gate (S9-01): password verified, but if the account has 2FA enabled we
+      // issue NO session tokens yet — only a short-lived challenge the client
+      // exchanges at /auth/2fa/login-verify with a TOTP/backup code.
+      if (await isEnabled(profile.id)) {
+        writeAuditAsync(request.log, {
+          actorId: profile.id,
+          action: 'auth.2fa_challenge_issued',
+          resourceType: 'profile',
+          resourceId: profile.id,
+          result: 'allowed',
+          metadata: { ip: request.ip },
+        })
+        return reply.status(200).send({
+          success: true,
+          data: { twoFactorRequired: true, challengeToken: signChallenge(profile.id) },
+        })
+      }
 
-      const memberships: Membership[] = memberRows.map((m) => ({
-        companyId: m.companyId,
-        role: m.role,
-        permissions: coercePermissions(m.permissions),
-      }))
-      const activeCompanyId = memberships[0]?.companyId ?? null
-
-      // Tenant context (ADR-004): team members operate in their agency; a client's
-      // tenant is the agency of their active company.
-      const agencyMemberships = await loadAgencyMemberships(prisma, profile.id)
-      const activeAgencyId =
-        (agencyMemberships.length > 0
-          ? pickActiveAgencyId(agencyMemberships, profile.lastActiveAgencyId)
-          : memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId) ?? null
-
-      const claims = buildAccessClaims({
-        profileId: profile.id,
-        email: profile.email,
-        role: profile.role,
-        activeAgencyId,
-        activeCompanyId,
-        agencyMemberships,
-        memberships,
-      })
-      const accessToken = await reply.jwtSign(claims)
-
-      const refresh = await issueRefreshToken(prisma, profile.id)
-      setRefreshCookie(reply, refresh.token)
+      const session = await issueSessionForProfile(reply, profile.id)
+      if (!session) throw invalidCredentials()
 
       writeAuditAsync(request.log, {
         actorId: profile.id,
@@ -128,25 +104,7 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
         metadata: { ip: request.ip },
       })
 
-      return reply.status(200).send({
-        success: true,
-        data: {
-          accessToken,
-          profile: {
-            id: profile.id,
-            email: profile.email,
-            displayName: profile.name,
-            role: profile.role,
-          },
-          activeCompanyId,
-          companies: memberRows.map((m) => ({
-            id: m.companyId,
-            name: m.company?.name ?? null,
-            slug: m.company?.slug ?? null,
-            role: m.role,
-          })),
-        },
-      })
+      return reply.status(200).send({ success: true, data: session })
     }
   )
 

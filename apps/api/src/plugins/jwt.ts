@@ -4,26 +4,10 @@ import { enterAgencyContext } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fp from 'fastify-plugin'
+import { resolveJwtSecret } from '../auth/jwtSecret.js'
 import type { AccessClaims } from '../auth/tokens.js'
 
 const ACCESS_TTL = process.env.JWT_EXPIRES_IN ?? '15m'
-
-/**
- * Resolve the JWT signing secret. Fail-fast OUTSIDE development if it is missing
- * or weak — never silently fall back to an empty secret (which would make every
- * access token forgeable). The previous `?? ''` fallback was a forgery vector in
- * any non-dev, non-prod environment (e.g. staging). Security audit 31.05.
- */
-function resolveJwtSecret(): string {
-  const secret = process.env.JWT_SECRET
-  if (secret && secret.length >= 32) return secret
-  if (process.env.NODE_ENV === 'development') {
-    return 'dev-only-insecure-secret-change-me-32chars'
-  }
-  throw new Error(
-    'JWT_SECRET is required and must be ≥32 chars outside development — refusing to start with an empty/weak JWT secret'
-  )
-}
 
 /**
  * Registers @fastify/cookie (refresh token storage) and @fastify/jwt

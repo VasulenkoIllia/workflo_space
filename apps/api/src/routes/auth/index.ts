@@ -7,6 +7,7 @@ import refreshRoute from './refresh.js'
 import registerRoute from './register.js'
 import resetPasswordRoute from './resetPassword.js'
 import switchAgencyRoute from './switchAgency.js'
+import twoFactorRoute from './twoFactor.js'
 
 /**
  * Auth route group. Endpoints are registered at root (`/auth/*`) since each
@@ -21,6 +22,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(meRoute)
   await fastify.register(forgotPasswordRoute)
   await fastify.register(resetPasswordRoute)
+  await fastify.register(twoFactorRoute)
 }
 
 export default authRoutes

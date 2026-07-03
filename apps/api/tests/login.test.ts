@@ -16,6 +16,9 @@ vi.mock('@workflo/db', () => ({
     agencyMember: { findMany: agencyMemberFindMany },
     refreshToken: { create: refreshTokenCreate },
     auditLog: { create: auditLogCreate },
+    // S9-01: login checks 2FA; default findUnique → null (2FA off) so existing tests
+    // exercise the no-2FA path unchanged.
+    twoFactorAuth: { findUnique: () => Promise.resolve(null) },
   },
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))

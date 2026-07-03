@@ -4,6 +4,12 @@ import { toast } from 'sonner'
 import { Button, Card, EmptyState, Icon, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { formatDate } from '@/lib/format'
+import {
+  useTwoFactorDisable,
+  useTwoFactorEnable,
+  useTwoFactorSetup,
+  useTwoFactorStatus,
+} from '@/lib/twoFactor'
 import { useTelegramConnect, useTelegramDisconnect, useTelegramStatus } from '@/lib/telegram'
 import {
   LOCKED_EMAIL,
@@ -703,6 +709,225 @@ function TelegramSection() {
   )
 }
 
+/**
+ * Двофакторна автентифікація (S9-01). Setup: показ QR (otpauth) + секрет для ручного
+ * вводу → підтвердження першим кодом → одноразові резервні коди (показуються ЄДИНИЙ раз).
+ * Disable: код 2FA або пароль акаунта. QR-ліба тягнеться ліниво лише на екрані setup.
+ */
+function SecuritySection() {
+  const { data, isLoading } = useTwoFactorStatus()
+  const setup = useTwoFactorSetup()
+  const enable = useTwoFactorEnable()
+  const disable = useTwoFactorDisable()
+  const [step, setStep] = useState<'idle' | 'setup'>('idle')
+  const [otpauth, setOtpauth] = useState('')
+  const [secret, setSecret] = useState('')
+  const [qr, setQr] = useState('')
+  const [code, setCode] = useState('')
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
+  const [disablePwd, setDisablePwd] = useState('')
+
+  const startSetup = async () => {
+    try {
+      const r = await setup.mutateAsync()
+      setSecret(r.secret)
+      setOtpauth(r.otpauthUrl)
+      setStep('setup')
+      // Lazy-load QR renderer only when a user actually starts setup.
+      const QR = (await import('qrcode')).default
+      setQr(await QR.toDataURL(r.otpauthUrl, { margin: 1, width: 200 }))
+    } catch {
+      toast.error('Не вдалося почати налаштування 2FA')
+    }
+  }
+
+  const confirmEnable = () => {
+    enable.mutate(code.trim(), {
+      onSuccess: (r) => {
+        setBackupCodes(r.backupCodes)
+        setStep('idle')
+        setCode('')
+        toast.success('Двофакторну автентифікацію увімкнено')
+      },
+      onError: () => toast.error('Невірний код — спробуйте ще раз'),
+    })
+  }
+
+  const doDisable = () => {
+    disable.mutate(
+      { password: disablePwd.trim() || undefined },
+      {
+        onSuccess: () => {
+          setDisablePwd('')
+          setBackupCodes(null)
+          toast.success('2FA вимкнено')
+        },
+        onError: () => toast.error('Потрібен код 2FA або пароль акаунта'),
+      }
+    )
+  }
+
+  return (
+    <Card title="Безпека · двофакторна автентифікація">
+      {isLoading ? (
+        <Skeleton style={{ height: 80 }} />
+      ) : data?.enabled ? (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="lock" size={16} />
+            <span style={{ fontWeight: 600 }}>2FA увімкнено</span>
+            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              · резервних кодів: {data.backupCodesRemaining}
+            </span>
+          </div>
+          {backupCodes && <BackupCodesBox codes={backupCodes} />}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, maxWidth: 260 }}>
+              <Input
+                label="Пароль акаунта (щоб вимкнути)"
+                type="password"
+                value={disablePwd}
+                onChange={(e) => setDisablePwd(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="ghost"
+              loading={disable.isPending}
+              disabled={disablePwd.trim().length === 0}
+              onClick={doDisable}
+            >
+              Вимкнути 2FA
+            </Button>
+          </div>
+        </div>
+      ) : step === 'setup' ? (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            // 1. Відскануйте QR у Google Authenticator / 1Password / Authy
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            {qr ? (
+              <img
+                src={qr}
+                alt="QR для 2FA"
+                width={180}
+                height={180}
+                style={{ border: '1px solid var(--wf-border)', borderRadius: 8 }}
+              />
+            ) : (
+              <Skeleton style={{ width: 180, height: 180 }} />
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                або введіть ключ вручну:
+              </div>
+              <code
+                style={{
+                  display: 'inline-block',
+                  wordBreak: 'break-all',
+                  fontSize: 13,
+                  padding: '4px 8px',
+                  background: 'var(--wf-surface)',
+                  border: '1px solid var(--wf-border)',
+                  borderRadius: 6,
+                  marginTop: 4,
+                }}
+              >
+                {secret}
+              </code>
+              <a
+                href={otpauth}
+                className="wfp-link wfp-mono"
+                style={{ display: 'block', fontSize: 11, marginTop: 6 }}
+              >
+                відкрити в застосунку →
+              </a>
+            </div>
+          </div>
+          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            // 2. Введіть 6-значний код із застосунку
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ maxWidth: 160 }}>
+              <Input
+                label="Код"
+                inputMode="numeric"
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="primary"
+              loading={enable.isPending}
+              disabled={code.trim().length < 6}
+              onClick={confirmEnable}
+            >
+              Увімкнути
+            </Button>
+            <Button variant="ghost" onClick={() => setStep('idle')}>
+              Скасувати
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {backupCodes && <BackupCodesBox codes={backupCodes} />}
+          <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+            Захистіть акаунт кодом із застосунку-автентифікатора на додачу до пароля. Особливо
+            важливо, бо ви маєте доступ до секретів клієнтів (сховище).
+          </div>
+          <div>
+            <Button variant="primary" loading={setup.isPending} onClick={() => void startSetup()}>
+              Увімкнути 2FA
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Одноразовий показ резервних кодів (копіювати/зберегти). */
+function BackupCodesBox({ codes }: { codes: string[] }) {
+  return (
+    <div
+      style={{
+        border: '1px solid var(--wf-accent)',
+        borderRadius: 8,
+        padding: 12,
+        background: 'color-mix(in oklab, var(--wf-accent) 6%, transparent)',
+      }}
+    >
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 8 }}
+      >
+        // резервні коди — збережіть зараз, більше не покажемо. Кожен діє один раз.
+      </div>
+      <div
+        className="wfp-mono"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, fontSize: 13 }}
+      >
+        {codes.map((c) => (
+          <span key={c}>{c}</span>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="wfp-link wfp-mono"
+        style={{ fontSize: 11, marginTop: 8 }}
+        onClick={() => {
+          void navigator.clipboard?.writeText(codes.join('\n'))
+          toast.success('Коди скопійовано')
+        }}
+      >
+        копіювати всі
+      </button>
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const payment = usePaymentSettings()
   const referral = useReferralSettings()
@@ -718,6 +943,7 @@ export function SettingsPage() {
       </div>
 
       <div style={{ display: 'grid', gap: 18 }}>
+        <SecuritySection />
         <LegalEntitiesSection />
         {payment.isLoading ? (
           <Skeleton style={{ height: 200 }} />

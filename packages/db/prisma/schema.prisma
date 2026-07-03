@@ -51,6 +51,7 @@ model Profile {
   orderChatReads         OrderChatRead[]
   projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
   credentialsCreated     CredentialVault[]     @relation("CredentialCreatedBy") // 17
+  twoFactor              TwoFactorAuth? // S9-01
 
   @@index([role])
   @@map("profiles")
@@ -462,6 +463,27 @@ model CredentialVault {
   @@index([agencyId])
   @@index([companyId, revokedAt])
   @@map("credential_vault")
+}
+
+// TOTP 2FA per profile (S9-01). The secret is KEK-encrypted with the SAME envelope
+// scheme as the vault (17) — so 2FA needs CREDENTIALS_KEK_BASE64 set. A row exists
+// only after setup starts; enabledAt null = pending (secret generated, first code
+// not yet confirmed) and does NOT gate login. Backup codes are one-time bcrypt hashes.
+model TwoFactorAuth {
+  profileId         String    @id
+  profile           Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  encryptedDek      Bytes
+  dekIv             Bytes
+  dekAuthTag        Bytes
+  ciphertext        Bytes // base32 TOTP secret encrypted with DEK
+  ciphertextIv      Bytes
+  ciphertextAuthTag Bytes
+  enabledAt         DateTime? @db.Timestamptz(3) // null = setup pending (does not gate login)
+  backupCodes       String[]  @default([]) // remaining one-time codes, bcrypt-hashed
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("two_factor_auth")
 }
 
 model Service {

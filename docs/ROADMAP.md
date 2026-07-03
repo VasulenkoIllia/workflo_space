@@ -126,6 +126,19 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **TOTP 2FA (S9-01) — ЗАКРИТО (2026-07-03).** RFC 6238 з нуля (Node crypto, без залежності —
+  перевірено на ДВОХ офіційних RFC-векторах). Модель `TwoFactorAuth`: секрет **KEK-encrypted**
+  тим самим envelope-схемою, що vault (17) — тож 2FA потребує `CREDENTIALS_KEK_BASE64`. Роути:
+  setup (секрет+otpauth), enable (перший код → 10 одноразових backup-кодів, bcrypt), disable
+  (код або пароль), status, **login-verify**. Login-гейт: при увімкненому 2FA пароль-крок віддає
+  `twoFactorRequired`+challenge (окремий HMAC-токен, фізично НЕ access-token, 5 хв), не сесію;
+  `/auth/2fa/login-verify` міняє challenge+код на токени. Backup-код одноразовий (спожив у tx —
+  reuse дає 401). Фронт: workspace login отримав крок коду; settings «Безпека» — QR (lazy
+  qrcode-чанк 24K, бандл +20K) + ручний ключ + backup-коди-бокс + disable. Гейт: +14 тестів
+  (api 657). **Верифіковано наскрізно вживу**: setup→enable→login-challenge→TOTP-login→
+  backup-login→reuse-401 (curl), і UI setup+enable (скрін QR + резервні коди). Portal 2FA-UI і
+  sessions/OAuth/email-verify — далі по S9.
+
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,
   SetNull) + `OrderFile.commentId`. Бек: `fileIds`/`replyToId` у createCommentSchema
