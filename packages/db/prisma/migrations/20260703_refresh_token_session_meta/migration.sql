@@ -9,3 +9,7 @@ ALTER TABLE "refresh_tokens"
 
 -- Existing rows: the best guess for their sign-in time is their creation time.
 UPDATE "refresh_tokens" SET "firstIssuedAt" = "createdAt";
+
+-- Prisma's @default(uuid()) is CLIENT-side — the column must carry no DB default
+-- (migrate diff flags it as drift). The default above only served the backfill.
+ALTER TABLE "refresh_tokens" ALTER COLUMN "familyId" DROP DEFAULT;
