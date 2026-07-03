@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api, getAccessToken, setAccessToken } from '@/lib/api'
 
@@ -28,7 +28,10 @@ export interface AuthState {
 interface AuthContextValue {
   user: AuthState | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  /** Password step. `twoFactorRequired` → caller shows the code step and calls verifyTwoFactor. */
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
+  /** 2FA step: exchange the challenge + code for a session. */
+  verifyTwoFactor: (code: string) => Promise<void>
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
   reload: () => Promise<void>
@@ -51,9 +54,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api.get<AuthState>('/auth/me'))
   }, [])
 
+  // Holds the short-lived challenge between the password step and the 2FA code step.
+  const challengeRef = useRef<string | null>(null)
+
   const login = useCallback(
     async (email: string, password: string) => {
-      const data = await api.post<{ accessToken: string }>('/auth/login', { email, password })
+      const data = await api.post<{
+        accessToken?: string
+        twoFactorRequired?: boolean
+        challengeToken?: string
+      }>('/auth/login', { email, password })
+      if (data.twoFactorRequired && data.challengeToken) {
+        challengeRef.current = data.challengeToken
+        return { twoFactorRequired: true }
+      }
+      if (data.accessToken) {
+        setAccessToken(data.accessToken)
+        await reload()
+      }
+      return { twoFactorRequired: false }
+    },
+    [reload]
+  )
+
+  const verifyTwoFactor = useCallback(
+    async (code: string) => {
+      const challengeToken = challengeRef.current
+      if (!challengeToken) throw new Error('Немає активної сесії підтвердження')
+      const data = await api.post<{ accessToken: string }>('/auth/2fa/login-verify', {
+        challengeToken,
+        code,
+      })
+      challengeRef.current = null
       setAccessToken(data.accessToken)
       await reload()
     },
@@ -104,8 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, register, logout, reload }),
-    [user, loading, login, register, logout, reload]
+    () => ({ user, loading, login, verifyTwoFactor, register, logout, reload }),
+    [user, loading, login, verifyTwoFactor, register, logout, reload]
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

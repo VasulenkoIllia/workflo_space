@@ -136,8 +136,9 @@
   reuse дає 401). Фронт: workspace login отримав крок коду; settings «Безпека» — QR (lazy
   qrcode-чанк 24K, бандл +20K) + ручний ключ + backup-коди-бокс + disable. Гейт: +14 тестів
   (api 657). **Верифіковано наскрізно вживу**: setup→enable→login-challenge→TOTP-login→
-  backup-login→reuse-401 (curl), і UI setup+enable (скрін QR + резервні коди). Portal 2FA-UI і
-  sessions/OAuth/email-verify — далі по S9.
+  backup-login→reuse-401 (curl), і UI setup+enable (скрін QR + резервні коди). **Portal 2FA-крок
+  теж закрито (2026-07-03)** — той самий challenge-бек, перевірено вживу через прев'ю (пароль →
+  код → кабінет). sessions/OAuth/email-verify — далі по S9.
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,
