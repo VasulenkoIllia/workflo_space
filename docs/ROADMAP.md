@@ -126,6 +126,20 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **INFRA-DR1 (repo-частина) — ЗРОБЛЕНО (2026-07-03).** (1) **uploads на named volume** —
+  до цього клієнтські файли жили в шарі контейнера і гинули при КОЖНОМУ recreate
+  (compose prod+staging: `uploads_data:/data/uploads` + `UPLOAD_DIR`; Dockerfile pre-create
+  з правами node). (2) **Ще один project-name баг**: backup.sh кликав compose без
+  `--project-name` → `up -d postgres` міг піднімати другий порожній postgres і дампити
+  його — виправлено (та сама пастка, що в rollback.sh). (3) Денні дампи тепер
+  `--no-owner --clean --if-exists` (ідемпотентний restore). (4) **`scripts/restore.sh`**:
+  `--drill` (throwaway PG16 + метрики tables/profiles/agencies + Telegram-звіт) і
+  `--restore` (підтвердження словом RESTORE, стоп сервісів, дамп, `up --wait`).
+  (5) Нічний uploads-tar + офсайт (restic/rclone) для нього. (6) Щомісячний drill-cron
+  в інсталяторі. (7) backup/restore/cron-інсталятор додані у scp-синк деплою.
+  **Drill прогнано локально на реальному дампі: DRILL OK (52 tables, 3 profiles).**
+  Серверна активація — SERVER_UPDATE_2026-07 крок 7 (restic init + перший drill).
+
 - **EditMemberModal (12-EDITMEMBER) + advisory-lock на вікна ставок — ЗАКРИТО (2026-07-02).**
   Роль + компенсація (оклад/міс · **собівартість $/год** для каскаду маржі · комісія % ·
   валюта) + норма год/тиж + zeroCost — в ОДНІЙ модалці `/team` (ростер став read-only +
@@ -323,15 +337,15 @@ _Повний беклог — [`DESIGN_PHASE2_PLAN.md`](DESIGN_PHASE2_PLAN.md) 
 > **Рішення власника 26.06: весь блок у беклог.** **Тригер промоуту: перед першим зовнішнім платним тенантом.**
 > Коли візьмемо — фазами, перший зріз **INFRA-DR1** (DR/бекапи P0 — єдине з ризиком незворотної втрати даних).
 
-| Фаза | Зріз (код у BACKLOG)                                                            | Пріоритет |
-| ---- | ------------------------------------------------------------------------------- | --------- |
-| 1    | **INFRA-DR1** restore.sh + drill + офсайт restic + uploads-volume               | P0        |
-| 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                | P0        |
-| 3    | **INFRA-OBS1** Sentry + uptime + notify-on-failure (⊃ OPS-D1)                   | P1        |
-| 4    | **INFRA-SEC1/2** пін екшенів+SSH-fingerprint · edge security-headers+rate-limit | P0/P1     |
-| 5    | **INFRA-OPS1** staging-rollback + health→/ready                                 | P1        |
-| 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                 | P1/P2     |
-| 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                       | P1        |
+| Фаза | Зріз (код у BACKLOG)                                                              | Пріоритет |
+| ---- | --------------------------------------------------------------------------------- | --------- |
+| 1    | ~~INFRA-DR1~~ ✅ repo-частина 03.07; лишилась серверна активація (крок 7 ранбука) | P0        |
+| 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                  | P0        |
+| 3    | **INFRA-OBS1** Sentry + uptime + notify-on-failure (⊃ OPS-D1)                     | P1        |
+| 4    | **INFRA-SEC1/2** пін екшенів+SSH-fingerprint · edge security-headers+rate-limit   | P0/P1     |
+| 5    | **INFRA-OPS1** staging-rollback + health→/ready                                   | P1        |
+| 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                   | P1/P2     |
+| 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                         | P1        |
 
 ## 🧱 Правила черги
 

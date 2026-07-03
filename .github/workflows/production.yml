@@ -131,9 +131,9 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_SSH_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          # scripts/ — the manual rollback + healthcheck live ON the server; without
-          # syncing them here a rollback.sh fix in the repo never reaches the box.
-          source: 'docker-compose.production.yml,infra/maintenance/**,infra/postgres/**,scripts/rollback.sh,scripts/healthcheck.sh'
+          # scripts/ — the manual ops scripts live ON the server; without syncing
+          # them here a rollback.sh/backup.sh fix in the repo never reaches the box.
+          source: 'docker-compose.production.yml,infra/maintenance/**,infra/postgres/**,scripts/rollback.sh,scripts/healthcheck.sh,scripts/backup.sh,scripts/restore.sh,scripts/install-backup-cron.sh'
           target: '${{ env.RUNTIME_ROOT }}/production'
 
       - name: Deploy via SSH

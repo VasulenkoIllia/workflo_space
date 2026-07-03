@@ -46,6 +46,10 @@ RUN pnpm --filter @workflo/db db:generate
 RUN pnpm --filter @workflo/api... build
 RUN chown -R node:node /app
 
+# Uploads live on a named volume (INFRA-DR1) — pre-create the mountpoint with node
+# ownership so the volume's first-use copy makes it writable for USER node below.
+RUN mkdir -p /data/uploads && chown -R node:node /data
+
 ENV NODE_ENV=production
 ENV API_HOST=0.0.0.0
 ENV API_PORT=4000

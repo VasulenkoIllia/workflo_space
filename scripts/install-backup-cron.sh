@@ -13,8 +13,11 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/var/www/srv/workflo}"
 BACKUP_SCRIPT="${BACKUP_SCRIPT:-$REPO_DIR/production/scripts/backup.sh}"
+RESTORE_SCRIPT="${RESTORE_SCRIPT:-$REPO_DIR/production/scripts/restore.sh}"
 CRON_FILE="/etc/cron.d/workflo-backup"
 CRON_SCHEDULE="${CRON_SCHEDULE:-0 3 * * *}"
+# INFRA-DR1: щомісячний restore-drill — 1-го числа о 04:20, після нічного бекапу.
+DRILL_SCHEDULE="${DRILL_SCHEDULE:-20 4 1 * *}"
 CRON_USER="${CRON_USER:-root}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -32,6 +35,8 @@ cat >"$CRON_FILE" <<CRON
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 $CRON_SCHEDULE $CRON_USER $BACKUP_SCRIPT >>/var/log/workflo-backup-cron.log 2>&1
+# INFRA-DR1: monthly restore drill — «бекап існує, лише якщо він відновлюється».
+$DRILL_SCHEDULE $CRON_USER $RESTORE_SCRIPT --drill >>/var/log/workflo-backup-cron.log 2>&1
 CRON
 
 chmod 0644 "$CRON_FILE"

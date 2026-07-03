@@ -203,6 +203,11 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # INFRA-DR1: те саме, що в prod — файли на volume, інакше гинуть при recreate.
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -275,3 +280,4 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:

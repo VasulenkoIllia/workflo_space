@@ -121,6 +121,37 @@ docker compose --project-name workflo-staging --env-file .env -f docker-compose.
 #     з _PROD-змінними на проді. migrate/worker НЕ чіпати — вони лишаються на owner-URL.
 ```
 
+## Крок 7 — активація INFRA-DR1 (після деплою зрізу 03.07)
+
+Зріз 03.07 привіз: `restore.sh` (drill + справжній restore), uploads на named volume,
+`--clean --if-exists` у денних дампах, uploads-tar щоночі, **фікс project-name у backup.sh**
+(до цього `up -d postgres` міг піднімати ДРУГИЙ порожній postgres і дампити його — перевірте
+`backups/backup.log`: якщо ночами були tiny-dump FAILED — це воно).
+
+```bash
+cd /var/www/srv/workflo/production
+
+# 7a. Оновлений cron (додався щомісячний drill 1-го числа о 04:20):
+sudo REPO_DIR=/var/www/srv/workflo bash scripts/install-backup-cron.sh
+
+# 7b. Перший ручний бекап + drill (двічі перевіряємо ланцюг):
+bash scripts/backup.sh          # очікуємо: DB OK + uploads OK (або skipped) у Telegram
+bash scripts/restore.sh --drill # очікуємо: "Restore drill OK: ... tables=..., profiles=..."
+
+# 7c. Офсайт (restic; storage box має існувати):
+sudo apt-get install -y restic
+# у production/.env: RESTIC_REPOSITORY="sftp:uXXXX@...:/backups/workflo" + RESTIC_PASSWORD=...
+restic init   # один раз, з тими ж env
+bash scripts/backup.sh   # тепер лог має сказати "Offsite (restic) OK"
+```
+
+Нотатки:
+
+- Файли, залиті ДО цього зрізу, жили в шарі контейнера і вже втрачались на кожному
+  деплої — рятувати нічого; нові підуть у volume `uploads_data` і в нічний tar.
+- Справжнє відновлення: `bash scripts/restore.sh --restore [dump]` — попросить
+  надрукувати RESTORE, зупинить api/bot, застосує дамп, підніме назад з `--wait`.
+
 ---
 
 **Після виконання кроків 1–5:** відміть тут дату виконання і перенеси файл у `docs/archive/`

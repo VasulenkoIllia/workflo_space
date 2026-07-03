@@ -193,6 +193,12 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # INFRA-DR1: клієнтські файли — на named volume; без нього вони жили в шарі
+      # контейнера і гинули при КОЖНОМУ recreate. backup.sh тарить цей volume щоночі.
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik_network}
@@ -309,3 +315,4 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:
