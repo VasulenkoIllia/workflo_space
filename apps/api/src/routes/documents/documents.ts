@@ -1,7 +1,10 @@
-import { type PrismaClient, prisma, tenantTransaction, withTenant } from '@workflo/db'
+import { type Prisma, type PrismaClient, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import {
   ChromiumUnavailableError,
+  type DocumentKind,
+  type DocumentLine,
   type DocumentRenderData,
+  type ReconciliationRow,
   htmlToPdf,
   renderDocumentHtml,
 } from '@workflo/templates'
@@ -13,7 +16,8 @@ import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 
-/** Documents that can be generated from an order (contract is issued separately). */
+/** Documents that can be generated from an order (повний UA-комплект, 06). Договір тут —
+ * рамковий, з предметом за замовленням; company-рівневий флоу — окремо (Фаза B). */
 const createDocumentSchema = z.object({
   type: z.enum([
     'invoice',
@@ -21,6 +25,7 @@ const createDocumentSchema = z.object({
     'completion_act',
     'specification',
     'reconciliation_act',
+    'contract',
   ]),
 })
 
@@ -79,6 +84,213 @@ export async function nextDocumentNumber(
   return `${NUMBER_PREFIX[type] ?? 'DOC'}-${year}-${String(count).padStart(6, '0')}`
 }
 
+/** Doc row shape used by the PDF endpoint (result of its select). */
+interface DocRow {
+  type: string
+  number: string
+  generatedAt: Date
+  companyId: string
+  agencyId: string
+  agency: { name: string }
+  order: {
+    id: string
+    title: string
+    description: string | null
+    totalAmount: unknown
+    approvedAmount: unknown
+    currency: string
+    createdAt: Date
+    project: { id: string; name: string } | null
+  } | null
+  company: {
+    name: string
+    legalName: string | null
+    taxId: string | null
+    legalAddress: string | null
+  }
+  legalEntity: {
+    name: string
+    legalName: string | null
+    taxId: string | null
+    vatPayer: boolean
+    legalAddress: string | null
+    bankName: string | null
+    iban: string | null
+    signerName: string | null
+    signerTitle: string | null
+  } | null
+}
+
+/**
+ * Пер-типова збірка даних рендера (06, повний UA-комплект): позиції — з estimate-ліній
+ * проєкту (фолбек: одна позиція за замовленням), грн-еквівалент — з ExchangeRate,
+ * звірка — з реальних charges/payments компанії. Дані читаються свіжими (без снапшоту —
+ * D2 follow-up).
+ */
+async function buildRenderData(
+  tx: Prisma.TransactionClient,
+  doc: DocRow
+): Promise<DocumentRenderData> {
+  const kind = doc.type as DocumentKind
+  const order = doc.order
+  const currency = order?.currency ?? 'UAH'
+  const amountNum = Number(order?.approvedAmount ?? order?.totalAmount ?? 0)
+
+  const data: DocumentRenderData = {
+    typeLabel: DOC_TYPE_LABEL[doc.type] ?? doc.type,
+    number: doc.number,
+    date: fmtDate(doc.generatedAt),
+    orderTitle: order?.title ?? '—',
+    projectName: order?.project?.name ?? null,
+    amount: fmtMoney(amountNum),
+    currency,
+    issuer: doc.legalEntity ?? { name: doc.agency.name },
+    recipient: {
+      name: doc.company.name,
+      legalName: doc.company.legalName,
+      taxId: doc.company.taxId,
+      legalAddress: doc.company.legalAddress,
+    },
+  }
+
+  // ── позиції: estimate-лінії проєкту (P-6); нема → фолбек у рендерері ──
+  if (kind !== 'reconciliation_act' && kind !== 'contract' && order?.project) {
+    const lines = await tx.estimateLine.findMany({
+      where: { projectId: order.project.id },
+      orderBy: { createdAt: 'asc' },
+      select: { name: true, hours: true, amount: true },
+    })
+    if (lines.length > 0) {
+      data.lines = lines.map((l): DocumentLine => {
+        const hours = Number(l.hours)
+        const sum = l.amount != null ? Number(l.amount) : 0
+        const rate = hours > 0 && sum > 0 ? sum / hours : null
+        return {
+          name: l.name,
+          qty: hours > 0 ? fmtMoney(hours) : '1',
+          unit: hours > 0 ? 'год' : 'послуга',
+          price: rate != null ? fmtMoney(rate) : sum > 0 ? fmtMoney(sum) : 'включено',
+          sum: sum > 0 ? fmtMoney(sum) : '0,00',
+        }
+      })
+    }
+  }
+
+  // ── грн-еквівалент для не-UAH валют (курс агенції, S5-03a) ──
+  if (currency !== 'UAH' && amountNum > 0) {
+    const rate = await tx.exchangeRate.findUnique({
+      where: { agencyId: doc.agencyId },
+      select: { usdToUah: true, eurToUah: true, updatedAt: true },
+    })
+    const uah =
+      currency === 'USD' && rate?.usdToUah
+        ? Number(rate.usdToUah)
+        : currency === 'EUR' && rate?.eurToUah
+          ? Number(rate.eurToUah)
+          : null
+    if (uah != null && rate) {
+      data.uahTotal = fmtMoney(amountNum * uah)
+      data.rateNote = `за курсом ${fmtMoney(uah)} грн/${currency} від ${fmtDate(rate.updatedAt)}`
+    }
+  }
+
+  data.vatNote = doc.legalEntity?.vatPayer ? 'у т.ч. ПДВ 20%' : 'без ПДВ (неплатник ПДВ)'
+
+  if (kind === 'invoice' || kind === 'advance_invoice') {
+    const settings = await tx.paymentSettings.findUnique({
+      where: { agencyId: doc.agencyId },
+      select: { paymentTermsDays: true },
+    })
+    const terms = settings?.paymentTermsDays ?? 7
+    data.dueDate = fmtDate(new Date(doc.generatedAt.getTime() + terms * 86_400_000))
+    const advance = kind === 'advance_invoice' ? 'Авансова оплата' : 'Оплата'
+    data.paymentPurpose = `${advance} за рахунком № ${doc.number} від ${data.date} за послуги з розробки ПЗ (${data.orderTitle}). ${data.vatNote === 'без ПДВ (неплатник ПДВ)' ? 'Без ПДВ.' : 'З ПДВ.'}`
+  }
+
+  if (kind === 'completion_act' && order) {
+    data.periodFrom = fmtDate(order.createdAt)
+    data.periodTo = fmtDate(doc.generatedAt)
+    const invoice = await tx.document.findFirst({
+      where: { orderId: order.id, type: { in: ['invoice', 'advance_invoice'] } },
+      orderBy: { generatedAt: 'desc' },
+      select: { number: true, generatedAt: true },
+    })
+    if (invoice) data.basisRef = `Рахунок ${invoice.number} від ${fmtDate(invoice.generatedAt)}`
+  }
+
+  if (kind === 'specification') {
+    data.description = order?.description ?? null
+  }
+
+  if (kind === 'reconciliation_act') {
+    // Звірка по КОМПАНІЇ: нарахування (charges, без pending-гейта) = дебет,
+    // підтверджені оплати = кредит. Суми «як записано» — мульти-валютні кейси
+    // позначаються валютою документа (MVP-обмеження, задокументовано).
+    const [charges, payments] = await Promise.all([
+      tx.serviceCharge.findMany({
+        where: { companyId: doc.companyId, approvalStatus: { not: 'pending' } },
+        orderBy: { month: 'asc' },
+        select: {
+          month: true,
+          kind: true,
+          amount: true,
+          totalAmount: true,
+          project: { select: { name: true } },
+        },
+      }),
+      tx.payment.findMany({
+        where: { companyId: doc.companyId },
+        orderBy: { confirmedAt: 'asc' },
+        select: { confirmedAt: true, amount: true, paymentMethod: true },
+      }),
+    ])
+    const ops: (ReconciliationRow & { at: number })[] = []
+    let debit = 0
+    let credit = 0
+    for (const c of charges) {
+      const v = Number(c.totalAmount ?? c.amount)
+      debit += v
+      ops.push({
+        at: c.month.getTime(),
+        date: fmtDate(c.month),
+        doc: c.kind === 'subscription' ? 'нарахування' : c.kind,
+        desc: c.project?.name ?? 'Разове нарахування',
+        debit: fmtMoney(v),
+        credit: null,
+      })
+    }
+    for (const p of payments) {
+      const v = Number(p.amount)
+      credit += v
+      ops.push({
+        at: p.confirmedAt.getTime(),
+        date: fmtDate(p.confirmedAt),
+        doc: 'оплата',
+        desc: p.paymentMethod ?? 'Платіж',
+        debit: null,
+        credit: fmtMoney(v),
+      })
+    }
+    ops.sort((a, b) => a.at - b.at)
+    data.operations = ops.map(({ at: _at, ...row }) => row)
+    data.opening = fmtMoney(0)
+    data.totalDebit = fmtMoney(debit)
+    data.totalCredit = fmtMoney(credit)
+    data.closing = fmtMoney(debit - credit)
+    data.amount = fmtMoney(debit - credit)
+    if (ops.length > 0) {
+      data.periodFrom = ops[0]?.date
+      data.periodTo = fmtDate(doc.generatedAt)
+    }
+  }
+
+  if (kind === 'contract') {
+    data.contractPlace = doc.legalEntity?.legalAddress?.split(',')[0]?.trim() || undefined
+  }
+
+  return data
+}
+
 const documentsRoute: FastifyPluginAsync = (fastify) => {
   // ── Generate a document from an order (team-only) ────────────────────────────
   fastify.post<{ Params: { orderId: string } }>(
@@ -89,7 +301,10 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
       const { type } = createDocumentSchema.parse(request.body)
 
       const order = await withTenant((tx) =>
-        tx.order.findUnique({ where: { id: orderId }, select: { companyId: true } })
+        tx.order.findUnique({
+          where: { id: orderId },
+          select: { companyId: true, project: { select: { legalEntityId: true } } },
+        })
       )
       if (!order?.companyId) {
         throw new AppError(
@@ -102,6 +317,17 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
       const year = new Date().getUTCFullYear()
 
       const document = await tenantTransaction(prisma, async (tx) => {
+        // Issuer legal entity: проєкт замовлення → дефолтна юр-особа агенції → без юр-особи.
+        // Раніше binding не заповнювався взагалі — інвойси виходили без реквізитів оплати.
+        const legalEntityId =
+          order.project?.legalEntityId ??
+          (
+            await tx.legalEntity.findFirst({
+              where: { agencyId, isDefault: true },
+              select: { id: true },
+            })
+          )?.id ??
+          null
         const number = await nextDocumentNumber(tx, agencyId, type, year)
         return tx.document.create({
           data: {
@@ -110,6 +336,7 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
             number,
             order: { connect: { id: orderId } },
             company: { connect: { id: companyId } },
+            ...(legalEntityId ? { legalEntity: { connect: { id: legalEntityId } } } : {}),
             status: 'generated', // record + number are fixed; PDF render lands in D2
             createdBy: { connect: { id: request.user.sub } },
           },
@@ -153,8 +380,21 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
             type: true,
             number: true,
             generatedAt: true,
+            companyId: true,
+            agencyId: true,
             agency: { select: { name: true } },
-            order: { select: { title: true, totalAmount: true, currency: true } },
+            order: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                totalAmount: true,
+                approvedAmount: true,
+                currency: true,
+                createdAt: true,
+                project: { select: { id: true, name: true } },
+              },
+            },
             company: {
               select: { name: true, legalName: true, taxId: true, legalAddress: true },
             },
@@ -163,6 +403,7 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
                 name: true,
                 legalName: true,
                 taxId: true,
+                vatPayer: true,
                 legalAddress: true,
                 bankName: true,
                 iban: true,
@@ -177,23 +418,8 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
       }
 
-      const data: DocumentRenderData = {
-        typeLabel: DOC_TYPE_LABEL[doc.type] ?? doc.type,
-        number: doc.number,
-        date: fmtDate(doc.generatedAt),
-        orderTitle: doc.order?.title ?? '—',
-        amount: fmtMoney(doc.order?.totalAmount),
-        currency: doc.order?.currency ?? 'UAH',
-        // Issuer: the agency legal entity if the document was bound to one, else the agency name.
-        issuer: doc.legalEntity ?? { name: doc.agency.name },
-        recipient: {
-          name: doc.company.name,
-          legalName: doc.company.legalName,
-          taxId: doc.company.taxId,
-          legalAddress: doc.company.legalAddress,
-        },
-      }
-      const html = renderDocumentHtml(data)
+      const data = await withTenant((tx) => buildRenderData(tx, doc))
+      const html = renderDocumentHtml(doc.type as DocumentKind, data)
 
       try {
         const pdf = await htmlToPdf(html)

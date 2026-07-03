@@ -15,6 +15,12 @@ const db = {
   },
   paymentSettings: { findUnique: vi.fn() },
   outboxEvent: { create: vi.fn() },
+  // 06 повний комплект: create резолвить юр-особу; buildRenderData тягне лінії/курс/звірку.
+  legalEntity: { findFirst: vi.fn() },
+  estimateLine: { findMany: vi.fn() },
+  exchangeRate: { findUnique: vi.fn() },
+  serviceCharge: { findMany: vi.fn() },
+  payment: { findMany: vi.fn() },
   $queryRaw: vi.fn(),
 }
 
@@ -96,7 +102,15 @@ async function authed(claims: unknown) {
   return { app, token: app.jwt.sign(claims as object) }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  db.legalEntity.findFirst.mockResolvedValue(null)
+  db.estimateLine.findMany.mockResolvedValue([])
+  db.exchangeRate.findUnique.mockResolvedValue(null)
+  db.serviceCharge.findMany.mockResolvedValue([])
+  db.payment.findMany.mockResolvedValue([])
+  db.paymentSettings.findUnique.mockResolvedValue(null)
+})
 afterEach(() => vi.clearAllMocks())
 
 describe('POST /orders/:orderId/documents — generate (team-only)', () => {
@@ -261,8 +275,19 @@ describe('GET /orders/:orderId/documents/:docId/pdf', () => {
       type: 'invoice',
       number: 'INV-2026-000001',
       generatedAt: new Date('2026-06-01T00:00:00Z'),
+      companyId: COMPANY,
+      agencyId: AGENCY,
       agency: { name: 'Acme Agency' },
-      order: { title: 'Site', totalAmount: 1000, currency: 'UAH' },
+      order: {
+        id: ORDER,
+        title: 'Site',
+        description: null,
+        totalAmount: 1000,
+        approvedAmount: null,
+        currency: 'UAH',
+        createdAt: new Date('2026-05-01T00:00:00Z'),
+        project: null,
+      },
       company: { name: 'Client co', legalName: null, taxId: null, legalAddress: null },
       legalEntity: null,
     })

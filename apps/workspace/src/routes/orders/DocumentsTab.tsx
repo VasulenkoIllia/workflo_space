@@ -16,8 +16,11 @@ import {
 
 const GENERATE: { type: DocumentType; label: string }[] = [
   { type: 'invoice', label: 'Рахунок' },
+  { type: 'advance_invoice', label: 'Аванс' },
   { type: 'completion_act', label: 'Акт' },
   { type: 'specification', label: 'Специфікація' },
+  { type: 'reconciliation_act', label: 'Звірка' },
+  { type: 'contract', label: 'Договір' },
 ]
 
 /** Team-side documents tab: list the order's documents + generate an invoice/act/spec. */

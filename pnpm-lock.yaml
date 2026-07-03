@@ -393,6 +393,10 @@ importers:
       puppeteer-core:
         specifier: ^23.11.1
         version: 23.11.1
+    devDependencies:
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.39)(jsdom@25.0.1)
 
   packages/types:
     dependencies:
