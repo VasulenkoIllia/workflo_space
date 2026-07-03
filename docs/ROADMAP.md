@@ -171,6 +171,22 @@
   верифікації банер зник. Гейт «чутливі дії до підтвердження» — відкладено до
   portal-vault self-service (наразі непідтверджені лише свіжі клієнти, їм гейтити нічого).
   З auth-набору лишився OAuth (Google).
+- **Google OAuth (S9 §E) — ЗАКРИТО (2026-07-04). Auth-набір §B–§E тепер повний.**
+  Code-flow без SDK (redirect → token-exchange, id*token з TLS-довіреного ендпоінта);
+  state = HMAC-підписаний JSON (v: login|link, app: portal|workspace, 10хв TTL).
+  `OAuthAccount` (provider+sub unique). Callback-гілки: знайомий акаунт → сесія;
+  email збігається з профілем → auto-link ТІЛЬКИ як Google каже email_verified
+  (інакше oauthError=unverified); новий → signup (компанія+тенант як register,
+  випадковий пароль, email авто-верифікований, avatar з Google). **2FA не обходиться**:
+  замість сесії — challenge-redirect `/login?oauth2fa=`, той самий верифай, що пароль.
+  Unlink вимагає пароль (канон ≥1 спосіб входу). GET providers → кнопки ховаються,
+  коли не налаштовано (503-патерн як KEK). Обидва фронти: кнопка на /login,
+  картка «Способи входу» в /settings, oauthError/oauth2fa-landing'и з чисткою URL.
+  Compose: GOOGLE_OAUTH*\*\_STAGING/\_PROD → контейнер (callback-дефолти під dev-api/api).
+  +11 тестів (api 684, stubbed token-endpoint). Вживу з fake-конфігом: providers,
+  302 на accounts.google.com, forged-state → oauthError=state (скрін), oauth2fa-landing
+  відкриває екран коду, unlink-без-звʼязку 404. Повний Google-dance потребує
+  client-id/secret з Google Cloud Console — крок оператора (див. .env.example).
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,

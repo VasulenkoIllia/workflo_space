@@ -10,6 +10,8 @@ import {
   useRevokeSession,
   useSessions,
 } from '@/lib/sessions'
+import { startGoogleLink, useOauthAccounts, useOauthProviders, useUnlinkOauth } from '@/lib/oauth'
+import { useSearchParams } from 'react-router-dom'
 import {
   useTwoFactorDisable,
   useTwoFactorEnable,
@@ -989,6 +991,90 @@ function SessionsSection() {
   )
 }
 
+/**
+ * Соц-входи (S9 §E): привʼязка/відвʼязка Google. Відвʼязка вимагає пароль —
+ * гарантія, що лишається ≥1 робочий спосіб входу. Картка ховається, коли
+ * OAuth не налаштовано і нічого не привʼязано.
+ */
+function LinkedAccountsSection() {
+  const providers = useOauthProviders()
+  const { data, isLoading } = useOauthAccounts()
+  const unlink = useUnlinkOauth()
+  const [pwd, setPwd] = useState('')
+  const [params, setParams] = useSearchParams()
+
+  // OAuth callback landings on /settings: ?oauthLinked=1 / ?oauthError=taken
+  useEffect(() => {
+    const linked = params.get('oauthLinked')
+    const err = params.get('oauthError')
+    if (!linked && !err) return
+    if (linked) toast.success('Google привʼязано до акаунту')
+    if (err === 'taken') toast.error('Цей Google-акаунт уже привʼязано до іншого профілю')
+    setParams({}, { replace: true })
+  }, [params, setParams])
+
+  const google = data?.accounts.find((a) => a.provider === 'google')
+  if (!providers.data?.google && !google) return null
+
+  return (
+    <Card title="Безпека · способи входу">
+      {isLoading ? (
+        <Skeleton style={{ height: 60 }} />
+      ) : google ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <Icon name="globe" size={16} />
+            <span style={{ fontWeight: 600 }}>Google</span>
+            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              {google.email} · з {formatDate(google.createdAt)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, maxWidth: 260 }}>
+              <Input
+                label="Пароль акаунта (щоб відвʼязати)"
+                type="password"
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="ghost"
+              loading={unlink.isPending}
+              disabled={pwd.trim().length === 0}
+              onClick={() =>
+                unlink.mutate(
+                  { provider: 'google', password: pwd.trim() },
+                  {
+                    onSuccess: () => {
+                      setPwd('')
+                      toast.success('Google відвʼязано')
+                    },
+                    onError: () => toast.error('Невірний пароль'),
+                  }
+                )
+              }
+            >
+              Відвʼязати Google
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+            Привʼяжіть Google, щоб входити одним кліком без пароля.
+          </div>
+          <div>
+            <Button variant="ghost" onClick={() => void startGoogleLink('workspace')}>
+              Привʼязати Google
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 /** Одноразовий показ резервних кодів (копіювати/зберегти). */
 function BackupCodesBox({ codes }: { codes: string[] }) {
   return (
@@ -1045,6 +1131,7 @@ export function SettingsPage() {
 
       <div style={{ display: 'grid', gap: 18 }}>
         <SecuritySection />
+        <LinkedAccountsSection />
         <SessionsSection />
         <LegalEntitiesSection />
         {payment.isLoading ? (

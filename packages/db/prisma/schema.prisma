@@ -56,9 +56,27 @@ model Profile {
   projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
   credentialsCreated     CredentialVault[]     @relation("CredentialCreatedBy") // 17
   twoFactor              TwoFactorAuth? // S9-01
+  oauthAccounts          OAuthAccount[] // S9 §E
 
   @@index([role])
   @@map("profiles")
+}
+
+// Social login (S9, canon 01-auth §E). One row per linked external identity;
+// (provider, providerAccountId) is the stable key Google/GitHub guarantee.
+// email is a snapshot of the provider-side address at link time (display only).
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  profileId         String
+  profile           Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String
+  email             String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([provider, providerAccountId])
+  @@index([profileId])
+  @@map("oauth_accounts")
 }
 
 model RefreshToken {

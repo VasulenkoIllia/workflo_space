@@ -6,6 +6,7 @@ import meRoute from './me.js'
 import refreshRoute from './refresh.js'
 import registerRoute from './register.js'
 import resetPasswordRoute from './resetPassword.js'
+import oauthRoute from './oauth.js'
 import sessionsRoute from './sessions.js'
 import switchAgencyRoute from './switchAgency.js'
 import twoFactorRoute from './twoFactor.js'
@@ -27,6 +28,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(twoFactorRoute)
   await fastify.register(sessionsRoute)
   await fastify.register(verifyEmailRoute)
+  await fastify.register(oauthRoute)
 }
 
 export default authRoutes

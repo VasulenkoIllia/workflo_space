@@ -178,6 +178,10 @@ services:
       RLS_ENFORCED: ${RLS_ENFORCED_STAGING:-false}
       # Credentials vault (module 17): 32-byte base64 KEK; absent → vault 503.
       CREDENTIALS_KEK_BASE64: ${CREDENTIALS_KEK_BASE64_STAGING:-}
+      # Google OAuth (S9 §E): all three set → login-via-Google on; absent → 503/hidden.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID_STAGING:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET_STAGING:-}
+      GOOGLE_OAUTH_CALLBACK_URL: ${GOOGLE_OAUTH_CALLBACK_URL_STAGING:-https://dev-api.workflo.space/auth/oauth/google/callback}
       # The deploy step seeds via `compose run api ... seed`, which only sees THIS
       # environment. The seed fails closed in production builds when passwords are
       # unset (no Admin123! fallback on an internet-reachable stack) — so these must

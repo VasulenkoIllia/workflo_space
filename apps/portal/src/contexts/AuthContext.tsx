@@ -34,6 +34,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
   /** 2FA step: exchange the challenge + code for a session. */
   verifyTwoFactor: (code: string) => Promise<void>
+  /** Adopt a challenge that arrived out-of-band (OAuth redirect ?oauth2fa=). */
+  adoptTwoFactorChallenge: (challengeToken: string) => void
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
   reload: () => Promise<void>
@@ -78,6 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [reload]
   )
+
+  const adoptTwoFactorChallenge = useCallback((challengeToken: string) => {
+    challengeRef.current = challengeToken
+  }, [])
 
   const verifyTwoFactor = useCallback(
     async (code: string) => {
@@ -138,8 +144,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, verifyTwoFactor, register, logout, reload }),
-    [user, loading, login, verifyTwoFactor, register, logout, reload]
+    () => ({
+      user,
+      loading,
+      login,
+      verifyTwoFactor,
+      adoptTwoFactorChallenge,
+      register,
+      logout,
+      reload,
+    }),
+    [user, loading, login, verifyTwoFactor, adoptTwoFactorChallenge, register, logout, reload]
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

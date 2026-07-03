@@ -1,23 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { loginSchema } from '@workflo/types'
 import { AuthShell, AuthHeader, AuthStatus, Input, Button } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
 import { safeRedirect } from '@/lib/navigation'
+import { startGoogleLogin, useOauthProviders } from '@/lib/oauth'
 
 type LoginForm = { email: string; password: string }
 
+const OAUTH_ERRORS: Record<string, string> = {
+  state: 'Сесія входу через Google прострочена — спробуйте ще раз',
+  denied: 'Вхід через Google скасовано',
+  exchange: 'Google не підтвердив вхід — спробуйте ще раз',
+  unverified: 'Email у Google не підтверджено — підтвердіть його в Google і повторіть',
+  inactive: 'Обліковий запис деактивовано',
+}
+
 export function LoginPage() {
-  const { login, verifyTwoFactor } = useAuth()
+  const { login, verifyTwoFactor, adoptTwoFactorChallenge } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [params, setParams] = useSearchParams()
+  const providers = useOauthProviders()
   const [formError, setFormError] = useState<string | null>(null)
   const [twoFactor, setTwoFactor] = useState(false)
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
+
+  // OAuth redirect landings: ?oauth2fa=<challenge> → straight to the code step;
+  // ?oauthError=<code> → inline error. Params are consumed (removed) on arrival.
+  useEffect(() => {
+    const challenge = params.get('oauth2fa')
+    const oauthError = params.get('oauthError')
+    if (!challenge && !oauthError) return
+    if (challenge) {
+      adoptTwoFactorChallenge(challenge)
+      setTwoFactor(true)
+    }
+    if (oauthError) setFormError(OAUTH_ERRORS[oauthError] ?? 'Не вдалося увійти через Google')
+    setParams({}, { replace: true })
+  }, [params, setParams, adoptTwoFactorChallenge])
   const {
     register,
     handleSubmit,
@@ -110,6 +135,11 @@ export function LoginPage() {
           Увійти
         </Button>
       </form>
+      {providers.data?.google && (
+        <Button type="button" variant="ghost" fullWidth onClick={() => startGoogleLogin('portal')}>
+          Увійти через Google
+        </Button>
+      )}
       <div className="wfp-auth-foot">
         немає акаунту?{' '}
         <Link to="/register" style={{ color: 'var(--wf-accent)' }}>
