@@ -341,6 +341,9 @@ model OrderComment {
   replies     OrderComment[] @relation("CommentReply")
   // Вкладення: OrderFile-и замовлення, прив'язані до цього повідомлення (03.07).
   attachments OrderFile[]
+  // S10 @mention: profile-ids згаданих учасників (сервер валідовує видимість:
+  // клієнта не можна згадати у внутрішній нотатці). Масив, не relation.
+  mentionIds  String[]       @default([])
   createdAt   DateTime       @default(now()) @db.Timestamptz(3)
   editedAt    DateTime?      @db.Timestamptz(3)
   deletedAt   DateTime?      @db.Timestamptz(3)

@@ -187,6 +187,18 @@
   302 на accounts.google.com, forged-state → oauthError=state (скрін), oauth2fa-landing
   відкриває екран коду, unlink-без-звʼязку 404. Повний Google-dance потребує
   client-id/secret з Google Cloud Console — крок оператора (див. .env.example).
+- **Chat @mention + read-receipts (S10) — ЗАКРИТО (2026-07-04).**
+  @mention: GET /orders/:id/participants (team+client), автокомпліт у композері обох
+  ChatTab-ів («@» → випадачка, Enter/Tab підставляє), фронт шле mentionIds; сервер
+  валідовує ВИДИМІСТЬ (клієнта у internal-нотатці мовчки відкидає — перевірено вживу).
+  `OrderComment.mentionIds`. Згадані отримують chat.mentioned (нові email/tg шаблони
+  uk/en) ЗАМІСТЬ generic chat.new_comment (без подвійних листів; воркер ділить
+  отримувачів). Підсвітка @Ім'я по точних іменах учасників + акцент-рамка рядка «вас
+  згадали». Read-receipts: meta.reads (маркери інших учасників) + in-process bus-івент
+  з mark-read → SSE `event: read` → ✓/✓✓ з тултипом «хто прочитав»; перехід ✓→✓✓
+  БЕЗ reload перевірено наживо (клієнт прочитав по curl — тік перемкнувся в UI).
+  Листи: executor отримав «Вас згадали» двічі (public+internal), клієнт — лише за
+  public (Mailpit). Гейти 51/51 (api 684+chat-моки).
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,

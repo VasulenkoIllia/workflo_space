@@ -97,6 +97,21 @@ export function renderOrderStatusChangedTelegram(opts: {
 // CHAT category
 // ────────────────────────────────────────────────────────────────────────────
 
+export function renderMentionedTelegram(opts: {
+  orderTitle: string
+  authorName: string
+  preview: string
+  orderUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const preview = opts.preview.length > 200 ? `${opts.preview.slice(0, 200)}…` : opts.preview
+  const text =
+    opts.locale === 'en'
+      ? `📣 ${bold('You were mentioned')}\n${escapeHtml(opts.orderTitle)} — ${italic(opts.authorName)}\n${escapeHtml(preview)}\n${link('Open chat', opts.orderUrl)}`
+      : `📣 ${bold('Вас згадали')}\n${escapeHtml(opts.orderTitle)} — ${italic(opts.authorName)}\n${escapeHtml(preview)}\n${link('Відкрити чат', opts.orderUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
 export function renderNewCommentTelegram(opts: {
   orderTitle: string
   authorName: string

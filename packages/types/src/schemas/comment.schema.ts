@@ -23,6 +23,9 @@ export const createCommentSchema = z
     replyToId: z.string().uuid().nullish(),
     // Вкладення: id вже завантажених OrderFile-ів цього замовлення (без commentId).
     fileIds: z.array(z.string().uuid()).max(10).optional(),
+    // S10 @mention: profile-ids, вибрані в автокомпліті композера. Сервер лишає
+    // тільки валідних УЧАСНИКІВ, яким це повідомлення видиме.
+    mentionIds: z.array(z.string().uuid()).max(20).optional(),
   })
   .refine((d) => d.content.trim().length > 0 || (d.fileIds?.length ?? 0) > 0, {
     message: 'Повідомлення порожнє',

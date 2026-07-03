@@ -35,3 +35,29 @@ export function subscribeChat(orderId: string, handler: (event: ChatEvent) => vo
 export function publishChatEvent(event: ChatEvent): void {
   emitter.emit(channel(event.orderId), event)
 }
+
+// ── Read receipts (S10) ───────────────────────────────────────────────────────
+// Published in-process by the mark-read route (no pg NOTIFY hop — single-replica
+// deployment, and a lost read event only delays a ✓✓ until the next refetch).
+
+export interface ChatReadEvent {
+  orderId: string
+  profileId: string
+  name: string
+  lastReadAt: string
+}
+
+const readChannel = (orderId: string) => `order:${orderId}:reads`
+
+export function subscribeReads(
+  orderId: string,
+  handler: (event: ChatReadEvent) => void
+): () => void {
+  const ch = readChannel(orderId)
+  emitter.on(ch, handler)
+  return () => emitter.off(ch, handler)
+}
+
+export function publishReadEvent(event: ChatReadEvent): void {
+  emitter.emit(readChannel(event.orderId), event)
+}

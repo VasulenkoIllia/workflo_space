@@ -74,6 +74,11 @@ const uk: Dictionary = {
   'orderStatus.s.cancelled': 'Скасовано',
 
   // new comment
+  'mentioned.subject': 'Вас згадали у «{orderTitle}»',
+  'mentioned.h1': 'Вас згадали в чаті',
+  'mentioned.body': '{authorName} згадав(ла) вас у замовленні «{orderTitle}»:',
+  'mentioned.cta': 'Відкрити чат',
+
   'newComment.subject': 'Новий коментар: «{orderTitle}»',
   'newComment.h1': 'Новий коментар',
   'newComment.body': '{authorName} залишив(ла) коментар у замовленні «{orderTitle}»:',
@@ -194,6 +199,11 @@ const en: Dictionary = {
   'orderStatus.s.cancelled': 'Cancelled',
 
   // new comment
+  'mentioned.subject': 'You were mentioned in “{orderTitle}”',
+  'mentioned.h1': 'You were mentioned',
+  'mentioned.body': '{authorName} mentioned you in the order “{orderTitle}”:',
+  'mentioned.cta': 'Open chat',
+
   'newComment.subject': 'New comment: “{orderTitle}”',
   'newComment.h1': 'New comment',
   'newComment.body': '{authorName} left a comment on order “{orderTitle}”:',

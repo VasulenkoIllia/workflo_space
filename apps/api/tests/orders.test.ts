@@ -65,7 +65,11 @@ vi.mock('@workflo/db', async (importOriginal) => {
     orderChatRead: {
       findUnique: chatReadFindUnique,
       upsert: chatReadUpsert,
+      // S10 read receipts: the list also loads OTHER participants' markers.
+      findMany: vi.fn().mockResolvedValue([]),
     },
+    // S10: mark-read publishes the reader's name to the live bus.
+    profile: { findUnique: vi.fn().mockResolvedValue({ name: 'Тест' }) },
     timeLog: {
       findMany: timeLogFindMany,
       create: timeLogCreate,

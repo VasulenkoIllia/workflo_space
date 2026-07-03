@@ -14,6 +14,7 @@ export {
   type OrderStatusChangedEmailVars,
 } from './orderStatusChanged.js'
 export { renderNewCommentEmail, type NewCommentEmailVars } from './newComment.js'
+export { renderMentionedEmail, type MentionedEmailVars } from './mentioned.js'
 export { renderInvoiceSentEmail, type InvoiceSentEmailVars } from './invoiceSent.js'
 export { renderOrderCreatedEmail, type OrderCreatedEmailVars } from './orderCreated.js'
 export { renderOrderAssignedEmail, type OrderAssignedEmailVars } from './orderAssigned.js'

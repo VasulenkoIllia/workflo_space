@@ -45,11 +45,31 @@ export interface ChatComment {
   /** null-и всередині = оригінал видалено/недоступний («повідомлення видалено»). */
   replyTo?: { id: string; authorName: string | null; preview: string | null } | null
   attachments?: CommentAttachment[]
+  /** S10 @mention: profile-ids згаданих (виділення + «вас згадали»). */
+  mentions?: string[]
+}
+
+export interface ReadMarker {
+  profileId: string
+  name: string
+  lastReadAt: string
+}
+
+export interface ChatParticipant {
+  id: string
+  name: string
+  kind: 'team' | 'client'
 }
 
 export interface CommentsResult {
   comments: ChatComment[]
-  meta: { hasMore: boolean; unreadCount: number; lastReadAt: string | null }
+  meta: {
+    hasMore: boolean
+    unreadCount: number
+    lastReadAt: string | null
+    /** Read-маркери ІНШИХ учасників (S10) — ✓✓ на власних повідомленнях. */
+    reads?: ReadMarker[]
+  }
 }
 
 export interface ActivityItem {
@@ -117,6 +137,20 @@ export interface PostCommentInput {
   content: string
   replyToId?: string
   fileIds?: string[]
+  mentionIds?: string[]
+}
+
+/** Хто може бути @-згаданим у чаті цього замовлення (S10). */
+export function useParticipants(id: string) {
+  return useQuery({
+    queryKey: [...orderKeys.comments(id), 'participants'] as const,
+    queryFn: () =>
+      api
+        .get<{ participants: ChatParticipant[] }>(`/orders/${id}/participants`)
+        .then((r) => r.participants),
+    enabled: id !== '',
+    staleTime: 60_000,
+  })
 }
 
 export function usePostComment(id: string) {
@@ -203,13 +237,27 @@ export function useCommentStream(id: string) {
     if (!id) return
     return subscribeSse(`/orders/${id}/comments/stream`, {
       onEvent: (event, dataStr) => {
-        if (event !== 'comment') return
         let incoming: unknown
         try {
           incoming = JSON.parse(dataStr)
         } catch {
           return
         }
+        // Read receipts (S10): оновити маркер читача → живі ✓✓.
+        if (event === 'read') {
+          const r = incoming as ReadMarker
+          if (typeof r?.profileId !== 'string' || typeof r?.lastReadAt !== 'string') return
+          qc.setQueryData<CommentsResult>(orderKeys.comments(id), (old) => {
+            if (!old) return old
+            const reads = old.meta.reads ?? []
+            const next = reads.some((m) => m.profileId === r.profileId)
+              ? reads.map((m) => (m.profileId === r.profileId ? { ...m, ...r } : m))
+              : [...reads, r]
+            return { ...old, meta: { ...old.meta, reads: next } }
+          })
+          return
+        }
+        if (event !== 'comment') return
         if (!isChatComment(incoming)) return
         qc.setQueryData<CommentsResult>(orderKeys.comments(id), (old) => {
           if (!old || old.comments.some((c) => c.id === incoming.id)) return old

@@ -6,12 +6,130 @@ import {
   downloadFile,
   markCommentsRead,
   useComments,
+  useParticipants,
   usePostComment,
   useUploadFile,
   type ChatComment,
+  type ChatParticipant,
   type CommentAttachment,
+  type ReadMarker,
 } from '@/lib/orderDetail'
 import { formatDateTime } from '@/lib/format'
+
+/** Хвіст «@запит» у композері (згадка набирається в кінці тексту). */
+const MENTION_TAIL = /@([^\s@]{0,30})$/u
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Підсвітити точні @Ім'я-токени відомих учасників у тексті повідомлення. */
+function MentionText({ content, names }: { content: string; names: string[] }) {
+  if (names.length === 0 || !content.includes('@')) return <>{content}</>
+  const tokens = names.map((n) => `@${n}`).sort((a, b) => b.length - a.length)
+  const re = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gu')
+  const known = new Set(tokens)
+  return (
+    <>
+      {content.split(re).map((part, i) =>
+        known.has(part) ? (
+          <span
+            key={i}
+            style={{
+              color: 'var(--wf-accent)',
+              fontWeight: 600,
+              background: 'color-mix(in oklab, var(--wf-accent) 10%, transparent)',
+              borderRadius: 4,
+              padding: '0 2px',
+            }}
+          >
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
+/** ✓ надіслано / ✓✓ прочитано (S10) — тултип перелічує, хто вже прочитав. */
+function ReadTicks({ createdAt, reads }: { createdAt: string; reads: ReadMarker[] }) {
+  const readers = reads.filter((r) => new Date(r.lastReadAt) >= new Date(createdAt))
+  const seen = readers.length > 0
+  return (
+    <span
+      className="wfp-mono"
+      title={seen ? `Прочитано: ${readers.map((r) => r.name).join(', ')}` : 'Надіслано'}
+      style={{
+        marginLeft: 6,
+        fontSize: 10,
+        color: seen ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+        cursor: 'default',
+      }}
+    >
+      {seen ? '✓✓' : '✓'}
+    </span>
+  )
+}
+
+/** Випадачка @-автокомпліту над композером. */
+function MentionDropdown({
+  options,
+  onPick,
+}: {
+  options: ChatParticipant[]
+  onPick: (p: ChatParticipant) => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: '100%',
+        left: 0,
+        marginBottom: 4,
+        zIndex: 20,
+        minWidth: 220,
+        background: 'var(--wf-surface)',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 8,
+        boxShadow: '0 6px 24px rgba(0,0,0,.25)',
+        overflow: 'hidden',
+      }}
+    >
+      {options.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault() // не втрачати фокус інпута
+            onPick(p)
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            width: '100%',
+            padding: '6px 10px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--wf-fg)',
+            fontSize: 13,
+            textAlign: 'left',
+          }}
+        >
+          <Avatar name={p.name} size={16} />
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+          <span className="wfp-mono" style={{ fontSize: 9, color: 'var(--wf-fg-muted)' }}>
+            {p.kind === 'team' ? 'команда' : 'клієнт'}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export function ChatTab({ orderId }: { orderId: string }) {
   const { user } = useAuth()
@@ -25,6 +143,23 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const count = data?.comments.length ?? 0
+
+  // @mention (S10): кандидати = команда агенції + учасники компанії.
+  const participants = useParticipants(orderId).data ?? []
+  const [mentions, setMentions] = useState<ChatParticipant[]>([])
+  const mentionTail = text.match(MENTION_TAIL)?.[1] ?? null
+  const mentionOptions =
+    mentionTail != null
+      ? participants
+          .filter((p) => p.id !== myId && p.name.toLowerCase().includes(mentionTail.toLowerCase()))
+          .slice(0, 6)
+      : []
+  const pickMention = (p: ChatParticipant) => {
+    setText((t) => t.replace(MENTION_TAIL, `@${p.name} `))
+    setMentions((prev) => (prev.some((m) => m.id === p.id) ? prev : [...prev, p]))
+  }
+  const participantNames = participants.map((p) => p.name)
+  const reads = data?.meta.reads ?? []
 
   // Mark read once per order open — NOT on every count change, or each inbound SSE message
   // (the live stream lives at page level) would re-POST and mark unseen messages read.
@@ -59,17 +194,21 @@ export function ChatTab({ orderId }: { orderId: string }) {
   const send = () => {
     const content = text.trim()
     if ((!content && attach.length === 0) || post.isPending || upload.isPending) return
+    // Згадка чинна, лише поки її @Ім'я досі в тексті (могли стерти вручну).
+    const mentionIds = mentions.filter((m) => content.includes(`@${m.name}`)).map((m) => m.id)
     post.mutate(
       {
         content,
         ...(replyTo ? { replyToId: replyTo.id } : {}),
         ...(attach.length ? { fileIds: attach.map((a) => a.id) } : {}),
+        ...(mentionIds.length ? { mentionIds } : {}),
       },
       {
         onSuccess: () => {
           setText('')
           setReplyTo(null)
           setAttach([])
+          setMentions([])
         },
       }
     )
@@ -95,8 +234,21 @@ export function ChatTab({ orderId }: { orderId: string }) {
       ) : (
         comments.map((c) => {
           const mine = c.author.id === myId
+          const mentionedMe = !mine && myId != null && (c.mentions ?? []).includes(myId)
           return (
-            <div key={c.id} className="wfp-chat-row">
+            <div
+              key={c.id}
+              className="wfp-chat-row"
+              style={
+                mentionedMe
+                  ? {
+                      background: 'color-mix(in oklab, var(--wf-accent) 7%, transparent)',
+                      borderLeft: '2px solid var(--wf-accent)',
+                      borderRadius: 4,
+                    }
+                  : undefined
+              }
+            >
               <span className="wfp-chat-ts">{formatDateTime(c.createdAt)}</span>
               <span
                 className={cn('wfp-chat-who', mine && 'wfp-chat-who--client')}
@@ -110,7 +262,8 @@ export function ChatTab({ orderId }: { orderId: string }) {
               </span>
               <div className="wfp-chat-text">
                 {c.replyTo && <ReplyQuote replyTo={c.replyTo} />}
-                {c.content}
+                <MentionText content={c.content} names={participantNames} />
+                {mine && <ReadTicks createdAt={c.createdAt} reads={reads} />}
                 <button
                   type="button"
                   className="wfp-mono"
@@ -136,7 +289,8 @@ export function ChatTab({ orderId }: { orderId: string }) {
       <div className="wfp-chat-input">
         <span className="wfp-chat-input-ts">зараз</span>
         <span className="wfp-chat-input-who">ви</span>
-        <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ minWidth: 0, flex: 1, position: 'relative' }}>
+          <MentionDropdown options={mentionOptions} onPick={pickMention} />
           <ComposerExtras
             replyTo={replyTo}
             attach={attach}
@@ -146,10 +300,16 @@ export function ChatTab({ orderId }: { orderId: string }) {
           />
           <input
             className="wfp-chat-input-field"
-            placeholder="Напишіть повідомлення…"
+            placeholder="Напишіть повідомлення… (@ — згадати)"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
+              // Відкрита @-випадачка: Enter/Tab підставляє першого кандидата.
+              if (mentionOptions.length > 0 && (e.key === 'Enter' || e.key === 'Tab')) {
+                e.preventDefault()
+                pickMention(mentionOptions[0] as ChatParticipant)
+                return
+              }
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 send()

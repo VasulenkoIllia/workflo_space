@@ -7,6 +7,7 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { publishReadEvent } from '../../services/chatBus.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant } from './access.js'
 
@@ -34,6 +35,8 @@ export const COMMENT_SELECT = {
     where: { deletedAt: null },
     select: { id: true, filename: true, mimeType: true, sizeBytes: true },
   },
+  // S10 @mention: ids згаданих учасників (валідовані на create).
+  mentionIds: true,
 } as const
 
 type RawComment = {
@@ -53,6 +56,7 @@ type RawComment = {
     author?: { name: string } | null
   } | null
   attachments?: { id: string; filename: string; mimeType: string; sizeBytes: number }[]
+  mentionIds?: string[]
 }
 
 /** Strip the raw memberships and expose only `author.kind` (team if the author is an agency
@@ -83,6 +87,7 @@ export function serializeComment(c: RawComment, agencyId: string, viewerIsIntern
     author: { id: author?.id ?? '', name: author?.name ?? '', kind },
     replyTo,
     attachments: c.attachments ?? [],
+    mentions: c.mentionIds ?? [],
   }
 }
 
@@ -103,7 +108,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       // One tenant tx (F4 RLS scope): read the unread-marker first to build the
       // unread filter, then the page + unread count — a consistent snapshot, and
       // sequential awaits (Prisma interactive tx forbids concurrent queries).
-      const { read, rows, unreadCount } = await withTenant(async (tx) => {
+      const { read, rows, unreadCount, reads } = await withTenant(async (tx) => {
         const read = await tx.orderChatRead.findUnique({
           where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
           select: { lastReadAt: true },
@@ -123,7 +128,12 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
           select: COMMENT_SELECT,
         })
         const unreadCount = await tx.orderComment.count({ where: unreadWhere })
-        return { read, rows, unreadCount }
+        // Read receipts (S10): the OTHER participants' markers → ✓✓ on own messages.
+        const reads = await tx.orderChatRead.findMany({
+          where: { orderId: access.orderId, profileId: { not: user.sub } },
+          select: { profileId: true, lastReadAt: true, profile: { select: { name: true } } },
+        })
+        return { read, rows, unreadCount, reads }
       })
       const hasMore = rows.length > q.limit
       const page = (hasMore ? rows.slice(0, q.limit) : rows).reverse() // ascending
@@ -132,7 +142,16 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
         success: true,
         data: {
           comments: page.map((c) => serializeComment(c, access.agencyId, access.isInternal)),
-          meta: { hasMore, unreadCount, lastReadAt: read?.lastReadAt ?? null },
+          meta: {
+            hasMore,
+            unreadCount,
+            lastReadAt: read?.lastReadAt ?? null,
+            reads: reads.map((r) => ({
+              profileId: r.profileId,
+              name: r.profile.name,
+              lastReadAt: r.lastReadAt,
+            })),
+          },
         },
       })
     }
@@ -150,6 +169,28 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       const isInternal = access.isInternal && input.isInternal
 
       const comment = await withTenant(async (tx) => {
+        // @mention-гард (S10): лишаємо тільки згаданих, яким це повідомлення ВИДИМЕ —
+        // команда агенції завжди, клієнтські учасники лише для публічних повідомлень.
+        // Невалідні id мовчки відкидаються (не 400 — згадка не має ламати відправку).
+        let mentionIds: string[] = []
+        if (input.mentionIds?.length) {
+          const unique = [...new Set(input.mentionIds)].filter((id) => id !== user.sub)
+          if (unique.length) {
+            const staff = await tx.agencyMember.findMany({
+              where: { agencyId: access.agencyId, profileId: { in: unique } },
+              select: { profileId: true },
+            })
+            const clients =
+              !isInternal && access.companyId
+                ? await tx.companyMember.findMany({
+                    where: { companyId: access.companyId, profileId: { in: unique } },
+                    select: { profileId: true },
+                  })
+                : []
+            const visible = new Set([...staff, ...clients].map((m) => m.profileId))
+            mentionIds = unique.filter((id) => visible.has(id))
+          }
+        }
         // Reply-гард: оригінал мусить бути живим повідомленням ЦЬОГО замовлення, і клієнт
         // не може відповідати на team-only нотатку (existence-приховування → 404-стиль 400).
         if (input.replyToId) {
@@ -173,6 +214,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
             author: { connect: { id: user.sub } },
             content: input.content,
             isInternal,
+            mentionIds,
             ...(input.replyToId ? { replyTo: { connect: { id: input.replyToId } } } : {}),
           },
           select: { id: true },
@@ -210,6 +252,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
             authorId: user.sub,
             isInternal,
             preview: input.content.slice(0, 200),
+            mentionIds,
           },
           agencyId: access.agencyId,
         })
@@ -241,13 +284,22 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const lastReadAt = new Date()
 
-      await withTenant((tx) =>
-        tx.orderChatRead.upsert({
+      const me = await withTenant(async (tx) => {
+        await tx.orderChatRead.upsert({
           where: { orderId_profileId: { orderId: access.orderId, profileId: user.sub } },
           create: { orderId: access.orderId, profileId: user.sub, lastReadAt },
           update: { lastReadAt },
         })
-      )
+        return tx.profile.findUnique({ where: { id: user.sub }, select: { name: true } })
+      })
+
+      // Live ✓✓ for open chats (S10) — in-process fan-out to this order's SSE streams.
+      publishReadEvent({
+        orderId: access.orderId,
+        profileId: user.sub,
+        name: me?.name ?? '',
+        lastReadAt: lastReadAt.toISOString(),
+      })
 
       return reply.send({ success: true, data: { lastReadAt } })
     }

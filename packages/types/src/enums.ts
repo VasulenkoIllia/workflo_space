@@ -338,6 +338,7 @@ export type NotificationEvent =
   | 'orders.approval_decided'
   // chat
   | 'chat.new_comment'
+  | 'chat.mentioned'
   | 'chat.mention'
   // billing (always email, see CRITICAL_EVENTS)
   | 'billing.invoice_sent'

@@ -13,6 +13,7 @@ import {
   renderInviteCompanyMemberEmail,
   renderInviteExecutorEmail,
   renderInvoiceSentEmail,
+  renderMentionedEmail,
   renderNewCommentEmail,
   renderOrderAssignedEmail,
   renderOrderCreatedEmail,
@@ -30,6 +31,7 @@ import {
   renderInviteCompanyMemberTelegram,
   renderInviteExecutorTelegram,
   renderInvoiceSentTelegram,
+  renderMentionedTelegram,
   renderNewCommentTelegram,
   renderOrderAssignedTelegram,
   renderOrderCreatedTelegram,
@@ -74,6 +76,7 @@ export type EventPayloadMap = {
   }
   'orders.status_changed': { orderTitle: string; orderUrl: string; newClientStatus: string }
   'chat.new_comment': { orderTitle: string; authorName: string; preview: string; orderUrl: string }
+  'chat.mentioned': { orderTitle: string; authorName: string; preview: string; orderUrl: string }
   'billing.invoice_sent': {
     invoiceNumber: string
     amount: string
@@ -163,6 +166,16 @@ export function renderEmailForEvent(
     case 'chat.new_comment': {
       const v = vars as EventPayloadMap['chat.new_comment']
       return renderNewCommentEmail({
+        orderTitle: v.orderTitle,
+        authorName: v.authorName,
+        preview: v.preview,
+        orderUrl: v.orderUrl,
+        locale,
+      })
+    }
+    case 'chat.mentioned': {
+      const v = vars as EventPayloadMap['chat.mentioned']
+      return renderMentionedEmail({
         orderTitle: v.orderTitle,
         authorName: v.authorName,
         preview: v.preview,
@@ -281,6 +294,16 @@ export function renderTelegramForEvent(
     case 'chat.new_comment': {
       const v = vars as EventPayloadMap['chat.new_comment']
       return renderNewCommentTelegram({
+        orderTitle: v.orderTitle,
+        authorName: v.authorName,
+        preview: v.preview,
+        orderUrl: v.orderUrl,
+        locale,
+      })
+    }
+    case 'chat.mentioned': {
+      const v = vars as EventPayloadMap['chat.mentioned']
+      return renderMentionedTelegram({
         orderTitle: v.orderTitle,
         authorName: v.authorName,
         preview: v.preview,

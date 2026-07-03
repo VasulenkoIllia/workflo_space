@@ -141,6 +141,7 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'orders.approval_decided': NotificationCategory.ORDERS,
   // chat
   'chat.new_comment': NotificationCategory.CHAT,
+  'chat.mentioned': NotificationCategory.CHAT,
   'chat.mention': NotificationCategory.CHAT,
   // billing
   'billing.invoice_sent': NotificationCategory.BILLING,

@@ -1,7 +1,7 @@
 import { runWithAgency, withTenant } from '@workflo/db'
 import { ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { subscribeChat } from '../../services/chatBus.js'
+import { subscribeChat, subscribeReads } from '../../services/chatBus.js'
 import { requireOrderParticipant } from './access.js'
 import { COMMENT_SELECT, serializeComment } from './comments.js'
 
@@ -117,6 +117,14 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
           .catch((err: unknown) => request.log.warn({ err }, 'sse: comment fetch failed'))
       })
 
+      // Read receipts (S10): tiny trusted payload straight off the in-process bus —
+      // no DB re-fetch needed (it carries no message content to leak-guard).
+      const unsubscribeReads = subscribeReads(access.orderId, (event) => {
+        if (closed) return
+        if (event.profileId === request.user.sub) return // own marker is uninteresting
+        write(`event: read\ndata: ${JSON.stringify(event)}\n\n`)
+      })
+
       const heartbeat = setInterval(() => write('event: heartbeat\ndata: {}\n\n'), HEARTBEAT_MS)
       heartbeat.unref()
 
@@ -125,6 +133,7 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         closed = true
         clearInterval(heartbeat)
         unsubscribe()
+        unsubscribeReads()
         releaseSlot()
         liveStreamClosers.delete(shutdownClose)
         res.end()

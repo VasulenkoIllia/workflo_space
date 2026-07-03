@@ -300,10 +300,13 @@ const commentPayload = z.object({
   authorId: z.string(),
   isInternal: z.boolean(),
   preview: z.string(),
+  // S10 @mention: visibility-validated on create (route) — trusted here.
+  mentionIds: z.array(z.string()).optional(),
 })
 
 /** `order.comment_created` → notify thread participants (chat.new_comment: email + telegram + in_app).
- * Internal notes stay team-only; public comments fan out to team + client, never the author. */
+ * Internal notes stay team-only; public comments fan out to team + client, never the author.
+ * S10: mentioned participants get the personal `chat.mentioned` INSTEAD of the generic event. */
 async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventView): Promise<void> {
   const p = commentPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
@@ -315,23 +318,35 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
   })
   const authorName = author?.name ?? 'Учасник'
   const team = await agencyStaffIds(order.agencyId, p.authorId)
-  const recipients = p.isInternal
+  const all = p.isInternal
     ? team
     : [...team, ...(order.companyId ? await clientMemberIds(order.companyId, p.authorId) : [])]
 
+  const mentioned = new Set((p.mentionIds ?? []).filter((id) => id !== p.authorId))
+  const recipients = all.filter((id) => !mentioned.has(id))
+  // Mention targets must still be legit participants (create validated visibility,
+  // but membership may have changed between enqueue and delivery).
+  const mentionRecipients = all.filter((id) => mentioned.has(id))
+
   const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
-  await deliverToRecipients(
-    logger,
-    recipients,
-    'chat.new_comment',
-    {
-      orderTitle: order.title,
-      authorName,
-      preview: p.preview,
-      orderUrl: `${portalUrl}/orders/${p.orderId}`,
-    },
-    { title: 'Новий коментар', body: `${authorName} · «${order.title}»` }
-  )
+  const vars = {
+    orderTitle: order.title,
+    authorName,
+    preview: p.preview,
+    orderUrl: `${portalUrl}/orders/${p.orderId}`,
+  }
+  if (recipients.length) {
+    await deliverToRecipients(logger, recipients, 'chat.new_comment', vars, {
+      title: 'Новий коментар',
+      body: `${authorName} · «${order.title}»`,
+    })
+  }
+  if (mentionRecipients.length) {
+    await deliverToRecipients(logger, mentionRecipients, 'chat.mentioned', vars, {
+      title: 'Вас згадали',
+      body: `${authorName} · «${order.title}»`,
+    })
+  }
 }
 
 const documentSentPayload = z.object({
