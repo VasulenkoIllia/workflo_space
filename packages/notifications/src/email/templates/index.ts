@@ -11,3 +11,12 @@ export {
 } from './orderStatusChanged.js'
 export { renderNewCommentEmail, type NewCommentEmailVars } from './newComment.js'
 export { renderInvoiceSentEmail, type InvoiceSentEmailVars } from './invoiceSent.js'
+export { renderOrderCreatedEmail, type OrderCreatedEmailVars } from './orderCreated.js'
+export { renderOrderAssignedEmail, type OrderAssignedEmailVars } from './orderAssigned.js'
+export {
+  renderApprovalRequestedEmail,
+  type ApprovalRequestedEmailVars,
+} from './approvalRequested.js'
+export { renderApprovalDecidedEmail, type ApprovalDecidedEmailVars } from './approvalDecided.js'
+export { renderDocumentSentEmail, type DocumentSentEmailVars } from './documentSent.js'
+export { renderPaymentReceivedEmail, type PaymentReceivedEmailVars } from './paymentReceived.js'

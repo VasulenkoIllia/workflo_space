@@ -7,22 +7,34 @@ import {
 } from './adapters/TelegramAdapter.js'
 import type { LocaleKey } from './email/i18n.js'
 import {
+  renderApprovalDecidedEmail,
+  renderApprovalRequestedEmail,
+  renderDocumentSentEmail,
   renderInviteCompanyMemberEmail,
   renderInviteExecutorEmail,
   renderInvoiceSentEmail,
   renderNewCommentEmail,
+  renderOrderAssignedEmail,
+  renderOrderCreatedEmail,
   renderOrderStatusChangedEmail,
   renderPasswordResetEmail,
+  renderPaymentReceivedEmail,
   renderWelcomeEmail,
   type RenderedEmail,
 } from './email/templates/index.js'
 import {
+  renderApprovalDecidedTelegram,
+  renderApprovalRequestedTelegram,
+  renderDocumentSentTelegram,
   renderInviteCompanyMemberTelegram,
   renderInviteExecutorTelegram,
   renderInvoiceSentTelegram,
   renderNewCommentTelegram,
+  renderOrderAssignedTelegram,
+  renderOrderCreatedTelegram,
   renderOrderStatusChangedTelegram,
   renderPasswordResetTelegram,
+  renderPaymentReceivedTelegram,
   renderWelcomeTelegram,
   type RenderedTelegram,
 } from './telegram/templates/index.js'
@@ -65,6 +77,21 @@ export type EventPayloadMap = {
     dueDate: string
     invoiceUrl: string
   }
+  'orders.created': { orderTitle: string; orderUrl: string }
+  'orders.assigned': { orderTitle: string; orderUrl: string }
+  'orders.approval_requested': { orderTitle: string; orderUrl: string }
+  'orders.approval_decided': {
+    orderTitle: string
+    orderUrl: string
+    approved: boolean
+    comment?: string | null
+  }
+  'documents.completion_act_ready': {
+    documentLabel: string
+    documentNumber: string
+    documentUrl: string
+  }
+  'billing.invoice_paid': { amount: string; method?: string | null; portalUrl: string }
 }
 
 export type DispatchResult =
@@ -145,6 +172,50 @@ export function renderEmailForEvent(
         locale,
       })
     }
+    case 'orders.created': {
+      const v = vars as EventPayloadMap['orders.created']
+      return renderOrderCreatedEmail({ orderTitle: v.orderTitle, orderUrl: v.orderUrl, locale })
+    }
+    case 'orders.assigned': {
+      const v = vars as EventPayloadMap['orders.assigned']
+      return renderOrderAssignedEmail({ orderTitle: v.orderTitle, orderUrl: v.orderUrl, locale })
+    }
+    case 'orders.approval_requested': {
+      const v = vars as EventPayloadMap['orders.approval_requested']
+      return renderApprovalRequestedEmail({
+        orderTitle: v.orderTitle,
+        orderUrl: v.orderUrl,
+        locale,
+      })
+    }
+    case 'orders.approval_decided': {
+      const v = vars as EventPayloadMap['orders.approval_decided']
+      return renderApprovalDecidedEmail({
+        orderTitle: v.orderTitle,
+        orderUrl: v.orderUrl,
+        approved: v.approved,
+        comment: v.comment,
+        locale,
+      })
+    }
+    case 'documents.completion_act_ready': {
+      const v = vars as EventPayloadMap['documents.completion_act_ready']
+      return renderDocumentSentEmail({
+        documentLabel: v.documentLabel,
+        documentNumber: v.documentNumber,
+        documentUrl: v.documentUrl,
+        locale,
+      })
+    }
+    case 'billing.invoice_paid': {
+      const v = vars as EventPayloadMap['billing.invoice_paid']
+      return renderPaymentReceivedEmail({
+        amount: v.amount,
+        method: v.method,
+        portalUrl: v.portalUrl,
+        locale,
+      })
+    }
     default:
       return null
   }
@@ -211,6 +282,50 @@ export function renderTelegramForEvent(
         amount: v.amount,
         dueDate: v.dueDate,
         invoiceUrl: v.invoiceUrl,
+        locale,
+      })
+    }
+    case 'orders.created': {
+      const v = vars as EventPayloadMap['orders.created']
+      return renderOrderCreatedTelegram({ orderTitle: v.orderTitle, orderUrl: v.orderUrl, locale })
+    }
+    case 'orders.assigned': {
+      const v = vars as EventPayloadMap['orders.assigned']
+      return renderOrderAssignedTelegram({ orderTitle: v.orderTitle, orderUrl: v.orderUrl, locale })
+    }
+    case 'orders.approval_requested': {
+      const v = vars as EventPayloadMap['orders.approval_requested']
+      return renderApprovalRequestedTelegram({
+        orderTitle: v.orderTitle,
+        orderUrl: v.orderUrl,
+        locale,
+      })
+    }
+    case 'orders.approval_decided': {
+      const v = vars as EventPayloadMap['orders.approval_decided']
+      return renderApprovalDecidedTelegram({
+        orderTitle: v.orderTitle,
+        orderUrl: v.orderUrl,
+        approved: v.approved,
+        comment: v.comment,
+        locale,
+      })
+    }
+    case 'documents.completion_act_ready': {
+      const v = vars as EventPayloadMap['documents.completion_act_ready']
+      return renderDocumentSentTelegram({
+        documentLabel: v.documentLabel,
+        documentNumber: v.documentNumber,
+        documentUrl: v.documentUrl,
+        locale,
+      })
+    }
+    case 'billing.invoice_paid': {
+      const v = vars as EventPayloadMap['billing.invoice_paid']
+      return renderPaymentReceivedTelegram({
+        amount: v.amount,
+        method: v.method,
+        portalUrl: v.portalUrl,
         locale,
       })
     }

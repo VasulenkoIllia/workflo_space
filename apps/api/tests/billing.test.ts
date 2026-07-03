@@ -20,6 +20,8 @@ const executeRaw = vi.fn()
 // AR-11: a no-order confirm now refreshes Company.moneyBalance in the same tx.
 const companyUpdate = vi.fn()
 const walletTxAggregate = vi.fn()
+// email-блок 03.07: createPayment ставить квитанцію клієнту в outbox у тій самій tx.
+const outboxCreate = vi.fn()
 
 let orderLockRows: unknown[] = []
 let companyLockRows: unknown[] = []
@@ -66,6 +68,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     project: { findMany: projectFindMany },
     paymentSettings: { findUnique: paymentSettingsFindUnique, upsert: paymentSettingsUpsert },
     auditLog: { create: auditLogCreate },
+    outboxEvent: { create: outboxCreate },
     $queryRaw: queryRaw,
     $executeRaw: executeRaw,
   }

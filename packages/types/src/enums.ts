@@ -334,6 +334,8 @@ export type NotificationEvent =
   | 'orders.due_soon'
   | 'orders.overdue'
   | 'orders.specification_ready'
+  | 'orders.approval_requested'
+  | 'orders.approval_decided'
   // chat
   | 'chat.new_comment'
   | 'chat.mention'

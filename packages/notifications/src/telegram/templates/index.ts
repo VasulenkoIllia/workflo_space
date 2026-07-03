@@ -11,7 +11,11 @@ export interface RenderedTelegram {
 // AUTH category
 // ────────────────────────────────────────────────────────────────────────────
 
-export function renderWelcomeTelegram(opts: { name: string; portalUrl: string; locale?: LocaleKey }): RenderedTelegram {
+export function renderWelcomeTelegram(opts: {
+  name: string
+  portalUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
   const greet = opts.name ? `👋 ${bold(`Привіт, ${opts.name}!`)}` : `👋 ${bold('Привіт!')}`
   const body =
     opts.locale === 'en'
@@ -45,7 +49,10 @@ export function renderInviteCompanyMemberTelegram(opts: {
   return { text, parseMode: 'HTML' }
 }
 
-export function renderPasswordResetTelegram(opts: { resetUrl: string; locale?: LocaleKey }): RenderedTelegram {
+export function renderPasswordResetTelegram(opts: {
+  resetUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
   // Per ADR-003: password_reset is also email-critical. Telegram message is
   // an ADDITIONAL channel if user has it enabled. We include the reset link
   // here for convenience but the email is canonical.
@@ -63,7 +70,7 @@ export function renderPasswordResetTelegram(opts: { resetUrl: string; locale?: L
 export function renderOrderStatusChangedTelegram(opts: {
   orderTitle: string
   orderUrl: string
-  newClientStatus: string  // already-translated label like "У роботі"
+  newClientStatus: string // already-translated label like "У роботі"
   locale?: LocaleKey
 }): RenderedTelegram {
   const text =
@@ -80,7 +87,7 @@ export function renderOrderStatusChangedTelegram(opts: {
 export function renderNewCommentTelegram(opts: {
   orderTitle: string
   authorName: string
-  preview: string         // first 200 chars of comment
+  preview: string // first 200 chars of comment
   orderUrl: string
   locale?: LocaleKey
 }): RenderedTelegram {
@@ -98,8 +105,8 @@ export function renderNewCommentTelegram(opts: {
 
 export function renderInvoiceSentTelegram(opts: {
   invoiceNumber: string
-  amount: string          // pre-formatted: "$ 1,200.00" or "₴ 49 000.00"
-  dueDate: string         // pre-formatted: "2026-04-25"
+  amount: string // pre-formatted: "$ 1,200.00" or "₴ 49 000.00"
+  dueDate: string // pre-formatted: "2026-04-25"
   invoiceUrl: string
   locale?: LocaleKey
 }): RenderedTelegram {
@@ -107,5 +114,94 @@ export function renderInvoiceSentTelegram(opts: {
     opts.locale === 'en'
       ? `💳 ${bold(`Invoice #${opts.invoiceNumber}`)}\nAmount: ${bold(opts.amount)} (due ${escapeHtml(opts.dueDate)})\n${link('View invoice', opts.invoiceUrl)}`
       : `💳 ${bold(`Рахунок #${opts.invoiceNumber}`)}\nСума: ${bold(opts.amount)} (до ${escapeHtml(opts.dueDate)})\n${link('Переглянути рахунок', opts.invoiceUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
+export function renderOrderCreatedTelegram(opts: {
+  orderTitle: string
+  orderUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const text =
+    opts.locale === 'en'
+      ? `🆕 ${bold('New order')}\n${escapeHtml(opts.orderTitle)}\n${link('Open order', opts.orderUrl)}`
+      : `🆕 ${bold('Нове замовлення')}\n${escapeHtml(opts.orderTitle)}\n${link('Відкрити замовлення', opts.orderUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
+export function renderOrderAssignedTelegram(opts: {
+  orderTitle: string
+  orderUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const text =
+    opts.locale === 'en'
+      ? `👤 ${bold('You were assigned')}\n${escapeHtml(opts.orderTitle)}\n${link('Open order', opts.orderUrl)}`
+      : `👤 ${bold('Вас призначено виконавцем')}\n${escapeHtml(opts.orderTitle)}\n${link('Відкрити замовлення', opts.orderUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
+export function renderApprovalRequestedTelegram(opts: {
+  orderTitle: string
+  orderUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const text =
+    opts.locale === 'en'
+      ? `✅ ${bold('Estimate awaits your approval')}\n${escapeHtml(opts.orderTitle)}\n${link('Approve estimate', opts.orderUrl)}`
+      : `✅ ${bold('Оцінка чекає на погодження')}\n${escapeHtml(opts.orderTitle)}\n${link('Погодити оцінку', opts.orderUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
+export function renderApprovalDecidedTelegram(opts: {
+  orderTitle: string
+  orderUrl: string
+  approved: boolean
+  comment?: string | null
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const head =
+    opts.locale === 'en'
+      ? opts.approved
+        ? `👍 ${bold('Estimate approved')}`
+        : `✍️ ${bold('Client requested changes')}`
+      : opts.approved
+        ? `👍 ${bold('Оцінку погоджено')}`
+        : `✍️ ${bold('Клієнт запросив правки')}`
+  const comment = !opts.approved && opts.comment ? `\n${italic(escapeHtml(opts.comment))}` : ''
+  const cta =
+    opts.locale === 'en'
+      ? link('Open order', opts.orderUrl)
+      : link('Відкрити замовлення', opts.orderUrl)
+  return {
+    text: `${head}\n${escapeHtml(opts.orderTitle)}${comment}\n${cta}`,
+    parseMode: 'HTML',
+  }
+}
+
+export function renderDocumentSentTelegram(opts: {
+  documentLabel: string
+  documentNumber: string
+  documentUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const text =
+    opts.locale === 'en'
+      ? `📄 ${bold('New document')}\n${escapeHtml(opts.documentLabel)} ${escapeHtml(opts.documentNumber)}\n${link('View document', opts.documentUrl)}`
+      : `📄 ${bold('Новий документ')}\n${escapeHtml(opts.documentLabel)} ${escapeHtml(opts.documentNumber)}\n${link('Переглянути документ', opts.documentUrl)}`
+  return { text, parseMode: 'HTML' }
+}
+
+export function renderPaymentReceivedTelegram(opts: {
+  amount: string
+  method?: string | null
+  portalUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  const method = opts.method ? ` · ${escapeHtml(opts.method)}` : ''
+  const text =
+    opts.locale === 'en'
+      ? `💸 ${bold('Payment received')}\n${escapeHtml(opts.amount)}${method}\n${link('Open portal', opts.portalUrl)}`
+      : `💸 ${bold('Оплату отримано')}\n${escapeHtml(opts.amount)}${method}\n${link('Відкрити кабінет', opts.portalUrl)}`
   return { text, parseMode: 'HTML' }
 }

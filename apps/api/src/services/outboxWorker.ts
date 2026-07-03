@@ -213,14 +213,10 @@ async function handleApprovalRequested(
   await deliverToRecipients(
     logger,
     await clientMemberIds(order.companyId, p.actorId),
-    'orders.status_changed',
-    // Full status vars so the email template (S6-07) renders correctly: at this point the
-    // order is client-status `pending_approval` (the estimate awaits the client's decision).
-    {
-      orderTitle: order.title,
-      orderUrl: `${portalUrl}/orders/${p.orderId}`,
-      newClientStatus: 'pending_approval',
-    },
+    // Виділена подія (S6-07 → email-блок 03.07): лист із CTA «Погодити оцінку», а не
+    // генеричний status_changed.
+    'orders.approval_requested',
+    { orderTitle: order.title, orderUrl: `${portalUrl}/orders/${p.orderId}` },
     {
       title: 'Оцінку надіслано на погодження',
       body: `«${order.title}» — перегляньте й погодьте оцінку`,
@@ -237,17 +233,16 @@ async function handleApprovalDecided(
   const p = orderRefPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
   if (!order) return
-  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   await deliverToRecipients(
     logger,
     await agencyStaffIds(order.agencyId, p.actorId),
-    'orders.status_changed',
-    // Either decision moves the order to client-status `in_progress` (approved → work starts;
-    // rejected → back to estimating, which still maps to in_progress for the client).
+    'orders.approval_decided',
     {
       orderTitle: order.title,
-      orderUrl: `${portalUrl}/orders/${p.orderId}`,
-      newClientStatus: 'in_progress',
+      orderUrl: `${workspaceUrl}/orders/${p.orderId}`,
+      approved,
+      comment: p.comment ?? null,
     },
     approved
       ? { title: 'Оцінку погоджено', body: `«${order.title}» — клієнт погодив, можна стартувати` }
@@ -266,11 +261,12 @@ async function handleOrderCreated(
   const p = orderRefPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
   if (!order) return
+  const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   await deliverToRecipients(
     logger,
     await agencyStaffIds(order.agencyId, p.actorId),
     'orders.created',
-    { orderTitle: order.title },
+    { orderTitle: order.title, orderUrl: `${workspaceUrl}/orders/${p.orderId}` },
     { title: 'Нове замовлення', body: `«${order.title}» — нове замовлення` }
   )
 }
@@ -289,11 +285,12 @@ async function handleOrderAssigned(
   const p = assignedPayload.parse(event.payload)
   const order = await loadOrderForEvent(logger, event, p.orderId)
   if (!order) return
+  const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   await deliverToRecipients(
     logger,
     [p.executorId].filter((id) => id !== p.actorId),
     'orders.assigned',
-    { orderTitle: order.title },
+    { orderTitle: order.title, orderUrl: `${workspaceUrl}/orders/${p.orderId}` },
     { title: 'Вас призначено виконавцем', body: `«${order.title}» — нове призначення` }
   )
 }
@@ -368,11 +365,52 @@ async function handleDocumentSent(
     // (in_app only), so use document-shaped var names rather than misleading invoice* keys.
     isInvoice
       ? { invoiceNumber: p.number, amount: p.amount, dueDate: p.dueDate, invoiceUrl: url }
-      : { documentNumber: p.number, documentType: p.docType, documentUrl: url },
+      : {
+          documentLabel: DOC_LABELS[p.docType] ?? 'Документ',
+          documentNumber: p.number,
+          documentUrl: url,
+        },
     {
       title: isInvoice ? 'Виставлено рахунок' : 'Новий документ',
       body: `${p.number} — надіслано`,
     }
+  )
+}
+
+const DOC_LABELS: Record<string, string> = {
+  invoice: 'Рахунок',
+  advance_invoice: 'Аванс-рахунок',
+  completion_act: 'Акт виконаних робіт',
+  specification: 'Специфікація',
+  reconciliation_act: 'Акт звірки',
+  contract: 'Договір',
+}
+
+const paymentConfirmedPayload = z.object({
+  companyId: z.string(),
+  amount: z.string(),
+  currency: z.string(),
+  method: z.string().nullable(),
+  actorId: z.string(),
+})
+
+/** `payment.confirmed` → квитанція клієнту «оплату отримано» (billing.invoice_paid). */
+async function handlePaymentConfirmed(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = paymentConfirmedPayload.parse(event.payload)
+  const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
+  await deliverToRecipients(
+    logger,
+    await clientMemberIds(p.companyId, p.actorId),
+    'billing.invoice_paid',
+    {
+      amount: `${p.amount} ${p.currency}`,
+      method: p.method,
+      portalUrl: `${portalUrl}/billing`,
+    },
+    { title: 'Оплату отримано', body: `${p.amount} ${p.currency} — дякуємо за оплату` }
   )
 }
 
@@ -403,6 +441,9 @@ export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
         return
       case 'order.approval_rejected':
         await handleApprovalDecided(logger, event, false)
+        return
+      case 'payment.confirmed':
+        await handlePaymentConfirmed(logger, event)
         return
       case 'charge.approval_approved':
       case 'charge.approval_rejected':

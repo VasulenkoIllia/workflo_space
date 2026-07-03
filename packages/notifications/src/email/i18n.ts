@@ -77,6 +77,51 @@ const uk: Dictionary = {
   'invoiceSent.body':
     'Рахунок {invoiceNumber} на суму {amount}. Будь ласка, оплатіть до {dueDate}.',
   'invoiceSent.cta': 'Переглянути рахунок',
+
+  // order created (team)
+  'orderCreated.subject': 'Нове замовлення: {orderTitle}',
+  'orderCreated.h1': 'Нове замовлення',
+  'orderCreated.body': '«{orderTitle}» — нове замовлення чекає на тріаж і призначення виконавця.',
+  'orderCreated.cta': 'Відкрити замовлення',
+
+  // order assigned (executor)
+  'orderAssigned.subject': 'Вам призначено замовлення',
+  'orderAssigned.h1': 'Нове призначення',
+  'orderAssigned.body':
+    'Вас призначено виконавцем замовлення «{orderTitle}». Перегляньте деталі та заплануйте роботу.',
+  'orderAssigned.cta': 'Відкрити замовлення',
+
+  // approval requested (client, 02-А)
+  'approvalRequested.subject': 'Погодьте оцінку — {orderTitle}',
+  'approvalRequested.h1': 'Оцінка чекає на погодження',
+  'approvalRequested.body':
+    'Команда підготувала оцінку по замовленню «{orderTitle}». Перегляньте її та погодьте, щоб ми могли розпочати роботу.',
+  'approvalRequested.cta': 'Погодити оцінку',
+
+  // approval decided (team)
+  'approvalDecided.subject_ok': 'Оцінку погоджено — {orderTitle}',
+  'approvalDecided.subject_no': 'Клієнт запросив правки — {orderTitle}',
+  'approvalDecided.h1_ok': 'Клієнт погодив оцінку',
+  'approvalDecided.h1_no': 'Клієнт запросив правки',
+  'approvalDecided.body_ok': 'Оцінку по «{orderTitle}» погоджено — можна стартувати роботу.',
+  'approvalDecided.body_no': 'Клієнт повернув оцінку по «{orderTitle}» на доопрацювання.',
+  'approvalDecided.comment': 'Коментар клієнта: «{comment}»',
+  'approvalDecided.cta': 'Відкрити замовлення',
+
+  // document sent (client, non-invoice)
+  'documentSent.subject': '{documentLabel} {documentNumber} — новий документ',
+  'documentSent.h1': 'Новий документ',
+  'documentSent.body':
+    'Ми надіслали вам документ: {documentLabel} {documentNumber}. Він доступний у вашому кабінеті.',
+  'documentSent.cta': 'Переглянути документ',
+
+  // payment received (client)
+  'paymentReceived.subject': 'Оплату отримано — {amount}',
+  'paymentReceived.h1': 'Дякуємо за оплату',
+  'paymentReceived.body':
+    'Ми отримали ваш платіж на {amount}. Баланс і рахунки у кабінеті оновлено.',
+  'paymentReceived.body_method': 'Спосіб оплати: {method}.',
+  'paymentReceived.cta': 'Відкрити кабінет',
 }
 
 const en: Dictionary = {
@@ -143,6 +188,45 @@ const en: Dictionary = {
   'invoiceSent.h1': 'Invoice issued',
   'invoiceSent.body': 'Invoice {invoiceNumber} for {amount}. Please pay by {dueDate}.',
   'invoiceSent.cta': 'View invoice',
+
+  'orderCreated.subject': 'New order: {orderTitle}',
+  'orderCreated.h1': 'New order',
+  'orderCreated.body': '"{orderTitle}" — a new order is waiting for triage and an assignee.',
+  'orderCreated.cta': 'Open order',
+
+  'orderAssigned.subject': 'You have been assigned an order',
+  'orderAssigned.h1': 'New assignment',
+  'orderAssigned.body':
+    'You were assigned to "{orderTitle}". Review the details and plan the work.',
+  'orderAssigned.cta': 'Open order',
+
+  'approvalRequested.subject': 'Approve the estimate — {orderTitle}',
+  'approvalRequested.h1': 'Estimate awaits your approval',
+  'approvalRequested.body':
+    'The team prepared an estimate for "{orderTitle}". Review and approve it so we can start.',
+  'approvalRequested.cta': 'Approve estimate',
+
+  'approvalDecided.subject_ok': 'Estimate approved — {orderTitle}',
+  'approvalDecided.subject_no': 'Client requested changes — {orderTitle}',
+  'approvalDecided.h1_ok': 'Client approved the estimate',
+  'approvalDecided.h1_no': 'Client requested changes',
+  'approvalDecided.body_ok': 'The estimate for "{orderTitle}" was approved — work can start.',
+  'approvalDecided.body_no': 'The client returned the estimate for "{orderTitle}" for revision.',
+  'approvalDecided.comment': 'Client comment: "{comment}"',
+  'approvalDecided.cta': 'Open order',
+
+  'documentSent.subject': '{documentLabel} {documentNumber} — new document',
+  'documentSent.h1': 'New document',
+  'documentSent.body':
+    'We sent you a document: {documentLabel} {documentNumber}. It is available in your portal.',
+  'documentSent.cta': 'View document',
+
+  'paymentReceived.subject': 'Payment received — {amount}',
+  'paymentReceived.h1': 'Thank you for your payment',
+  'paymentReceived.body':
+    'We received your payment of {amount}. Your balance and invoices are updated.',
+  'paymentReceived.body_method': 'Payment method: {method}.',
+  'paymentReceived.cta': 'Open portal',
 }
 
 const DICTIONARIES: Record<LocaleKey, Dictionary> = { uk, en }

@@ -7,6 +7,12 @@ import {
   renderOrderStatusChangedEmail,
   renderPasswordResetEmail,
   renderWelcomeEmail,
+  renderOrderCreatedEmail,
+  renderOrderAssignedEmail,
+  renderApprovalRequestedEmail,
+  renderApprovalDecidedEmail,
+  renderDocumentSentEmail,
+  renderPaymentReceivedEmail,
 } from '../src/email/templates/index.js'
 import {
   renderInviteCompanyMemberTelegram,
@@ -16,6 +22,8 @@ import {
   renderOrderStatusChangedTelegram,
   renderPasswordResetTelegram,
   renderWelcomeTelegram,
+  renderApprovalRequestedTelegram,
+  renderPaymentReceivedTelegram,
 } from '../src/telegram/templates/index.js'
 
 describe('email templates', () => {
@@ -215,5 +223,80 @@ describe('telegram templates', () => {
       acceptUrl: 'https://accept',
     })
     expect(r.text).toContain('Acme')
+  })
+})
+
+describe('email templates — блок 03.07 (події без листів)', () => {
+  it('orderCreated: назва + лінк у workspace', () => {
+    const r = renderOrderCreatedEmail({ orderTitle: 'CRM 1C', orderUrl: 'https://w/orders/1' })
+    expect(r.subject).toContain('CRM 1C')
+    expect(r.html).toContain('https://w/orders/1')
+    expect(r.html).toContain('тріаж')
+  })
+
+  it('orderAssigned: виконавцю з CTA', () => {
+    const r = renderOrderAssignedEmail({ orderTitle: 'Бот', orderUrl: 'https://w/orders/2' })
+    expect(r.subject).toBe('Вам призначено замовлення')
+    expect(r.html).toContain('Бот')
+    expect(r.html).toContain('https://w/orders/2')
+  })
+
+  it('approvalRequested: CTA «Погодити оцінку» веде у портал', () => {
+    const r = renderApprovalRequestedEmail({ orderTitle: 'Сайт', orderUrl: 'https://p/orders/3' })
+    expect(r.subject).toContain('Погодьте оцінку')
+    expect(r.html).toContain('Погодити оцінку')
+    expect(r.html).toContain('https://p/orders/3')
+  })
+
+  it('approvalDecided: approved-варіант', () => {
+    const r = renderApprovalDecidedEmail({
+      orderTitle: 'Сайт',
+      orderUrl: 'https://w/orders/3',
+      approved: true,
+    })
+    expect(r.subject).toContain('погоджено')
+    expect(r.html).not.toContain('Коментар клієнта')
+  })
+
+  it('approvalDecided: rejected з коментарем клієнта', () => {
+    const r = renderApprovalDecidedEmail({
+      orderTitle: 'Сайт',
+      orderUrl: 'https://w/orders/3',
+      approved: false,
+      comment: 'Дорого',
+    })
+    expect(r.subject).toContain('правки')
+    expect(r.html).toContain('Дорого')
+  })
+
+  it('documentSent: лейбл + номер + CTA', () => {
+    const r = renderDocumentSentEmail({
+      documentLabel: 'Акт виконаних робіт',
+      documentNumber: 'ACT-2026-000001',
+      documentUrl: 'https://p/orders/1',
+    })
+    expect(r.subject).toContain('ACT-2026-000001')
+    expect(r.html).toContain('Акт виконаних робіт')
+  })
+
+  it('paymentReceived: сума + метод + en-варіант', () => {
+    const uk = renderPaymentReceivedEmail({
+      amount: '1 200,00 USD',
+      method: 'bank_transfer',
+      portalUrl: 'https://p/billing',
+    })
+    expect(uk.subject).toContain('1 200,00 USD')
+    expect(uk.html).toContain('bank_transfer')
+    const en = renderPaymentReceivedEmail({ amount: '5 USD', portalUrl: 'https://p', locale: 'en' })
+    expect(en.subject).toBe('Payment received — 5 USD')
+    expect(en.html).not.toContain('Спосіб оплати')
+  })
+
+  it('telegram: approvalRequested + paymentReceived рендеряться', () => {
+    const a = renderApprovalRequestedTelegram({ orderTitle: 'X<b>', orderUrl: 'https://p' })
+    expect(a.text).toContain('Погодити оцінку')
+    expect(a.text).toContain('&lt;b&gt;') // escapeHtml
+    const b = renderPaymentReceivedTelegram({ amount: '5 USD', portalUrl: 'https://p' })
+    expect(b.text).toContain('Оплату отримано')
   })
 })

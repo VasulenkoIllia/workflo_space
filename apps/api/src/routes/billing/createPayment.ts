@@ -6,6 +6,7 @@ import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { hashRequest, withIdempotency } from '../../services/idempotency.js'
+import { enqueueOutbox } from '../../services/outbox.js'
 import { confirmManualPayment } from '../../services/payments.js'
 
 const ENDPOINT = 'POST /workspace/billing/payments'
@@ -85,6 +86,19 @@ const createPaymentRoute: FastifyPluginAsync = (fastify) => {
               note: input.note ?? null,
               confirmedBy: user.sub,
               idempotencyKey,
+            })
+            // Квитанція клієнту (billing.invoice_paid, email-блок 03.07). Усередині
+            // idempotency-колбека — replay НЕ шле другого листа.
+            await enqueueOutbox(tx, {
+              type: 'payment.confirmed',
+              payload: {
+                companyId: input.companyId,
+                amount: String(input.amount),
+                currency: input.currency,
+                method: input.paymentMethod ?? null,
+                actorId: user.sub,
+              },
+              agencyId,
             })
             return { status: 201, body: { success: true, data: result } }
           }

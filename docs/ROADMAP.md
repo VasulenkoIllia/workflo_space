@@ -126,6 +126,18 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Email-шаблони: всі живі події тепер з листами (08, email-блок) — ЗАКРИТО (2026-07-03).**
+  +6 пар шаблонів (email+telegram, uk/en, stone+lime): **order_created** (команді, CTA у
+  workspace) · **order_assigned** (виконавцю) · **approval_requested** (клієнту, CTA «Погодити
+  оцінку» — раніше їхав генеричним status*changed) · **approval_decided** (команді,
+  з коментарем клієнта при правках) · **document_sent** (акт/спека/звірка/договір з лейблом
+  і номером) · **payment_received** (квитанція клієнту — **нова подія `payment.confirmed`**
+  з createPayment, усередині idempotency: replay не шле дубля). Union подій += approval*
+  requested/decided (+EVENT_TO_CATEGORY). Гейт: +9 тестів (notifications 29, api 638).
+  **Верифіковано наскрізно через Mailpit**: 3 живі листи доставлені реальним пайплайном
+  (API→outbox→worker→SMTP), бренд-палітра і CTA в HTML підтверджені. Лишок дизайн-набору
+  (verify/otp/digest/deadline…) — флоу ще не існують (S9/S12), чесно відкладено.
+
 - **Блок документів: повний UA-комплект 6 типів (06) — ЗАКРИТО (2026-07-03).** Раніше всі
   типи рендерились ОДНИМ generic-шаблоном (одна позиція + сума). Тепер пер-типові рендерери
   в `packages/templates` за каноном documents-screens.jsx: **рахунок/аванс** (позиції з
