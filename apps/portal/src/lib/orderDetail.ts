@@ -47,6 +47,15 @@ export interface ChatComment {
   attachments?: CommentAttachment[]
   /** S10 @mention: profile-ids згаданих (виділення + «вас згадали»). */
   mentions?: string[]
+  /** S10 реакції: агрегат {emoji, count, mine, names} (канон 03-C). */
+  reactions?: ReactionAgg[]
+}
+
+export interface ReactionAgg {
+  emoji: string
+  count: number
+  mine: boolean
+  names: string[]
 }
 
 export interface ReadMarker {
@@ -138,6 +147,60 @@ export interface PostCommentInput {
   replyToId?: string
   fileIds?: string[]
   mentionIds?: string[]
+}
+
+/** PATCH — редагування власного повідомлення (15хв; owner — будь-коли). */
+export function useUpdateComment(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { commentId: string; content: string }) =>
+      api
+        .patch<{ comment: ChatComment }>(`/orders/${id}/comments/${input.commentId}`, {
+          content: input.content,
+        })
+        .then((r) => r.comment),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+  })
+}
+
+/** DELETE — soft-delete (автор/owner); у списку повідомлення зникає. */
+export function useDeleteComment(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (commentId: string) =>
+      api.delete<{ deleted: true }>(`/orders/${id}/comments/${commentId}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+  })
+}
+
+/** Тогл реакції: mine → DELETE, інакше POST (канон 03-C). */
+export function useToggleReaction(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { commentId: string; emoji: string; mine: boolean }) =>
+      input.mine
+        ? api.delete(`/orders/${id}/comments/${input.commentId}/reactions`, {
+            body: { emoji: input.emoji },
+          })
+        : api.post(`/orders/${id}/comments/${input.commentId}/reactions`, {
+            emoji: input.emoji,
+          }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.comments(id) }),
+  })
+}
+
+// Typing (03-Б): пінг не частіше ніж раз на 2.5с, fire-and-forget.
+const typingLastSent = new Map<string, number>()
+export function sendTyping(id: string, internal = false): void {
+  const now = Date.now()
+  if (now - (typingLastSent.get(id) ?? 0) < 2500) return
+  typingLastSent.set(id, now)
+  void api.post(`/orders/${id}/comments/typing`, { internal }).catch(() => undefined)
+}
+
+export interface TypingMarker {
+  name: string
+  until: number
 }
 
 /** Хто може бути @-згаданим у чаті цього замовлення (S10). */
@@ -241,6 +304,36 @@ export function useCommentStream(id: string) {
         try {
           incoming = JSON.parse(dataStr)
         } catch {
+          return
+        }
+        // Edit/delete/reactions (S10): замінити/прибрати повідомлення в кеші.
+        if (event === 'comment_updated') {
+          if (!isChatComment(incoming)) return
+          qc.setQueryData<CommentsResult>(orderKeys.comments(id), (old) => {
+            if (!old) return old
+            return {
+              ...old,
+              comments: old.comments.map((c) => (c.id === incoming.id ? incoming : c)),
+            }
+          })
+          return
+        }
+        if (event === 'comment_deleted') {
+          const d = incoming as { id?: string }
+          if (typeof d?.id !== 'string') return
+          qc.setQueryData<CommentsResult>(orderKeys.comments(id), (old) =>
+            old ? { ...old, comments: old.comments.filter((c) => c.id !== d.id) } : old
+          )
+          return
+        }
+        // Typing (03-Б): ефемерний маркер у кеші; ChatTab сам гасить по until.
+        if (event === 'typing') {
+          const t = incoming as { name?: string }
+          if (typeof t?.name !== 'string') return
+          qc.setQueryData<TypingMarker>(['order-typing', id], {
+            name: t.name,
+            until: Date.now() + 4000,
+          })
           return
         }
         // Read receipts (S10): оновити маркер читача → живі ✓✓.

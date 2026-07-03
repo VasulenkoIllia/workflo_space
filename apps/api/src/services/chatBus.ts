@@ -61,3 +61,53 @@ export function subscribeReads(
 export function publishReadEvent(event: ChatReadEvent): void {
   emitter.emit(readChannel(event.orderId), event)
 }
+
+// ── Message changes: edit / delete / reaction (S10, канон 03-B/C) ─────────────
+// In-process (routes publish directly): the stream re-fetches the row from DB
+// truth on `updated`, so leak-guards stay authoritative exactly like inserts.
+
+export interface ChatChangeEvent {
+  orderId: string
+  commentId: string
+  kind: 'updated' | 'deleted'
+}
+
+const changeChannel = (orderId: string) => `order:${orderId}:changes`
+
+export function subscribeChanges(
+  orderId: string,
+  handler: (event: ChatChangeEvent) => void
+): () => void {
+  const ch = changeChannel(orderId)
+  emitter.on(ch, handler)
+  return () => emitter.off(ch, handler)
+}
+
+export function publishChangeEvent(event: ChatChangeEvent): void {
+  emitter.emit(changeChannel(event.orderId), event)
+}
+
+// ── Typing indicator (S10, 03-Б): ephemeral, never touches the DB ─────────────
+
+export interface ChatTypingEvent {
+  orderId: string
+  profileId: string
+  name: string
+  /** Team is drafting an internal note → the stream hides this from clients. */
+  internal: boolean
+}
+
+const typingChannel = (orderId: string) => `order:${orderId}:typing`
+
+export function subscribeTyping(
+  orderId: string,
+  handler: (event: ChatTypingEvent) => void
+): () => void {
+  const ch = typingChannel(orderId)
+  emitter.on(ch, handler)
+  return () => emitter.off(ch, handler)
+}
+
+export function publishTypingEvent(event: ChatTypingEvent): void {
+  emitter.emit(typingChannel(event.orderId), event)
+}

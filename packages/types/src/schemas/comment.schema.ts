@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { REACTION_EMOJIS } from '../constants.js'
 
 /**
  * GET /orders/:id/comments — cursor pagination. `before` is an ISO timestamp;
@@ -31,3 +32,13 @@ export const createCommentSchema = z
     message: 'Повідомлення порожнє',
     path: ['content'],
   })
+
+/** PATCH /orders/:id/comments/:commentId — редагування власного повідомлення (канон: 15хв, owner — будь-коли). */
+export const updateCommentSchema = z.object({
+  content: z.string().trim().min(1, 'Повідомлення порожнє').max(10_000),
+})
+
+/** POST/DELETE .../reactions — емодзі строго з дозволеного набору (REACTION_EMOJIS). */
+export const reactionSchema = z.object({
+  emoji: z.enum(REACTION_EMOJIS),
+})

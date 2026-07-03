@@ -37,6 +37,10 @@ export const COMMENT_SELECT = {
   },
   // S10 @mention: ids згаданих учасників (валідовані на create).
   mentionIds: true,
+  // S10 реакції (канон 03-C): агрегуються серіалізатором у {emoji, count, mine, names}.
+  reactions: {
+    select: { emoji: true, profileId: true, profile: { select: { name: true } } },
+  },
 } as const
 
 type RawComment = {
@@ -57,11 +61,17 @@ type RawComment = {
   } | null
   attachments?: { id: string; filename: string; mimeType: string; sizeBytes: number }[]
   mentionIds?: string[]
+  reactions?: { emoji: string; profileId: string; profile?: { name: string } | null }[]
 }
 
 /** Strip the raw memberships and expose only `author.kind` (team if the author is an agency
  * member of this order's agency, else client). Never leak which agencies a person belongs to. */
-export function serializeComment(c: RawComment, agencyId: string, viewerIsInternal = true) {
+export function serializeComment(
+  c: RawComment,
+  agencyId: string,
+  viewerIsInternal = true,
+  viewerId?: string
+) {
   const author = c.author
   const kind = (author?.agencyMemberships ?? []).some((m) => m.agencyId === agencyId)
     ? 'team'
@@ -88,7 +98,24 @@ export function serializeComment(c: RawComment, agencyId: string, viewerIsIntern
     replyTo,
     attachments: c.attachments ?? [],
     mentions: c.mentionIds ?? [],
+    reactions: aggregateReactions(c.reactions ?? [], viewerId),
   }
+}
+
+/** {emoji,count,mine,names} — стабільний порядок за REACTION_EMOJIS-послідовністю появи. */
+function aggregateReactions(
+  rows: NonNullable<RawComment['reactions']>,
+  viewerId?: string
+): { emoji: string; count: number; mine: boolean; names: string[] }[] {
+  const byEmoji = new Map<string, { count: number; mine: boolean; names: string[] }>()
+  for (const r of rows) {
+    const agg = byEmoji.get(r.emoji) ?? { count: 0, mine: false, names: [] }
+    agg.count += 1
+    if (viewerId && r.profileId === viewerId) agg.mine = true
+    if (r.profile?.name) agg.names.push(r.profile.name)
+    byEmoji.set(r.emoji, agg)
+  }
+  return [...byEmoji.entries()].map(([emoji, a]) => ({ emoji, ...a }))
 }
 
 const commentsRoute: FastifyPluginAsync = (fastify) => {
@@ -141,7 +168,9 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
       return reply.send({
         success: true,
         data: {
-          comments: page.map((c) => serializeComment(c, access.agencyId, access.isInternal)),
+          comments: page.map((c) =>
+            serializeComment(c, access.agencyId, access.isInternal, user.sub)
+          ),
           meta: {
             hasMore,
             unreadCount,
@@ -270,7 +299,7 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
 
       return reply.status(201).send({
         success: true,
-        data: { comment: serializeComment(comment, access.agencyId, access.isInternal) },
+        data: { comment: serializeComment(comment, access.agencyId, access.isInternal, user.sub) },
       })
     }
   )

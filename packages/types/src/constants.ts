@@ -167,6 +167,14 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
  * Events that ALWAYS go via email regardless of user preferences.
  * Source: ADR-003 (security/legal critical events).
  */
+/**
+ * Дозволені реакції в чаті (S10). ТИМЧАСОВИЙ технічний набір — коли дизайнер
+ * віддасть власний емодзі-пак (backlog у ROADMAP), підмінюється ТУТ (API валідовує
+ * проти цього списку, обидва фронти рендерять пікер із нього).
+ */
+export const REACTION_EMOJIS = ['👍', '✅', '🔥', '❤️', '😂', '👀'] as const
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number]
+
 export const CRITICAL_EVENTS: ReadonlyArray<NotificationEvent> = [
   // auth
   'auth.password_reset',

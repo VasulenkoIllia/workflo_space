@@ -57,6 +57,7 @@ model Profile {
   credentialsCreated     CredentialVault[]     @relation("CredentialCreatedBy") // 17
   twoFactor              TwoFactorAuth? // S9-01
   oauthAccounts          OAuthAccount[] // S9 §E
+  commentReactions       CommentReaction[] // S10
 
   @@index([role])
   @@map("profiles")
@@ -345,9 +346,13 @@ model OrderComment {
   // клієнта не можна згадати у внутрішній нотатці). Масив, не relation.
   mentionIds  String[]       @default([])
   createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  // editedAt = ФАКТ правки (показ «(відредаговано)»); updatedAt — технічний (канон 03-B).
   editedAt    DateTime?      @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
   deletedAt   DateTime?      @db.Timestamptz(3)
   agency      Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+
+  reactions CommentReaction[]
 
   @@index([agencyId])
   @@index([orderId, createdAt])
@@ -355,6 +360,22 @@ model OrderComment {
   @@index([authorId])
   @@index([replyToId])
   @@map("order_comments")
+}
+
+// Реакції на повідомлення чату (S10, канон 03-C). Емодзі валідовано проти
+// REACTION_EMOJIS (@workflo/types) — технічний набір до дизайнерського пака.
+model CommentReaction {
+  id        String       @id @default(uuid())
+  commentId String
+  comment   OrderComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([commentId, profileId, emoji])
+  @@index([commentId])
+  @@map("comment_reactions")
 }
 
 model OrderFile {

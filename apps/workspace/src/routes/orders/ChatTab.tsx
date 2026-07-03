@@ -15,6 +15,18 @@ import {
 } from '@/lib/orderDetail'
 import type { CommentAttachment } from '@/lib/orderDetail'
 import { formatDateTime } from '@/lib/format'
+import { useQueryClient } from '@tanstack/react-query'
+import { REACTION_EMOJIS } from '@workflo/types'
+import {
+  sendTyping,
+  useDeleteComment,
+  useToggleReaction,
+  useUpdateComment,
+  type TypingMarker,
+} from '@/lib/orderDetail'
+
+// Канон 03-B: автор редагує 15 хв; owner агенції — будь-коли (бек енфорсить).
+const EDIT_WINDOW_MS = 15 * 60 * 1000
 
 /** Хвіст «@запит» у композері (згадка набирається в кінці тексту). */
 const MENTION_TAIL = /@([^\s@]{0,30})$/u
@@ -133,12 +145,135 @@ function MentionDropdown({
 
 /** Internal-team chat: shows client + internal notes, with an "internal" toggle on send,
  * reply-to quoting and file attachments (03-чат, зріз 03.07). */
+
+/** Чіпи реакцій + «+»-пікер з технічного набору REACTION_EMOJIS (S10, канон 03-C). */
+function ReactionBar({
+  comment,
+  onToggle,
+}: {
+  comment: ChatComment
+  onToggle: (emoji: string, mine: boolean) => void
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const reactions = comment.reactions ?? []
+  return (
+    <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, marginTop: 4, marginRight: 6 }}>
+      {reactions.map((r) => (
+        <button
+          key={r.emoji}
+          type="button"
+          className="wfp-mono"
+          title={r.names.join(', ')}
+          onClick={() => onToggle(r.emoji, r.mine)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            fontSize: 11,
+            padding: '1px 6px',
+            borderRadius: 999,
+            cursor: 'pointer',
+            border: r.mine ? '1px solid var(--wf-accent)' : '1px solid var(--wf-border)',
+            background: r.mine
+              ? 'color-mix(in oklab, var(--wf-accent) 14%, transparent)'
+              : 'transparent',
+            color: 'var(--wf-fg)',
+          }}
+        >
+          {r.emoji} {r.count}
+        </button>
+      ))}
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <button
+          type="button"
+          className="wfp-mono"
+          title="Додати реакцію"
+          onClick={() => setPickerOpen((v) => !v)}
+          style={{
+            fontSize: 11,
+            padding: '1px 6px',
+            borderRadius: 999,
+            cursor: 'pointer',
+            border: '1px dashed var(--wf-border)',
+            background: 'transparent',
+            color: 'var(--wf-fg-muted)',
+          }}
+        >
+          +🙂
+        </button>
+        {pickerOpen && (
+          <span
+            style={{
+              position: 'absolute',
+              bottom: '110%',
+              left: 0,
+              zIndex: 20,
+              display: 'flex',
+              gap: 2,
+              padding: '4px 6px',
+              background: 'var(--wf-surface)',
+              border: '1px solid var(--wf-border)',
+              borderRadius: 8,
+              boxShadow: '0 6px 24px rgba(0,0,0,.25)',
+            }}
+          >
+            {REACTION_EMOJIS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => {
+                  const mine = reactions.find((r) => r.emoji === e)?.mine ?? false
+                  onToggle(e, mine)
+                  setPickerOpen(false)
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 15,
+                  padding: 2,
+                }}
+              >
+                {e}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
+    </div>
+  )
+}
+
+/** «N друкує…» — ефемерний маркер з SSE, сам гасне по `until`. */
+function TypingRow({ orderId }: { orderId: string }) {
+  const qc = useQueryClient()
+  const [, force] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => force((v) => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const marker = qc.getQueryData<TypingMarker>(['order-typing', orderId])
+  if (!marker || marker.until < Date.now()) return null
+  return (
+    <div
+      className="wfp-mono"
+      style={{ fontSize: 11, color: 'var(--wf-fg-muted)', padding: '2px 0' }}
+    >
+      {marker.name} друкує…
+    </div>
+  )
+}
+
 export function ChatTab({ orderId }: { orderId: string }) {
-  const { user } = useAuth()
+  const { user, isOwner } = useAuth()
   const myId = user?.profile.id
   const { data, isLoading } = useComments(orderId)
   const post = usePostComment(orderId)
   const upload = useUploadFile(orderId)
+  const update = useUpdateComment(orderId)
+  const del = useDeleteComment(orderId)
+  const react = useToggleReaction(orderId)
+  const [editing, setEditing] = useState<{ id: string; content: string } | null>(null)
   const [text, setText] = useState('')
   const [internal, setInternal] = useState(false)
   const [onlyInternal, setOnlyInternal] = useState(false)
@@ -222,6 +357,17 @@ export function ChatTab({ orderId }: { orderId: string }) {
     )
   }
 
+  const saveEdit = () => {
+    if (!editing || !editing.content.trim() || update.isPending) return
+    update.mutate(
+      { commentId: editing.id, content: editing.content.trim() },
+      {
+        onSuccess: () => setEditing(null),
+        onError: () => toast.error('Не вдалося зберегти (вікно 15 хв могло минути)'),
+      }
+    )
+  }
+
   const comments = data?.comments ?? []
   const internalCount = comments.filter((c) => c.isInternal).length
   const shown = onlyInternal ? comments.filter((c) => c.isInternal) : comments
@@ -293,30 +439,123 @@ export function ChatTab({ orderId }: { orderId: string }) {
               </span>
               <div className="wfp-chat-text">
                 {c.replyTo && <ReplyQuote replyTo={c.replyTo} />}
-                <MentionText content={c.content} names={participantNames} />
-                {mine && <ReadTicks createdAt={c.createdAt} reads={reads} />}
-                <button
-                  type="button"
-                  className="wfp-mono"
-                  title="Відповісти"
-                  onClick={() => setReplyTo(c)}
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 11,
-                    border: 'none',
-                    background: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--wf-fg-muted)',
-                  }}
-                >
-                  ↩
-                </button>
+                {editing?.id === c.id ? (
+                  <span
+                    style={{ display: 'inline-flex', gap: 6, alignItems: 'center', width: '100%' }}
+                  >
+                    <input
+                      className="wfp-chat-input-field"
+                      style={{ flex: 1 }}
+                      value={editing.content}
+                      autoFocus
+                      onChange={(e) => setEditing({ id: c.id, content: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveEdit()
+                        }
+                        if (e.key === 'Escape') setEditing(null)
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      loading={update.isPending}
+                      onClick={saveEdit}
+                    >
+                      Зберегти
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                      Скасувати
+                    </Button>
+                  </span>
+                ) : (
+                  <>
+                    <MentionText content={c.content} names={participantNames} />
+                    {c.editedAt && (
+                      <span
+                        className="wfp-mono"
+                        style={{ marginLeft: 5, fontSize: 10, color: 'var(--wf-fg-muted)' }}
+                      >
+                        (відредаговано)
+                      </span>
+                    )}
+                    {mine && <ReadTicks createdAt={c.createdAt} reads={reads} />}
+                    <button
+                      type="button"
+                      className="wfp-mono"
+                      title="Відповісти"
+                      onClick={() => setReplyTo(c)}
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--wf-fg-muted)',
+                      }}
+                    >
+                      ↩
+                    </button>
+                    {((mine && Date.now() - new Date(c.createdAt).getTime() < EDIT_WINDOW_MS) ||
+                      isOwner) && (
+                      <button
+                        type="button"
+                        className="wfp-mono"
+                        title="Редагувати"
+                        onClick={() => setEditing({ id: c.id, content: c.content })}
+                        style={{
+                          marginLeft: 4,
+                          fontSize: 11,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--wf-fg-muted)',
+                        }}
+                      >
+                        ✎
+                      </button>
+                    )}
+                    {(mine || isOwner) && (
+                      <button
+                        type="button"
+                        className="wfp-mono"
+                        title="Видалити"
+                        onClick={() => {
+                          del.mutate(c.id, {
+                            onError: () => toast.error('Не вдалося видалити'),
+                          })
+                        }}
+                        style={{
+                          marginLeft: 4,
+                          fontSize: 11,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--wf-fg-muted)',
+                        }}
+                      >
+                        🗑
+                      </button>
+                    )}
+                  </>
+                )}
                 <AttachmentChips items={c.attachments ?? []} />
+                <ReactionBar
+                  comment={c}
+                  onToggle={(emoji, mine2) =>
+                    react.mutate(
+                      { commentId: c.id, emoji, mine: mine2 },
+                      { onError: () => toast.error('Не вдалося') }
+                    )
+                  }
+                />
               </div>
             </div>
           )
         })
       )}
+      <TypingRow orderId={orderId} />
       <div className="wfp-chat-input">
         <span className="wfp-chat-input-ts">зараз</span>
         <span className="wfp-chat-input-who">ви</span>
@@ -337,7 +576,10 @@ export function ChatTab({ orderId }: { orderId: string }) {
                 : 'Напишіть повідомлення… (@ — згадати)'
             }
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value)
+              if (e.target.value) sendTyping(orderId, internal)
+            }}
             onKeyDown={(e) => {
               // Відкрита @-випадачка: Enter/Tab підставляє першого кандидата.
               if (mentionOptions.length > 0 && (e.key === 'Enter' || e.key === 'Tab')) {

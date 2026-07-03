@@ -1,7 +1,12 @@
 import { runWithAgency, withTenant } from '@workflo/db'
 import { ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { subscribeChat, subscribeReads } from '../../services/chatBus.js'
+import {
+  subscribeChanges,
+  subscribeChat,
+  subscribeReads,
+  subscribeTyping,
+} from '../../services/chatBus.js'
 import { requireOrderParticipant } from './access.js'
 import { COMMENT_SELECT, serializeComment } from './comments.js'
 
@@ -111,7 +116,12 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
           .then((comment) => {
             if (!comment || comment.deletedAt) return
             if (comment.isInternal && !access.isInternal) return // leak guard (authoritative)
-            const payload = serializeComment(comment, access.agencyId, access.isInternal)
+            const payload = serializeComment(
+              comment,
+              access.agencyId,
+              access.isInternal,
+              request.user.sub
+            )
             write(`id: ${event.commentId}\nevent: comment\ndata: ${JSON.stringify(payload)}\n\n`)
           })
           .catch((err: unknown) => request.log.warn({ err }, 'sse: comment fetch failed'))
@@ -125,6 +135,45 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         write(`event: read\ndata: ${JSON.stringify(event)}\n\n`)
       })
 
+      // Edit/delete/reactions (S10 канон 03-B/C): `updated` re-fetches from DB truth
+      // (same authoritative leak-guard as inserts); `deleted` carries only the id.
+      const unsubscribeChanges = subscribeChanges(access.orderId, (event) => {
+        if (closed) return
+        if (event.kind === 'deleted') {
+          write(`event: comment_deleted\ndata: ${JSON.stringify({ id: event.commentId })}\n\n`)
+          return
+        }
+        runWithAgency(access.agencyId, () =>
+          withTenant((tx) =>
+            tx.orderComment.findUnique({
+              where: { id: event.commentId },
+              select: { ...COMMENT_SELECT, deletedAt: true },
+            })
+          )
+        )
+          .then((comment) => {
+            if (!comment || comment.deletedAt) return
+            if (comment.isInternal && !access.isInternal) return // leak guard
+            const payload = serializeComment(
+              comment,
+              access.agencyId,
+              access.isInternal,
+              request.user.sub
+            )
+            write(`event: comment_updated\ndata: ${JSON.stringify(payload)}\n\n`)
+          })
+          .catch((err: unknown) => request.log.warn({ err }, 'sse: updated fetch failed'))
+      })
+
+      // Typing (03-Б): ephemeral; clients never learn the team is drafting a note.
+      const unsubscribeTyping = subscribeTyping(access.orderId, (event) => {
+        if (closed) return
+        if (event.profileId === request.user.sub) return
+        if (event.internal && !access.isInternal) return // leak guard
+        const pub = { profileId: event.profileId, name: event.name }
+        write(`event: typing\ndata: ${JSON.stringify(pub)}\n\n`)
+      })
+
       const heartbeat = setInterval(() => write('event: heartbeat\ndata: {}\n\n'), HEARTBEAT_MS)
       heartbeat.unref()
 
@@ -134,6 +183,8 @@ const commentsStreamRoute: FastifyPluginAsync = (fastify) => {
         clearInterval(heartbeat)
         unsubscribe()
         unsubscribeReads()
+        unsubscribeChanges()
+        unsubscribeTyping()
         releaseSlot()
         liveStreamClosers.delete(shutdownClose)
         res.end()
