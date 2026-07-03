@@ -10,6 +10,7 @@ const inviteUpdateMany = vi.fn()
 const inviteFindUnique = vi.fn()
 const profileFindUnique = vi.fn()
 const profileUpdate = vi.fn()
+const profileUpdateMany = vi.fn().mockResolvedValue({ count: 1 })
 const companyFindUnique = vi.fn()
 const companyMemberFindUnique = vi.fn()
 const companyMemberUpsert = vi.fn()
@@ -29,7 +30,11 @@ vi.mock('@workflo/db', () => ({
       updateMany: inviteUpdateMany,
       findUnique: inviteFindUnique,
     },
-    profile: { findUnique: profileFindUnique, update: profileUpdate },
+    profile: {
+      findUnique: profileFindUnique,
+      update: profileUpdate,
+      updateMany: profileUpdateMany,
+    },
     company: { findUnique: companyFindUnique },
     companyMember: { findUnique: companyMemberFindUnique, upsert: companyMemberUpsert },
     agencyMember: { upsert: agencyMemberUpsert },

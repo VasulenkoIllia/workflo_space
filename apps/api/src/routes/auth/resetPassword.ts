@@ -51,6 +51,12 @@ const resetPasswordRoute: FastifyPluginAsync = (fastify) => {
           where: { id: profile.id },
           data: { passwordHash },
         })
+        // The reset link was delivered to this mailbox → email proven (S9).
+        // Conditional so an existing verification timestamp is never rewritten.
+        await tx.profile.updateMany({
+          where: { id: profile.id, emailVerifiedAt: null },
+          data: { emailVerifiedAt: new Date() },
+        })
         await tx.passwordResetToken.update({
           where: { id: tokenRow.id },
           data: { usedAt: new Date() },

@@ -9,6 +9,7 @@ import { AppLayout } from '@/layouts/AppLayout'
 import { OrdersPage } from '@/routes/orders/OrdersPage'
 import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
+import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
 import { SettingsPage } from '@/routes/settings/SettingsPage'
 import { TeamPage } from '@/routes/team/TeamPage'
 import { BillingPage } from '@/routes/billing/BillingPage'
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       <Route
         element={

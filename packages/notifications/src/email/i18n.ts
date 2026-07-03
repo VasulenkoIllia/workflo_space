@@ -55,6 +55,14 @@ const uk: Dictionary = {
   'passwordReset.ignore':
     'Якщо ви НЕ запитували скидання, проігноруйте цей лист. Пароль не буде змінено без переходу за посиланням.',
 
+  // email verification
+  'emailVerification.subject': 'Підтвердьте email для Workflo',
+  'emailVerification.h1': 'Підтвердження email',
+  'emailVerification.body':
+    'Натисніть кнопку нижче, щоб підтвердити цю адресу — посилання діє 24 години. Це відкриє всі можливості акаунту.',
+  'emailVerification.cta': 'Підтвердити email',
+  'emailVerification.ignore': 'Якщо ви не створювали акаунт Workflo — проігноруйте цей лист.',
+
   // order status changed
   'orderStatus.subject': 'Оновлення замовлення «{orderTitle}»',
   'orderStatus.h1': 'Статус замовлення оновлено',
@@ -166,6 +174,14 @@ const en: Dictionary = {
   'passwordReset.cta': 'Reset password',
   'passwordReset.ignore':
     'If you did NOT request a reset, ignore this email. Your password will not be changed without you clicking the link.',
+
+  // email verification
+  'emailVerification.subject': 'Confirm your email for Workflo',
+  'emailVerification.h1': 'Confirm your email',
+  'emailVerification.body':
+    'Click the button below to confirm this address — the link is valid for 24 hours. This unlocks the full account.',
+  'emailVerification.cta': 'Confirm email',
+  'emailVerification.ignore': 'If you did not create a Workflo account, ignore this email.',
 
   // order status changed
   'orderStatus.subject': 'Order update: “{orderTitle}”',

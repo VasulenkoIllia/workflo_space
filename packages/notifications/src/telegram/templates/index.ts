@@ -49,6 +49,19 @@ export function renderInviteCompanyMemberTelegram(opts: {
   return { text, parseMode: 'HTML' }
 }
 
+export function renderEmailVerificationTelegram(opts: {
+  verifyUrl: string
+  locale?: LocaleKey
+}): RenderedTelegram {
+  // ADR-003: email_verification is email-critical; Telegram is only an extra
+  // convenience channel (the verify token works from anywhere).
+  const text =
+    opts.locale === 'en'
+      ? `${bold('Confirm your email')}\n\n${link('Click here', opts.verifyUrl)} to confirm your email address. Link is valid for 24 hours.\n\n${italic('If you did not create a Workflo account, ignore this message.')}`
+      : `${bold('Підтвердьте email')}\n\n${link('Натисніть тут', opts.verifyUrl)}, щоб підтвердити адресу. Посилання діє 24 години.\n\n${italic('Якщо ви не створювали акаунт Workflo — проігноруйте це повідомлення.')}`
+  return { text, parseMode: 'HTML' }
+}
+
 export function renderPasswordResetTelegram(opts: {
   resetUrl: string
   locale?: LocaleKey

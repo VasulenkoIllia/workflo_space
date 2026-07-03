@@ -24,6 +24,7 @@ const meRoute: FastifyPluginAsync = (fastify) => {
         theme: true,
         isActive: true,
         avatarUrl: true,
+        emailVerifiedAt: true,
       },
     })
 
@@ -65,6 +66,7 @@ const meRoute: FastifyPluginAsync = (fastify) => {
           language: profile.language,
           theme: profile.theme,
           avatarUrl: profile.avatarUrl,
+          emailVerified: profile.emailVerifiedAt != null,
         },
         activeCompanyId,
         companies: memberRows.map((m) => ({

@@ -6,6 +6,10 @@ export {
 } from './inviteCompanyMember.js'
 export { renderPasswordResetEmail, type PasswordResetEmailVars } from './passwordReset.js'
 export {
+  renderEmailVerificationEmail,
+  type EmailVerificationEmailVars,
+} from './emailVerification.js'
+export {
   renderOrderStatusChangedEmail,
   type OrderStatusChangedEmailVars,
 } from './orderStatusChanged.js'

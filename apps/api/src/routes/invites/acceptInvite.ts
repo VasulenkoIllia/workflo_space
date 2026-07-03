@@ -2,6 +2,7 @@ import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { markEmailVerified } from '../../services/emailVerification.js'
 
 /**
  * POST /invite/:token/accept — accept an invite (requires authentication).
@@ -57,6 +58,9 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
       if (me.email.toLowerCase() !== invite.email.toLowerCase()) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Це запрошення призначене для іншого email', 403)
       }
+
+      // The invite link reached this exact mailbox → email ownership proven (S9).
+      await markEmailVerified(profileId)
 
       if (invite.type === 'company_member') {
         if (!invite.companyId) {

@@ -109,7 +109,7 @@ describe('POST /auth/reset-password', () => {
     refreshTokenUpdateMany.mockResolvedValue({ count: 2 })
     transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
-        profile: { update: profileUpdate },
+        profile: { update: profileUpdate, updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         passwordResetToken: { update: prtUpdate },
         refreshToken: { updateMany: refreshTokenUpdateMany },
       })

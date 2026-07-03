@@ -17,6 +17,7 @@ import {
   renderOrderAssignedEmail,
   renderOrderCreatedEmail,
   renderOrderStatusChangedEmail,
+  renderEmailVerificationEmail,
   renderPasswordResetEmail,
   renderPaymentReceivedEmail,
   renderWelcomeEmail,
@@ -33,6 +34,7 @@ import {
   renderOrderAssignedTelegram,
   renderOrderCreatedTelegram,
   renderOrderStatusChangedTelegram,
+  renderEmailVerificationTelegram,
   renderPasswordResetTelegram,
   renderPaymentReceivedTelegram,
   renderWelcomeTelegram,
@@ -61,6 +63,7 @@ export interface Recipient {
 export type EventPayloadMap = {
   'auth.welcome': { portalUrl: string }
   'auth.password_reset': { resetUrl: string }
+  'auth.email_verification': { verifyUrl: string }
   // One event, two templates: companyName present → company-member invite,
   // else executor invite (expiresAt used by the executor template).
   'system.invite_sent': {
@@ -118,6 +121,11 @@ export function renderEmailForEvent(
     case 'auth.password_reset':
       return renderPasswordResetEmail({
         resetUrl: (vars as EventPayloadMap['auth.password_reset']).resetUrl,
+        locale,
+      })
+    case 'auth.email_verification':
+      return renderEmailVerificationEmail({
+        verifyUrl: (vars as EventPayloadMap['auth.email_verification']).verifyUrl,
         locale,
       })
     case 'system.invite_sent': {
@@ -238,6 +246,11 @@ export function renderTelegramForEvent(
     case 'auth.password_reset':
       return renderPasswordResetTelegram({
         resetUrl: (vars as EventPayloadMap['auth.password_reset']).resetUrl,
+        locale,
+      })
+    case 'auth.email_verification':
+      return renderEmailVerificationTelegram({
+        verifyUrl: (vars as EventPayloadMap['auth.email_verification']).verifyUrl,
         locale,
       })
     case 'system.invite_sent': {

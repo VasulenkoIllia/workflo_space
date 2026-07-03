@@ -27,6 +27,8 @@ const transaction = vi.fn()
 vi.mock('@workflo/db', () => ({
   prisma: {
     profile: { findUnique: profileFindUnique },
+    // register also mints the email-verify token (S9) — resolve quietly.
+    otpToken: { upsert: vi.fn().mockResolvedValue({}) },
     $transaction: transaction,
   },
   tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>

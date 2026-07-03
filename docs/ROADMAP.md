@@ -156,6 +156,21 @@
   Той самий бек, нові lib/twoFactor.ts + lib/sessions.ts у порталі, qrcode лінивим чанком.
   Вживу через прев'ю: client@ setup→enable (тост, 10 кодів)→disable паролем; revoke-others
   зніс 5 висячих сесій. Гейти 7/7.
+- **Email-верифікація (S9, канон 01-auth §B) — ЗАКРИТО (2026-07-04).**
+  `Profile.emailVerifiedAt` (міграція grandfather-ить усі наявні профілі — nag тільки для
+  нових реєстрацій); токен в `otp_tokens(purpose=email_verify)` TTL 24h, upsert по
+  (profileId,purpose) → resend гасить старий лінк. Лист uk/en (email+telegram шаблони,
+  CRITICAL_EVENT). Роути: POST /auth/verify-email (публічний, 410 на
+  чужий/прострочений/повторний), POST /auth/resend-verification (3/15хв, 400 як уже
+  підтверджено). Скринька також доводиться invite-accept'ом (email-bound) і
+  password-reset'ом. /auth/me віддає emailVerified. Portal: сторінка /verify-email
+  (страждає StrictMode-подвійний виклик — firedRef) + банер з resend'ом у AppLayout.
+  Login НЕ блокується (канон). +7 тестів (api 673). Вживу: register → лист у Mailpit →
+  лінк у прев'ю → «готово» → reuse 410 → me:true → resend-після-verified 400; банер
+  видно у user2, resend доставив другий лист, старий лінк 410/новий 200, після
+  верифікації банер зник. Гейт «чутливі дії до підтвердження» — відкладено до
+  portal-vault self-service (наразі непідтверджені лише свіжі клієнти, їм гейтити нічого).
+  З auth-набору лишився OAuth (Google).
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,

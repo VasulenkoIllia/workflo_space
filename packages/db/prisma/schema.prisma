@@ -9,21 +9,25 @@ datasource db {
 }
 
 model Profile {
-  id                 String   @id @default(uuid())
-  email              String   @unique
+  id                 String    @id @default(uuid())
+  email              String    @unique
   passwordHash       String
   name               String
-  role               Role     @default(client)
+  role               Role      @default(client)
   avatarUrl          String?
-  language           Language @default(uk)
-  theme              Theme    @default(system)
-  isActive           Boolean  @default(true)
+  language           Language  @default(uk)
+  theme              Theme     @default(system)
+  isActive           Boolean   @default(true)
+  // Email ownership proven (S9 email-verify): set by /auth/verify-email, invite
+  // accept (email-bound link) or password reset (mailbox-delivered link).
+  // null = unverified. Login is NOT blocked; sensitive actions may gate on it.
+  emailVerifiedAt    DateTime? @db.Timestamptz(3)
   // Last agency a multi-agency staffer chose via /auth/switch-agency (ADR-004).
   // Soft preference — always re-validated against current agencyMemberships at
   // login/refresh, so a stale/dangling value harmlessly falls back to the first.
   lastActiveAgencyId String?
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
 
   companyMembership      CompanyMember[]
   ordersAssigned         Order[]               @relation("OrderAssignee")

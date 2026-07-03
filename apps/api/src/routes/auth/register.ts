@@ -11,6 +11,7 @@ import {
   setRefreshCookie,
 } from '../../auth/tokens.js'
 import { dispatchNotification } from '../../services/notifications.js'
+import { sendVerificationEmail } from '../../services/emailVerification.js'
 
 const registerRoute: FastifyPluginAsync = (fastify) => {
   fastify.post(
@@ -140,6 +141,14 @@ const registerRoute: FastifyPluginAsync = (fastify) => {
         event: 'auth.welcome',
         vars: { portalUrl: process.env.PORTAL_URL ?? 'https://portal.workflo.space' },
       })
+
+      // Verify link (S9) — a failure here must never fail the registration;
+      // the user can always resend from the in-app banner.
+      try {
+        await sendVerificationEmail(request.log, result.profileId)
+      } catch (err) {
+        request.log.error({ err }, 'email-verification send failed on register')
+      }
 
       return reply.status(201).send({
         success: true,

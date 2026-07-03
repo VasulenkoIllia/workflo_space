@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n'
 import { PORTAL_NAV, activeNavId } from '@/config/nav'
 import { useNotifications } from '@/lib/notifications'
 import { SidebarCompanyMenu } from '@/components/SidebarCompanyMenu'
+import { EmailVerifyBanner } from '@/components/EmailVerifyBanner'
 
 export function AppLayout() {
   const { user, logout } = useAuth()
@@ -149,6 +150,7 @@ export function AppLayout() {
         />
       }
     >
+      <EmailVerifyBanner />
       <Outlet />
       <CommandPalette
         open={cmdkOpen}
