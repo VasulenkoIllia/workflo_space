@@ -49,16 +49,10 @@ export function LeadBoardPage() {
     if (status === 'lost') {
       const reason = window.prompt(`Причина втрати ліда «${lead.name}»?`, lead.lostReason ?? '')
       if (reason === null) return
-      update.mutate(
-        { id: lead.id, status, lostReason: reason.trim() || null },
-        { onError: () => toast.error('Не вдалося перемістити лід') }
-      )
+      update.mutate({ id: lead.id, status, lostReason: reason.trim() || null })
       return
     }
-    update.mutate(
-      { id: lead.id, status },
-      { onError: () => toast.error('Не вдалося перемістити лід') }
-    )
+    update.mutate({ id: lead.id, status })
   }
 
   // Pipeline stats from the current set (design: active count + conversion %).
@@ -74,7 +68,6 @@ export function LeadBoardPage() {
     if (!window.confirm(`Видалити лід «${lead.name}»?`)) return
     del.mutate(lead.id, {
       onSuccess: () => toast.success('Лід видалено'),
-      onError: () => toast.error('Не вдалося видалити'),
     })
   }
 
@@ -256,7 +249,6 @@ function CreateLeadModal({ onClose }: { onClose: () => void }) {
           toast.success('Лід створено')
           onClose()
         },
-        onError: () => toast.error('Не вдалося створити лід'),
       }
     )
   }
@@ -321,7 +313,6 @@ function ConvertLeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }
           toast.success('Лід конвертовано в замовлення')
           onClose()
         },
-        onError: () => toast.error('Не вдалося конвертувати'),
       }
     )
   }

@@ -1,6 +1,5 @@
 import { useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
 import { EmptyState, Skeleton } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { type BoardTask, type TaskStatus, useAllTasks, useMoveBoardTask } from '@/lib/tasks'
@@ -74,10 +73,7 @@ export function TaskBoardPage() {
   const drop = (status: TaskStatus, t: BoardTask) => {
     setOverCol(null)
     if (t.status === status) return
-    move.mutate(
-      { orderId: t.order.id, id: t.id, status },
-      { onError: () => toast.error('Не вдалося перемістити задачу') }
-    )
+    move.mutate({ orderId: t.order.id, id: t.id, status })
   }
 
   return (

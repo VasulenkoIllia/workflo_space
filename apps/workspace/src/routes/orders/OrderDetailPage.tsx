@@ -411,10 +411,6 @@ function EstimateCard({ order }: { order: WorkspaceOrderDetail }) {
         toast.success(
           canSubmit ? 'Оцінку збережено — можна надіслати на погодження' : 'Оцінку збережено'
         ),
-      onError: (e) =>
-        toast.error('Не вдалося зберегти оцінку', {
-          description: e instanceof Error ? e.message : undefined,
-        }),
     })
   }
 

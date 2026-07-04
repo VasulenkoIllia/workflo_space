@@ -27,7 +27,6 @@ export function VaultStepUpModal({
         setPassword('')
         onSuccess()
       },
-      onError: () => toast.error('Невірний пароль'),
     })
   }
 

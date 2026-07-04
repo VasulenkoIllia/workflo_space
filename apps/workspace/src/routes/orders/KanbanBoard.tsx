@@ -45,15 +45,7 @@ export function KanbanBoard({
       })
       return
     }
-    transition.mutate(
-      { id, status: target },
-      {
-        onError: (err) =>
-          toast.error('Статус не змінено', {
-            description: err instanceof Error ? err.message : 'Спробуйте ще раз.',
-          }),
-      }
-    )
+    transition.mutate({ id, status: target })
   }
 
   // Drop-target props shared by the columns and the «готово» tile.

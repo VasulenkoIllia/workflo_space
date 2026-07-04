@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { apiErrorMessage } from '@/lib/api'
 import {
   hasValidRevealGrant,
   STEP_UP_REQUIRED,
@@ -81,11 +80,10 @@ export function SecretRow({
         },
         onError: (err) => {
           // Grant expired between the check and the call → prompt for password, then retry.
+          // Any OTHER error is toasted by the global mutationCache handler (single pipeline).
           if ((err as { code?: unknown }).code === STEP_UP_REQUIRED) {
             onNeedStepUp(runReveal)
-            return
           }
-          toast.error(apiErrorMessage(err, 'Не вдалося показати секрет'))
         },
       }
     )

@@ -66,7 +66,6 @@ export function VaultPage() {
       { companyId: c.companyId, credId: c.id },
       {
         onSuccess: () => toast.success('Секрет відкликано'),
-        onError: () => toast.error('Не вдалося відкликати'),
       }
     )
   }
@@ -76,7 +75,6 @@ export function VaultPage() {
       { companyId: c.companyId, credId: c.id },
       {
         onSuccess: () => toast.success('Секрет видалено'),
-        onError: () => toast.error('Не вдалося видалити'),
       }
     )
   }

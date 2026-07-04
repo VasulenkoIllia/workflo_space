@@ -404,14 +404,12 @@ function SecretsSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Відкликати секрет «${c.label}»? Reveal стане недоступним.`)) return
     revoke.mutate(c.id, {
       onSuccess: () => toast.success('Секрет відкликано'),
-      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося відкликати')),
     })
   }
   const doDelete = (c: Credential) => {
     if (!window.confirm(`Назавжди видалити секрет «${c.label}»?`)) return
     del.mutate(c.id, {
       onSuccess: () => toast.success('Секрет видалено'),
-      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося видалити')),
     })
   }
 
@@ -501,7 +499,6 @@ function AddCredentialForm({
           toast.success('Секрет додано')
           onDone()
         },
-        onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося додати')),
       }
     )
   }
@@ -577,10 +574,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
   const members = data?.members ?? []
 
   const changeRole = (profileId: string, role: 'owner' | 'member') =>
-    setRole.mutate(
-      { profileId, role },
-      { onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося змінити роль')) }
-    )
+    setRole.mutate({ profileId, role })
 
   const sendInvite = () => {
     const email = inviteEmail.trim()
@@ -594,8 +588,6 @@ function PeopleSection({ companyId }: { companyId: string }) {
         setInviteEmail('')
         setInviting(false)
       },
-      onError: (err) =>
-        toast.error(apiErrorMessage(err, 'Не вдалося запросити — можливо, вже учасник')),
     })
   }
 
@@ -603,8 +595,6 @@ function PeopleSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Видалити ${name} з компанії клієнта?`)) return
     remove.mutate(profileId, {
       onSuccess: () => toast.success('Користувача видалено'),
-      onError: (err) =>
-        toast.error(apiErrorMessage(err, 'Не вдалося — можливо, це останній власник')),
     })
   }
 
@@ -612,7 +602,6 @@ function PeopleSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Надіслати ${name} лист для скидання пароля?`)) return
     resetPw.mutate(profileId, {
       onSuccess: () => toast.success('Лист для скидання пароля надіслано'),
-      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося надіслати')),
     })
   }
 
@@ -774,7 +763,6 @@ function LoyaltyPanel({
   const save = () =>
     setOverride.mutate(draft === '' ? null : (draft as LoyaltyTier), {
       onSuccess: () => toast.success('Тір оновлено'),
-      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося оновити тір')),
     })
 
   const lifetime = Number(data.lifetimePaidUsd)
@@ -1135,8 +1123,6 @@ function RequisitesForm({
           toast.success('Реквізити збережено')
           onDone()
         },
-        onError: (err) =>
-          toast.error(apiErrorMessage(err, 'Не вдалося — перевірте формат ІПН/IBAN/email')),
       }
     )
 

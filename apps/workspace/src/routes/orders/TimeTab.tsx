@@ -182,7 +182,6 @@ function OrderTimerControl({ orderId }: { orderId: string }) {
                 stop.mutate(undefined, {
                   onSuccess: (r) =>
                     toast.success(r.timer ? `Час записано: ${r.timer.hours} год` : 'Зупинено'),
-                  onError: () => toast.error('Не вдалося зупинити таймер'),
                 })
               }
             >
@@ -195,7 +194,6 @@ function OrderTimerControl({ orderId }: { orderId: string }) {
               onClick={() =>
                 start.mutate(orderId, {
                   onSuccess: () => toast.success('Таймер запущено'),
-                  onError: () => toast.error('Не вдалося запустити таймер'),
                 })
               }
             >

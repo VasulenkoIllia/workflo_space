@@ -12,7 +12,6 @@ export function EmailVerifyBanner() {
   const resend = useMutation({
     mutationFn: () => api.post<{ sent: true }>('/auth/resend-verification', {}),
     onSuccess: () => toast.success('Лист надіслано — перевірте пошту'),
-    onError: () => toast.error('Не вдалося надіслати лист — спробуйте пізніше'),
   })
 
   if (!user || user.profile.emailVerified !== false) return null

@@ -74,7 +74,6 @@ export function TimerBar() {
           stop.mutate(undefined, {
             onSuccess: (r) =>
               toast.success(r.timer ? `Час записано: ${r.timer.hours} год` : 'Таймер зупинено'),
-            onError: () => toast.error('Не вдалося зупинити таймер'),
           })
         }
       >

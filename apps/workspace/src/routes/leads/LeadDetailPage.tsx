@@ -90,7 +90,6 @@ function LeadEditor({ lead }: { lead: Lead }) {
       },
       {
         onSuccess: () => toast.success('Збережено'),
-        onError: () => toast.error('Не вдалося зберегти — перевірте email/суму'),
       }
     )
   }
@@ -106,7 +105,6 @@ function LeadEditor({ lead }: { lead: Lead }) {
         onSuccess: () => {
           toast.success('Лід конвертовано в замовлення')
         },
-        onError: () => toast.error('Не вдалося конвертувати'),
       }
     )
   }
@@ -118,7 +116,6 @@ function LeadEditor({ lead }: { lead: Lead }) {
         toast.success('Лід видалено')
         navigate('/leads')
       },
-      onError: () => toast.error('Не вдалося видалити'),
     })
   }
 

@@ -32,19 +32,11 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
   const onGenerate = (type: DocumentType) =>
     generate.mutate(type, {
       onSuccess: (r) => toast.success(`Сформовано: ${r.document.number}`),
-      onError: (e) =>
-        toast.error('Не вдалося сформувати', {
-          description: e instanceof Error ? e.message : undefined,
-        }),
     })
 
   const onSend = (d: OrderDocument) =>
     send.mutate(d.id, {
       onSuccess: (r) => toast.success(`Надіслано клієнту: ${r.document.number}`),
-      onError: (e) =>
-        toast.error('Не вдалося надіслати', {
-          description: e instanceof Error ? e.message : undefined,
-        }),
     })
 
   return (
