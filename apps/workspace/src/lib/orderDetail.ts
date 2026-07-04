@@ -421,15 +421,19 @@ export function markCommentsRead(id: string): Promise<unknown> {
 }
 
 /** The /content endpoint requires Bearer auth, so fetch the blob and trigger a download. */
-export async function downloadFile(file: Pick<OrderFileItem, 'id' | 'filename'>): Promise<void> {
+/** Blob-URL файлу з Authorization (03-МЕДІА: інлайн <img>/<audio>/<video>). Викликач revoke'ає. */
+export async function fetchFileBlobUrl(file: { id: string }): Promise<string> {
   const token = getAccessToken()
   const res = await fetch(`${API_URL}/files/${file.id}/content`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: 'include',
   })
-  if (!res.ok) throw new Error('download failed')
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
+  if (!res.ok) throw new Error('fetch failed')
+  return URL.createObjectURL(await res.blob())
+}
+
+export async function downloadFile(file: Pick<OrderFileItem, 'id' | 'filename'>): Promise<void> {
+  const url = await fetchFileBlobUrl(file)
   const a = document.createElement('a')
   a.href = url
   a.download = file.filename

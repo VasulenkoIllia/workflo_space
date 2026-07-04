@@ -27,6 +27,12 @@ export const ALLOWED_FILE_MIME_TYPES = [
   // Video
   'video/mp4',
   'video/webm',
+  // Audio (03-МЕДІА: готові записи, НЕ браузерний запис — рішення власника 11.06)
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/webm',
 ] as const
 
 export type AllowedFileMimeType = (typeof ALLOWED_FILE_MIME_TYPES)[number]
@@ -69,9 +75,18 @@ export function magicMatchesMime(bytes: Uint8Array, mime: string): boolean {
     case 'application/vnd.ms-excel':
       return at(0, 0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1) // OLE compound (legacy)
     case 'video/mp4':
-      return at(4, 0x66, 0x74, 0x79, 0x70) // 'ftyp' box at offset 4
+    case 'audio/mp4':
+      return at(4, 0x66, 0x74, 0x79, 0x70) // 'ftyp' box at offset 4 (MP4/M4A container)
     case 'video/webm':
+    case 'audio/webm':
       return at(0, 0x1a, 0x45, 0xdf, 0xa3) // EBML (Matroska/WebM)
+    case 'audio/mpeg':
+      // ID3-тег або сирий MPEG-фрейм-синк (0xFF 0xE0+)
+      return at(0, 0x49, 0x44, 0x33) || (b[0] === 0xff && ((b[1] ?? 0) & 0xe0) === 0xe0)
+    case 'audio/wav':
+      return at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x41, 0x56, 0x45) // RIFF....WAVE
+    case 'audio/ogg':
+      return at(0, 0x4f, 0x67, 0x67, 0x53) // OggS
     default:
       return true // allowlisted but unmapped → don't block
   }

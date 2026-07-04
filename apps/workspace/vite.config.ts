@@ -16,7 +16,8 @@ export default defineConfig({
     port: 3002,
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        // 127.0.0.1 явно: `localhost` у Node ≥17 резолвиться в ::1, а API слухає IPv4.
+        target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },

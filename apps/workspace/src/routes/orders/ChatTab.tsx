@@ -18,6 +18,7 @@ import { formatDateTime } from '@/lib/format'
 import { useQueryClient } from '@tanstack/react-query'
 import { REACTION_EMOJIS } from '@workflo/types'
 import {
+  fetchFileBlobUrl,
   sendTyping,
   useDeleteComment,
   usePinComment,
@@ -347,6 +348,150 @@ function PinnedSection({
         </div>
       )}
     </div>
+  )
+}
+
+/** 03-МЕДІА: інлайн-рендер вкладень — картинки (прев'ю+лайтбокс) авто, аудіо/відео
+ * плеєром ПІСЛЯ кліку (файл може бути до 100МБ — не тягнемо на відкриття чату). */
+function MediaAttachments({ items }: { items: CommentAttachment[] }) {
+  const media = items.filter((a) => /^(image|audio|video)\//.test(a.mimeType))
+  const rest = items.filter((a) => !/^(image|audio|video)\//.test(a.mimeType))
+  return (
+    <>
+      {media.map((a) => (
+        <MediaItem key={a.id} file={a} />
+      ))}
+      <AttachmentChips items={rest} />
+    </>
+  )
+}
+
+function MediaItem({ file }: { file: CommentAttachment }) {
+  const kind = file.mimeType.split('/')[0]
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
+
+  const load = () => {
+    if (url || loading) return
+    setLoading(true)
+    fetchFileBlobUrl(file)
+      .then(setUrl)
+      .catch(() => toast.error('Не вдалося завантажити медіа'))
+      .finally(() => setLoading(false))
+  }
+  // Картинки — одразу (fileId-залежність: об'єкт file міняється при рефетчі кешу).
+  const fileId = file.id
+  useEffect(() => {
+    if (kind !== 'image') return
+    let cancelled = false
+    setLoading(true)
+    fetchFileBlobUrl({ id: fileId })
+      .then((u) => {
+        if (cancelled) URL.revokeObjectURL(u)
+        else setUrl(u)
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [kind, fileId])
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [url])
+
+  if (kind === 'image') {
+    return (
+      <div style={{ marginTop: 6 }}>
+        {url ? (
+          <img
+            src={url}
+            alt={file.filename}
+            onClick={() => setLightbox(true)}
+            style={{
+              display: 'block',
+              maxHeight: 180,
+              maxWidth: 280,
+              borderRadius: 8,
+              border: '1px solid var(--wf-border)',
+              cursor: 'zoom-in',
+            }}
+          />
+        ) : (
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // {loading ? 'завантаження зображення…' : file.filename}
+          </span>
+        )}
+        {lightbox && url && (
+          <div
+            onClick={() => setLightbox(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 100,
+              background: 'rgba(0,0,0,.82)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'zoom-out',
+            }}
+          >
+            <img
+              src={url}
+              alt={file.filename}
+              style={{ maxWidth: '92vw', maxHeight: '92vh', borderRadius: 8 }}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (!url) {
+    return (
+      <div style={{ marginTop: 6 }}>
+        <button
+          type="button"
+          className="wfp-mono"
+          onClick={load}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 11,
+            padding: '4px 10px',
+            borderRadius: 6,
+            border: '1px solid var(--wf-border)',
+            background: 'var(--wf-surface)',
+            color: 'var(--wf-fg)',
+            cursor: 'pointer',
+          }}
+        >
+          ▶{' '}
+          {loading
+            ? 'завантаження…'
+            : `${kind === 'audio' ? 'аудіо' : 'відео'} · ${file.filename} · ${Math.max(1, Math.round(file.sizeBytes / 1024 / 1024))} МБ`}
+        </button>
+      </div>
+    )
+  }
+  return kind === 'audio' ? (
+    <audio
+      controls
+      autoPlay
+      src={url}
+      style={{ display: 'block', marginTop: 6, maxWidth: 320, height: 32 }}
+    />
+  ) : (
+    <video
+      controls
+      autoPlay
+      src={url}
+      style={{ display: 'block', marginTop: 6, maxWidth: 360, maxHeight: 240, borderRadius: 8 }}
+    />
   )
 }
 
@@ -681,7 +826,7 @@ export function ChatTab({ orderId }: { orderId: string }) {
                     </button>
                   </>
                 )}
-                <AttachmentChips items={c.attachments ?? []} />
+                <MediaAttachments items={c.attachments ?? []} />
                 <ReactionBar
                   comment={c}
                   onToggle={(emoji, mine2) =>
