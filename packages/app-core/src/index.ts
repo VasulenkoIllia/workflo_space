@@ -24,3 +24,5 @@ export * from './twoFactor.js'
 export * from './oauth.js'
 // Order-chat data layer — shared query keys + comment/reaction/pin/stream hooks.
 export * from './orderChat.js'
+// Order-chat UI — one shared component (AR-42 decomp C), parameterised by capabilities.
+export * from './OrderChatView.js'
