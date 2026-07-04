@@ -368,13 +368,29 @@ function MediaItem({ file }: { file: CommentAttachment }) {
   const [loading, setLoading] = useState(false)
   const [lightbox, setLightbox] = useState(false)
 
+  // Розмонтування під час on-demand завантаження (audio/video): без гарду
+  // fetchFileBlobUrl уже створив blob-URL, а setUrl не встиг — cleanup нижче його
+  // не бачить (url===null) → витік. mountedRef ревокає замість setState на мертвому.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const load = () => {
     if (url || loading) return
     setLoading(true)
     fetchFileBlobUrl(file)
-      .then(setUrl)
+      .then((u) => {
+        if (mountedRef.current) setUrl(u)
+        else URL.revokeObjectURL(u)
+      })
       .catch(() => toast.error('Не вдалося завантажити медіа'))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (mountedRef.current) setLoading(false)
+      })
   }
   // Картинки — одразу (fileId-залежність: об'єкт file міняється при рефетчі кешу).
   const fileId = file.id
