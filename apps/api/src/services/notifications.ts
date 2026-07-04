@@ -1,5 +1,6 @@
 import { type Prisma, withTenant } from '@workflo/db'
 import { type NotifyDeps, type NotifyInput, notify } from '@workflo/notifications'
+import type { NotificationEvent } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
 import { writeAuditAsync } from './audit.js'
 
@@ -102,7 +103,10 @@ export function buildNotifyDeps(logger: FastifyBaseLogger): NotifyDeps {
  * Fire-and-forget dispatch — never throws into the request path. Errors are
  * logged; delivery failures are already captured in notification_logs by notify().
  */
-export function dispatchNotification(logger: FastifyBaseLogger, input: NotifyInput): void {
+export function dispatchNotification<E extends NotificationEvent>(
+  logger: FastifyBaseLogger,
+  input: NotifyInput<E>
+): void {
   const deps = buildNotifyDeps(logger)
   void notify(deps, input).catch((err: unknown) => {
     logger.error({ err, event: input.event, profileId: input.profileId }, 'notify dispatch failed')

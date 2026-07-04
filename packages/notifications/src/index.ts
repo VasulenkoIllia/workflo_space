@@ -10,6 +10,7 @@ export {
   type NotifyOutcome,
   type NotifyPrisma,
   type NotifyRecipientInput,
+  type NotifyVars,
 } from './notify.js'
 
 // Resolver — exported so API layer can preview channels in /profile/settings.

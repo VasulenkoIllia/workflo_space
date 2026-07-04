@@ -4,6 +4,7 @@ import {
   dispatchInApp,
   dispatchTelegram,
   type DispatchResult,
+  type EventPayloadMap,
   type Recipient,
 } from './dispatch.js'
 export type { Recipient } from './dispatch.js'
@@ -83,13 +84,23 @@ export interface NotifyDeps {
   onTelegramBlocked?: (profileId: string) => Promise<void> | void
 }
 
-export interface NotifyInput {
+/**
+ * The `vars` shape required for an event: the exact `EventPayloadMap` entry for a
+ * templated event, else a permissive record (events with no template just skip).
+ * This is what makes the public `notify`/`dispatchNotification` boundary type-safe —
+ * a call site with a literal event now fails to compile on a wrong/missing var.
+ */
+export type NotifyVars<E extends NotificationEvent> = E extends keyof EventPayloadMap
+  ? EventPayloadMap[E]
+  : Record<string, unknown>
+
+export interface NotifyInput<E extends NotificationEvent = NotificationEvent> {
   /** Profile id of the recipient. Settings + language are loaded from DB. */
   profileId: string
   /** Event identifier — drives both resolver and renderer. */
-  event: NotificationEvent
-  /** Event-specific variables passed to the renderer. */
-  vars: Record<string, unknown>
+  event: E
+  /** Event-specific variables passed to the renderer (checked against the event). */
+  vars: NotifyVars<E>
   /**
    * Optional in_app title/body — when omitted, in_app dispatch is skipped.
    * (We don't auto-derive in_app text from email/telegram templates because
@@ -136,9 +147,15 @@ function scrubVars(vars: Record<string, unknown>): Record<string, unknown> {
  * Never throws — collects per-channel failures into `results` so callers can
  * decide whether to retry / surface a warning to the user.
  */
-export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<NotifyOutcome> {
+export async function notify<E extends NotificationEvent>(
+  deps: NotifyDeps,
+  input: NotifyInput<E>
+): Promise<NotifyOutcome> {
   const logger = deps.logger ?? defaultLogger
   const { prisma } = deps
+  // The generic boundary above proves `vars` matches `event`; the per-channel
+  // renderers still take the widened record (they narrow per-event internally).
+  const vars = input.vars as Record<string, unknown>
 
   const settings = await prisma.notificationSettings.findUnique({
     where: { profileId: input.profileId },
@@ -177,9 +194,9 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
     let result: DispatchResult
 
     if (channel === NotificationChannel.EMAIL) {
-      result = await dispatchEmail(input.event, recipient, input.vars)
+      result = await dispatchEmail(input.event, recipient, vars)
     } else if (channel === NotificationChannel.TELEGRAM) {
-      result = await dispatchTelegram(input.event, recipient, input.vars)
+      result = await dispatchTelegram(input.event, recipient, vars)
       if (
         result.channel === NotificationChannel.TELEGRAM &&
         result.result.status === 'failed' &&
@@ -195,7 +212,7 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
         }
       }
     } else if (channel === NotificationChannel.IN_APP) {
-      result = dispatchInApp(input.event, recipient, input.vars)
+      result = dispatchInApp(input.event, recipient, vars)
       if (input.inApp) {
         try {
           await prisma.notification.create({
@@ -204,7 +221,7 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
               type: input.event,
               title: input.inApp.title,
               body: input.inApp.body,
-              metadata: scrubVars(input.vars),
+              metadata: scrubVars(vars),
             },
           })
           result = {
@@ -247,7 +264,7 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
           channel,
           status: result.result.status,
           errorCode: 'reason' in result.result ? result.result.reason : null,
-          metadata: { vars: scrubVars(input.vars) },
+          metadata: { vars: scrubVars(vars) },
         },
       })
     } catch (logErr) {
@@ -263,11 +280,11 @@ export async function notify(deps: NotifyDeps, input: NotifyInput): Promise<Noti
   return { results, attempted }
 }
 
-export interface NotifyRecipientInput {
+export interface NotifyRecipientInput<E extends NotificationEvent = NotificationEvent> {
   /** Explicit recipient — used when there is no Profile (external guest, invite). */
   recipient: Recipient
-  event: NotificationEvent
-  vars: Record<string, unknown>
+  event: E
+  vars: NotifyVars<E>
   /** Channels to dispatch on. Defaults to email only (the always-available channel). */
   channels?: ReadonlyArray<NotificationChannel>
 }
@@ -280,20 +297,21 @@ export interface NotifyRecipientInput {
  *
  * Never throws — per-channel failures are collected in the returned results.
  */
-export async function notifyRecipient(
-  input: NotifyRecipientInput,
+export async function notifyRecipient<E extends NotificationEvent>(
+  input: NotifyRecipientInput<E>,
   logger: NotifyLogger = defaultLogger
 ): Promise<NotifyOutcome> {
   const channels = input.channels ?? [NotificationChannel.EMAIL]
   const results: DispatchResult[] = []
   const attempted: NotificationChannel[] = []
+  const vars = input.vars as Record<string, unknown>
 
   for (const channel of channels) {
     attempted.push(channel)
     if (channel === NotificationChannel.EMAIL) {
-      results.push(await dispatchEmail(input.event, input.recipient, input.vars))
+      results.push(await dispatchEmail(input.event, input.recipient, vars))
     } else if (channel === NotificationChannel.TELEGRAM) {
-      results.push(await dispatchTelegram(input.event, input.recipient, input.vars))
+      results.push(await dispatchTelegram(input.event, input.recipient, vars))
     } else {
       logger.warn('notifyRecipient.unsupported_channel', { channel, event: input.event })
       results.push({ channel, result: { status: 'skipped', reason: 'unsupported_for_recipient' } })

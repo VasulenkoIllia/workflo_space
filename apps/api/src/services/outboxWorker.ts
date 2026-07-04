@@ -1,5 +1,5 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
-import { notify } from '@workflo/notifications'
+import { notify, type NotifyVars } from '@workflo/notifications'
 import {
   INTERNAL_TO_CLIENT_STATUS,
   type NotificationEvent,
@@ -136,11 +136,11 @@ const orderRefPayload = z.object({
  * failed. in_app rows persist regardless (notify() writes them); email/telegram without a
  * template come back `skipped`, so adding events with no email template is safe.
  */
-async function deliverToRecipients(
+async function deliverToRecipients<E extends NotificationEvent>(
   logger: FastifyBaseLogger,
   recipientProfileIds: string[],
-  event: NotificationEvent,
-  vars: Record<string, unknown>,
+  event: E,
+  vars: NotifyVars<E>,
   inApp: { title: string; body: string }
 ): Promise<void> {
   if (recipientProfileIds.length === 0) return

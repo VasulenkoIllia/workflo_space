@@ -112,8 +112,10 @@ export function renderEmailForEvent(
   vars: Record<string, unknown>
 ): RenderedEmail | null {
   const locale: LocaleKey = recipient.locale ?? 'uk'
-  // We intentionally use `as` casts here because the per-event types are
-  // proven by the caller building EventPayloadMap[event].
+  // The `as` casts below are now genuinely backed: the public notify()/
+  // notifyRecipient()/dispatchNotification() boundary is generic over the event
+  // (NotifyVars<E>), so a literal-event caller cannot pass mismatched vars. This
+  // router only re-narrows the widened record it receives internally.
   switch (event) {
     case 'auth.welcome':
       return renderWelcomeEmail({
