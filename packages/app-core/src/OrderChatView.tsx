@@ -187,7 +187,7 @@ function ReactionBar({
           {r.emoji} {r.count}
         </button>
       ))}
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <span className="wfp-chat-react-add" style={{ position: 'relative', display: 'inline-flex' }}>
         <button
           type="button"
           className="wfp-mono"
@@ -799,97 +799,54 @@ export function OrderChat({ orderId, currentUserId, capabilities, upload }: Orde
                       </span>
                     )}
                     {mine && <ReadTicks createdAt={c.createdAt} reads={reads} />}
-                    <button
-                      type="button"
-                      className="wfp-mono"
-                      title="Відповісти"
-                      onClick={() => setReplyTo(c)}
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 11,
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--wf-fg-muted)',
-                      }}
-                    >
-                      ↩
-                    </button>
-                    {((mine && Date.now() - new Date(c.createdAt).getTime() < EDIT_WINDOW_MS) ||
-                      canEditAnyone) && (
+                    {/* Дії повідомлення — з'являються на hover (як у месенджерах), не висять завжди. */}
+                    <span className="wfp-chat-acts">
                       <button
                         type="button"
-                        className="wfp-mono"
-                        title="Редагувати"
-                        onClick={() => setEditing({ id: c.id, content: c.content })}
-                        style={{
-                          marginLeft: 4,
-                          fontSize: 11,
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--wf-fg-muted)',
-                        }}
+                        className="wfp-mono wfp-chat-act"
+                        title="Відповісти"
+                        onClick={() => setReplyTo(c)}
                       >
-                        ✎
+                        ↩
                       </button>
-                    )}
-                    {(mine || canEditAnyone) && (
-                      <button
-                        type="button"
-                        className="wfp-mono"
-                        title="Видалити"
-                        onClick={() => {
-                          del.mutate(c.id, {
-                            onError: () => toast.error('Не вдалося видалити'),
-                          })
-                        }}
-                        style={{
-                          marginLeft: 4,
-                          fontSize: 11,
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--wf-fg-muted)',
-                        }}
-                      >
-                        🗑
-                      </button>
-                    )}
-                    {canPin && (
-                      <button
-                        type="button"
-                        className="wfp-mono"
-                        title={c.pinnedAt ? 'Відкріпити' : 'Закріпити'}
-                        onClick={() =>
-                          pin.mutate(
-                            { commentId: c.id, pinned: !!c.pinnedAt },
-                            { onError: () => toast.error('Не вдалося') }
-                          )
-                        }
-                        style={{
-                          marginLeft: 4,
-                          fontSize: 11,
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          color: c.pinnedAt ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
-                        }}
-                      >
-                        📌
-                      </button>
-                    )}
+                      {((mine && Date.now() - new Date(c.createdAt).getTime() < EDIT_WINDOW_MS) ||
+                        canEditAnyone) && (
+                        <button
+                          type="button"
+                          className="wfp-mono wfp-chat-act"
+                          title="Редагувати"
+                          onClick={() => setEditing({ id: c.id, content: c.content })}
+                        >
+                          ✎
+                        </button>
+                      )}
+                      {(mine || canEditAnyone) && (
+                        <button
+                          type="button"
+                          className="wfp-mono wfp-chat-act wfp-chat-act--danger"
+                          title="Видалити"
+                          onClick={() => del.mutate(c.id)}
+                        >
+                          🗑
+                        </button>
+                      )}
+                      {canPin && (
+                        <button
+                          type="button"
+                          className={cn('wfp-mono wfp-chat-act', c.pinnedAt && 'wfp-chat-act--on')}
+                          title={c.pinnedAt ? 'Відкріпити' : 'Закріпити'}
+                          onClick={() => pin.mutate({ commentId: c.id, pinned: !!c.pinnedAt })}
+                        >
+                          📌
+                        </button>
+                      )}
+                    </span>
                   </>
                 )}
                 <MediaAttachments items={c.attachments ?? []} />
                 <ReactionBar
                   comment={c}
-                  onToggle={(emoji, mine2) =>
-                    react.mutate(
-                      { commentId: c.id, emoji, mine: mine2 },
-                      { onError: () => toast.error('Не вдалося') }
-                    )
-                  }
+                  onToggle={(emoji, mine2) => react.mutate({ commentId: c.id, emoji, mine: mine2 })}
                 />
               </div>
             </div>

@@ -683,6 +683,46 @@
   border-radius: 4px;
 }
 .wfp-chat-row:hover { background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent); }
+
+/* Message actions (reply/edit/delete/pin) + reaction-add — revealed on row hover
+   (messenger-style), not permanently on screen. Kept in-flow (opacity, no reflow). */
+.wfp-chat-acts {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.wfp-chat-act {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 4px;
+  color: var(--wf-fg-subtle);
+  transition: color 0.1s ease, background 0.1s ease;
+}
+.wfp-chat-act:hover { color: var(--wf-fg); background: color-mix(in oklab, var(--wf-fg) 8%, transparent); }
+.wfp-chat-act--danger:hover { color: var(--wf-destructive); }
+.wfp-chat-act--on { color: var(--wf-accent); }
+.wfp-chat-react-add {
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.wfp-chat-row:hover .wfp-chat-acts,
+.wfp-chat-row:focus-within .wfp-chat-acts,
+.wfp-chat-row:hover .wfp-chat-react-add,
+.wfp-chat-row:focus-within .wfp-chat-react-add {
+  opacity: 1;
+}
+/* Touch devices have no hover — keep actions reachable. */
+@media (hover: none) {
+  .wfp-chat-acts,
+  .wfp-chat-react-add { opacity: 1; }
+}
 .wfp-chat-ts { color: var(--wf-fg-subtle); font-size: 11px; }
 .wfp-chat-who { font-weight: 500; }
 .wfp-chat-who-wrap { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
