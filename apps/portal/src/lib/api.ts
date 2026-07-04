@@ -3,6 +3,7 @@ export {
   API_URL,
   ApiError,
   api,
+  apiErrorMessage,
   getAccessToken,
   refreshAccessToken,
   setAccessToken,

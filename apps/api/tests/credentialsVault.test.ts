@@ -183,6 +183,31 @@ describe('POST /workspace/clients/:id/credentials — create', () => {
     await app.close()
   })
 
+  it('accepts null for empty optional fields → 201 (client sends null, not undefined)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.create.mockResolvedValue(metaRow)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      // порожні опційні поля фронт шле як null — схема .nullish() має пропустити (не 400)
+      payload: {
+        label: 'key crm',
+        service: null,
+        url: null,
+        username: 'admin',
+        secret: 'p',
+        notes: null,
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const data = db.credentialVault.create.mock.calls[0][0].data
+    expect(data.notes).toBeNull()
+    expect(data.service).toBeNull()
+    await app.close()
+  })
+
   it('503 when the vault KEK is not configured', async () => {
     db.company.findFirst.mockResolvedValue({ id: COMPANY })
     const saved = process.env.CREDENTIALS_KEK_BASE64

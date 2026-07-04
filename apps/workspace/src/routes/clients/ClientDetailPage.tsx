@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { apiErrorMessage } from '@/lib/api'
 import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
 import { Avatar, Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
@@ -257,7 +258,9 @@ function DocumentsSection({ companyId }: { companyId: string }) {
 
   const open = (d: ClientDocument) => {
     if (!d.order) return
-    openDocumentPdf(d.order.id, d).catch(() => toast.error('Не вдалося відкрити документ'))
+    openDocumentPdf(d.order.id, d).catch((err) =>
+      toast.error(apiErrorMessage(err, 'Не вдалося відкрити документ'))
+    )
   }
 
   return (
@@ -401,14 +404,14 @@ function SecretsSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Відкликати секрет «${c.label}»? Reveal стане недоступним.`)) return
     revoke.mutate(c.id, {
       onSuccess: () => toast.success('Секрет відкликано'),
-      onError: () => toast.error('Не вдалося відкликати'),
+      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося відкликати')),
     })
   }
   const doDelete = (c: Credential) => {
     if (!window.confirm(`Назавжди видалити секрет «${c.label}»?`)) return
     del.mutate(c.id, {
       onSuccess: () => toast.success('Секрет видалено'),
-      onError: () => toast.error('Не вдалося видалити'),
+      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося видалити')),
     })
   }
 
@@ -498,7 +501,7 @@ function AddCredentialForm({
           toast.success('Секрет додано')
           onDone()
         },
-        onError: () => toast.error('Не вдалося додати'),
+        onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося додати')),
       }
     )
   }
@@ -574,7 +577,10 @@ function PeopleSection({ companyId }: { companyId: string }) {
   const members = data?.members ?? []
 
   const changeRole = (profileId: string, role: 'owner' | 'member') =>
-    setRole.mutate({ profileId, role }, { onError: () => toast.error('Не вдалося змінити роль') })
+    setRole.mutate(
+      { profileId, role },
+      { onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося змінити роль')) }
+    )
 
   const sendInvite = () => {
     const email = inviteEmail.trim()
@@ -588,7 +594,8 @@ function PeopleSection({ companyId }: { companyId: string }) {
         setInviteEmail('')
         setInviting(false)
       },
-      onError: () => toast.error('Не вдалося запросити — можливо, вже учасник'),
+      onError: (err) =>
+        toast.error(apiErrorMessage(err, 'Не вдалося запросити — можливо, вже учасник')),
     })
   }
 
@@ -596,7 +603,8 @@ function PeopleSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Видалити ${name} з компанії клієнта?`)) return
     remove.mutate(profileId, {
       onSuccess: () => toast.success('Користувача видалено'),
-      onError: () => toast.error('Не вдалося — можливо, це останній власник'),
+      onError: (err) =>
+        toast.error(apiErrorMessage(err, 'Не вдалося — можливо, це останній власник')),
     })
   }
 
@@ -604,7 +612,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
     if (!window.confirm(`Надіслати ${name} лист для скидання пароля?`)) return
     resetPw.mutate(profileId, {
       onSuccess: () => toast.success('Лист для скидання пароля надіслано'),
-      onError: () => toast.error('Не вдалося надіслати'),
+      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося надіслати')),
     })
   }
 
@@ -766,7 +774,7 @@ function LoyaltyPanel({
   const save = () =>
     setOverride.mutate(draft === '' ? null : (draft as LoyaltyTier), {
       onSuccess: () => toast.success('Тір оновлено'),
-      onError: () => toast.error('Не вдалося оновити тір'),
+      onError: (err) => toast.error(apiErrorMessage(err, 'Не вдалося оновити тір')),
     })
 
   const lifetime = Number(data.lifetimePaidUsd)
@@ -1127,7 +1135,8 @@ function RequisitesForm({
           toast.success('Реквізити збережено')
           onDone()
         },
-        onError: () => toast.error('Не вдалося — перевірте формат ІПН/IBAN/email'),
+        onError: (err) =>
+          toast.error(apiErrorMessage(err, 'Не вдалося — перевірте формат ІПН/IBAN/email')),
       }
     )
 

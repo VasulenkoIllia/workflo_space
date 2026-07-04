@@ -20,11 +20,13 @@ import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.j
 const createSchema = z
   .object({
     label: z.string().trim().min(1).max(120),
-    service: z.string().trim().max(60).optional(),
-    url: z.string().trim().max(500).optional(),
-    username: z.string().trim().max(200).optional(),
+    // nullish (not just optional): фронт шле `null` для порожніх опційних полів
+    // (порожнє → null), а null — валідне «немає значення» для цих nullable-колонок.
+    service: z.string().trim().max(60).nullish(),
+    url: z.string().trim().max(500).nullish(),
+    username: z.string().trim().max(200).nullish(),
     secret: z.string().min(1).max(10000),
-    notes: z.string().trim().max(2000).optional(),
+    notes: z.string().trim().max(2000).nullish(),
   })
   .strict()
 

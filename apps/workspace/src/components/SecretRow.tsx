@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import { apiErrorMessage } from '@/lib/api'
 import {
   hasValidRevealGrant,
   STEP_UP_REQUIRED,
@@ -84,7 +85,7 @@ export function SecretRow({
             onNeedStepUp(runReveal)
             return
           }
-          toast.error('Не вдалося показати секрет')
+          toast.error(apiErrorMessage(err, 'Не вдалося показати секрет'))
         },
       }
     )

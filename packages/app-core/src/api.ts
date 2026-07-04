@@ -35,6 +35,30 @@ export class ApiError extends Error {
   }
 }
 
+/** One field-level validation issue (VALIDATION_ERROR `details[]`). */
+interface ApiFieldIssue {
+  field?: string
+  message?: string
+}
+
+/**
+ * The message to show a user for a failed request. For an ApiError we surface the
+ * SERVER's own message (business rules / 403 / 409 carry a user-facing UA string) —
+ * so backend errors actually reach the user instead of a generic «Не вдалося…».
+ * For a VALIDATION_ERROR the top message is generic, so we append the offending
+ * field(s) when the server named them. Non-ApiError → the caller's fallback.
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError)) return fallback
+  const base = err.message || fallback
+  const details = err.details
+  if (err.code === (ApiErrorCode.VALIDATION_ERROR as string) && Array.isArray(details)) {
+    const fields = (details as ApiFieldIssue[]).map((d) => d.field).filter(Boolean)
+    if (fields.length) return `${base} (${[...new Set(fields)].join(', ')})`
+  }
+  return base
+}
+
 interface RequestOptions extends Omit<RequestInit, 'body' | 'method'> {
   body?: unknown
   _retry?: boolean
