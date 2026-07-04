@@ -36,7 +36,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
       // Legal identity (IBAN/tax-id/signatory) is owner-only, like the write — NOT the
       // delegable `billing.view` used for transactional records.
       if (!can(user, 'company.update_settings', { agencyId, companyId })) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу', 403)
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Реквізити доступні лише власнику', 403)
       }
       const requisites = await withTenant((tx) =>
         tx.company.findFirst({ where: { id: companyId, agencyId }, select: REQUISITES_SELECT })

@@ -17,7 +17,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
     },
     async (request, reply) => {
       if (!can(request.user, 'executor.invite')) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав', 403)
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Запрошувати виконавців може лише команда', 403)
       }
 
       const input = inviteExecutorSchema.parse(request.body)
