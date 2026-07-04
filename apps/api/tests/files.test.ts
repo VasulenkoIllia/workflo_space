@@ -230,6 +230,37 @@ describe('GET /orders/:id/files', () => {
     expect(res.statusCode).toBe(404)
     await app.close()
   })
+
+  it('client file list excludes internal-note attachments (leak guard)', async () => {
+    orderFindUnique.mockResolvedValue(order) // client is a participant of this order
+    fileFindMany.mockResolvedValue([])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/files',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    // клієнт бачить лише звичайні файли або вкладення публічних повідомлень
+    expect(fileFindMany.mock.calls[0][0].where.OR).toEqual([
+      { commentId: null },
+      { comment: { isInternal: false } },
+    ])
+    await app.close()
+  })
+
+  it('team file list is unfiltered (sees internal-note attachments)', async () => {
+    orderFindUnique.mockResolvedValue(order)
+    fileFindMany.mockResolvedValue([])
+    const { app, token } = await authed(EXECUTOR)
+    await app.inject({
+      method: 'GET',
+      url: '/orders/order-1/files',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(fileFindMany.mock.calls[0][0].where.OR).toBeUndefined()
+    await app.close()
+  })
 })
 
 describe('GET /files/:id + content', () => {
@@ -291,6 +322,45 @@ describe('GET /files/:id + content', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('404 when a client opens an internal-note attachment (leak guard)', async () => {
+    // File linked to a team-only note: the client is a participant of the order but
+    // must not see (metadata) or download (content) the internal attachment.
+    fileFindUnique.mockResolvedValue({ ...fileRow, comment: { isInternal: true } })
+    orderFindUnique.mockResolvedValue(order) // client is a participant of order-1
+    storageRead.mockResolvedValue(Buffer.from('SECRET'))
+    const { app, token } = await authed(CLIENT)
+
+    const meta = await app.inject({
+      method: 'GET',
+      url: '/files/file-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(meta.statusCode).toBe(404)
+
+    const content = await app.inject({
+      method: 'GET',
+      url: '/files/file-1/content',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(content.statusCode).toBe(404)
+    expect(storageRead).not.toHaveBeenCalled() // never even read the blob
+    await app.close()
+  })
+
+  it('internal-note attachment IS visible to the team (executor 200)', async () => {
+    fileFindUnique.mockResolvedValue({ ...fileRow, comment: { isInternal: true } })
+    orderFindUnique.mockResolvedValue(order)
+    storageRead.mockResolvedValue(Buffer.from('DATA'))
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/files/file-1/content',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
     await app.close()
   })
 })

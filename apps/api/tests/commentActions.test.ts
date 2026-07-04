@@ -249,10 +249,11 @@ describe('reactions', () => {
       payload: { emoji: '👍' },
     })
     expect(res.statusCode).toBe(200)
+    // scoped to own reaction AND to a comment in THIS order (backstop до RLS реакцій)
     expect(reactionDeleteMany.mock.calls[0][0].where).toMatchObject({
-      commentId: 'c1',
       profileId: 'exec-1',
       emoji: '👍',
+      comment: { id: 'c1', orderId: 'order-1' },
     })
     await app.close()
   })

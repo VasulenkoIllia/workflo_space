@@ -166,7 +166,13 @@ const commentActionsRoute: FastifyPluginAsync = (fastify) => {
 
       const removed = await withTenant((tx) =>
         tx.commentReaction.deleteMany({
-          where: { commentId: request.params.commentId, profileId: user.sub, emoji },
+          // Скоуп по orderId (як усі мутації тут): не даємо чіпати реакцію поза
+          // цим замовленням навіть на свій profileId — backstop до RLS реакцій.
+          where: {
+            emoji,
+            profileId: user.sub,
+            comment: { id: request.params.commentId, orderId: access.orderId },
+          },
         })
       )
       if (removed.count > 0) {

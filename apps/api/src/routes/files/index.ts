@@ -120,7 +120,15 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
       const access = await requireOrderParticipant(request, request.params.id)
       const files = await withTenant((tx) =>
         tx.orderFile.findMany({
-          where: { orderId: access.orderId, deletedAt: null },
+          where: {
+            orderId: access.orderId,
+            deletedAt: null,
+            // leak-гард: клієнт не бачить вкладень командних нотаток у табі «Файли».
+            // Звичайні файли (commentId=null) і вкладення публічних повідомлень — видно.
+            ...(access.isInternal
+              ? {}
+              : { OR: [{ commentId: null }, { comment: { isInternal: false } }] }),
+          },
           orderBy: { createdAt: 'desc' },
           select: FILE_META_SELECT,
         })

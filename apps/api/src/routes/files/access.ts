@@ -24,6 +24,9 @@ export interface FileRow {
   sha256: string
   createdAt: Date
   deletedAt: Date | null
+  // 03-чат leak-гард: файл, прив'язаний до internal-нотатки, лишається team-only —
+  // клієнт не бачить ні повідомлення, ні його вкладення (null = звичайний файл табу).
+  comment: { isInternal: boolean } | null
 }
 
 export interface FileWithAccess {
@@ -55,6 +58,8 @@ export async function requireFileAccess(
         sha256: true,
         createdAt: true,
         deletedAt: true,
+        // leak-гард: чи це вкладення internal-нотатки (тоді клієнт його не бачить).
+        comment: { select: { isInternal: true } },
       },
     })
   )
@@ -62,5 +67,10 @@ export async function requireFileAccess(
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Файл не знайдено', 404)
   }
   const access = await requireOrderParticipant(request, file.orderId)
+  // 03-чат: вкладення командної нотатки — team-only. Клієнт (не-internal учасник)
+  // отримує той самий 404, що й для неіснуючого файлу (без визнання існування).
+  if (!access.isInternal && file.comment?.isInternal) {
+    throw new AppError(ApiErrorCode.NOT_FOUND, 'Файл не знайдено', 404)
+  }
   return { file, access }
 }
