@@ -18,3 +18,7 @@ export * from './notificationPrefs.js'
 export * from './telegram.js'
 export * from './InboxView.js'
 export * from './BellDropdown.js'
+// Auth-lib surface — was byte-identical in both apps (AR-42, audit r4); shared here.
+export * from './sessions.js'
+export * from './twoFactor.js'
+export * from './oauth.js'
