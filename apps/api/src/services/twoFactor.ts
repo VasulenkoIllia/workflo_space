@@ -1,7 +1,7 @@
 import { type Prisma, prisma } from '@workflo/db'
 import bcrypt from 'bcryptjs'
 import { decryptSecret, encryptSecret, requireKek } from './credentialCrypto.js'
-import { generateBackupCodes, generateTotpSecret, verifyTotp } from './totp.js'
+import { generateBackupCodes, generateTotpSecret, matchTotpStep } from './totp.js'
 
 /**
  * 2FA persistence + crypto glue (S9-01). The base32 TOTP secret is stored with the
@@ -68,13 +68,15 @@ export async function enable(profileId: string, code: string): Promise<EnableRes
   const row = await prisma.twoFactorAuth.findUnique({ where: { profileId } })
   if (!row || row.enabledAt) return { ok: false }
   const secret = decryptTotpSecret(row)
-  if (!verifyTotp(secret, code)) return { ok: false }
+  const step = matchTotpStep(secret, code)
+  if (step === null) return { ok: false }
 
   const codes = generateBackupCodes()
   const hashes = await Promise.all(codes.map((c) => bcrypt.hash(c, 10)))
   await prisma.twoFactorAuth.update({
     where: { profileId },
-    data: { enabledAt: new Date(), backupCodes: hashes },
+    // Seed lastTotpStep so the enable code can't be replayed as a login within its window.
+    data: { enabledAt: new Date(), backupCodes: hashes, lastTotpStep: step },
   })
   return { ok: true, backupCodes: codes }
 }
@@ -92,18 +94,28 @@ export type ChallengeOutcome = 'ok' | 'invalid'
 
 /**
  * Verify a login/step-up challenge: a 6-digit TOTP OR a one-time backup code.
- * A matched backup code is consumed (removed from the row). Runs in one tx so a
- * concurrent reuse of the same code can't both succeed.
+ * A matched TOTP step and a matched backup code are BOTH single-use. A per-profile
+ * advisory lock serialises the whole read-modify-write, so two concurrent requests
+ * can't double-spend a backup code or replay a TOTP step (the plain tx alone did
+ * NOT prevent this — the array/step writes are unconditional overwrites of a stale
+ * read; same lock pattern as timer/leads/rates).
  */
 export async function verifyChallenge(profileId: string, code: string): Promise<ChallengeOutcome> {
   const trimmed = code.trim()
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`2fa:${profileId}`}))`
     const row = await tx.twoFactorAuth.findUnique({ where: { profileId } })
     if (!row || !row.enabledAt) return 'invalid'
 
     if (/^\d{6}$/.test(trimmed)) {
       const secret = decryptTotpSecret(row)
-      if (verifyTotp(secret, trimmed)) return 'ok'
+      const step = matchTotpStep(secret, trimmed)
+      if (step !== null) {
+        // Replay guard: each step is accepted at most once (RFC 6238 §5.2).
+        if (row.lastTotpStep != null && step <= row.lastTotpStep) return 'invalid'
+        await tx.twoFactorAuth.update({ where: { profileId }, data: { lastTotpStep: step } })
+        return 'ok'
+      }
     }
 
     // Backup-code path: find the first matching hash, consume it.

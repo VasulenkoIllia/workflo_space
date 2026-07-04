@@ -81,6 +81,9 @@ function stubGoogleExchange(payload: Record<string, unknown> | null) {
 }
 
 const GOOGLE_USER = {
+  iss: 'https://accounts.google.com',
+  aud: 'test-client-id', // must equal GOOGLE_OAUTH_CLIENT_ID for the aud check
+  exp: Math.floor(Date.now() / 1000) + 3600,
   sub: 'google-sub-1',
   email: 'oauth-user@example.com',
   email_verified: true,
@@ -148,6 +151,33 @@ describe('GET /auth/oauth/google/callback', () => {
     const setCookie = String(res.headers['set-cookie'])
     expect(setCookie).toContain('refresh_token=')
     expect(refreshCreate).toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('rejects an id_token with the wrong audience → oauthError=exchange', async () => {
+    stubGoogleExchange({ ...GOOGLE_USER, aud: 'attacker-client-id' })
+    oauthFindUnique.mockResolvedValue({ profileId: 'user-1' })
+    const { app } = await authed(PROFILE)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth/oauth/google/callback?code=ok&state=${encodeURIComponent(signState({ v: 'login', app: 'portal' }))}`,
+    })
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toBe('http://localhost:3001/login?oauthError=exchange')
+    expect(refreshCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('rejects an expired id_token → oauthError=exchange', async () => {
+    stubGoogleExchange({ ...GOOGLE_USER, exp: Math.floor(Date.now() / 1000) - 60 })
+    oauthFindUnique.mockResolvedValue({ profileId: 'user-1' })
+    const { app } = await authed(PROFILE)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/auth/oauth/google/callback?code=ok&state=${encodeURIComponent(signState({ v: 'login', app: 'portal' }))}`,
+    })
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toBe('http://localhost:3001/login?oauthError=exchange')
     await app.close()
   })
 

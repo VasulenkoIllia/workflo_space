@@ -118,7 +118,10 @@ const oauthRoute: FastifyPluginAsync = (fastify) => {
   // ── Signed URL for the "link Google" button of a LOGGED-IN user ──────────────
   fastify.get(
     '/auth/oauth/google/link-url',
-    { preHandler: [fastify.authenticate] },
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
+    },
     (request, reply) => {
       const cfg = googleOauthConfig()
       if (!cfg) {

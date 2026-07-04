@@ -67,19 +67,33 @@ export function totpAt(secret: string, timeMs: number): string {
 }
 
 /**
- * Verify a user-entered code against the secret. Accepts the current step ±`window`
- * steps (clock skew tolerance). Constant-time compare per candidate. `nowMs` is
- * injectable for tests.
+ * Match a user-entered code against the secret and return the ABSOLUTE step it
+ * matched (unix-step counter), or null if none. Accepts the current step ±`window`
+ * steps (clock skew). Constant-time compare per candidate. The returned step lets
+ * the caller enforce single-use (replay guard, RFC 6238 §5.2). `nowMs` injectable.
  */
-export function verifyTotp(secret: string, code: string, window = 1, nowMs = Date.now()): boolean {
+export function matchTotpStep(
+  secret: string,
+  code: string,
+  window = 1,
+  nowMs = Date.now()
+): number | null {
   const trimmed = code.replace(/\s/g, '')
-  if (!/^\d{6}$/.test(trimmed)) return false
+  if (!/^\d{6}$/.test(trimmed)) return null
   const target = Buffer.from(trimmed)
   for (let w = -window; w <= window; w++) {
-    const candidate = Buffer.from(totpAt(secret, nowMs + w * STEP_SECONDS * 1000))
-    if (candidate.length === target.length && timingSafeEqual(candidate, target)) return true
+    const tMs = nowMs + w * STEP_SECONDS * 1000
+    const candidate = Buffer.from(totpAt(secret, tMs))
+    if (candidate.length === target.length && timingSafeEqual(candidate, target)) {
+      return Math.floor(tMs / 1000 / STEP_SECONDS)
+    }
   }
-  return false
+  return null
+}
+
+/** Boolean convenience over {@link matchTotpStep} (skew-tolerant, no replay tracking). */
+export function verifyTotp(secret: string, code: string, window = 1, nowMs = Date.now()): boolean {
+  return matchTotpStep(secret, code, window, nowMs) !== null
 }
 
 /** otpauth:// provisioning URI for QR rendering (label = issuer:account). */

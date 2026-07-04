@@ -116,12 +116,22 @@ export async function exchangeCode(
   if (segments.length !== 3) return null
   try {
     const payload = JSON.parse(Buffer.from(segments[1] as string, 'base64url').toString()) as {
+      iss?: string
+      aud?: string
+      exp?: number
       sub?: string
       email?: string
       email_verified?: boolean
       name?: string
       picture?: string
     }
+    // Claim checks (OIDC Core §3.1.3.7) — defense-in-depth atop the direct-TLS
+    // exchange: issuer is Google, audience is US, and the token is unexpired.
+    const issOk =
+      payload.iss === 'accounts.google.com' || payload.iss === 'https://accounts.google.com'
+    if (!issOk) return null
+    if (payload.aud !== cfg.clientId) return null
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now()) return null
     if (!payload.sub || !payload.email) return null
     return {
       providerAccountId: payload.sub,

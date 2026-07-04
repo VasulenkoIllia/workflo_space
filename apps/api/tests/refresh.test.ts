@@ -108,14 +108,18 @@ describe('POST /auth/refresh', () => {
     await app.close()
   })
 
-  it('returns 401 for a revoked token', async () => {
+  it('detects reuse of a revoked token → 401 + revokes the whole family', async () => {
     refreshTokenFindUnique.mockResolvedValue({
       id: 'rt-1',
       profileId: 'p1',
-      revokedAt: new Date(),
+      revokedAt: new Date(), // already rotated → presenting it again = theft signal
       expiresAt: new Date(Date.now() + 100000),
+      familyId: 'fam-1',
+      firstIssuedAt: new Date(),
       profile: { id: 'p1', email: 'u@e.com', role: 'client', isActive: true },
     })
+    refreshTokenUpdateMany.mockResolvedValue({ count: 2 })
+    auditLogCreate.mockResolvedValue({})
     const app = buildApp()
     const res = await app.inject({
       method: 'POST',
@@ -123,6 +127,11 @@ describe('POST /auth/refresh', () => {
       headers: { cookie: COOKIE },
     })
     expect(res.statusCode).toBe(401)
+    // reuse-detection: kill the whole family (also revokes the attacker's live successor)
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { familyId: 'fam-1', revokedAt: null } })
+    )
+    expect(refreshTokenCreate).not.toHaveBeenCalled() // no new token for a stale credential
     await app.close()
   })
 

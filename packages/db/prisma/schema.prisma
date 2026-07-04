@@ -539,6 +539,7 @@ model TwoFactorAuth {
   ciphertextAuthTag Bytes
   enabledAt         DateTime? @db.Timestamptz(3) // null = setup pending (does not gate login)
   backupCodes       String[]  @default([]) // remaining one-time codes, bcrypt-hashed
+  lastTotpStep      Int? // last accepted TOTP step (replay guard, RFC 6238 §5.2)
   createdAt         DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
 

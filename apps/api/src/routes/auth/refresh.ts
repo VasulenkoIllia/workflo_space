@@ -67,7 +67,26 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         },
       })
 
-      if (!stored || stored.revokedAt || stored.expiresAt.getTime() < Date.now()) {
+      if (!stored || stored.expiresAt.getTime() < Date.now()) {
+        throw invalid()
+      }
+      // Reuse-detection (OAuth2 BCP §4.13.2): presenting an ALREADY-rotated token is
+      // the theft signal — the legit client rotated to a successor, so this copy is
+      // stale/stolen. Revoke the whole family (kills the attacker's live successor
+      // too) and flag it, forcing both parties to re-authenticate.
+      if (stored.revokedAt) {
+        await prisma.refreshToken.updateMany({
+          where: { familyId: stored.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        })
+        writeAuditAsync(request.log, {
+          actorId: stored.profileId,
+          action: 'auth.refresh_reuse_detected',
+          resourceType: 'profile',
+          resourceId: stored.profileId,
+          result: 'denied',
+          metadata: { familyId: stored.familyId, ip: request.ip },
+        })
         throw invalid()
       }
       if (!stored.profile.isActive) {

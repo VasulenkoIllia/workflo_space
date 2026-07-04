@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
@@ -47,6 +48,8 @@ const { prisma } = (await import('@workflo/db')) as unknown as {
 }
 prisma.$transaction = (fn: (tx: unknown) => unknown) =>
   fn({
+    // verifyChallenge takes a per-profile advisory lock before the read-modify-write.
+    $executeRaw: vi.fn(),
     twoFactorAuth: {
       findUnique: twoFactorFindUnique,
       update: twoFactorUpdate,
@@ -73,12 +76,16 @@ async function authed(claims: unknown) {
 }
 
 /** Build a stored TwoFactorAuth row around a known secret. */
-function rowFor(secret: string, opts: { enabled?: boolean; backupCodes?: string[] } = {}) {
+function rowFor(
+  secret: string,
+  opts: { enabled?: boolean; backupCodes?: string[]; lastTotpStep?: number } = {}
+) {
   return {
     profileId: PROFILE.sub,
     ...encryptTotpSecret(secret),
     enabledAt: opts.enabled ? new Date() : null,
     backupCodes: opts.backupCodes ?? [],
+    lastTotpStep: opts.lastTotpStep ?? null,
   }
 }
 
@@ -202,6 +209,54 @@ describe('2FA login challenge', () => {
       payload: { challengeToken: signChallenge(PROFILE.sub), code: '000000' },
     })
     expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('login-verify rejects a replayed TOTP step (already consumed)', async () => {
+    const secret = generateTotpSecret()
+    const now = Date.now()
+    const usedStep = Math.floor(now / 1000 / 30)
+    // The row already recorded this step as used → the same code must not work again.
+    twoFactorFindUnique.mockResolvedValue(rowFor(secret, { enabled: true, lastTotpStep: usedStep }))
+    const { signChallenge } = await import('../src/routes/auth/twoFactor.js')
+    const { app } = await authed(PROFILE)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/2fa/login-verify',
+      payload: { challengeToken: signChallenge(PROFILE.sub), code: totpAt(secret, now) },
+    })
+    expect(res.statusCode).toBe(401)
+    expect(twoFactorUpdate).not.toHaveBeenCalled() // step not advanced on a replay
+    await app.close()
+  })
+
+  it('login-verify accepts a backup code and consumes it', async () => {
+    const secret = generateTotpSecret()
+    const hash = await bcrypt.hash('abcd-efgh', 10)
+    twoFactorFindUnique.mockResolvedValue(rowFor(secret, { enabled: true, backupCodes: [hash] }))
+    profileFindUnique.mockResolvedValue({
+      id: PROFILE.sub,
+      email: PROFILE.email,
+      role: 'owner',
+      name: 'U',
+      isActive: true,
+      lastActiveAgencyId: null,
+    })
+    companyMemberFindMany.mockResolvedValue([])
+    agencyMemberFindMany.mockResolvedValue([{ agencyId: 'agency-1', role: 'owner' }])
+    refreshCreate.mockResolvedValue({ token: 'r', id: 'rt1' })
+    const { signChallenge } = await import('../src/routes/auth/twoFactor.js')
+    const { app } = await authed(PROFILE)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/2fa/login-verify',
+      payload: { challengeToken: signChallenge(PROFILE.sub), code: 'abcd-efgh' },
+    })
+    expect(res.statusCode).toBe(200)
+    // the used code is removed from the row (single-use)
+    expect(twoFactorUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { backupCodes: [] } })
+    )
     await app.close()
   })
 })
