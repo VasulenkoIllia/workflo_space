@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workflo/api", "dev"],
+      "port": 4000
+    },
+    {
       "name": "ui-storybook",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@workflo/ui", "storybook"],
