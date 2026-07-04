@@ -26,3 +26,5 @@ export * from './oauth.js'
 export * from './orderChat.js'
 // Order-chat UI — one shared component (AR-42 decomp C), parameterised by capabilities.
 export * from './OrderChatView.js'
+// Shared Settings sections — 2FA / sessions / linked accounts / notifications / telegram.
+export * from './SettingsSections.js'
