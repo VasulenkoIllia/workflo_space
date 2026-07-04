@@ -3,7 +3,7 @@
 > **Єдине місце, яке відкриваєш щодня.** Що в роботі, що далі, у якому порядку. Кожен зріз їде по
 > **Definition of Done** ([`ENGINEERING_STANDARDS.md` §8](ENGINEERING_STANDARDS.md)). Стан коду —
 > істина в [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md); це — **черга дій**.
-> _Звірено з кодом: 2026-06-24 (кінець S5)._
+> _Звірено з кодом: 2026-07-04 (аудит r4 + drift-звірка беклогу — прибрано 3 «привиди»: notify-feed, Sentry, `/ready`)._
 
 ## 🗺️ Карта доків (щоб не плутатися, який відкривати)
 
@@ -482,7 +482,7 @@ conformance + form-submit smoke на кожен зріз).
 > Потребують **нового бекенду** → за планом S6–S13 ([`TRACKER.md`](TRACKER.md):44). Не будуємо наперед.
 
 - **client360** (картка клієнта 360°) — потребує clients-CRUD; **рішення власника 2026-06-20: не підтягувати наперед**.
-- **notify-feed** (центр сповіщень) — модель є, read/mark-read API нема.
+- ~~**notify-feed** (центр сповіщень)~~ ✅ **ЗАКРИТО (2026-07-04)** — read/mark-read/unread/snooze (`routes/notifications`) + bell-dropdown + inbox-таби; цей рядок був застарілим (drift-звірка r4).
 - **documents-eu / PDF-движок**, **vault** (секрети), **support**, **calendar**, **testimonials**, **case-editor**.
 - **Глобальна командна дошка** (`workspace-board.jsx`: team-boards, агрегація «усі команди», DnD, фільтри) — нема cross-order/team-board API (`InternalTask` лише per-order). _Per-order kanban задач уже зроблено (slice №4)._
 - **Team** ростер/картка виконавця — бекенд partial, перевірити перед плануванням.
@@ -497,15 +497,15 @@ _Повний беклог — [`DESIGN_PHASE2_PLAN.md`](DESIGN_PHASE2_PLAN.md) 
 > **Рішення власника 26.06: весь блок у беклог.** **Тригер промоуту: перед першим зовнішнім платним тенантом.**
 > Коли візьмемо — фазами, перший зріз **INFRA-DR1** (DR/бекапи P0 — єдине з ризиком незворотної втрати даних).
 
-| Фаза | Зріз (код у BACKLOG)                                                              | Пріоритет |
-| ---- | --------------------------------------------------------------------------------- | --------- |
-| 1    | ~~INFRA-DR1~~ ✅ repo-частина 03.07; лишилась серверна активація (крок 7 ранбука) | P0        |
-| 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                  | P0        |
-| 3    | **INFRA-OBS1** Sentry + uptime + notify-on-failure (⊃ OPS-D1)                     | P1        |
-| 4    | **INFRA-SEC1/2** пін екшенів+SSH-fingerprint · edge security-headers+rate-limit   | P0/P1     |
-| 5    | **INFRA-OPS1** staging-rollback + health→/ready                                   | P1        |
-| 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                   | P1/P2     |
-| 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                         | P1        |
+| Фаза | Зріз (код у BACKLOG)                                                                                                                                                                    | Пріоритет |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1    | ~~INFRA-DR1~~ ✅ repo-частина 03.07; лишилась серверна активація (крок 7 ранбука)                                                                                                       | P0        |
+| 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                                                                                                                        | P0        |
+| 3    | **INFRA-OBS1** ✅ Sentry (`observability/sentry.ts` — api+worker+streams+ErrorBoundary); лишилось: **uptime-моніторинг + notify-on-failure**                                            | P1        |
+| 4    | **INFRA-SEC1/2** appleboy (SSH-key) запінено по SHA (r3); лишилось: **пін actions/docker/pnpm** (ще floating `@v`) · **SSH-fingerprint/known_hosts** · edge security-headers+rate-limit | P0/P1     |
+| 5    | **INFRA-OPS1** ✅ `health→/ready` (`routes/health.ts`); лишилось: **staging-rollback** (prod auto-rollback уже є)                                                                       | P1        |
+| 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                                                                                                                         | P1/P2     |
+| 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                                                                                                                               | P1        |
 
 ## 🧱 Правила черги
 
