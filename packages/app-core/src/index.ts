@@ -22,3 +22,5 @@ export * from './BellDropdown.js'
 export * from './sessions.js'
 export * from './twoFactor.js'
 export * from './oauth.js'
+// Order-chat data layer — shared query keys + comment/reaction/pin/stream hooks.
+export * from './orderChat.js'

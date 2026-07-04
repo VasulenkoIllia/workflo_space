@@ -28,7 +28,8 @@ export function useActiveTimer() {
 /** Invalidate the timer + any order's logged-time/detail (start may auto-stop another order). */
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ['active-timer'] })
-  void qc.invalidateQueries({ queryKey: ['ws-order'] })
+  // order-detail keys (comments/activity/files/time-logs) — unified prefix (AR-42 decomp B)
+  void qc.invalidateQueries({ queryKey: ['order'] })
 }
 
 export function useStartTimer() {
