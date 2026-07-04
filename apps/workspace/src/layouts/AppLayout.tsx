@@ -12,6 +12,7 @@ import {
 } from '@workflo/ui'
 import { SidebarUserMenu } from '@/components/SidebarUserMenu'
 import { TimerBar } from '@/components/TimerBar'
+import { BellDropdown } from '@workflo/app-core'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -144,7 +145,9 @@ export function AppLayout() {
           avatar={initials}
           crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
-          onBell={() => navigate('/inbox')}
+          bellPanel={(close) => (
+            <BellDropdown close={close} onOpenInbox={() => navigate('/inbox')} />
+          )}
           bellDot={unread > 0}
           actions={
             <>

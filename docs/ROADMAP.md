@@ -234,6 +234,18 @@
   WAV-плеєр з'явився після ▶ (скрін). Дизайнерська стилістика (PDF-вьювер, ←/→, стани
   завантаження) — коли буде ТЗ. Побічний фікс: vite-проксі /api → 127.0.0.1 (localhost
   у Node ≥17 резолвиться в ::1 → ECONNREFUSED при IPv4-only API).
+- **Inbox-хвости (18): @згадки-таб + bell-dropdown + mark-unread + snooze (18-Б) —
+  ЗАКРИТО (2026-07-04).** Таб «@згадки» (type=chat.mentioned) у спільному InboxView.
+  Bell-dropdown: Topbar отримав `bellPanel` render-prop (клік-поза закриває), BellDropdown
+  (app-core) — останні 4 з unread-виділенням, «прочитати все», «усі сповіщення →»;
+  обидва AppLayout переключені з navigate-по-кліку на дропдаун. Snooze:
+  `Notification.snoozedUntil`, POST /:id/snooze {hours 1..720} (isRead=true+until),
+  прострочені «прокидаються» ЛІНИВО при GET (updateMany lte-now — без крона),
+  PATCH /:id/unread повертає в непрочитані і знімає snooze. UI: actions-bar у детальці
+  (Позначити непрочитаним / Snooze 1год·до завтра·тиждень), 💤-маркер у списку.
+  +3 тести (api 701). Вживу: mention-нотифікація приїхала, snooze→isRead+until,
+  unread→скинуто, дропдаун/таб/💤 у UI (скріни). Лишок 18: mute/archive розмов (B),
+  відповідальний за тред (18-В), «без відповіді > N год» (18-Г) — окремий зріз.
 
 - **Чат-збагачення: вкладення + reply-to (03) — ЗАКРИТО (2026-07-03).** Міграція
   `20260703_chat_attachments_reply` (additive): `OrderComment.replyToId` (self-relation,

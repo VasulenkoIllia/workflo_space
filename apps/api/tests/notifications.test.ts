@@ -198,6 +198,75 @@ describe('PATCH /notifications/:id/read (own row only)', () => {
   })
 })
 
+describe('PATCH /notifications/:id/unread + snooze (18-Б)', () => {
+  it('unread flips isRead=false and clears snooze (own row scope)', async () => {
+    notificationUpdateMany.mockResolvedValue({ count: 1 })
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/notifications/n1/unread',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const call = notificationUpdateMany.mock.calls.find((c) => c[0].data.isRead === false)
+    expect(call[0].where).toMatchObject({ id: 'n1', profileId: CLAIMS.sub })
+    expect(call[0].data).toMatchObject({ isRead: false, snoozedUntil: null })
+    await app.close()
+  })
+
+  it('snooze sets isRead=true + future snoozedUntil; 404 on foreign row', async () => {
+    notificationUpdateMany.mockResolvedValue({ count: 1 })
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/notifications/n1/snooze',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { hours: 24 },
+    })
+    expect(res.statusCode).toBe(200)
+    const call = notificationUpdateMany.mock.calls.find((c) => c[0].data.snoozedUntil)
+    expect(call[0].data.isRead).toBe(true)
+    expect(call[0].data.snoozedUntil.getTime()).toBeGreaterThan(Date.now() + 23 * 3600_000)
+    await app.close()
+
+    notificationUpdateMany.mockResolvedValue({ count: 0 })
+    const app2 = buildApp()
+    await app2.ready()
+    const token2 = app2.jwt.sign(CLAIMS)
+    const res2 = await app2.inject({
+      method: 'POST',
+      url: '/notifications/n-foreign/snooze',
+      headers: { authorization: `Bearer ${token2}` },
+      payload: { hours: 24 },
+    })
+    expect(res2.statusCode).toBe(404)
+    await app2.close()
+  })
+
+  it('GET lazily wakes expired snoozes (updateMany with lte-now filter)', async () => {
+    notificationUpdateMany.mockResolvedValue({ count: 1 })
+    notificationFindMany.mockResolvedValue([])
+    notificationCount.mockResolvedValue(0)
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/notifications?limit=5',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const wake = notificationUpdateMany.mock.calls.find((c) => c[0].where.snoozedUntil)
+    expect(wake[0].where).toMatchObject({ profileId: CLAIMS.sub })
+    expect(wake[0].data).toMatchObject({ isRead: false, snoozedUntil: null })
+    await app.close()
+  })
+})
+
 describe('POST /notifications/read-all (own unread only)', () => {
   beforeEach(() => vi.clearAllMocks())
 

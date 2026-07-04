@@ -14,8 +14,12 @@ const NOTIF_SELECT = {
   body: true,
   isRead: true,
   metadata: true,
+  snoozedUntil: true,
   createdAt: true,
 } as const
+
+// 18-Б: snooze на 1 год … 30 днів.
+const snoozeSchema = z.object({ hours: z.coerce.number().int().min(1).max(720) })
 
 /**
  * Personal in-app notification feed (07). Rows are profile-scoped — a user only ever sees and
@@ -28,6 +32,11 @@ const notificationsRoute: FastifyPluginAsync = (fastify) => {
   fastify.get('/notifications', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const q = listQuerySchema.parse(request.query)
     const profileId = request.user.sub
+    // 18-Б: прострочені snooze «прокидаються» ліниво при кожному читанні — без крона.
+    await prisma.notification.updateMany({
+      where: { profileId, snoozedUntil: { lte: new Date() } },
+      data: { isRead: false, snoozedUntil: null },
+    })
     const where = {
       profileId,
       ...(q.before ? { createdAt: { lt: new Date(q.before) } } : {}),
@@ -60,6 +69,40 @@ const notificationsRoute: FastifyPluginAsync = (fastify) => {
         data: { isRead: true },
       })
       return reply.send({ success: true, data: { id: request.params.id } })
+    }
+  )
+
+  // ── Mark one UNREAD (повернути в непрочитані; знімає і snooze) ───────────────
+  fastify.patch<{ Params: { id: string } }>(
+    '/notifications/:id/unread',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      await prisma.notification.updateMany({
+        where: { id: request.params.id, profileId: request.user.sub },
+        data: { isRead: false, snoozedUntil: null },
+      })
+      return reply.send({ success: true, data: { id: request.params.id } })
+    }
+  )
+
+  // ── Snooze (18-Б): сховати з непрочитаних, повернути непрочитаною о T ────────
+  fastify.post<{ Params: { id: string } }>(
+    '/notifications/:id/snooze',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { hours } = snoozeSchema.parse(request.body)
+      const snoozedUntil = new Date(Date.now() + hours * 60 * 60 * 1000)
+      const res = await prisma.notification.updateMany({
+        where: { id: request.params.id, profileId: request.user.sub },
+        data: { isRead: true, snoozedUntil },
+      })
+      if (res.count === 0) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Сповіщення не знайдено', details: null },
+        })
+      }
+      return reply.send({ success: true, data: { snoozedUntil } })
     }
   )
 

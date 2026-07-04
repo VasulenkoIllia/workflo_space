@@ -9,6 +9,8 @@ export interface Notification {
   body: string
   isRead: boolean
   metadata: unknown
+  /** 18-Б: приспано до цього часу (у майбутньому → показуємо 💤). */
+  snoozedUntil?: string | null
   createdAt: string
 }
 
@@ -30,6 +32,25 @@ export function useMarkNotificationRead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.patch(`/notifications/${id}/read`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+}
+
+/** Повернути в непрочитані (детальна панель інбокса). */
+export function useMarkNotificationUnread() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.patch(`/notifications/${id}/unread`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+}
+
+/** Snooze (18-Б): сховати з непрочитаних і повернути непрочитаною через N годин. */
+export function useSnoozeNotification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { id: string; hours: number }) =>
+      api.post(`/notifications/${input.id}/snooze`, { hours: input.hours }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['notifications'] }),
   })
 }
@@ -70,6 +91,11 @@ export const KIND_ICON: Record<NotifKind, IconName> = {
   doc: 'file',
   marketing: 'gift',
   system: 'bell',
+}
+
+/** Таб «@згадки» (канон 18-D mentioned-me): персональні згадки з чату. */
+export function isMentionType(type: string): boolean {
+  return type === 'chat.mentioned'
 }
 
 /** The «система» filter groups non-actionable feed items (system + marketing/loyalty). */

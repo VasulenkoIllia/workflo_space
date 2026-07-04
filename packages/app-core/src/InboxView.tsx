@@ -5,16 +5,19 @@ import { formatDateTime } from './format.js'
 import {
   KIND_ICON,
   KIND_LABEL,
+  isMentionType,
   isSystemKind,
   notifKind,
   notifLinkId,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
+  useMarkNotificationUnread,
   useNotifications,
+  useSnoozeNotification,
   type Notification,
 } from './notifications.js'
 
-type Filter = 'all' | 'unread' | 'system'
+type Filter = 'all' | 'unread' | 'mentions' | 'system'
 
 /** Інбокс — master-detail (design: inbox-screens.jsx). Left: searchable, tab-filtered list;
  * right: the focused notification + a jump-to-order link. Shared by portal + workspace — the only
@@ -23,12 +26,15 @@ export function InboxView({ subtitle }: { subtitle: string }) {
   const { data, isLoading } = useNotifications(50)
   const markRead = useMarkNotificationRead()
   const markAll = useMarkAllNotificationsRead()
+  const markUnread = useMarkNotificationUnread()
+  const snooze = useSnoozeNotification()
   const navigate = useNavigate()
 
   const items = useMemo(() => data?.notifications ?? [], [data])
   const counts = {
     all: items.length,
     unread: items.filter((n) => !n.isRead).length,
+    mentions: items.filter((n) => isMentionType(n.type)).length,
     system: items.filter((n) => isSystemKind(n.type)).length,
   }
 
@@ -38,6 +44,7 @@ export function InboxView({ subtitle }: { subtitle: string }) {
 
   const filtered = items.filter((n) => {
     if (filter === 'unread' && n.isRead) return false
+    if (filter === 'mentions' && !isMentionType(n.type)) return false
     if (filter === 'system' && !isSystemKind(n.type)) return false
     if (q && !`${n.title} ${n.body}`.toLowerCase().includes(q.toLowerCase())) return false
     return true
@@ -53,6 +60,7 @@ export function InboxView({ subtitle }: { subtitle: string }) {
   const TABS: { key: Filter; label: string; count: number }[] = [
     { key: 'all', label: 'усі', count: counts.all },
     { key: 'unread', label: 'непрочитані', count: counts.unread },
+    { key: 'mentions', label: '@згадки', count: counts.mentions },
     { key: 'system', label: 'система', count: counts.system },
   ]
 
@@ -151,7 +159,12 @@ export function InboxView({ subtitle }: { subtitle: string }) {
             </div>
           </div>
 
-          <InboxDetail n={selected} onGo={(id) => navigate(`/orders/${id}`)} />
+          <InboxDetail
+            n={selected}
+            onGo={(id) => navigate(`/orders/${id}`)}
+            onUnread={(id) => markUnread.mutate(id)}
+            onSnooze={(id, hours) => snooze.mutate({ id, hours })}
+          />
         </div>
       )}
     </div>
@@ -198,12 +211,26 @@ function InboxRow({
         <div className="wfp-ibox-row-title">{n.title}</div>
         <div className="wfp-ibox-row-preview">{n.body}</div>
       </div>
-      <span className="wfp-ibox-row-ts">{formatDateTime(n.createdAt).split(' ')[0]}</span>
+      <span className="wfp-ibox-row-ts">
+        {n.snoozedUntil && new Date(n.snoozedUntil) > new Date() ? '💤 ' : ''}
+        {formatDateTime(n.createdAt).split(' ')[0]}
+      </span>
     </div>
   )
 }
 
-function InboxDetail({ n, onGo }: { n: Notification | null; onGo: (id: string) => void }) {
+function InboxDetail({
+  n,
+  onGo,
+  onUnread,
+  onSnooze,
+}: {
+  n: Notification | null
+  onGo: (id: string) => void
+  onUnread: (id: string) => void
+  onSnooze: (id: string, hours: number) => void
+}) {
+  const [snoozeOpen, setSnoozeOpen] = useState(false)
   if (!n) {
     return (
       <div className="wfp-ibox-detail">
@@ -241,16 +268,66 @@ function InboxDetail({ n, onGo }: { n: Notification | null; onGo: (id: string) =
         <p style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--wf-fg-secondary)', margin: 0 }}>
           {n.body}
         </p>
-        {linkId && (
-          <Button
-            variant="primary"
-            size="sm"
-            style={{ marginTop: 16 }}
-            onClick={() => onGo(linkId)}
-          >
-            Перейти до замовлення →
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+          {linkId && (
+            <Button variant="primary" size="sm" onClick={() => onGo(linkId)}>
+              Перейти до замовлення →
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => onUnread(n.id)}>
+            Позначити непрочитаним
           </Button>
-        )}
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <Button variant="ghost" size="sm" onClick={() => setSnoozeOpen((v) => !v)}>
+              💤 Snooze ▾
+            </Button>
+            {snoozeOpen && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 0,
+                  zIndex: 30,
+                  display: 'grid',
+                  minWidth: 150,
+                  background: 'var(--wf-surface)',
+                  border: '1px solid var(--wf-border)',
+                  borderRadius: 8,
+                  boxShadow: '0 6px 24px rgba(0,0,0,.25)',
+                  overflow: 'hidden',
+                }}
+              >
+                {(
+                  [
+                    { label: 'на 1 годину', hours: 1 },
+                    { label: 'до завтра', hours: 24 },
+                    { label: 'на тиждень', hours: 168 },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.hours}
+                    type="button"
+                    onClick={() => {
+                      onSnooze(n.id, o.hours)
+                      setSnoozeOpen(false)
+                    }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '7px 12px',
+                      fontSize: 13,
+                      color: 'var(--wf-fg)',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </span>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Icon } from './Icon.js'
 import { useShellMobile } from './AppShell.js'
@@ -17,6 +17,8 @@ export interface TopbarProps {
   onBell?: () => void
   /** Show the unread dot on the bell. */
   bellDot?: boolean
+  /** Dropdown anchored at the bell (18): render-prop gets a close(). Takes precedence over onBell. */
+  bellPanel?: (close: () => void) => ReactNode
   className?: string
 }
 
@@ -28,9 +30,21 @@ export function Topbar({
   onSearch,
   onBell,
   bellDot = false,
+  bellPanel,
   className,
 }: TopbarProps) {
   const mobile = useShellMobile()
+  const [bellOpen, setBellOpen] = useState(false)
+  const bellRef = useRef<HTMLSpanElement>(null)
+  // Клік поза дзвіночком/панеллю закриває дропдаун.
+  useEffect(() => {
+    if (!bellOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [bellOpen])
   return (
     <div className={cn('wfp-topbar', className)}>
       {mobile && (
@@ -65,17 +79,32 @@ export function Topbar({
             <Icon name="search" size={15} />
           </button>
         )}
-        {onBell && (
-          <button
-            type="button"
-            className="wfp-iconbtn"
-            title="Нотифікації"
-            aria-label="Нотифікації"
-            onClick={onBell}
-          >
-            <Icon name="bell" size={15} />
-            {bellDot && <span className="wfp-iconbtn-dot" />}
-          </button>
+        {(onBell || bellPanel) && (
+          <span ref={bellRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              type="button"
+              className="wfp-iconbtn"
+              title="Нотифікації"
+              aria-label="Нотифікації"
+              aria-expanded={bellPanel ? bellOpen : undefined}
+              onClick={bellPanel ? () => setBellOpen((v) => !v) : onBell}
+            >
+              <Icon name="bell" size={15} />
+              {bellDot && <span className="wfp-iconbtn-dot" />}
+            </button>
+            {bellPanel && bellOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  zIndex: 60,
+                }}
+              >
+                {bellPanel(() => setBellOpen(false))}
+              </div>
+            )}
+          </span>
         )}
         {avatar != null && <div className="wfp-tb-avatar">{avatar}</div>}
       </div>

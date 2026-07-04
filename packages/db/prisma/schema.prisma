@@ -863,15 +863,18 @@ model OutboxEvent {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  type      String
-  title     String
-  body      String
-  isRead    Boolean  @default(false)
-  metadata  Json?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  id           String    @id @default(uuid())
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type         String
+  title        String
+  body         String
+  isRead       Boolean   @default(false)
+  metadata     Json?
+  // 18-Б snooze: «повернути непрочитаною о T». GET ліниво скидає прострочені
+  // (isRead=false, snoozedUntil=null) — без крона.
+  snoozedUntil DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([profileId, isRead])
   @@index([profileId, createdAt])

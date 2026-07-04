@@ -9,6 +9,7 @@ import {
   type CommandItem,
   type ThemeMode,
 } from '@workflo/ui'
+import { BellDropdown } from '@workflo/app-core'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { PORTAL_NAV, activeNavId } from '@/config/nav'
@@ -118,7 +119,9 @@ export function AppLayout() {
           avatar={initials}
           crumbs={crumbs}
           onSearch={() => setCmdkOpen(true)}
-          onBell={() => navigate('/inbox')}
+          bellPanel={(close) => (
+            <BellDropdown close={close} onOpenInbox={() => navigate('/inbox')} />
+          )}
           bellDot={unread > 0}
           actions={
             <>
