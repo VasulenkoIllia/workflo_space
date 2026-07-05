@@ -2,6 +2,7 @@
 
 import { Fragment, type FormEvent, useEffect, useState } from 'react'
 import { HERO_ASCII, UA, type LandingContent } from '@/data/content'
+import { getUtm } from '@/lib/utm'
 
 const PORTAL_URL = 'https://app.workflo.space'
 // Inlined at build (NEXT_PUBLIC_*); defaults to the staging API. Prod sets the build-arg.
@@ -441,6 +442,7 @@ function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
           message: form.message,
           source: 'landing-home',
           website,
+          ...getUtm(),
         }),
       })
       setState(res.ok ? 'sent' : 'error')

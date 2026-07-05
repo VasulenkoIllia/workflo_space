@@ -482,13 +482,40 @@ model Lead {
   convertedOrderId String? // set on convert
   lostReason       String?
   position         Int        @default(0)
+  // 26-UTM: first-touch attribution captured on website intake (read-only in the app)
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmTerm          String?
+  utmContent       String?
   createdAt        DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
   agency           Agency     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
+  activities LeadActivity[]
+
   @@index([agencyId])
   @@index([agencyId, status])
   @@map("leads")
+}
+
+// 26-ТАЙМЛАЙН: append-only journal of lead lifecycle events (created / stage_changed /
+// assigned / updated / converted). actorId is a plain Profile id (project convention,
+// no FK); null actor = system intake (website contact form).
+model LeadActivity {
+  id        String   @id @default(uuid())
+  agencyId  String
+  leadId    String
+  actorId   String?
+  type      String
+  metadata  Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([agencyId])
+  @@map("lead_activities")
 }
 
 // 17-CREDENTIALS: envelope-encrypted secrets bound to a client company.
@@ -968,13 +995,23 @@ model BlogPost {
 }
 
 model ContactForm {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  message   String
-  source    String?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  id          String   @id @default(uuid())
+  name        String
+  email       String
+  message     String
+  source      String?
+  isRead      Boolean  @default(false)
+  // 26-UTM: attribution of the visit that produced this submission + link to the
+  // auto-created CRM lead (nullable — intake is best-effort, the message survives anyway)
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+  page        String?
+  referrer    String?
+  leadId      String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([isRead, createdAt])
   @@map("contact_forms")
@@ -1096,6 +1133,7 @@ model Agency {
   estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
   leads                Lead[] // 26 (CRM)
+  leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
 
   @@index([planId])

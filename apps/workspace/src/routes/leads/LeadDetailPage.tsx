@@ -4,12 +4,15 @@ import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useCompanies } from '@/lib/projects'
+import { useTeam } from '@/lib/payouts'
 import {
   type Lead,
+  type LeadActivity,
   type LeadStatus,
   useConvertLead,
   useDeleteLead,
   useLead,
+  useLeadActivity,
   useUpdateLead,
 } from '@/lib/leads'
 
@@ -20,6 +23,33 @@ const STAGE_OPTIONS: { value: Exclude<LeadStatus, 'won'>; label: string }[] = [
   { value: 'qualified', label: 'Кваліфікований' },
   { value: 'proposal', label: 'Пропозиція' },
   { value: 'lost', label: 'Втрачено' },
+]
+
+const STAGE_LABELS: Record<string, string> = {
+  new: 'Новий',
+  contacted: 'Контакт',
+  qualified: 'Кваліфікований',
+  proposal: 'Пропозиція',
+  won: 'Виграно',
+  lost: 'Втрачено',
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'назва',
+  contactName: 'контактна особа',
+  email: 'email',
+  phone: 'телефон',
+  source: 'джерело',
+  estimatedValue: 'сума',
+  notes: 'нотатки',
+}
+
+const UTM_LABELS: [keyof Lead, string][] = [
+  ['utmSource', 'utm_source'],
+  ['utmMedium', 'utm_medium'],
+  ['utmCampaign', 'utm_campaign'],
+  ['utmTerm', 'utm_term'],
+  ['utmContent', 'utm_content'],
 ]
 
 export function LeadDetailPage() {
@@ -210,7 +240,29 @@ function LeadEditor({ lead }: { lead: Lead }) {
         </div>
       </Card>
 
-      <Card title="Конвертація">
+      {UTM_LABELS.some(([k]) => lead[k]) && (
+        <Card title="Джерело · UTM" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {UTM_LABELS.filter(([k]) => lead[k]).map(([k, label]) => (
+              <span
+                key={label}
+                className="wfp-mono"
+                style={{
+                  fontSize: 11,
+                  border: '1px solid var(--wf-border)',
+                  borderRadius: 'var(--wf-radius)',
+                  padding: '3px 8px',
+                }}
+              >
+                <span style={{ color: 'var(--wf-fg-muted)' }}>{label}=</span>
+                {String(lead[k])}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card title="Конвертація" style={{ marginBottom: 16 }}>
         {converted ? (
           <div style={{ fontSize: 13 }}>
             <span className="wfp-mono" style={{ color: 'var(--wf-accent)' }}>
@@ -239,6 +291,110 @@ function LeadEditor({ lead }: { lead: Lead }) {
           </div>
         )}
       </Card>
+
+      <ActivityTimeline leadId={lead.id} />
     </div>
   )
+}
+
+/** 26-ТАЙМЛАЙН: append-only journal of the lead's lifecycle (created / stage / assignee /
+ * edits / convert). Website intakes have no actor and show as «сайт». */
+function ActivityTimeline({ leadId }: { leadId: string }) {
+  const { data: activities, isLoading } = useLeadActivity(leadId)
+  const { data: teamData } = useTeam()
+  const names = new Map((teamData?.members ?? []).map((m) => [m.profileId, m.name]))
+
+  return (
+    <Card title="Активність">
+      {isLoading ? (
+        <Skeleton style={{ height: 80 }} />
+      ) : !activities || activities.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>
+          Подій ще немає — журнал ведеться з моменту цього оновлення.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {activities.map((a) => (
+            <div key={a.id} style={{ display: 'flex', gap: 10, fontSize: 13 }}>
+              <span
+                className="wfp-mono"
+                style={{ color: 'var(--wf-fg-muted)', fontSize: 11, whiteSpace: 'nowrap' }}
+              >
+                {new Date(a.createdAt).toLocaleString('uk-UA', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+              <span>
+                <ActivityLine a={a} names={names} />{' '}
+                <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  · {a.actorId === null ? 'сайт' : (names.get(a.actorId) ?? 'команда')}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ActivityLine({ a, names }: { a: LeadActivity; names: Map<string, string> }) {
+  const m = a.metadata ?? {}
+  switch (a.type) {
+    case 'created':
+      return m.via === 'website' ? (
+        <>
+          створено із заявки на сайті
+          {typeof m.page === 'string' && m.page !== '' ? (
+            <span className="wfp-mono" style={{ fontSize: 11 }}>
+              {' '}
+              ({m.page})
+            </span>
+          ) : null}
+        </>
+      ) : (
+        <>створено вручну</>
+      )
+    case 'stage_changed':
+      return (
+        <>
+          стадія: {STAGE_LABELS[String(m.from)] ?? String(m.from)} →{' '}
+          <strong>{STAGE_LABELS[String(m.to)] ?? String(m.to)}</strong>
+          {typeof m.lostReason === 'string' && m.lostReason !== ''
+            ? ` — причина: ${m.lostReason}`
+            : null}
+        </>
+      )
+    case 'assigned': {
+      const to = typeof m.to === 'string' ? m.to : null
+      return to === null ? (
+        <>відповідального знято</>
+      ) : (
+        <>
+          відповідальний: <strong>{names.get(to) ?? to}</strong>
+        </>
+      )
+    }
+    case 'updated': {
+      const fields = Array.isArray(m.fields) ? m.fields : []
+      return <>оновлено: {fields.map((f) => FIELD_LABELS[String(f)] ?? String(f)).join(', ')}</>
+    }
+    case 'converted': {
+      const orderId = typeof m.orderId === 'string' ? m.orderId : ''
+      return (
+        <>
+          конвертовано в{' '}
+          <Link to={`/orders/${orderId}`} className="wfp-link">
+            замовлення →
+          </Link>
+        </>
+      )
+    }
+    default:
+      return <>{a.type}</>
+  }
 }

@@ -1060,6 +1060,15 @@ Module 25's core ledger slice is genuinely shipped: Portal /wallet (WalletPage.t
 > `/leads` kanban (A1) + `/leads/:id` detail (A2: edit/notes/convert/delete) + convert modal (A3),
 > and the leads nav entry (`nav.tsx`). **Still MISS:** pipeline editor (A4), UTM capture on the
 > contact form (C1), per-lead activity-timeline (needs `LeadActivity`). See ROADMAP §queue-2.
+>
+> **UPDATE 2026-07-05 — C1 + activity-timeline ЗБУДОВАНО (зріз «Leads-добудова»).**
+> C1: `POST /content/contact` авто-створює `Lead` у платформенній агенції з first-touch UTM
+> (лендінг: `lib/utm.ts` captureUtm→sessionStorage у root-layout, обидві форми шлють utm\_\*+page+referrer;
+> `contact_forms` += utm/page/referrer/leadId — повідомлення переживає падіння інтейку, best-effort).
+> Timeline: модель `LeadActivity` (міграція `20260705_lead_utm_activity`, RLS wf_in_tenant) журналить
+> created (manual/website) / stage_changed (+lostReason) / assigned / updated (diff-only, не на кожен save) /
+> converted; `GET /workspace/leads/:id/activity`; `/leads/:id` отримав картки «Джерело · UTM» (чіпи) та
+> «Активність» (актор = член команди або «сайт»). **Still MISS:** pipeline editor (A4), A6-A10, C2.
 
 Module 26 (Leads/CRM) is DESIGN-ONLY: zero code, zero backend. The design-v2 mockup `design-v2/project/workspace-leads.jsx` (439 lines) is rich and covers A1 kanban board (LeadsBoard), A2 lead detail (LeadDetail), A3 convert modal incl. the 26-A "first project in one step" extension (LeadConvertModal), A4 pipeline editor (LeadsPipelines), and B1 the shared WfSource source-icon set — all present and token-based (--wf-\* CSS vars, no hardcoded hex in layout; stage/source brand colors are intentional data values). C1 contact form exists in landing-marketing.jsx but is a plain contact form with NO UTM hidden fields / honeypot / Turnstile, so its "extend" claim overstates the mockup. On the CODE side there is nothing: no `/leads`, `/leads/:id`, or `/settings/leads/pipelines` route in apps/workspace (App.tsx catch-all redirects to `/`), no leads route file, no nav entry (only a comment in nav.tsx:15), no Lead/LeadPipeline/LeadStage/LeadActivity model in prisma schema, and no leads API route (only a stray `'leads'` string in apps/api/src/saas/limits.ts:15 QuotaResource enum). TRACKER.md confirms the whole module is unstarted: LEAD-1/LEAD-2 (and inbound INT-1/INT-3) are all ⬜, GROW-UI is ⏸️ design. DESIGN_SPEC_FULL statuses (РОЗШИР for A1-A4) describe design-intent layered on the design bundle, not code readiness — there is no code base to "extend." The main doc-level drifts: (1) the DESIGN_SYSTEM §5.13.2 "17-module readiness matrix" omits the leads module entirely (no row), and (2) the module's "Релевантні файли" footer in DESIGN_SPEC_FULL points to the old `design-v2/project/workspace-leads.jsx` path while the canonical bundle is `design-v2/`.
 

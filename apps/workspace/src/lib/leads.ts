@@ -20,8 +20,22 @@ export interface Lead {
   convertedOrderId: string | null
   lostReason: string | null
   position: number
+  utmSource: string | null
+  utmMedium: string | null
+  utmCampaign: string | null
+  utmTerm: string | null
+  utmContent: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** One journal entry of the lead timeline (26-ТАЙМЛАЙН). actorId null = website intake. */
+export interface LeadActivity {
+  id: string
+  actorId: string | null
+  type: 'created' | 'stage_changed' | 'assigned' | 'updated' | 'converted' | (string & {})
+  metadata: Record<string, unknown> | null
+  createdAt: string
 }
 
 export interface LeadInput {
@@ -50,9 +64,21 @@ export function useLead(id: string) {
   })
 }
 
+export function useLeadActivity(id: string) {
+  return useQuery({
+    queryKey: ['ws-lead-activity', id],
+    queryFn: () =>
+      api
+        .get<{ activities: LeadActivity[] }>(`/workspace/leads/${id}/activity`)
+        .then((r) => r.activities),
+    enabled: id !== '',
+  })
+}
+
 function invalidateLeads(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ['ws-leads'] })
   void qc.invalidateQueries({ queryKey: ['ws-lead'] })
+  void qc.invalidateQueries({ queryKey: ['ws-lead-activity'] })
 }
 
 export function useCreateLead() {

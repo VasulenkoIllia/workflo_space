@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from 'react'
 import { CONTACT_PAGE } from '@/data/pages'
+import { getUtm } from '@/lib/utm'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://dev-api.workflo.space'
 
@@ -28,6 +29,7 @@ export function ContactForm() {
           message: (vals.task ?? '') + budget,
           source: 'landing-contact',
           website,
+          ...getUtm(),
         }),
       })
       setState(res.ok ? 'sent' : 'error')

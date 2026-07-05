@@ -28,6 +28,11 @@ const LEAD_SELECT = {
   convertedOrderId: true,
   lostReason: true,
   position: true,
+  utmSource: true,
+  utmMedium: true,
+  utmCampaign: true,
+  utmTerm: true,
+  utmContent: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -72,6 +77,18 @@ const updateSchema = z
   .refine((d) => Object.keys(d).length > 0, { message: 'Потрібно вказати хоча б одне поле' })
 
 const listQuerySchema = z.object({ status: z.nativeEnum(LeadStatus).optional() })
+
+// 26-ТАЙМЛАЙН: fields whose edits show up as a generic «updated» activity entry
+// (stage / assignee / lost-reason get their own richer entries instead).
+const UPDATED_TRACKED_FIELDS = [
+  'name',
+  'contactName',
+  'email',
+  'phone',
+  'source',
+  'estimatedValue',
+  'notes',
+] as const
 const convertSchema = z.object({
   companyId: z.string().min(1),
   title: z.string().trim().min(1).max(200).optional(),
@@ -125,8 +142,8 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const agencyId = assertTeam(request.user)
       const input = createSchema.parse(request.body)
-      const lead = await withTenant((tx) =>
-        tx.lead.create({
+      const lead = await withTenant(async (tx) => {
+        const created = await tx.lead.create({
           data: {
             agency: { connect: { id: agencyId } },
             name: input.name,
@@ -141,7 +158,17 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
           },
           select: LEAD_SELECT,
         })
-      )
+        await tx.leadActivity.create({
+          data: {
+            agencyId,
+            leadId: created.id,
+            actorId: request.user.sub,
+            type: 'created',
+            metadata: { via: 'manual' },
+          },
+        })
+        return created
+      })
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
         agencyId,
@@ -174,10 +201,21 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
       const lead = await withTenant(async (tx) => {
         const existing = await tx.lead.findFirst({
           where: { id: request.params.id, agencyId },
-          select: { id: true },
+          select: {
+            id: true,
+            name: true,
+            contactName: true,
+            email: true,
+            phone: true,
+            source: true,
+            status: true,
+            estimatedValue: true,
+            notes: true,
+            assigneeId: true,
+          },
         })
         if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Лід не знайдено', 404)
-        return tx.lead.update({
+        const updated = await tx.lead.update({
           where: { id: existing.id },
           data: {
             ...(input.name !== undefined ? { name: input.name } : {}),
@@ -193,6 +231,51 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
           },
           select: LEAD_SELECT,
         })
+
+        // 26-ТАЙМЛАЙН: journal only real changes (the detail form re-sends every field
+        // on save, so compare against the previous values, not mere key presence).
+        const actor = { agencyId, leadId: existing.id, actorId: request.user.sub }
+        // TS-enum vs Prisma-enum — same string values (drift-guarded), compare as strings
+        if (input.status !== undefined && (input.status as string) !== existing.status) {
+          await tx.leadActivity.create({
+            data: {
+              ...actor,
+              type: 'stage_changed',
+              metadata: {
+                from: existing.status,
+                to: input.status,
+                ...(input.status === LeadStatus.LOST && input.lostReason
+                  ? { lostReason: input.lostReason }
+                  : {}),
+              },
+            },
+          })
+        }
+        if (input.assigneeId !== undefined && (input.assigneeId ?? null) !== existing.assigneeId) {
+          await tx.leadActivity.create({
+            data: {
+              ...actor,
+              type: 'assigned',
+              metadata: { from: existing.assigneeId, to: input.assigneeId ?? null },
+            },
+          })
+        }
+        const changedFields = UPDATED_TRACKED_FIELDS.filter((k) => {
+          if (input[k] === undefined) return false
+          const prev =
+            k === 'estimatedValue'
+              ? existing.estimatedValue === null
+                ? null
+                : Number(existing.estimatedValue)
+              : existing[k]
+          return (input[k] ?? null) !== prev
+        })
+        if (changedFields.length > 0) {
+          await tx.leadActivity.create({
+            data: { ...actor, type: 'updated', metadata: { fields: changedFields } },
+          })
+        }
+        return updated
       })
       return reply.send({ success: true, data: { lead: toDto(lead) } })
     }
@@ -237,6 +320,15 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
           data: { status: LeadStatus.WON, companyId: company.id, convertedOrderId: order.id },
           select: LEAD_SELECT,
         })
+        await tx.leadActivity.create({
+          data: {
+            agencyId,
+            leadId: lead.id,
+            actorId: request.user.sub,
+            type: 'converted',
+            metadata: { orderId: order.id, companyId: company.id },
+          },
+        })
         return { lead: updated, orderId: order.id }
       })
       writeAuditAsync(request.log, {
@@ -251,6 +343,34 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
       return reply.send({
         success: true,
         data: { lead: toDto(result.lead), orderId: result.orderId },
+      })
+    }
+  )
+
+  // ── Activity timeline (26-ТАЙМЛАЙН, append-only journal) ─────────────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/workspace/leads/:id/activity',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = assertTeam(request.user)
+      const rows = await withTenant(async (tx) => {
+        const lead = await tx.lead.findFirst({
+          where: { id: request.params.id, agencyId },
+          select: { id: true },
+        })
+        if (!lead) throw new AppError(ApiErrorCode.NOT_FOUND, 'Лід не знайдено', 404)
+        return tx.leadActivity.findMany({
+          where: { leadId: lead.id, agencyId },
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          select: { id: true, actorId: true, type: true, metadata: true, createdAt: true },
+        })
+      })
+      return reply.send({
+        success: true,
+        data: {
+          activities: rows.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
+        },
       })
     }
   )

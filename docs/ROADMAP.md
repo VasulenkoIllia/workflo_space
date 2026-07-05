@@ -88,7 +88,7 @@
 **📌 Що варто доробити далі (черга після тесту):**
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
-2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії; лишок: пайплайн-редактор, UTM з contact-форми, activity-timeline.
+2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії, ✅ **UTM з contact-форми** (05.07), ✅ **activity-timeline** (05.07); лишок: пайплайн-редактор (custom-стадії — окремий зріз зі схемою).
 3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв). Лишок: executor-share, ротація-нагадування, portal self-service (17-А), типізовані шаблони (17-Д), журнал доступів **клієнту** (17-Б portal-side). _Примітка: TOTP-2FA (замість пароля) — коли модуль 01 видаватиме authenticator-secret._
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
@@ -125,6 +125,24 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **Leads-добудова: UTM-захоплення + activity-timeline (26 C1/A2-частина) — ЗАКРИТО (2026-07-05).**
+  Міграція `20260705_lead_utm_activity` (additive, drift-free verified): `leads` += utm×5,
+  нова `lead_activities` (RLS wf_in_tenant, FK cascade на lead), `contact_forms` +=
+  utm/page/referrer/leadId. **UTM:** лендінг захоплює first-touch utm\_\*+referrer у
+  sessionStorage (`lib/utm.ts` + `UtmCapture` у root-layout, не перезаписується), обидві
+  contact-форми шлють із сабмітом; `POST /content/contact` **best-effort** створює лід у
+  платформенній агенції (`runWithAgency`+`withTenant`; падіння інтейку НЕ губить повідомлення —
+  contact_forms пишеться завжди, leadId nullable). Не-email контакт (@tg) іде в нотатки, не в
+  email-колонку. **Timeline:** `LeadActivity` журналить created (manual/website+page) /
+  stage_changed (from→to, +lostReason) / assigned / updated (**diff проти попередніх значень** —
+  повторний save без змін не шумить) / converted (orderId); `GET /workspace/leads/:id/activity`
+  (team-only, 404 cross-tenant). UI `/leads/:id`: картка «Джерело · UTM» (чіпи, лише коли є) +
+  «Активність» (актор = ім'я з ростера або «сайт»; конвертація — лінк на замовлення). Гейт:
+  +10 тестів (leads 24, content 9; api **717** unit + 151 gated), turbo test+lint+type-check+build 56/56.
+  Вживу: curl contact з utm → лід+журнал+лінк у БД перевірені psql; UI — чіпи, таймлайн,
+  зміна стадії з live-оновленням запису «Новий → Контакт» без reload (скрін). Лишок 26:
+  пайплайн-редактор (A4), follow-up гігієна, аналітика джерел — окремі зрізи.
 
 - **TOTP 2FA (S9-01) — ЗАКРИТО (2026-07-03).** RFC 6238 з нуля (Node crypto, без залежності —
   перевірено на ДВОХ офіційних RFC-векторах). Модель `TwoFactorAuth`: секрет **KEK-encrypted**

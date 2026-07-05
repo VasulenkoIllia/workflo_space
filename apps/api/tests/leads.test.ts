@@ -10,6 +10,7 @@ const db = {
     update: vi.fn(),
     deleteMany: vi.fn(),
   },
+  leadActivity: { create: vi.fn(), findMany: vi.fn() },
   company: { findFirst: vi.fn() },
   order: { create: vi.fn() },
   $executeRaw: vi.fn().mockResolvedValue(1),
@@ -62,6 +63,11 @@ const leadRow = (over: Record<string, unknown> = {}) => ({
   convertedOrderId: null,
   lostReason: null,
   position: 0,
+  utmSource: null,
+  utmMedium: null,
+  utmCampaign: null,
+  utmTerm: null,
+  utmContent: null,
   createdAt: new Date('2026-06-01T00:00:00Z'),
   updatedAt: new Date('2026-06-01T00:00:00Z'),
   ...over,
@@ -329,6 +335,158 @@ describe('DELETE /workspace/leads/:id', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+// ── 26-ТАЙМЛАЙН: activity journal ────────────────────────────────────────────
+describe('lead activity journal', () => {
+  it('create journals a «created» activity by the actor', async () => {
+    db.lead.create.mockResolvedValue(leadRow())
+    const { app, token } = await authed(OWNER)
+    await app.inject({
+      method: 'POST',
+      url: '/workspace/leads',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'New deal' },
+    })
+    const arg = db.leadActivity.create.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(arg.data.type).toBe('created')
+    expect(arg.data.actorId).toBe(OWNER.sub)
+    expect(arg.data.agencyId).toBe(AGENCY)
+    await app.close()
+  })
+
+  it('stage change journals «stage_changed» with from/to (+lostReason on lost)', async () => {
+    db.lead.findFirst.mockResolvedValue(leadRow({ status: 'contacted' }))
+    db.lead.update.mockResolvedValue(leadRow({ status: 'lost', lostReason: 'бюджет' }))
+    const { app, token } = await authed(OWNER)
+    await app.inject({
+      method: 'PATCH',
+      url: '/workspace/leads/lead-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'lost', lostReason: 'бюджет' },
+    })
+    const arg = db.leadActivity.create.mock.calls[0]![0] as {
+      data: { type: string; metadata: Record<string, unknown> }
+    }
+    expect(arg.data.type).toBe('stage_changed')
+    expect(arg.data.metadata).toEqual({ from: 'contacted', to: 'lost', lostReason: 'бюджет' })
+    await app.close()
+  })
+
+  it('re-saving identical values journals nothing', async () => {
+    const row = leadRow({ name: 'Same', notes: 'n' })
+    db.lead.findFirst.mockResolvedValue(row)
+    db.lead.update.mockResolvedValue(row)
+    const { app, token } = await authed(OWNER)
+    await app.inject({
+      method: 'PATCH',
+      url: '/workspace/leads/lead-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'Same', notes: 'n', status: 'new' },
+    })
+    expect(db.leadActivity.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('field edits journal «updated» with the changed field list only', async () => {
+    db.lead.findFirst.mockResolvedValue(leadRow({ name: 'Old', phone: null }))
+    db.lead.update.mockResolvedValue(leadRow({ name: 'New', phone: '+380' }))
+    const { app, token } = await authed(OWNER)
+    await app.inject({
+      method: 'PATCH',
+      url: '/workspace/leads/lead-1',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'New', phone: '+380', notes: null },
+    })
+    const arg = db.leadActivity.create.mock.calls[0]![0] as {
+      data: { type: string; metadata: { fields: string[] } }
+    }
+    expect(arg.data.type).toBe('updated')
+    expect(arg.data.metadata.fields).toEqual(['name', 'phone'])
+    await app.close()
+  })
+
+  it('convert journals «converted» with the order link', async () => {
+    db.lead.findFirst.mockResolvedValue({ id: 'lead-1', name: 'X', convertedOrderId: null })
+    db.company.findFirst.mockResolvedValue({ id: 'company-1' })
+    db.order.create.mockResolvedValue({ id: 'order-9' })
+    db.lead.update.mockResolvedValue(leadRow({ status: 'won', convertedOrderId: 'order-9' }))
+    const { app, token } = await authed(OWNER)
+    await app.inject({
+      method: 'POST',
+      url: '/workspace/leads/lead-1/convert',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { companyId: 'company-1' },
+    })
+    const arg = db.leadActivity.create.mock.calls[0]![0] as {
+      data: { type: string; metadata: Record<string, unknown> }
+    }
+    expect(arg.data.type).toBe('converted')
+    expect(arg.data.metadata).toEqual({ orderId: 'order-9', companyId: 'company-1' })
+    await app.close()
+  })
+})
+
+describe('GET /workspace/leads/:id/activity', () => {
+  it('returns the journal newest-first, lead-scoped', async () => {
+    db.lead.findFirst.mockResolvedValue({ id: 'lead-1' })
+    db.leadActivity.findMany.mockResolvedValue([
+      {
+        id: 'act-2',
+        actorId: 'owner-1',
+        type: 'stage_changed',
+        metadata: { from: 'new', to: 'contacted' },
+        createdAt: new Date('2026-07-02T00:00:00Z'),
+      },
+      {
+        id: 'act-1',
+        actorId: null,
+        type: 'created',
+        metadata: { via: 'website' },
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+      },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads/lead-1/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const acts = res.json().data.activities as { id: string; type: string }[]
+    expect(acts.map((a) => a.id)).toEqual(['act-2', 'act-1'])
+    expect(db.leadActivity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { leadId: 'lead-1', agencyId: AGENCY },
+        orderBy: { createdAt: 'desc' },
+      })
+    )
+    await app.close()
+  })
+
+  it('is 404 for a lead in another tenant', async () => {
+    db.lead.findFirst.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads/lead-x/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(db.leadActivity.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a client (not team) is forbidden (403)', async () => {
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads/lead-1/activity',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 })

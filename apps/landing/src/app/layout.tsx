@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import '@/styles/terminal.css'
 import '@/styles/pages.css'
+import { UtmCapture } from '@/components/UtmCapture'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://workflo.space'),
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body style={{ margin: 0, background: '#fafaf9' }}>{children}</body>
+      <body style={{ margin: 0, background: '#fafaf9' }}>
+        <UtmCapture />
+        {children}
+      </body>
     </html>
   )
 }

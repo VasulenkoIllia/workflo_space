@@ -2,18 +2,28 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
-// Public content endpoints (S7) — no auth. Contact: honeypot + validation. Blog: read-only.
+// Public content endpoints (S7) — no auth. Contact: honeypot + validation + CRM lead
+// intake (26-UTM). Blog: read-only.
 const contactCreate = vi.fn()
 const blogFindMany = vi.fn()
 const blogFindFirst = vi.fn()
+const agencyFindUnique = vi.fn()
+const leadCreate = vi.fn()
+const leadActivityCreate = vi.fn()
+
+const db = {
+  contactForm: { create: contactCreate },
+  blogPost: { findMany: blogFindMany, findFirst: blogFindFirst },
+  agency: { findUnique: agencyFindUnique },
+  lead: { create: leadCreate },
+  leadActivity: { create: leadActivityCreate },
+}
 
 vi.mock('@workflo/db', () => ({
-  prisma: {
-    contactForm: { create: contactCreate },
-    blogPost: { findMany: blogFindMany, findFirst: blogFindFirst },
-  },
-  tenantTransaction: (c: unknown, fn: (tx: unknown) => unknown) => fn(c),
-  withTenant: (fn: (tx: unknown) => unknown) => fn({}),
+  prisma: db,
+  tenantTransaction: (_c: unknown, fn: (tx: unknown) => unknown) => fn(db),
+  withTenant: (fn: (tx: unknown) => unknown) => fn(db),
+  runWithAgency: (_id: string, fn: () => unknown) => fn(),
 }))
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 
@@ -29,11 +39,56 @@ const post = (payload: unknown) =>
   app.inject({ method: 'POST', url: '/content/contact', payload: payload as object })
 
 describe('POST /content/contact', () => {
-  it('persists a valid submission', async () => {
+  it('persists a valid submission + auto-creates a CRM lead linked back (26-UTM)', async () => {
+    agencyFindUnique.mockResolvedValue({ id: 'agency-1' })
+    leadCreate.mockResolvedValue({ id: 'lead-9' })
+    leadActivityCreate.mockResolvedValue({ id: 'act-1' })
+    contactCreate.mockResolvedValue({ id: 'c-1' })
+    const res = await post({
+      name: 'Іван',
+      email: 'ivan@example.com',
+      message: 'Привіт',
+      utmSource: 'google',
+      utmMedium: 'cpc',
+      utmCampaign: 'summer',
+      page: '/contact',
+    })
+    expect(res.statusCode).toBe(200)
+    // lead carries the visitor identity + attribution
+    const leadArg = leadCreate.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(leadArg.data.contactName).toBe('Іван')
+    expect(leadArg.data.email).toBe('ivan@example.com')
+    expect(leadArg.data.utmSource).toBe('google')
+    expect(leadArg.data.utmCampaign).toBe('summer')
+    // created-activity is journaled as a website intake (no actor)
+    const actArg = leadActivityCreate.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(actArg.data.type).toBe('created')
+    expect(actArg.data.actorId).toBeNull()
+    // contact_forms row keeps the UTM copy + the lead link
+    const cfArg = contactCreate.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(cfArg.data.utmSource).toBe('google')
+    expect(cfArg.data.leadId).toBe('lead-9')
+  })
+
+  it('a non-email contact string goes to notes, not the email column', async () => {
+    agencyFindUnique.mockResolvedValue({ id: 'agency-1' })
+    leadCreate.mockResolvedValue({ id: 'lead-9' })
+    contactCreate.mockResolvedValue({ id: 'c-1' })
+    const res = await post({ name: 'Іван', email: '@ivan_tg', message: 'Привіт' })
+    expect(res.statusCode).toBe(200)
+    const leadArg = leadCreate.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(leadArg.data.email).toBeNull()
+    expect(leadArg.data.notes).toContain('@ivan_tg')
+  })
+
+  it('lead intake failure still persists the message and returns 200', async () => {
+    agencyFindUnique.mockRejectedValue(new Error('db down'))
     contactCreate.mockResolvedValue({ id: 'c-1' })
     const res = await post({ name: 'Іван', email: 'ivan@example.com', message: 'Привіт' })
     expect(res.statusCode).toBe(200)
     expect(contactCreate).toHaveBeenCalledOnce()
+    const cfArg = contactCreate.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(cfArg.data.leadId).toBeNull()
   })
 
   it('honeypot field ⇒ 200 but stores nothing', async () => {
@@ -45,6 +100,7 @@ describe('POST /content/contact', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(contactCreate).not.toHaveBeenCalled()
+    expect(leadCreate).not.toHaveBeenCalled()
   })
 
   it('rejects invalid input with 400', async () => {
