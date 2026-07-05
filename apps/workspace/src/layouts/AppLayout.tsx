@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
 import { useOrders } from '@/lib/orders'
+import { useGlobalSearch } from '@/lib/search'
 import { useNotifications } from '@/lib/notifications'
 
 const ROLE_LABEL: Record<string, string> = {
@@ -67,6 +68,43 @@ export function AppLayout() {
 
   // ── ⌘K command palette ──────────────────────────────────────────────────
   const [cmdkOpen, setCmdkOpen] = useState(false)
+  // S11-02: серверний пошук у палітрі (debounce на рівні keystroke → state, query кешується)
+  const [searchQ, setSearchQ] = useState('')
+  const search = useGlobalSearch(cmdkOpen ? searchQ : '')
+  const asyncItems = useMemo<CommandItem[]>(() => {
+    const d = search.data
+    if (!d) return []
+    return [
+      ...d.orders.map((o) => ({
+        id: `s-order-${o.id}`,
+        group: 'замовлення',
+        label: o.title,
+        icon: <Icon name="kanban" size={13} />,
+        run: () => navigate(`/orders/${o.id}`),
+      })),
+      ...d.companies.map((c) => ({
+        id: `s-company-${c.id}`,
+        group: 'клієнти',
+        label: c.name,
+        icon: <Icon name="building" size={13} />,
+        run: () => navigate(`/clients/${c.id}`),
+      })),
+      ...d.leads.map((l) => ({
+        id: `s-lead-${l.id}`,
+        group: 'ліди',
+        label: l.name,
+        icon: <Icon name="users" size={13} />,
+        run: () => navigate(`/leads/${l.id}`),
+      })),
+      ...d.projects.map((p) => ({
+        id: `s-project-${p.id}`,
+        group: 'проєкти',
+        label: p.name,
+        icon: <Icon name="receipt" size={13} />,
+        run: () => navigate(`/projects/${p.id}`),
+      })),
+    ]
+  }, [search.data, navigate])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -222,7 +260,9 @@ export function AppLayout() {
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}
         commands={commands}
-        placeholder="Перейти до екрана…"
+        asyncItems={asyncItems}
+        onQueryChange={setSearchQ}
+        placeholder="Пошук: замовлення, клієнти, ліди, проєкти…"
       />
     </AppShell>
   )

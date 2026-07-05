@@ -23,11 +23,17 @@ export function CommandPalette({
   onClose,
   commands,
   placeholder = 'Пошук або команда…',
+  onQueryChange,
+  asyncItems = [],
 }: {
   open: boolean
   onClose: () => void
   commands: CommandItem[]
   placeholder?: string
+  /** S11-02: хук для серверного пошуку — викликається на кожну зміну вводу. */
+  onQueryChange?: (q: string) => void
+  /** S11-02: серверні результати — вже відфільтровані бекендом, домішуються після локальних. */
+  asyncItems?: CommandItem[]
 }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -36,6 +42,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return
     setQuery('')
+    onQueryChange?.('')
     setActive(0)
     const t = setTimeout(() => inputRef.current?.focus(), 0)
     return () => clearTimeout(t)
@@ -43,9 +50,12 @@ export function CommandPalette({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return commands
-    return commands.filter((c) => `${c.label} ${c.sub ?? ''}`.toLowerCase().includes(q))
-  }, [commands, query])
+    const local = q
+      ? commands.filter((c) => `${c.label} ${c.sub ?? ''}`.toLowerCase().includes(q))
+      : commands
+    // asyncItems уже відфільтровані сервером — не ріжемо їх локальним матчем
+    return q ? [...local, ...asyncItems] : local
+  }, [commands, query, asyncItems])
 
   // Keep the active index within bounds as the filtered list shrinks.
   useEffect(() => {
@@ -97,7 +107,10 @@ export function CommandPalette({
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              onQueryChange?.(e.target.value)
+            }}
             placeholder={placeholder}
             style={{ flex: 1, background: 'none', border: 0, outline: 'none', color: 'inherit' }}
           />

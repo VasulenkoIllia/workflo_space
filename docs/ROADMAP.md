@@ -126,6 +126,19 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Глобальний пошук + Cmd+K (S11-01/02, модуль 16) — ЗАКРИТО (2026-07-05).**
+  FTS на **expression-GIN індексах** (конфіг `simple` — безсловниковий lowercase, чесний для
+  змішаної uk/en; словникового `ukrainian` у стоковому PG нема; expression-індекси не входять
+  у Prisma-датамодель → drift-гейт чистий). `GET /workspace/search?q=` — 4 групи з role-скоупом
+  екранів (замовлення — команда · клієнти/ліди — owner+manager · проєкти — internal-non-manager),
+  top-5 на групу, останнє слово префіксно (`:*` — «лен» знаходить «лендінг»), tsquery-білдер
+  ріже спецсимволи (інʼєкція неможлива). UI: `CommandPalette` розширено `onQueryChange` +
+  `asyncItems` (серверні результати домішуються до локальних команд без ре-фільтру); AppLayout
+  мапить групи в палітру з навігацією (⌘K → друк → Enter відкриває сутність). Гейт: +6 тестів
+  (api **805** unit), turbo 56/56. Вживу: «тест» у палітрі → 3 групи (замовлення/клієнт/лід),
+  скрін; API — «заявка» знаходить лід, префікс працює. Лишок 16: пошук по коментарях
+  (participant-скоуп) і Meilisearch-адаптер — Phase 3.
+
 - **SLA-політики + breach-cron (S10-02) — ЗАКРИТО (2026-07-05). Блок S10-лишків: 07+01+02 за день.**
   Канон спеки 02-orders §C: `SlaPolicy {agencyId, priority, firstResponseMins, resolutionMins}`
   (unique per-пріоритет, RLS) + `Order` += firstResponseDueAt/resolutionDueAt/firstRespondedAt/
