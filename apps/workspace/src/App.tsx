@@ -21,6 +21,7 @@ import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
+import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
 import { LeadDetailPage } from '@/routes/leads/LeadDetailPage'
 import { VaultPage } from '@/routes/vault/VaultPage'
@@ -78,6 +79,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner', 'manager', 'executor']}>
               <TaskBoardPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/chats"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <ChatsPage />
             </RoleRoute>
           }
         />

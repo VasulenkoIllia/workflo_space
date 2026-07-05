@@ -25,6 +25,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   { group: 'Робота', roles: 'om' },
   { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },
   { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
+  // 18-А: єдиний хаб розмов (клієнт → замовлення), unread-бейджі всередині
+  { id: 'chats', label: 'Чати', icon: <Icon name="inbox" />, href: '/chats', roles: 'omx' },
 
   // 'omx': executor reaches «Секрети» (17-SHARE) under this group; clients/leads stay 'om'.
   { group: 'Клієнти', roles: 'omx' },

@@ -1,4 +1,4 @@
-import { withTenant } from '@workflo/db'
+import { Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
@@ -7,6 +7,10 @@ import { requireOrderParticipant, requireTeamOrder } from './access.js'
 
 /**
  * 18-хвости (chat-hub):
+ *  - список розмов (18-А, зріз 05.07): GET /workspace/conversations — всі замовлення
+ *    агенції з чат-активністю: прев'ю останнього повідомлення, unread (OrderChatRead),
+ *    відповідальний, mute/archive стан юзера. Фільтри «мої»/«без відповіді»/«архів»
+ *    рахує фронт із прапорців (кап 300 тредів — довше за це щоденний хаб не живе).
  *  - mute/archive стану треду per-user (18-Б): GET/PUT /orders/:id/conversation.
  *    muted → воркер не шле chat.new_comment цьому профілю (@mention пробиває mute свідомо).
  *  - відповідальний за тред (18-В): PATCH /workspace/orders/:id/chat-owner. null = «авто»
@@ -128,6 +132,129 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
         metadata: { chatOwnerId: profileId },
       })
       return reply.send({ success: true, data: { orderId, chatOwnerId: profileId } })
+    }
+  )
+
+  // ── 18-А: список розмов для хабу «Чати» (workspace, команда) ──────────────────
+  fastify.get(
+    '/workspace/conversations',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const agencyId = user.activeAgencyId
+      if (!agencyId || user.agencyMemberships.length === 0) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
+      }
+      const me = user.sub
+
+      const data = await withTenant(async (tx) => {
+        const staff = await tx.agencyMember.findMany({
+          where: { agencyId },
+          select: { profileId: true },
+        })
+        const staffSet = new Set(staff.map((s) => s.profileId))
+
+        const orders = await tx.order.findMany({
+          where: {
+            agencyId,
+            deletedAt: null,
+            comments: { some: { deletedAt: null } },
+          },
+          select: {
+            id: true,
+            title: true,
+            internalStatus: true,
+            chatOwnerId: true,
+            assigneeId: true,
+            companyId: true,
+            company: { select: { name: true } },
+            comments: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                content: true,
+                isInternal: true,
+                createdAt: true,
+                authorId: true,
+                author: { select: { name: true } },
+              },
+            },
+            conversationStates: {
+              where: { profileId: me },
+              select: { muted: true, archivedAt: true },
+            },
+          },
+          take: 300,
+        })
+        if (orders.length === 0) return { conversations: [] }
+
+        const orderIds = orders.map((o) => o.id)
+
+        // Unread per order: коментарі не від мене, новіші за мій lastReadAt (або всі,
+        // якщо читання ще не було). Один raw-запит замість N.
+        const unreadRows = await tx.$queryRaw<{ orderId: string; unread: bigint }[]>(Prisma.sql`
+          SELECT c."orderId", count(*) AS unread
+          FROM order_comments c
+          LEFT JOIN order_chat_reads r
+            ON r."orderId" = c."orderId" AND r."profileId" = ${me}
+          WHERE c."orderId" = ANY(${orderIds})
+            AND c."deletedAt" IS NULL
+            AND c."authorId" <> ${me}
+            AND (r."lastReadAt" IS NULL OR c."createdAt" > r."lastReadAt")
+          GROUP BY c."orderId"
+        `)
+        const unreadByOrder = new Map(unreadRows.map((r) => [r.orderId, Number(r.unread)]))
+
+        // Імена відповідальних — одним запитом по ефективних ids.
+        const ownerIds = [
+          ...new Set(
+            orders.map((o) => o.chatOwnerId ?? o.assigneeId).filter((id): id is string => !!id)
+          ),
+        ]
+        const owners =
+          ownerIds.length > 0
+            ? await tx.profile.findMany({
+                where: { id: { in: ownerIds } },
+                select: { id: true, name: true },
+              })
+            : []
+        const ownerName = new Map(owners.map((p) => [p.id, p.name]))
+
+        const conversations = orders
+          .map((o) => {
+            const last = o.comments[0]
+            const state = o.conversationStates[0]
+            const effectiveOwnerId = o.chatOwnerId ?? o.assigneeId ?? null
+            return {
+              orderId: o.id,
+              title: o.title,
+              internalStatus: o.internalStatus,
+              companyId: o.companyId,
+              companyName: o.company?.name ?? null,
+              lastMessage: last
+                ? {
+                    preview: last.content.slice(0, 140),
+                    authorName: last.author.name,
+                    authorIsTeam: staffSet.has(last.authorId),
+                    isInternal: last.isInternal,
+                    at: last.createdAt.toISOString(),
+                  }
+                : null,
+              unread: unreadByOrder.get(o.id) ?? 0,
+              muted: state?.muted ?? false,
+              archived: state?.archivedAt != null,
+              chatOwnerId: effectiveOwnerId,
+              chatOwnerName: effectiveOwnerId ? (ownerName.get(effectiveOwnerId) ?? null) : null,
+              mine: effectiveOwnerId === me,
+            }
+          })
+          .sort((a, b) => (b.lastMessage?.at ?? '').localeCompare(a.lastMessage?.at ?? ''))
+
+        return { conversations }
+      })
+
+      return reply.send({ success: true, data })
     }
   )
 

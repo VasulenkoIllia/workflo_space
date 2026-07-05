@@ -9,11 +9,18 @@ const db = {
   agencyMember: { findFirst: vi.fn(), findMany: vi.fn() },
   agency: { findMany: vi.fn().mockResolvedValue([]) },
   twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
+  // 18-А: conversations-list — unread raw-запит + імена відповідальних
+  profile: { findMany: vi.fn() },
+  $queryRaw: vi.fn(),
 }
 
 vi.mock('@workflo/db', () => ({
   prisma: db,
-  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+  Prisma: {
+    PrismaClientKnownRequestError: class extends Error {},
+    // 18-А: роут будує unread-запит через Prisma.sql — у тесті вистачає болванки
+    sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
+  },
   withTenant: (fn: (tx: unknown) => unknown) => fn(db),
   tenantTransaction: (_p: unknown, fn: (tx: unknown) => unknown) => fn(db),
 }))
@@ -211,6 +218,129 @@ describe('GET /workspace/chats/unanswered (18-Г)', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/chats/unanswered',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('GET /workspace/conversations (18-А, хаб «Чати»)', () => {
+  const t1 = new Date('2026-07-05T10:00:00Z')
+  const t2 = new Date('2026-07-05T12:00:00Z')
+
+  function wireConversations() {
+    db.agencyMember.findMany.mockResolvedValue([{ profileId: 'owner-1' }, { profileId: 'exec-1' }])
+    db.order.findMany.mockResolvedValue([
+      {
+        id: 'o-1',
+        title: 'Лендінг',
+        internalStatus: 'in_progress',
+        chatOwnerId: null,
+        assigneeId: 'exec-1',
+        companyId: 'company-1',
+        company: { name: 'ТОВ Тест' },
+        comments: [
+          {
+            content: 'Клієнт написав довге повідомлення ' + 'x'.repeat(200),
+            isInternal: false,
+            createdAt: t1,
+            authorId: 'client-1',
+            author: { name: 'Олена Клієнт' },
+          },
+        ],
+        conversationStates: [],
+      },
+      {
+        id: 'o-2',
+        title: 'Бот',
+        internalStatus: 'done',
+        chatOwnerId: 'owner-1',
+        assigneeId: null,
+        companyId: 'company-1',
+        company: { name: 'ТОВ Тест' },
+        comments: [
+          {
+            content: 'Готово!',
+            isInternal: false,
+            createdAt: t2,
+            authorId: 'owner-1',
+            author: { name: 'Власник' },
+          },
+        ],
+        conversationStates: [{ muted: true, archivedAt: new Date() }],
+      },
+    ])
+    db.$queryRaw.mockResolvedValue([{ orderId: 'o-1', unread: 3n }])
+    db.profile.findMany.mockResolvedValue([
+      { id: 'exec-1', name: 'Петро' },
+      { id: 'owner-1', name: 'Власник' },
+    ])
+  }
+
+  it('returns threads with preview, unread, effective owner, per-user state; newest first', async () => {
+    wireConversations()
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/conversations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data.conversations as Record<string, unknown>[]
+    expect(rows).toHaveLength(2)
+    // сортування: свіжіше повідомлення (o-2, t2) перше
+    expect(rows.map((r) => r.orderId)).toEqual(['o-2', 'o-1'])
+
+    const o1 = rows[1]! as {
+      lastMessage: { preview: string; authorIsTeam: boolean; authorName: string }
+      unread: number
+      chatOwnerId: string
+      chatOwnerName: string
+      mine: boolean
+      muted: boolean
+      archived: boolean
+    }
+    // прев'ю ріжеться до 140 символів, автор-клієнт → authorIsTeam=false
+    expect(o1.lastMessage.preview.length).toBe(140)
+    expect(o1.lastMessage.authorIsTeam).toBe(false)
+    expect(o1.unread).toBe(3)
+    // ефективний відповідальний = assignee (chatOwnerId null)
+    expect(o1.chatOwnerId).toBe('exec-1')
+    expect(o1.chatOwnerName).toBe('Петро')
+    expect(o1.mine).toBe(false)
+    expect(o1.muted).toBe(false)
+    expect(o1.archived).toBe(false)
+
+    const o2 = rows[0]! as { mine: boolean; muted: boolean; archived: boolean; unread: number }
+    // o-2: явний chatOwner = я → mine; мій стан muted+archived; unread нема в raw → 0
+    expect(o2.mine).toBe(true)
+    expect(o2.muted).toBe(true)
+    expect(o2.archived).toBe(true)
+    expect(o2.unread).toBe(0)
+    await app.close()
+  })
+
+  it('skips the unread raw query when there are no threads', async () => {
+    db.agencyMember.findMany.mockResolvedValue([{ profileId: 'owner-1' }])
+    db.order.findMany.mockResolvedValue([])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/conversations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.conversations).toEqual([])
+    expect(db.$queryRaw).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('client is forbidden (403)', async () => {
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/conversations',
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(403)

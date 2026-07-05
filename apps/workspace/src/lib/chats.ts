@@ -49,6 +49,38 @@ export interface UnansweredChat {
   chatOwnerId: string | null
 }
 
+/** 18-А: тред хабу «Чати» — замовлення з чат-активністю + прев'ю + unread. */
+export interface Conversation {
+  orderId: string
+  title: string
+  internalStatus: string
+  companyId: string | null
+  companyName: string | null
+  lastMessage: {
+    preview: string
+    authorName: string
+    authorIsTeam: boolean
+    isInternal: boolean
+    at: string
+  } | null
+  unread: number
+  muted: boolean
+  archived: boolean
+  chatOwnerId: string | null
+  chatOwnerName: string | null
+  /** ефективний відповідальний = я */
+  mine: boolean
+}
+
+export function useConversations() {
+  return useQuery({
+    queryKey: ['ws-conversations'],
+    queryFn: () => api.get<{ conversations: Conversation[] }>('/workspace/conversations'),
+    // хаб — «жива» сторінка: підтягуємо нові треди/unread без ручного рефрешу
+    refetchInterval: 30_000,
+  })
+}
+
 /** 18-Г: активні замовлення, де клієнт чекає на відповідь довше за поріг. */
 export function useUnansweredChats(hours = 4) {
   return useQuery({
