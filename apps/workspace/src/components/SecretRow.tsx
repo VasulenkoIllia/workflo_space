@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { VaultTypedCardFields, vaultTypeLabel } from '@workflo/app-core'
+import { VaultExpiryTag, VaultTypedCardFields, vaultTypeLabel } from '@workflo/app-core'
 import type { VaultField } from '@workflo/types'
 import {
   hasValidRevealGrant,
@@ -22,6 +22,7 @@ export interface SecretRowData {
   username: string | null
   resourceType: string | null
   publicFields: VaultField[] | null
+  expiresAt: string | null
   revoked: boolean
   companyName?: string | null
 }
@@ -52,6 +53,7 @@ export function SecretRow({
   readOnly = false,
   sharedNames,
   onManageShares,
+  onSetExpiry,
   formatDate,
 }: {
   cred: SecretRowData
@@ -66,6 +68,8 @@ export function SecretRow({
   sharedNames?: string[]
   /** 17-SHARE: opens the per-secret share modal (owner view). */
   onManageShares?: () => void
+  /** 17-РОТАЦІЯ: set/clear the access term (owner action «термін»). */
+  onSetExpiry?: () => void
   formatDate: (iso: string) => string
 }) {
   const reveal = useRevealGlobal()
@@ -157,6 +161,7 @@ export function SecretRow({
                 відкликано
               </span>
             )}
+            {!cred.revoked && <VaultExpiryTag expiresAt={cred.expiresAt} />}
           </div>
           {(showCompanyLink || (readOnly && cred.companyName) || cred.username || cred.url) && (
             <div
@@ -210,6 +215,16 @@ export function SecretRow({
               onClick={onManageShares}
             >
               доступи
+            </button>
+          )}
+          {onSetExpiry && !readOnly && !cred.revoked && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12 }}
+              onClick={onSetExpiry}
+            >
+              термін
             </button>
           )}
           {!cred.revoked && !readOnly && (

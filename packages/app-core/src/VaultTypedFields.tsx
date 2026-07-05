@@ -215,3 +215,26 @@ export function VaultTypedCardFields({
     </div>
   )
 }
+
+/** 17-РОТАЦІЯ: expiry badge — «протерміновано» (destructive) past the date, «ротація за Nд»
+ * (warn) within a week. Null/far dates render nothing. */
+export function VaultExpiryTag({ expiresAt }: { expiresAt: string | null }) {
+  if (!expiresAt) return null
+  const msLeft = new Date(expiresAt).getTime() - Date.now()
+  const daysLeft = Math.ceil(msLeft / 86_400_000)
+  if (daysLeft > 7) return null
+  const overdue = msLeft <= 0
+  return (
+    <span
+      className="wfp-mono"
+      style={{
+        fontSize: 11,
+        marginLeft: 8,
+        color: overdue ? 'var(--wf-destructive)' : 'var(--wf-warning, #b45309)',
+      }}
+      title={`Термін доступу: ${new Date(expiresAt).toLocaleDateString('uk-UA')}`}
+    >
+      {overdue ? '⚠ протерміновано' : `⚠ ротація за ${daysLeft}д`}
+    </span>
+  )
+}

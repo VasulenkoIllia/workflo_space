@@ -41,6 +41,8 @@ export const typedCreateSchema = z
     resourceType: z.enum(RESOURCE_TYPE_KEYS),
     fields: z.array(fieldSchema).min(1).max(20),
     notes: z.string().trim().max(2000).nullish(),
+    // 17-РОТАЦІЯ: optional access expiry (ISO) — the daily cron nags the owner near it
+    expiresAt: z.string().datetime().nullish(),
   })
   .strict()
 

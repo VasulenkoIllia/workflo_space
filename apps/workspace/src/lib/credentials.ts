@@ -47,6 +47,8 @@ export interface Credential {
   /** 17-Д: ordered NON-secret fields of a typed card (secret ones live behind /reveal). */
   publicFields: VaultField[] | null
   notes: string | null
+  /** 17-РОТАЦІЯ: optional access expiry (ISO); the cron nags the owner near/past it. */
+  expiresAt: string | null
   revoked: boolean
   revokedAt: string | null
   createdAt: string
@@ -114,6 +116,26 @@ export function useCredentialAudit(companyId: string, credId: string, enabled: b
         `/workspace/clients/${companyId}/credentials/${credId}/audit`
       ),
     enabled: enabled && companyId !== '' && credId !== '',
+  })
+}
+
+/** 17-РОТАЦІЯ: set/clear the access term of one secret (resets the reminder window). */
+export function useSetCredentialExpiry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      companyId,
+      credId,
+      expiresAt,
+    }: {
+      companyId: string
+      credId: string
+      expiresAt: string | null
+    }) => api.patch(`/workspace/clients/${companyId}/credentials/${credId}/expiry`, { expiresAt }),
+    onSuccess: (_r, { companyId }) => {
+      void qc.invalidateQueries({ queryKey: ['client-credentials', companyId] })
+      void qc.invalidateQueries({ queryKey: ['ws-vault'] })
+    },
   })
 }
 

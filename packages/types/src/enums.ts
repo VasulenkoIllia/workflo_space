@@ -358,6 +358,8 @@ export type NotificationEvent =
   | 'system.maintenance_planned'
   | 'system.invite_sent'
   | 'system.company_member_added'
+  // vault (17-РОТАЦІЯ): секрету спливає термін — нагадування власнику агенції (in-app)
+  | 'credentials.rotation_due'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

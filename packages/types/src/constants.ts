@@ -161,6 +161,7 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'system.maintenance_planned': NotificationCategory.SYSTEM,
   'system.invite_sent': NotificationCategory.SYSTEM,
   'system.company_member_added': NotificationCategory.SYSTEM,
+  'credentials.rotation_due': NotificationCategory.SYSTEM,
 }
 
 /**

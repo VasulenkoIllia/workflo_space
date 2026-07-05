@@ -46,6 +46,8 @@ export interface PortalCredential {
   /** 17-Д: ordered NON-secret fields of a typed card (secret ones live behind /reveal). */
   publicFields: VaultField[] | null
   notes: string | null
+  /** 17-РОТАЦІЯ: optional access expiry (ISO); the cron nags the agency owner near/past it. */
+  expiresAt: string | null
   revoked: boolean
   revokedAt: string | null
   createdAt: string
@@ -99,6 +101,16 @@ export function useRevealPortalCredential() {
       api.post<RevealResult>(`/portal/credentials/${credId}/reveal`, {
         grant: getRevealGrant(),
       }),
+  })
+}
+
+/** 17-РОТАЦІЯ: set/clear the access term of one secret (resets the reminder window). */
+export function useSetPortalCredentialExpiry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ credId, expiresAt }: { credId: string; expiresAt: string | null }) =>
+      api.patch(`/portal/credentials/${credId}/expiry`, { expiresAt }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['portal-credentials'] }),
   })
 }
 

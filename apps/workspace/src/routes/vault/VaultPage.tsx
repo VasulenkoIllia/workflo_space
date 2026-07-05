@@ -7,6 +7,7 @@ import {
   useDeleteGlobal,
   useGlobalVault,
   useRevokeGlobal,
+  useSetCredentialExpiry,
 } from '@/lib/credentials'
 import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
@@ -22,6 +23,7 @@ export function VaultPage() {
   const { data, isLoading } = useGlobalVault()
   const revoke = useRevokeGlobal()
   const del = useDeleteGlobal()
+  const setExpiry = useSetCredentialExpiry()
 
   const [q, setQ] = useState('')
   const [company, setCompany] = useState('')
@@ -70,6 +72,24 @@ export function VaultPage() {
       {
         onSuccess: () => toast.success('Секрет відкликано'),
       }
+    )
+  }
+  const doSetExpiry = (c: GlobalCredential) => {
+    const current = c.expiresAt ? c.expiresAt.slice(0, 10) : ''
+    const raw = window.prompt('Термін дії доступу (РРРР-ММ-ДД, порожньо — без терміну):', current)
+    if (raw === null) return
+    const trimmed = raw.trim()
+    if (trimmed !== '' && Number.isNaN(new Date(trimmed).getTime())) {
+      toast.error('Невірна дата — формат РРРР-ММ-ДД')
+      return
+    }
+    setExpiry.mutate(
+      {
+        companyId: c.companyId,
+        credId: c.id,
+        expiresAt: trimmed === '' ? null : new Date(trimmed).toISOString(),
+      },
+      { onSuccess: () => toast.success(trimmed === '' ? 'Термін знято' : 'Термін оновлено') }
     )
   }
   const doDelete = (c: GlobalCredential) => {
@@ -172,6 +192,7 @@ export function VaultPage() {
                     onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
                     showCompanyLink={isOwner}
                     readOnly={!isOwner}
+                    onSetExpiry={isOwner ? () => doSetExpiry(c) : undefined}
                     formatDate={formatDate}
                   />
                 ))}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   VAULT_TYPE_OPTIONS,
+  VaultExpiryTag,
   VaultTypedCardFields,
   VaultTypedFieldsEditor,
   vaultTypeLabel,
@@ -22,6 +23,7 @@ import {
   usePortalCredentials,
   useRevealPortalCredential,
   useRevokePortalCredential,
+  useSetPortalCredentialExpiry,
 } from '@/lib/credentials'
 import { formatDateTime } from '@/lib/format'
 
@@ -177,6 +179,7 @@ function PortalSecretRow({
   onNeedStepUp: (retry: () => void) => void
 }) {
   const reveal = useRevealPortalCredential()
+  const setExpiry = useSetPortalCredentialExpiry()
   const [shown, setShown] = useState<RevealResult | null>(null)
   const [showLog, setShowLog] = useState(false)
   const audit = usePortalCredentialAudit(cred.id, showLog)
@@ -265,6 +268,7 @@ function PortalSecretRow({
                 відкликано
               </span>
             )}
+            {!cred.revoked && <VaultExpiryTag expiresAt={cred.expiresAt} />}
           </div>
           {(cred.username || cred.url) && (
             <div
@@ -297,6 +301,38 @@ function PortalSecretRow({
           >
             журнал
           </button>
+          {!cred.revoked && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12 }}
+              onClick={() => {
+                const current = cred.expiresAt ? cred.expiresAt.slice(0, 10) : ''
+                const raw = window.prompt(
+                  'Термін дії доступу (РРРР-ММ-ДД, порожньо — без терміну):',
+                  current
+                )
+                if (raw === null) return
+                const trimmed = raw.trim()
+                if (trimmed !== '' && Number.isNaN(new Date(trimmed).getTime())) {
+                  toast.error('Невірна дата — формат РРРР-ММ-ДД')
+                  return
+                }
+                setExpiry.mutate(
+                  {
+                    credId: cred.id,
+                    expiresAt: trimmed === '' ? null : new Date(trimmed).toISOString(),
+                  },
+                  {
+                    onSuccess: () =>
+                      toast.success(trimmed === '' ? 'Термін знято' : 'Термін оновлено'),
+                  }
+                )
+              }}
+            >
+              термін
+            </button>
+          )}
           {!cred.revoked && (
             <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={onRevoke}>
               відкликати

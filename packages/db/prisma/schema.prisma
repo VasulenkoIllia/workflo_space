@@ -524,30 +524,35 @@ model LeadActivity {
 // url/username/notes) is queryable; only the secret value is ciphertext. Access: agency OWNER
 // only (executors never), enforced in the route; RLS scopes by agencyId like every tenant table.
 model CredentialVault {
-  id                String    @id @default(uuid())
-  agencyId          String
-  companyId         String
-  label             String // "Bitrix24 admin", "FTP клієнта" — plain
-  service           String? // "bitrix24"|"ftp"|"wordpress"|... — filter/icon
-  url               String? // login URL — plain
-  username          String? // plain (preview without reveal)
+  id                 String    @id @default(uuid())
+  agencyId           String
+  companyId          String
+  label              String // "Bitrix24 admin", "FTP клієнта" — plain
+  service            String? // "bitrix24"|"ftp"|"wordpress"|... — filter/icon
+  url                String? // login URL — plain
+  username           String? // plain (preview without reveal)
   // 17-Д typed templates: resourceType = key of VAULT_RESOURCE_TYPES (null = legacy freeform
   // row); publicFields = ordered non-secret fields [{kind,value}] (kinds from VAULT_FIELD_KINDS).
   // The SECRET fields of a typed card are stored as an encrypted JSON array in ciphertext below.
-  resourceType      String?
-  publicFields      Json?
-  encryptedDek      Bytes // DEK wrapped by KEK (AES-256-GCM)
-  dekIv             Bytes // 12-byte IV for DEK wrap
-  dekAuthTag        Bytes // 16-byte GCM tag for DEK wrap
-  ciphertext        Bytes // secret encrypted with DEK
-  ciphertextIv      Bytes // 12-byte IV for ciphertext
-  ciphertextAuthTag Bytes // 16-byte GCM tag for ciphertext
-  notes             String? // plain notes (no secrets!)
-  revokedAt         DateTime? @db.Timestamptz(3)
-  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
-  createdById       String
-  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  resourceType       String?
+  publicFields       Json?
+  encryptedDek       Bytes // DEK wrapped by KEK (AES-256-GCM)
+  dekIv              Bytes // 12-byte IV for DEK wrap
+  dekAuthTag         Bytes // 16-byte GCM tag for DEK wrap
+  ciphertext         Bytes // secret encrypted with DEK
+  ciphertextIv       Bytes // 12-byte IV for ciphertext
+  ciphertextAuthTag  Bytes // 16-byte GCM tag for ciphertext
+  notes              String? // plain notes (no secrets!)
+  // 17-РОТАЦІЯ (спека §D): optional access expiry; the daily cron nags the agency owner
+  // when a secret is ≤7 days from (or past) expiresAt. rotationRemindedAt throttles the
+  // reminder to once per 7 days per secret.
+  expiresAt          DateTime? @db.Timestamptz(3)
+  rotationRemindedAt DateTime? @db.Timestamptz(3)
+  revokedAt          DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+  createdById        String
+  agency             Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   shares    CredentialShare[]
   company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)

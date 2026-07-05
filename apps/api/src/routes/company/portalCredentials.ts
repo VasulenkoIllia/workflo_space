@@ -39,6 +39,8 @@ const createSchema = z
     username: z.string().trim().max(200).nullish(),
     secret: z.string().min(1).max(10000),
     notes: z.string().trim().max(2000).nullish(),
+    // 17-РОТАЦІЯ: optional access expiry (ISO)
+    expiresAt: z.string().datetime().nullish(),
   })
   .strict()
 
@@ -67,6 +69,7 @@ const LIST_SELECT = {
   resourceType: true,
   publicFields: true,
   notes: true,
+  expiresAt: true,
   revokedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -82,6 +85,7 @@ type ListRow = {
   resourceType: string | null
   publicFields: unknown
   notes: string | null
+  expiresAt: Date | null
   revokedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -96,6 +100,7 @@ const toDto = (c: ListRow, viewerId: string) => ({
   resourceType: c.resourceType,
   publicFields: c.publicFields ?? null,
   notes: c.notes,
+  expiresAt: c.expiresAt,
   revoked: c.revokedAt != null,
   revokedAt: c.revokedAt,
   createdAt: c.createdAt,
@@ -260,6 +265,7 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
           // interface → Prisma JSON input (interfaces lack the implicit index signature)
           publicFields: publicFields as unknown as Prisma.InputJsonValue,
           notes: input.notes ?? null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
           ...encryptSecret(secretPlaintext, kek),
         }
       } else {
@@ -270,6 +276,7 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
           url: input.url ?? null,
           username: input.username ?? null,
           notes: input.notes ?? null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
           ...encryptSecret(input.secret, kek),
         }
       }
@@ -417,6 +424,43 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
         metadata: { companyId, via: 'portal' },
       })
       return reply.send({ success: true, data: { revoked: request.params.credId } })
+    }
+  )
+
+  // ── Expiry (17-РОТАЦІЯ): the client sets/clears the term of any company secret ──
+  fastify.patch<{ Params: { credId: string } }>(
+    '/portal/credentials/:credId/expiry',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { agencyId, companyId } = assertVaultAccess(request.user, 'credentials.update')
+      await requireVerifiedEmail(request.user.sub)
+      const { expiresAt } = z
+        .object({ expiresAt: z.string().datetime().nullable() })
+        .strict()
+        .parse(request.body)
+
+      const updated = await withTenant((tx) =>
+        tx.credentialVault.updateMany({
+          where: { id: request.params.credId, companyId },
+          data: {
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            rotationRemindedAt: null,
+          },
+        })
+      )
+      if (updated.count === 0) {
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Секрет не знайдено', 404)
+      }
+      writeAuditAsync(request.log, {
+        actorId: request.user.sub,
+        agencyId,
+        action: 'credentials.updated',
+        resourceType: 'credential',
+        resourceId: request.params.credId,
+        result: 'allowed',
+        metadata: { companyId, field: 'expiresAt', expiresAt, via: 'portal' },
+      })
+      return reply.send({ success: true, data: { id: request.params.credId, expiresAt } })
     }
   )
 

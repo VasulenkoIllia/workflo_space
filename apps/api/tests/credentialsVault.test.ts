@@ -610,3 +610,58 @@ describe('17-Д typed templates (agency side)', () => {
     await app.close()
   })
 })
+
+// ── 17-РОТАЦІЯ: expiry PATCH ────────────────────────────────────────────────
+describe('PATCH /workspace/clients/:id/credentials/:credId/expiry', () => {
+  it('owner sets a term (resets the reminder window), clears with null', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 1 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: '2026-08-01T00:00:00.000Z' },
+    })
+    expect(res.statusCode).toBe(200)
+    const arg = db.credentialVault.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>
+      data: Record<string, unknown>
+    }
+    expect(arg.where).toEqual({ id: CRED, companyId: COMPANY })
+    expect(arg.data.rotationRemindedAt).toBeNull()
+    expect(arg.data.expiresAt).toBeInstanceOf(Date)
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: null },
+    })
+    expect(cleared.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('404 for a secret outside the company, 403 for executor', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 0 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `${base}/cred-foreign/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: null },
+    })
+    expect(res.statusCode).toBe(404)
+
+    const etoken = app.jwt.sign(EXECUTOR as object)
+    const denied = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${etoken}` },
+      payload: { expiresAt: null },
+    })
+    expect(denied.statusCode).toBe(403)
+    await app.close()
+  })
+})

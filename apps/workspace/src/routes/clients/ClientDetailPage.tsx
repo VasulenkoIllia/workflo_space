@@ -39,6 +39,7 @@ import {
   useCredentials,
   useDeleteCredential,
   useGrantShare,
+  useSetCredentialExpiry,
   useRevokeCredential,
   useRevokeShare,
   useVaultShares,
@@ -415,6 +416,7 @@ function SecretsSection({ companyId }: { companyId: string }) {
   const create = useCreateCredential(companyId)
   const revoke = useRevokeCredential(companyId)
   const del = useDeleteCredential(companyId)
+  const setExpiry = useSetCredentialExpiry()
   const [adding, setAdding] = useState(false)
   const [stepUpRetry, setStepUpRetry] = useState<(() => void) | null>(null)
 
@@ -442,6 +444,25 @@ function SecretsSection({ companyId }: { companyId: string }) {
     revoke.mutate(c.id, {
       onSuccess: () => toast.success('Секрет відкликано'),
     })
+  }
+  // 17-РОТАЦІЯ: term prompt (YYYY-MM-DD; порожньо = зняти термін)
+  const doSetExpiry = (c: Credential) => {
+    const current = c.expiresAt ? c.expiresAt.slice(0, 10) : ''
+    const raw = window.prompt('Термін дії доступу (РРРР-ММ-ДД, порожньо — без терміну):', current)
+    if (raw === null) return
+    const trimmed = raw.trim()
+    if (trimmed !== '' && Number.isNaN(new Date(trimmed).getTime())) {
+      toast.error('Невірна дата — формат РРРР-ММ-ДД')
+      return
+    }
+    setExpiry.mutate(
+      {
+        companyId,
+        credId: c.id,
+        expiresAt: trimmed === '' ? null : new Date(trimmed).toISOString(),
+      },
+      { onSuccess: () => toast.success(trimmed === '' ? 'Термін знято' : 'Термін оновлено') }
+    )
   }
   const doDelete = (c: Credential) => {
     if (!window.confirm(`Назавжди видалити секрет «${c.label}»?`)) return
@@ -489,6 +510,7 @@ function SecretsSection({ companyId }: { companyId: string }) {
               onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
               sharedNames={sharedNamesFor(c.id)}
               onManageShares={executors.length > 0 ? () => setShareModalCred(c) : undefined}
+              onSetExpiry={() => doSetExpiry(c)}
               formatDate={formatDate}
             />
           ))
