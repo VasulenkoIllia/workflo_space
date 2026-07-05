@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { TwoFactorSection } from '@workflo/app-core'
 import { Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/format'
@@ -60,6 +61,12 @@ export function ProfilePage() {
           </div>
         </div>
       </Card>
+
+      {/* 2FA доступна КОЖНІЙ ролі тут (/settings — owner-only), сюди ж веде банер
+          2FA-політики агенції. */}
+      <div style={{ marginBottom: 16 }}>
+        <TwoFactorSection app="workspace" />
+      </div>
 
       <Card title="Заробіток">
         {payouts.isLoading ? (

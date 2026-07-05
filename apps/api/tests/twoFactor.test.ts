@@ -27,6 +27,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     companyMember: { findMany: companyMemberFindMany },
     agencyMember: { findMany: agencyMemberFindMany },
     refreshToken: { create: refreshCreate },
+    // 2FA-POLICY engine probes the agencies of internal members at session-issue
+    agency: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return {
     ...actual,

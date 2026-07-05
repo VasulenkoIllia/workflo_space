@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   LinkedAccountsSection,
   NotificationsSection,
@@ -8,6 +10,9 @@ import {
 } from '@workflo/app-core'
 import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { useAuth } from '@/contexts/AuthContext'
+import { api } from '@/lib/api'
+import { formatDate } from '@/lib/format'
 import {
   usePaymentSettings,
   useReferralSettings,
@@ -26,6 +31,82 @@ import {
   type LegalEntity,
   type LegalEntityInput,
 } from '@/lib/legalEntities'
+
+/** 2FA-POLICY (owner-only): «вимагати 2FA у команди» + хто з команди вже захищений.
+ * Увімкнення дає кожному члену без TOTP грейс 7 днів (банер), далі вхід веде одразу
+ * в налаштування 2FA. Клієнтів порталу політика не стосується. */
+interface AgencySecurity {
+  requireTwoFactor: boolean
+  since: string | null
+  deadline: string | null
+  members: { profileId: string; name: string; twoFactorEnabled: boolean }[]
+}
+
+function AgencySecuritySection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['agency-security'],
+    queryFn: () => api.get<AgencySecurity>('/workspace/agency/security'),
+  })
+  const patch = useMutation({
+    mutationFn: (requireTwoFactor: boolean) =>
+      api.patch('/workspace/agency/security', { requireTwoFactor }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-security'] }),
+  })
+
+  if (isLoading) return <Skeleton style={{ height: 120 }} />
+  if (!data) return null
+  const unprotected = data.members.filter((m) => !m.twoFactorEnabled)
+
+  return (
+    <Card title="Безпека агенції · 2FA">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+        <input
+          type="checkbox"
+          checked={data.requireTwoFactor}
+          disabled={patch.isPending}
+          onChange={(e) => {
+            const next = e.target.checked
+            if (
+              next &&
+              !window.confirm(
+                `Вимагати 2FA у всієї команди? Хто ще не налаштував (${unprotected.length}) — матиме 7 днів, далі вхід вестиме одразу в налаштування 2FA.`
+              )
+            )
+              return
+            patch.mutate(next, {
+              onSuccess: () =>
+                toast.success(next ? 'Політику ввімкнено — грейс 7 днів' : 'Політику вимкнено'),
+            })
+          }}
+        />
+        Вимагати двофакторну автентифікацію у команди
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        {data.requireTwoFactor && data.deadline
+          ? `// діє з ${formatDate(data.since ?? '')} · дедлайн для команди: ${formatDate(data.deadline)} · клієнтів порталу не стосується`
+          : '// стосується owner/manager/виконавців; клієнтів порталу — ні. Грейс 7 днів, далі вхід веде в налаштування 2FA.'}
+      </div>
+      <div style={{ display: 'grid', gap: 4, marginTop: 12 }}>
+        {data.members.map((m) => (
+          <div key={m.profileId} style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+            <span
+              className="wfp-mono"
+              style={{
+                fontSize: 11,
+                color: m.twoFactorEnabled ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+                width: 70,
+              }}
+            >
+              {m.twoFactorEnabled ? '✓ 2FA' : '— без 2FA'}
+            </span>
+            {m.name}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
 
 function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
   const save = useSavePaymentSettings()
@@ -506,6 +587,7 @@ function LegalEntitiesSection() {
 export function SettingsPage() {
   const payment = usePaymentSettings()
   const referral = useReferralSettings()
+  const { isOwner } = useAuth()
 
   return (
     <div>
@@ -519,6 +601,7 @@ export function SettingsPage() {
 
       <div style={{ display: 'grid', gap: 18 }}>
         <TwoFactorSection app="workspace" />
+        {isOwner && <AgencySecuritySection />}
         <LinkedAccountsSection app="workspace" />
         <SessionsSection />
         <LegalEntitiesSection />

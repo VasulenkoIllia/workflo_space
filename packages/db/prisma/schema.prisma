@@ -1132,6 +1132,12 @@ model Agency {
   defaultApprovalMode    ApprovalMode    @default(none)
   defaultInvoiceApprover InvoiceApprover @default(client)
 
+  // 2FA-POLICY (рішення власника 05.07): when set, every INTERNAL member (owner/manager/
+  // executor) must have TOTP 2FA. Grace = 7 days from this timestamp; past it, sessions
+  // carry tfaDue and the API gate only lets /auth/* through until setup completes.
+  // Portal clients are never affected. null = policy off.
+  requireTwoFactorAt DateTime? @db.Timestamptz(3)
+
   members          AgencyMember[]
   companies        Company[]
   orders           Order[]

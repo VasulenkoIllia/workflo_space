@@ -371,6 +371,9 @@ export enum ApiErrorCode {
   // Step-up auth needed before the action (e.g. re-enter password to reveal a vault secret).
   // Returned with HTTP 403 so the API client does NOT treat it as a session-expiry 401.
   STEP_UP_REQUIRED = 'STEP_UP_REQUIRED',
+  // 2FA-POLICY: the agency requires TOTP, the grace window expired, and this member has
+  // not set it up yet — every route except /auth/* answers 403 with this code.
+  TFA_SETUP_REQUIRED = 'TFA_SETUP_REQUIRED',
 }
 
 // ─── Departments (CRUD table, not enum — see modules/12) ────────────────────

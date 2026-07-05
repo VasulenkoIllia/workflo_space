@@ -12,7 +12,8 @@ import {
 } from '@workflo/ui'
 import { SidebarUserMenu } from '@/components/SidebarUserMenu'
 import { TimerBar } from '@/components/TimerBar'
-import { BellDropdown } from '@workflo/app-core'
+import { BellDropdown, TwoFactorSection } from '@workflo/app-core'
+import { refreshAccessToken } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -179,7 +180,43 @@ export function AppLayout() {
         />
       }
     >
-      <Outlet />
+      {/* 2FA-POLICY: grace banner → forced setup once the deadline passes (the API gate
+          already 403s everything except /auth/*, so this screen is the only useful one). */}
+      {user?.twoFactorSetup?.blocking ? (
+        <ForcedTwoFactorSetup />
+      ) : (
+        <>
+          {user?.twoFactorSetup?.required && (
+            <div
+              className="wfp-mono"
+              style={{
+                fontSize: 12,
+                padding: '8px 12px',
+                marginBottom: 14,
+                border: '1px solid var(--wf-warning, #b45309)',
+                borderRadius: 'var(--wf-radius)',
+                color: 'var(--wf-warning, #b45309)',
+              }}
+            >
+              // агенція вимагає 2FA — налаштуйте до{' '}
+              {user.twoFactorSetup.deadline
+                ? new Date(user.twoFactorSetup.deadline).toLocaleDateString('uk-UA')
+                : '—'}{' '}
+              у{' '}
+              <button
+                type="button"
+                className="wfp-link"
+                style={{ fontSize: 12 }}
+                onClick={() => navigate('/profile')}
+              >
+                Профілі
+              </button>
+              , інакше вхід буде заблоковано
+            </div>
+          )}
+          <Outlet />
+        </>
+      )}
       <TimerBar />
       <CommandPalette
         open={cmdkOpen}
@@ -188,5 +225,45 @@ export function AppLayout() {
         placeholder="Перейти до екрана…"
       />
     </AppShell>
+  )
+}
+
+/** 2FA-POLICY forced-setup screen: shown instead of the app once the grace expired.
+ * The API gate already limits the session to /auth/* — the 2FA setup endpoints live
+ * there, so the setup card works; «Продовжити» rotates the token (drops tfaDue) and
+ * reloads the session. */
+function ForcedTwoFactorSetup() {
+  const { reload } = useAuth()
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div className="wfp-ph">
+        <div className="wfp-ph-l">
+          <div className="wfp-ph-sub">// політика безпеки агенції</div>
+          <h1 className="wfp-ph-h1">Потрібна двофакторна автентифікація</h1>
+        </div>
+      </div>
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 12, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
+      >
+        // грейс-період минув — доступ до workspace відновиться одразу після налаштування 2FA
+      </div>
+      <TwoFactorSection app="workspace" />
+      <div style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          className="wfp-link"
+          onClick={() => {
+            void (async () => {
+              await refreshAccessToken()
+              await reload()
+              window.location.assign('/')
+            })()
+          }}
+        >
+          Я налаштував 2FA — продовжити →
+        </button>
+      </div>
+    </div>
   )
 }

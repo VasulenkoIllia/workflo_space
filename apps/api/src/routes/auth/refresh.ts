@@ -16,6 +16,7 @@ import {
   setRefreshCookie,
 } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /**
  * CSRF guard (ADR-001): /auth/refresh validates the Origin header against the
@@ -124,6 +125,10 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         })
       })
 
+      // 2FA-POLICY: re-evaluated on every rotation, so enabling 2FA (or the owner
+      // flipping the policy) takes effect within one access-token TTL.
+      const twoFactorSetup = await twoFactorSetupState(stored.profile.id, agencyMemberships)
+
       const claims = buildAccessClaims({
         profileId: stored.profile.id,
         email: stored.profile.email,
@@ -133,6 +138,7 @@ const refreshRoute: FastifyPluginAsync = (fastify) => {
         agencyMemberships,
         memberships,
         sid: stored.familyId,
+        tfaDue: twoFactorSetup.blocking,
       })
       const accessToken = await reply.jwtSign(claims)
 

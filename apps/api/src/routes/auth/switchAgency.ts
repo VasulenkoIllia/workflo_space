@@ -8,6 +8,7 @@ import {
 } from '../../auth/memberships.js'
 import { buildAccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /**
  * POST /auth/switch-agency — change the active tenant of a multi-agency staffer
@@ -60,6 +61,7 @@ const switchAgencyRoute: FastifyPluginAsync = (fastify) => {
 
       const memberships = await loadMemberships(prisma, profileId)
       const activeCompanyId = defaultActiveCompanyId(memberships)
+      const twoFactorSetup = await twoFactorSetupState(profileId, agencyMemberships)
 
       const claims = buildAccessClaims({
         profileId: profile.id,
@@ -71,6 +73,7 @@ const switchAgencyRoute: FastifyPluginAsync = (fastify) => {
         memberships,
         // Same device/session — preserve the session id from the current token.
         sid: request.user.sid ?? null,
+        tfaDue: twoFactorSetup.blocking,
       })
       const accessToken = await reply.jwtSign(claims)
 

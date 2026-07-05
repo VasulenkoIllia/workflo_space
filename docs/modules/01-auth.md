@@ -678,6 +678,19 @@ fastify.register(rateLimit, {
 - **Login flow зміна:** якщо `totpEnabledAt` → після пароля НЕ видаємо токени, повертаємо `{ require2fa: true, challengeId }`; `POST /auth/2fa/verify { challengeId, code }` (TOTP або backup) → видаємо access+refresh. Rate-limit 5/15хв на verify.
 - Reset паролю / зміна 2FA → `tokenVersion++`.
 
+#### C-2. Політика «вимагати 2FA у команди» (2FA-POLICY, рішення власника 05.07.2026) ✅
+
+> Вікторина 05.07: **owner-тумблер для команди** (клієнтів порталу не стосується) ·
+> **грейс 7 днів → блок входу** (форс-екран setup) · **TOTP-first step-up у vault**
+> (пароль лишається фолбеком для акаунтів без 2FA).
+
+- `Agency.requireTwoFactorAt DateTime?` — момент увімкнення політики (null = off). Дедлайн = +7 днів. Повторне увімкнення перезапускає грейс (не «доганяє» заднім числом).
+- Роути: `GET/PATCH /workspace/agency/security` (owner-only; GET віддає покриття — хто з команди вже має 2FA). Audit `agency.2fa_policy_enabled/disabled`.
+- Двигун: `services/twoFactorPolicy.ts` → `{ required, deadline, blocking }`; рахується на **кожній видачі сесії** (login / refresh / switch-agency) і в `/auth/me`. Стосується лише internal-членів (`agencyMemberships`); увімкнене 2FA знімає вимогу.
+- **Жорсткий гейт:** `blocking` → клейм `tfaDue` в access-токені → `authenticate` пропускає ЛИШЕ `/auth/*` (setup/enable/me/logout), решта — `403 TFA_SETUP_REQUIRED` (окремий код, щоб фронт вів на форс-екран, а не тост). Після enable — refresh знімає клейм (≤15 хв TTL, фронт рефрешить одразу).
+- UI (workspace): картка «Безпека агенції · 2FA» у `/settings` (owner, тумблер + покриття команди); банер грейсу з дедлайном у AppLayout (веде в `/profile`, де 2FA-секція доступна всім ролям); після дедлайну — форс-екран «Потрібна 2FA» замість апки.
+- **TOTP-first step-up (vault reveal):** `services/vaultStepUp.ts` — у кого 2FA увімкнено, step-up приймає ЛИШЕ `{ code }` (TOTP або backup, через `verifyChallenge` з replay-guard; пароль → 400 «введіть код»); без 2FA — `{ password }` як раніше. Обидві модалки (workspace+portal) перемикаються по `GET /auth/2fa/status`.
+
 ### D. Active sessions (управління) ✅
 
 - `RefreshToken` додає `ip String?`, `userAgent String?`, `lastUsedAt DateTime?` (оновлюється на кожному `/auth/refresh`).

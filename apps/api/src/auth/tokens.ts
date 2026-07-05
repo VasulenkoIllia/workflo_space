@@ -74,6 +74,8 @@ export interface AccessClaims {
   memberships: Membership[]
   /** Session id = refresh-token familyId (S9-02); lets /auth/sessions mark «current». */
   sid?: string | null
+  /** 2FA-POLICY: grace expired without TOTP → the API gate limits this session to /auth/*. */
+  tfaDue?: boolean
 }
 
 /**
@@ -113,6 +115,7 @@ export function buildAccessClaims(params: {
   agencyMemberships: AgencyMembership[]
   memberships: Membership[]
   sid?: string | null
+  tfaDue?: boolean
 }): AccessClaims {
   return {
     sub: params.profileId,
@@ -123,6 +126,7 @@ export function buildAccessClaims(params: {
     agencyMemberships: params.agencyMemberships,
     memberships: params.memberships,
     sid: params.sid ?? null,
+    ...(params.tfaDue ? { tfaDue: true } : {}),
   }
 }
 

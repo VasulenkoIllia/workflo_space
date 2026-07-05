@@ -42,6 +42,16 @@ async function jwtPlugin(fastify: FastifyInstance): Promise<void> {
     } catch {
       throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Потрібна автентифікація', 401)
     }
+    // 2FA-POLICY hard gate: grace expired without TOTP → only /auth/* stays reachable
+    // (setup/enable/me/logout live there); everything else answers 403 with a distinct
+    // code so the frontends route to the forced-setup screen instead of a toast.
+    if (request.user.tfaDue === true && !request.url.startsWith('/auth/')) {
+      throw new AppError(
+        ApiErrorCode.TFA_SETUP_REQUIRED,
+        'Агенція вимагає двофакторну автентифікацію — налаштуйте її, щоб продовжити',
+        403
+      )
+    }
     // RLS seam (F4 / ADR-007): bind the request's tenant so the DB client sets the
     // `app.current_agency_id` GUC for every query. No-op unless RLS_ENFORCED=true
     // (and the app connects as the non-superuser workflo_app role) — see @workflo/db.

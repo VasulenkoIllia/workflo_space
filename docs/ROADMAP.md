@@ -89,7 +89,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії, ✅ **UTM з contact-форми** (05.07), ✅ **activity-timeline** (05.07); лишок: пайплайн-редактор (custom-стадії — окремий зріз зі схемою).
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** + ✅ **executor-share (17-SHARE)** (усі 05.07). Лишок: ротація-нагадування. _Примітки: TOTP-2FA — коли модуль 01 видаватиме authenticator-secret; каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** + ✅ **executor-share (17-SHARE)** + ✅ **TOTP-first step-up на reveal** (усі 05.07). Лишок: ротація-нагадування. _Примітка: каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 
@@ -125,6 +125,23 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **TOTP-step-up у vault + політика «вимагати 2FA у команди» (2FA-POLICY) — ЗАКРИТО (2026-07-05).**
+  Рішення власника (вікторина): **TOTP якщо є, інакше пароль** · **owner-тумблер для команди**
+  (клієнтів не стосується) · **грейс 7 днів → блок входу**. (1) **TOTP-first step-up**:
+  `vaultStepUp.ts` спільний для обох vault-роутів — з увімкненим 2FA reveal вимагає код
+  автентифікатора/backup (пароль → 400, даунгрейд неможливий); модалки обох апок самі
+  перемикаються по /auth/2fa/status. (2) **Політика**: `Agency.requireTwoFactorAt` (міграція) +
+  `GET/PATCH /workspace/agency/security` (owner-only, GET = покриття команди) + двигун
+  `twoFactorPolicy.ts` на кожній видачі сесії (login/refresh/switch) і в /me. Поза грейсом —
+  клейм `tfaDue` → **authenticate-гейт пропускає лише /auth/\***, решта 403 `TFA_SETUP_REQUIRED`
+  (новий код). UI: картка «Безпека агенції» в /settings (тумблер + хто вже з 2FA), банер
+  дедлайну, форс-екран setup замість апки; **2FA-секція додана в /profile** (була лише в
+  owner-only /settings — виконавцю не було де вмикати). Гейт: +14 тестів (api **771** unit;
+  4 старі моки доповнені під policy-двигун), turbo 56/56. Вживу (curl): enable TOTP → step-up
+  паролем 400 «введіть код» → кодом grant; політика on → login виконавця несе
+  `twoFactorSetup{deadline}`; бекдейт -8днів → `/workspace/*` 403 TFA_SETUP_REQUIRED, а
+  `/auth/2fa/status` доступний. Канон: `01-auth.md §C-2`.
 
 - **Vault executor-share (17-SHARE) — ЗАКРИТО (2026-07-05).** Модель — **рішення власника
   (вікторина 05.07): гібрид** (точковий share НА один секрет + «всі секрети клієнта» одним

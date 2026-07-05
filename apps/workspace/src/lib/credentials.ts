@@ -24,11 +24,12 @@ export function hasValidRevealGrant(): boolean {
   return getRevealGrant() !== null
 }
 
-/** Step-up: exchange the owner's password for a reveal grant (stored in-memory on success). */
+/** Step-up: exchange the user's proof (TOTP code when 2FA is on, password otherwise)
+ * for a reveal grant (stored in-memory on success). */
 export function useVaultStepUp() {
   return useMutation({
-    mutationFn: (password: string) =>
-      api.post<{ grant: string; expiresAt: string }>('/workspace/vault/step-up', { password }),
+    mutationFn: (body: { password?: string; code?: string }) =>
+      api.post<{ grant: string; expiresAt: string }>('/workspace/vault/step-up', body),
     onSuccess: (r) => setRevealGrant(r.grant, r.expiresAt),
   })
 }

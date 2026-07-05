@@ -3,7 +3,6 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { can } from '../../auth/can.js'
-import { verifyPassword } from '../../auth/password.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -15,6 +14,7 @@ import {
   typedCreateSchema,
 } from '../../services/vaultFields.js'
 import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.js'
+import { STEP_UP_FAILURE_MESSAGE, verifyVaultStepUp } from '../../services/vaultStepUp.js'
 
 /**
  * Credentials Vault — PORTAL self-service (17-А «двосторонній ввід» + 17-Б client-facing
@@ -42,7 +42,17 @@ const createSchema = z
   })
   .strict()
 
-const stepUpSchema = z.object({ password: z.string().min(1).max(200) }).strict()
+// TOTP-first step-up (рішення власника 05.07): клієнт із увімкненим 2FA підтверджує
+// reveal кодом автентифікатора; без 2FA — пароль-фолбек.
+const stepUpSchema = z
+  .object({
+    password: z.string().min(1).max(200).optional(),
+    code: z.string().trim().min(6).max(20).optional(),
+  })
+  .strict()
+  .refine((d) => d.password != null || d.code != null, {
+    message: 'Потрібен пароль або код автентифікатора',
+  })
 
 // Same anti-exfil budget as the workspace side: 10 reveals / hour per profile.
 const REVEAL_MAX_PER_WINDOW = 10
@@ -135,24 +145,27 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
     },
     async (request, reply) => {
       const { agencyId } = assertVaultAccess(request.user, 'credentials.read')
-      const { password } = stepUpSchema.parse(request.body)
+      const input = stepUpSchema.parse(request.body)
 
-      const profile = await prisma.profile.findUnique({
-        where: { id: request.user.sub },
-        select: { passwordHash: true },
-      })
-      const ok = profile ? await verifyPassword(password, profile.passwordHash) : false
-      if (!ok) {
-        writeAuditAsync(request.log, {
-          actorId: request.user.sub,
-          agencyId,
-          action: 'credentials.step_up_failed',
-          resourceType: 'profile',
-          resourceId: request.user.sub,
-          result: 'denied',
-          metadata: { ip: request.ip, via: 'portal' },
-        })
-        throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Невірний пароль', 401)
+      const result = await verifyVaultStepUp(request.user.sub, input)
+      if (!result.ok) {
+        const fail = STEP_UP_FAILURE_MESSAGE[result.reason]
+        if (fail.status === 401) {
+          writeAuditAsync(request.log, {
+            actorId: request.user.sub,
+            agencyId,
+            action: 'credentials.step_up_failed',
+            resourceType: 'profile',
+            resourceId: request.user.sub,
+            result: 'denied',
+            metadata: { ip: request.ip, via: 'portal', reason: result.reason },
+          })
+        }
+        throw new AppError(
+          fail.status === 401 ? ApiErrorCode.UNAUTHORIZED : ApiErrorCode.VALIDATION_ERROR,
+          fail.message,
+          fail.status
+        )
       }
 
       const { grant, expiresAt } = issueRevealGrant(request.user.sub)

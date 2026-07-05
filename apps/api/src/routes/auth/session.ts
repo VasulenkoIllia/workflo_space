@@ -9,6 +9,7 @@ import {
   type SessionMeta,
   setRefreshCookie,
 } from '../../auth/tokens.js'
+import { type TwoFactorSetupState, twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /** The `data` block both /auth/login and /auth/2fa/login-verify return on success. */
 export interface SessionResponse {
@@ -16,6 +17,8 @@ export interface SessionResponse {
   profile: { id: string; email: string; displayName: string; role: string }
   activeCompanyId: string | null
   companies: { id: string; name: string | null; slug: string | null; role: string }[]
+  /** 2FA-POLICY: present only when the agency requires TOTP this member lacks. */
+  twoFactorSetup?: TwoFactorSetupState
 }
 
 /**
@@ -66,6 +69,9 @@ export async function issueSessionForProfile(
       ? pickActiveAgencyId(agencyMemberships, profile.lastActiveAgencyId)
       : memberRows.find((m) => m.companyId === activeCompanyId)?.company?.agencyId) ?? null
 
+  // 2FA-POLICY: does an agency of this member require TOTP they don't have yet?
+  const twoFactorSetup = await twoFactorSetupState(profile.id, agencyMemberships)
+
   // Refresh row first — its familyId is the session id (sid) inside the access token.
   const refresh = await issueRefreshToken(prisma, profile.id, meta)
   setRefreshCookie(reply, refresh.token)
@@ -79,6 +85,7 @@ export async function issueSessionForProfile(
     agencyMemberships,
     memberships,
     sid: refresh.familyId,
+    tfaDue: twoFactorSetup.blocking,
   })
   const accessToken = await reply.jwtSign(claims)
 
@@ -97,5 +104,6 @@ export async function issueSessionForProfile(
       slug: m.company?.slug ?? null,
       role: m.role,
     })),
+    ...(twoFactorSetup.required ? { twoFactorSetup } : {}),
   }
 }

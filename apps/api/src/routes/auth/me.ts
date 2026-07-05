@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { loadAgencyMemberships } from '../../auth/memberships.js'
+import { twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /**
  * GET /auth/me — return the current authenticated user.
@@ -55,6 +56,9 @@ const meRoute: FastifyPluginAsync = (fastify) => {
       : (agencyMemberships[0]?.agencyId ?? null)
     const agencyRole = agencyMemberships.find((m) => m.agencyId === activeAgencyId)?.role ?? null
 
+    // 2FA-POLICY: banner/forced-setup state for the frontends (fresh on every /me).
+    const twoFactorSetup = await twoFactorSetupState(profileId, agencyMemberships)
+
     return reply.status(200).send({
       success: true,
       data: {
@@ -79,6 +83,7 @@ const meRoute: FastifyPluginAsync = (fastify) => {
         activeAgencyId,
         agencyRole,
         agencyMemberships,
+        ...(twoFactorSetup.required ? { twoFactorSetup } : {}),
       },
     })
   })

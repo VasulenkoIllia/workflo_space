@@ -12,6 +12,9 @@ vi.mock('@workflo/db', () => ({
   prisma: {
     profile: { findUnique: profileFindUnique, update: profileUpdate },
     agencyMember: { findMany: agencyMemberFindMany },
+    // 2FA-POLICY engine probes the agencies of internal members
+    agency: { findMany: vi.fn().mockResolvedValue([]) },
+    twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
     companyMember: { findMany: companyMemberFindMany },
     auditLog: { create: auditLogCreate },
   },

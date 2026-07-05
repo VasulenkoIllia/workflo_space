@@ -15,6 +15,8 @@ const db = {
   },
   auditLog: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
   profile: { findUnique: vi.fn() },
+  // TOTP-first step-up: isEnabled() probes the 2FA row (null → password fallback)
+  twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
   credentialShare: {
     findMany: vi.fn().mockResolvedValue([]),
     findFirst: vi.fn(),

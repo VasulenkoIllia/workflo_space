@@ -1,11 +1,11 @@
-import { type Prisma, prisma, withTenant } from '@workflo/db'
+import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { verifyPassword } from '../../auth/password.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { STEP_UP_FAILURE_MESSAGE, verifyVaultStepUp } from '../../services/vaultStepUp.js'
 import { decryptSecret, encryptSecret, requireKek } from '../../services/credentialCrypto.js'
 import {
   isTypedCreateBody,
@@ -41,7 +41,17 @@ const createSchema = z
   })
   .strict()
 
-const stepUpSchema = z.object({ password: z.string().min(1).max(200) }).strict()
+// TOTP-first step-up (рішення власника 05.07): у кого 2FA увімкнено — reveal вимагає
+// код автентифікатора (або backup-код), інакше лишається пароль-фолбек.
+const stepUpSchema = z
+  .object({
+    password: z.string().min(1).max(200).optional(),
+    code: z.string().trim().min(6).max(20).optional(),
+  })
+  .strict()
+  .refine((d) => d.password != null || d.code != null, {
+    message: 'Потрібен пароль або код автентифікатора',
+  })
 
 // Per-owner reveal throttle (module 17 §133): 10 reveals / hour, keyed on the owner (not IP, which
 // would lock out co-located owners). Counted over the owner's own committed reveal audit rows;
@@ -190,24 +200,27 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(request.user) || isAgencyManager(request.user, agencyId)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до секретів', 403)
       }
-      const { password } = stepUpSchema.parse(request.body)
+      const input = stepUpSchema.parse(request.body)
 
-      const profile = await prisma.profile.findUnique({
-        where: { id: request.user.sub },
-        select: { passwordHash: true },
-      })
-      const ok = profile ? await verifyPassword(password, profile.passwordHash) : false
-      if (!ok) {
-        writeAuditAsync(request.log, {
-          actorId: request.user.sub,
-          agencyId,
-          action: 'credentials.step_up_failed',
-          resourceType: 'profile',
-          resourceId: request.user.sub,
-          result: 'denied',
-          metadata: { ip: request.ip },
-        })
-        throw new AppError(ApiErrorCode.UNAUTHORIZED, 'Невірний пароль', 401)
+      const result = await verifyVaultStepUp(request.user.sub, input)
+      if (!result.ok) {
+        const fail = STEP_UP_FAILURE_MESSAGE[result.reason]
+        if (fail.status === 401) {
+          writeAuditAsync(request.log, {
+            actorId: request.user.sub,
+            agencyId,
+            action: 'credentials.step_up_failed',
+            resourceType: 'profile',
+            resourceId: request.user.sub,
+            result: 'denied',
+            metadata: { ip: request.ip, reason: result.reason },
+          })
+        }
+        throw new AppError(
+          fail.status === 401 ? ApiErrorCode.UNAUTHORIZED : ApiErrorCode.VALIDATION_ERROR,
+          fail.message,
+          fail.status
+        )
       }
 
       const { grant, expiresAt } = issueRevealGrant(request.user.sub)
