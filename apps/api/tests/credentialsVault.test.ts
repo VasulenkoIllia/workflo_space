@@ -146,7 +146,7 @@ describe('GET /workspace/vault — global (17-ГЛОБАЛ)', () => {
     await app.close()
   })
 
-  it('executor is forbidden (403)', async () => {
+  it('executor without shares gets an empty vault (17-SHARE)', async () => {
     db.credentialShare.findMany.mockResolvedValue([])
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
