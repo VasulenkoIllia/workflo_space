@@ -24,7 +24,13 @@ import {
 import { useCompanies, useProjects } from '@/lib/projects'
 import { useTeam } from '@/lib/payouts'
 import { useAuth } from '@/contexts/AuthContext'
-import { useDeletedOrders, useRestoreOrder } from '@/lib/orders'
+import {
+  useDeletedOrders,
+  useRestoreOrder,
+  useOrderTags,
+  useOrderTemplates,
+  useCreateFromTemplate,
+} from '@/lib/orders'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 import { KanbanBoard } from './KanbanBoard'
 
@@ -47,6 +53,8 @@ function isOverdue(o: WorkspaceOrder): boolean {
 export function OrdersPage() {
   const { isOwner } = useAuth()
   const [trashOpen, setTrashOpen] = useState(false)
+  const [tagF, setTagF] = useState('')
+  const orderTags = useOrderTags()
   const [params, setParams] = useSearchParams()
   const viewParam = params.get('view')
   // Design: /orders is the filterable table registry by default; board (kanban) + timeline are
@@ -65,6 +73,7 @@ export function OrdersPage() {
     status: statusF || undefined,
     companyId: clientF || undefined,
     assigneeId: execF || undefined,
+    tags: tagF || undefined,
     limit: 100,
   })
   const unassigned = useOrders({ assigneeId: 'none', limit: 100 })
@@ -152,7 +161,7 @@ export function OrdersPage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1.4fr 1fr 1fr 1fr',
+          gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr',
           gap: 10,
           alignItems: 'end',
           marginBottom: 16,
@@ -174,6 +183,15 @@ export function OrdersPage() {
         <Select label="Статус" value={statusF} onChange={setStatusF} options={STATUS_OPTS} />
         <Select label="Клієнт" value={clientF} onChange={setClientF} options={clientOpts} />
         <Select label="Виконавець" value={execF} onChange={setExecF} options={execOpts} />
+        <Select
+          label="Тег"
+          value={tagF}
+          onChange={setTagF}
+          options={[
+            { value: '', label: 'усі теги' },
+            ...(orderTags.data?.tags ?? []).map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
       </div>
 
       {isLoading ? (
@@ -239,7 +257,10 @@ function CreateOrderModal({
 }) {
   const navigate = useNavigate()
   const create = useCreateOrder()
+  const fromTemplate = useCreateFromTemplate()
+  const templates = useOrderTemplates()
   const projects = useProjects()
+  const [templateId, setTemplateId] = useState('')
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? '')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -253,6 +274,14 @@ function CreateOrderModal({
 
   const submit = () => {
     if (titleInvalid || !companyId) return
+    // S10-01: обраний шаблон → створення через from-template (несе білінг/тип шаблону)
+    if (templateId !== '') {
+      fromTemplate.mutate(
+        { templateId, companyId, title: title.trim() },
+        { onSuccess: (res) => navigate(`/orders/${res.order.id}`) }
+      )
+      return
+    }
     create.mutate(
       {
         companyId,
@@ -293,6 +322,24 @@ function CreateOrderModal({
       }
     >
       <div style={{ display: 'grid', gap: 14 }}>
+        {(templates.data?.templates.length ?? 0) > 0 && (
+          <Select
+            label="З шаблону"
+            value={templateId}
+            onChange={(v) => {
+              setTemplateId(v)
+              const t = templates.data?.templates.find((x) => x.id === v)
+              if (t) {
+                setTitle(t.defaultTitle)
+                setDescription(t.defaultDescription ?? '')
+              }
+            }}
+            options={[
+              { value: '', label: '— без шаблону —' },
+              ...(templates.data?.templates ?? []).map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
+        )}
         <Select
           label="Клієнт"
           value={companyId}

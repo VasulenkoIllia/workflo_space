@@ -256,6 +256,8 @@ describe('GET /orders', () => {
     createdAt: new Date('2026-05-31T00:00:00Z'),
     updatedAt: new Date('2026-05-31T00:00:00Z'),
     _count: { stages: 2 },
+    // S10-01: list-select тепер тягне теги
+    tags: [] as { tag: { id: string; name: string; color: string | null } }[],
   }
 
   it('client list is scoped to their companies + hides internalStatus', async () => {
@@ -303,6 +305,8 @@ describe('GET /orders/:id', () => {
   afterEach(() => vi.clearAllMocks())
 
   const fullOrder = {
+    // S10-01: getOrder-select тепер тягне теги
+    tags: [] as { tag: { id: string; name: string; color: string | null } }[],
     id: 'order-1',
     agencyId: 'agency-1',
     companyId: 'company-1',

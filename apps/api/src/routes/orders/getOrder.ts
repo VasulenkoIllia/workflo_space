@@ -54,6 +54,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             company: { select: { id: true, name: true } },
             assignee: { select: { id: true, name: true } },
             project: { select: { id: true, name: true, billingModel: true } },
+            tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
             stages: {
               select: { id: true, title: true, description: true, status: true, position: true },
               orderBy: { position: 'asc' },
@@ -110,6 +111,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             company: order.company,
             assignee: order.assignee,
             project: order.project,
+            tags: order.tags.map((t) => t.tag),
           },
         },
       })

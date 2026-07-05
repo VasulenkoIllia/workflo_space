@@ -14,6 +14,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
+  useCreateOrderTag,
+  useCreateOrderTemplate,
+  useDeleteOrderTag,
+  useDeleteOrderTemplate,
+  useOrderTags,
+  useOrderTemplates,
+} from '@/lib/orders'
+import {
   usePaymentSettings,
   useReferralSettings,
   useSavePaymentSettings,
@@ -602,6 +610,7 @@ export function SettingsPage() {
       <div style={{ display: 'grid', gap: 18 }}>
         <TwoFactorSection app="workspace" />
         {isOwner && <AgencySecuritySection />}
+        {isOwner && <OrderCatalogSection />}
         <LinkedAccountsSection app="workspace" />
         <SessionsSection />
         <LegalEntitiesSection />
@@ -619,5 +628,204 @@ export function SettingsPage() {
         <TelegramSection app="workspace" />
       </div>
     </div>
+  )
+}
+
+/** S10-01: каталоги замовлень — теги (name+color) і шаблони (name+title+price). Owner-only. */
+function OrderCatalogSection() {
+  const tags = useOrderTags()
+  const createTag = useCreateOrderTag()
+  const deleteTag = useDeleteOrderTag()
+  const templates = useOrderTemplates()
+  const createTemplate = useCreateOrderTemplate()
+  const deleteTemplate = useDeleteOrderTemplate()
+  const [tagName, setTagName] = useState('')
+  const [tagColor, setTagColor] = useState('#a3d90d')
+  const [tplName, setTplName] = useState('')
+  const [tplTitle, setTplTitle] = useState('')
+  const [tplPrice, setTplPrice] = useState('')
+
+  return (
+    <Card title="Замовлення · теги і шаблони">
+      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: '1fr 1fr' }}>
+        <div>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 8 }}
+          >
+            ТЕГИ (фільтр і чіпи на замовленнях)
+          </div>
+          <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+            {(tags.data?.tags ?? []).map((t) => (
+              <div
+                key={t.id}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}
+              >
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    background: t.color ?? 'var(--wf-fg-muted)',
+                  }}
+                />
+                <span style={{ flex: 1 }}>{t.name}</span>
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 11, color: 'var(--wf-destructive)' }}
+                  onClick={() => {
+                    if (window.confirm(`Видалити тег «${t.name}»? Він зніметься з усіх замовлень.`))
+                      deleteTag.mutate(t.id)
+                  }}
+                >
+                  видалити
+                </button>
+              </div>
+            ))}
+            {(tags.data?.tags.length ?? 0) === 0 && (
+              <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                // тегів ще немає
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <Input
+                label="Новий тег"
+                value={tagName}
+                onChange={(e) => setTagName(e.target.value)}
+              />
+            </div>
+            <input
+              type="color"
+              aria-label="Колір тега"
+              value={tagColor}
+              onChange={(e) => setTagColor(e.target.value)}
+              style={{
+                width: 36,
+                height: 34,
+                border: '1px solid var(--wf-border)',
+                borderRadius: 6,
+                background: 'none',
+              }}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={createTag.isPending}
+              onClick={() => {
+                if (tagName.trim() === '') return
+                createTag.mutate(
+                  { name: tagName.trim(), color: tagColor },
+                  {
+                    onSuccess: () => {
+                      setTagName('')
+                      toast.success('Тег додано')
+                    },
+                  }
+                )
+              }}
+            >
+              Додати
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 8 }}
+          >
+            ШАБЛОНИ (пресети «Нового замовлення»)
+          </div>
+          <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+            {(templates.data?.templates ?? []).map((t) => (
+              <div
+                key={t.id}
+                style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 13 }}
+              >
+                <span style={{ flex: 1 }}>
+                  {t.name}
+                  <span
+                    className="wfp-mono"
+                    style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
+                  >
+                    {t.defaultTitle}
+                    {t.defaultPrice ? ` · $${t.defaultPrice}` : ''}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 11, color: 'var(--wf-destructive)' }}
+                  onClick={() => {
+                    if (window.confirm(`Видалити шаблон «${t.name}»?`)) deleteTemplate.mutate(t.id)
+                  }}
+                >
+                  видалити
+                </button>
+              </div>
+            ))}
+            {(templates.data?.templates.length ?? 0) === 0 && (
+              <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                // шаблонів ще немає
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
+              <Input
+                label="Назва шаблону"
+                value={tplName}
+                onChange={(e) => setTplName(e.target.value)}
+              />
+              <Input
+                label="Сума (фікс, опц.)"
+                inputMode="decimal"
+                value={tplPrice}
+                onChange={(e) => setTplPrice(e.target.value)}
+              />
+            </div>
+            <Input
+              label="Назва замовлення за замовчуванням"
+              value={tplTitle}
+              onChange={(e) => setTplTitle(e.target.value)}
+            />
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={createTemplate.isPending}
+                onClick={() => {
+                  if (tplName.trim() === '' || tplTitle.trim() === '') {
+                    toast.error('Назва шаблону і назва замовлення обовʼязкові')
+                    return
+                  }
+                  const price = tplPrice.trim() === '' ? null : Number(tplPrice.replace(',', '.'))
+                  if (price != null && (!Number.isFinite(price) || price < 0)) {
+                    toast.error('Сума: невідʼємне число')
+                    return
+                  }
+                  createTemplate.mutate(
+                    { name: tplName.trim(), defaultTitle: tplTitle.trim(), defaultPrice: price },
+                    {
+                      onSuccess: () => {
+                        setTplName('')
+                        setTplTitle('')
+                        setTplPrice('')
+                        toast.success('Шаблон додано')
+                      },
+                    }
+                  )
+                }}
+              >
+                Додати шаблон
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Card>
   )
 }

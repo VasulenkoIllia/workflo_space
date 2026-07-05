@@ -30,6 +30,8 @@ export interface OrdersPage {
 }
 
 export interface OrderFilters {
+  /** S10-01: CSV tag-ids */
+  tags?: string
   /** CSV of internal statuses. */
   status?: string
   search?: string
@@ -49,6 +51,7 @@ export function useOrders(filters: OrderFilters) {
   if (filters.assigneeId) qs.set('assigneeId', filters.assigneeId)
   if (filters.companyId) qs.set('companyId', filters.companyId)
   if (filters.priority) qs.set('priority', filters.priority)
+  if (filters.tags) qs.set('tags', filters.tags)
   qs.set('limit', String(filters.limit ?? 100))
   qs.set('sortBy', filters.sortBy ?? 'createdAt')
   qs.set('sortDir', filters.sortDir ?? 'desc')
@@ -255,5 +258,114 @@ export function useRestoreOrder() {
       void qc.invalidateQueries({ queryKey: ['ws-orders-deleted'] })
       void qc.invalidateQueries({ queryKey: ['orders'] })
     },
+  })
+}
+
+// ── S10-01: теги замовлень + шаблони ─────────────────────────────────────────────────
+export interface OrderTag {
+  id: string
+  name: string
+  color: string | null
+}
+
+export function useOrderTags() {
+  return useQuery({
+    queryKey: ['order-tags'],
+    queryFn: () => api.get<{ tags: OrderTag[] }>('/workspace/order-tags'),
+  })
+}
+
+export function useCreateOrderTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; color?: string | null }) =>
+      api.post<{ tag: OrderTag }>('/workspace/order-tags', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-tags'] }),
+  })
+}
+
+export function useDeleteOrderTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/workspace/order-tags/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order-tags'] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+/** Replace-set тегів замовлення (команда). */
+export function useSetOrderTags(orderId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tagIds: string[]) =>
+      api.put<{ tags: OrderTag[] }>(`/orders/${orderId}/tags`, { tagIds }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['orders'] })
+      void qc.invalidateQueries({ queryKey: ['order', orderId] })
+      void qc.invalidateQueries({ queryKey: ['order-tags-of', orderId] })
+    },
+  })
+}
+
+export interface OrderTemplate {
+  id: string
+  name: string
+  type: string
+  defaultTitle: string
+  defaultDescription: string | null
+  defaultBillingType: string
+  defaultPrice: string | null
+  isActive: boolean
+}
+
+export function useOrderTemplates() {
+  return useQuery({
+    queryKey: ['order-templates'],
+    queryFn: () => api.get<{ templates: OrderTemplate[] }>('/workspace/order-templates'),
+  })
+}
+
+export function useCreateOrderTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      name: string
+      defaultTitle: string
+      defaultDescription?: string | null
+      defaultBillingType?: string
+      defaultPrice?: number | null
+    }) => api.post<{ template: OrderTemplate }>('/workspace/order-templates', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-templates'] }),
+  })
+}
+
+export function useDeleteOrderTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/workspace/order-templates/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-templates'] }),
+  })
+}
+
+/** Створити замовлення з шаблону (компанія обовʼязкова, назву можна перекрити). */
+export function useCreateFromTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      templateId,
+      companyId,
+      title,
+    }: {
+      templateId: string
+      companyId: string
+      title?: string
+    }) =>
+      api.post<{ order: { id: string; title: string } }>(
+        `/workspace/orders/from-template/${templateId}`,
+        { companyId, ...(title ? { title } : {}) }
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['orders'] }),
   })
 }

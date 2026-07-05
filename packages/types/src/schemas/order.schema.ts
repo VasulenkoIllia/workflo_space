@@ -56,6 +56,8 @@ export const listOrdersQuerySchema = z.object({
   companyId: z.string().uuid().optional(),
   assigneeId: z.string().optional(), // uuid, or 'none' for unassigned (workspace)
   search: z.string().max(200).optional(),
+  // S10-01: CSV tag-ids фільтр (workspace)
+  tags: z.string().max(500).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   sortBy: z.enum(['createdAt', 'dueDate', 'priority']).default('createdAt'),

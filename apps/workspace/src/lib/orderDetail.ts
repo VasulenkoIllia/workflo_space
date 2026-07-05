@@ -46,6 +46,8 @@ export interface OrderStage {
 
 /** Internal-team order detail — superset of the client view. */
 export interface WorkspaceOrderDetail {
+  /** S10-01: теги замовлення (internal-only) */
+  tags?: { id: string; name: string; color: string | null }[]
   id: string
   title: string
   description: string | null

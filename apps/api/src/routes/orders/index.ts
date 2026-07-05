@@ -11,6 +11,8 @@ import createWorkspaceOrderRoute from './createWorkspaceOrder.js'
 import decideOrderApprovalRoute from './decideOrderApproval.js'
 import deleteOrderRoute from './deleteOrder.js'
 import restoreOrderRoute from './restoreOrder.js'
+import orderTagsRoute from './tags.js'
+import orderTemplatesRoute from './templates.js'
 import getOrderRoute from './getOrder.js'
 import internalTasksRoute from './internalTasks.js'
 import listOrdersRoute from './listOrders.js'
@@ -32,6 +34,8 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(updateOrderRoute)
   await fastify.register(deleteOrderRoute)
   await fastify.register(restoreOrderRoute)
+  await fastify.register(orderTagsRoute)
+  await fastify.register(orderTemplatesRoute)
   await fastify.register(assignOrderRoute)
   await fastify.register(internalTasksRoute)
   await fastify.register(commentsRoute)

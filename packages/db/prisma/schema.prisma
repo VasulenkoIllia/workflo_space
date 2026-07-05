@@ -284,7 +284,8 @@ model Order {
   payments           Payment[]
   documents          Document[]
   conversationStates ConversationState[]
-  agency             Agency              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  tags               OrderTagAssignment[]
+  agency             Agency               @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
@@ -320,6 +321,62 @@ model ConversationState {
   @@index([orderId, muted])
   @@index([agencyId])
   @@map("conversation_state")
+}
+
+// S10-01: per-agency tag catalog for orders (спека 02-orders §B). Admin CRUD (owner);
+// assignment — team, через join-таблицю нижче.
+model OrderTag {
+  id        String   @id @default(uuid())
+  agencyId  String
+  name      String
+  color     String? // hex/токен для чіпа; null → нейтральний
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  assignments OrderTagAssignment[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("order_tags")
+}
+
+// agencyId продубльовано заради уніформного RLS (join-таблиці без tenant-колонки
+// політикою wf_in_tenant не накриваються).
+model OrderTagAssignment {
+  orderId  String
+  tagId    String
+  agencyId String
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tag      OrderTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  agency   Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, tagId])
+  @@index([tagId])
+  @@index([agencyId])
+  @@map("order_tag_assignments")
+}
+
+// S10-01: order creation presets (спека 02-orders §E). defaultStages/nomenclatureCode —
+// spec-compat, поки не використовуються (стадії/номенклатура — окремі зрізи).
+model OrderTemplate {
+  id                 String      @id @default(uuid())
+  agencyId           String
+  name               String
+  type               OrderType   @default(client_order)
+  defaultTitle       String
+  defaultDescription String?
+  defaultBillingType BillingType @default(fixed)
+  defaultPrice       Decimal?    @db.Decimal(10, 2)
+  defaultStages      Json?
+  nomenclatureCode   String?
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+  agency             Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("order_templates")
 }
 
 model OrderStage {
@@ -1205,6 +1262,9 @@ model Agency {
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
   conversationStates   ConversationState[] // 18-Б
+  orderTags            OrderTag[] // S10-01
+  orderTagAssignments  OrderTagAssignment[] // S10-01
+  orderTemplates       OrderTemplate[] // S10-01
 
   @@index([planId])
   @@map("agencies")

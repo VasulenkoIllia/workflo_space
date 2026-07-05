@@ -59,6 +59,15 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
       ]
     }
 
+    // S10-01: фільтр по тегах (AND не потрібен — будь-який зі списку)
+    if (q.tags) {
+      const tagIds = q.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+      if (tagIds.length) where.tags = { some: { tagId: { in: tagIds } } }
+    }
+
     const sortField = q.sortBy === 'dueDate' ? 'deadline' : q.sortBy
     const orderBy = { [sortField]: q.sortDir } as Prisma.OrderOrderByWithRelationInput
 
@@ -84,6 +93,7 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           createdAt: true,
           updatedAt: true,
           _count: { select: { stages: true } },
+          tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
         },
       }),
     }))
@@ -96,6 +106,7 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           title: o.title,
           clientStatus: o.clientStatus,
           ...(isInternal ? { internalStatus: o.internalStatus } : {}),
+          ...(isInternal ? { tags: o.tags.map((t) => t.tag) } : {}),
           priority: o.priority,
           dueDate: o.deadline,
           totalAmount: o.totalAmount == null ? null : Number(o.totalAmount),

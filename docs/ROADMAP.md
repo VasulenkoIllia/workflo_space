@@ -126,6 +126,24 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Теги + шаблони замовлень (S10-01) і кошик відновлення (S10-07) — ЗАКРИТО (2026-07-05).**
+  **S10-07:** `GET /workspace/orders/deleted` (owner, вікно 30 днів, daysLeft) +
+  `POST .../restore` (поза вікном → 410 остаточно, audit `order.restored`); кнопка «Кошик» на
+  /orders → модалка з відкатом. **S10-01 (канон спеки 02-orders):** міграція
+  `20260705_order_tags_templates` — `OrderTag` (unique agencyId+name) + `OrderTagAssignment`
+  (join несе agencyId заради уніформного RLS) + `OrderTemplate` (defaultStages/nomenclatureCode
+  лежать spec-compat під майбутні зрізи). Роути: каталог тегів CRUD (owner) + `PUT
+/orders/:id/tags` replace-set (команда; cross-tenant tagId → 400); шаблони CRUD (owner) +
+  `POST /workspace/orders/from-template/:id` (команда; несе title/description/type/білінг —
+  fixed→fixedPrice, hourly→hourlyRate). Список: `?tags=` CSV-фільтр + tags у list/getOrder DTO
+  (internal-only). UI: фільтр «Тег» на /orders, картка «Теги» (чіпи+чек-пікер) у сайдбарі
+  деталі, селект «З шаблону» в «Новому замовленні» (prefill + створення через from-template),
+  settings-картка «Замовлення · теги і шаблони» (owner CRUD, color-picker). Гейт: +11 тестів
+  (api **794** unit; 2 старі list/get-моки доповнені під tags-select), turbo 56/56. Вживу: тег →
+  призначення → `?tags=`-фільтр віддає 1 замовлення з чіпом; шаблон → from-template створив
+  замовлення з назвою шаблону. Чесний субсет: чіпи на канбан-картках і «зберегти як шаблон» з
+  деталі — пізніше; стадії з шаблону — коли підключимо defaultStages.
+
 - **Inbox-18 хвости: mute/archive + відповідальний за тред + «без відповіді > N год» — ЗАКРИТО (2026-07-05).**
   Міграція `20260705_conversation_state`: `ConversationState {profileId, orderId, muted,
 archivedAt}` (RLS) + `Order.chatOwnerId`. **18-Б mute:** `GET/PUT /orders/:id/conversation`

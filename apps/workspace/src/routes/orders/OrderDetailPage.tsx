@@ -19,6 +19,7 @@ import {
 } from '@/lib/orderDetail'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
+import { useOrderTags, useSetOrderTags, type OrderTag } from '@/lib/orders'
 import { DocumentsTab } from './DocumentsTab'
 import { FilesTab } from './FilesTab'
 import { TimeTab } from './TimeTab'
@@ -121,6 +122,7 @@ export function OrderDetailPage() {
         </div>
 
         <aside>
+          <OrderTagsCard orderId={order.id} current={order.tags ?? []} />
           {order.company && (
             <Card title="Клієнт" style={{ marginBottom: 16 }}>
               <div className="wfp-side">
@@ -701,5 +703,85 @@ function DetailSkeleton() {
         <Skeleton style={{ height: 220 }} />
       </div>
     </div>
+  )
+}
+
+/** S10-01: теги замовлення — чіпи + чек-пікер з каталогу агенції (replace-set). */
+function OrderTagsCard({ orderId, current }: { orderId: string; current: OrderTag[] }) {
+  const { data } = useOrderTags()
+  const setTags = useSetOrderTags(orderId)
+  const catalog = data?.tags ?? []
+  const [editing, setEditing] = useState(false)
+  const currentIds = new Set(current.map((t) => t.id))
+  if (catalog.length === 0 && current.length === 0) return null
+  return (
+    <Card
+      title="Теги"
+      aux={
+        <button
+          type="button"
+          className="wfp-link"
+          style={{ fontSize: 11 }}
+          onClick={() => setEditing((v) => !v)}
+        >
+          {editing ? 'готово' : 'змінити'}
+        </button>
+      }
+      style={{ marginBottom: 16 }}
+    >
+      {editing ? (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {catalog.map((t) => (
+            <label
+              key={t.id}
+              style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}
+            >
+              <input
+                type="checkbox"
+                checked={currentIds.has(t.id)}
+                disabled={setTags.isPending}
+                onChange={(e) => {
+                  const next = new Set(currentIds)
+                  if (e.target.checked) next.add(t.id)
+                  else next.delete(t.id)
+                  setTags.mutate([...next])
+                }}
+              />
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  background: t.color ?? 'var(--wf-fg-muted)',
+                }}
+              />
+              {t.name}
+            </label>
+          ))}
+        </div>
+      ) : current.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // без тегів
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {current.map((t) => (
+            <span
+              key={t.id}
+              className="wfp-mono"
+              style={{
+                fontSize: 11,
+                border: '1px solid var(--wf-border)',
+                borderRadius: 999,
+                padding: '2px 10px',
+                borderColor: t.color ?? 'var(--wf-border)',
+              }}
+            >
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
