@@ -230,3 +230,30 @@ export function groupByColumn(orders: WorkspaceOrder[]): Record<string, Workspac
 export function countByStatus(orders: WorkspaceOrder[], statuses: OrderInternalStatus[]): number {
   return orders.filter((o) => o.internalStatus && statuses.includes(o.internalStatus)).length
 }
+
+// ── S10-07 «Кошик»: видалені замовлення (owner, вікно 30 днів) ──────────────────────
+export interface DeletedOrder {
+  id: string
+  title: string
+  companyName: string | null
+  deletedAt: string
+  daysLeft: number
+}
+
+export function useDeletedOrders() {
+  return useQuery({
+    queryKey: ['ws-orders-deleted'],
+    queryFn: () => api.get<{ orders: DeletedOrder[] }>('/workspace/orders/deleted'),
+  })
+}
+
+export function useRestoreOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (orderId: string) => api.post(`/workspace/orders/${orderId}/restore`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['ws-orders-deleted'] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}

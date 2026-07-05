@@ -23,6 +23,8 @@ import {
 } from '@/lib/orders'
 import { useCompanies, useProjects } from '@/lib/projects'
 import { useTeam } from '@/lib/payouts'
+import { useAuth } from '@/contexts/AuthContext'
+import { useDeletedOrders, useRestoreOrder } from '@/lib/orders'
 import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
 import { KanbanBoard } from './KanbanBoard'
 
@@ -43,6 +45,8 @@ function isOverdue(o: WorkspaceOrder): boolean {
 }
 
 export function OrdersPage() {
+  const { isOwner } = useAuth()
+  const [trashOpen, setTrashOpen] = useState(false)
   const [params, setParams] = useSearchParams()
   const viewParam = params.get('view')
   // Design: /orders is the filterable table registry by default; board (kanban) + timeline are
@@ -118,6 +122,11 @@ export function OrdersPage() {
               onClick={() => setView('timeline')}
             />
           </div>
+          {isOwner && (
+            <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
+              Кошик
+            </Button>
+          )}
           <Button
             variant="primary"
             size="sm"
@@ -200,6 +209,7 @@ export function OrdersPage() {
           )}
         </>
       )}
+      {trashOpen && <TrashModal onClose={() => setTrashOpen(false)} />}
       {creating && (
         <CreateOrderModal
           companies={companies.data?.companies ?? []}
@@ -720,5 +730,57 @@ function OrdersTable({
         </tbody>
       </table>
     </div>
+  )
+}
+
+/** S10-07 «Кошик»: видалені замовлення за останні 30 днів, відкат owner-ом. */
+function TrashModal({ onClose }: { onClose: () => void }) {
+  const { data, isLoading } = useDeletedOrders()
+  const restore = useRestoreOrder()
+  const rows = data?.orders ?? []
+  return (
+    <Modal open onClose={onClose} title="Кошик · видалені замовлення">
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // вікно відновлення — 30 днів від видалення; далі — остаточно
+        </div>
+        {isLoading ? (
+          <Skeleton style={{ height: 80 }} />
+        ) : rows.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>Кошик порожній.</div>
+        ) : (
+          rows.map((o) => (
+            <div
+              key={o.id}
+              style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13 }}
+            >
+              <span style={{ fontWeight: 500, flex: 1, minWidth: 0 }}>
+                {o.title}
+                {o.companyName && (
+                  <span
+                    className="wfp-mono"
+                    style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
+                  >
+                    {o.companyName}
+                  </span>
+                )}
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                ще {o.daysLeft} дн
+              </span>
+              <button
+                type="button"
+                className="wfp-link"
+                style={{ fontSize: 12 }}
+                disabled={restore.isPending}
+                onClick={() => restore.mutate(o.id)}
+              >
+                відновити
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </Modal>
   )
 }
