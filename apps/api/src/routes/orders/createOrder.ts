@@ -5,6 +5,7 @@ import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { slaDueDates } from '../../services/sla.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
@@ -37,6 +38,8 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
       await assertWithinQuota(agencyId, 'orders')
 
       const order = await withTenant(async (tx) => {
+        // S10-02: SLA-дедлайни з політики агенції для цього пріоритету (нема політики → null)
+        const sla = await slaDueDates(tx, agencyId, input.priority)
         const created = await tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
@@ -46,6 +49,7 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
             description: input.description ?? null,
             type: input.type,
             priority: input.priority,
+            ...sla,
             internalStatus: 'new',
             clientStatus: 'in_progress',
             deadline: input.dueDate ? new Date(input.dueDate) : null,

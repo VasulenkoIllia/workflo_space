@@ -48,6 +48,11 @@ export interface OrderStage {
 export interface WorkspaceOrderDetail {
   /** S10-01: теги замовлення (internal-only) */
   tags?: { id: string; name: string; color: string | null }[]
+  /** S10-02 SLA (internal-only) */
+  firstResponseDueAt?: string | null
+  resolutionDueAt?: string | null
+  firstRespondedAt?: string | null
+  slaBreachedAt?: string | null
   id: string
   title: string
   description: string | null

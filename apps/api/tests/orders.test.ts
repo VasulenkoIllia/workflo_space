@@ -46,7 +46,11 @@ vi.mock('@workflo/db', async (importOriginal) => {
       findMany: orderFindMany,
       findUnique: orderFindUnique,
       update: orderUpdate,
+      // S10-02: firstRespondedAt-хук першого публічного коментаря команди
+      updateMany: orderUpdateMany,
     },
+    // S10-02: штампування SLA-дедлайнів при створенні (null = політики нема)
+    slaPolicy: { findFirst: vi.fn().mockResolvedValue(null) },
     internalTask: {
       findMany: taskFindMany,
       create: taskCreate,

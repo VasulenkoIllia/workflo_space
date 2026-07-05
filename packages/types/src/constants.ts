@@ -162,6 +162,7 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'system.invite_sent': NotificationCategory.SYSTEM,
   'system.company_member_added': NotificationCategory.SYSTEM,
   'credentials.rotation_due': NotificationCategory.SYSTEM,
+  'orders.sla_breached': NotificationCategory.ORDERS,
 }
 
 /**

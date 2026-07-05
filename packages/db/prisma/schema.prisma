@@ -270,6 +270,12 @@ model Order {
   // 18-В: відповідальний за тред (хто винен клієнту відповідь). Plain Profile id
   // (project convention); null = «авто» — UI трактує як першого assignee.
   chatOwnerId         String?
+  // S10-02 SLA (спека 02-orders §C): дедлайни реакції, штамповані при створенні з SlaPolicy
+  // пріоритету; firstRespondedAt = перший ПУБЛІЧНИЙ коментар команди; slaBreachedAt — cron.
+  firstResponseDueAt  DateTime?            @db.Timestamptz(3)
+  resolutionDueAt     DateTime?            @db.Timestamptz(3)
+  firstRespondedAt    DateTime?            @db.Timestamptz(3)
+  slaBreachedAt       DateTime?            @db.Timestamptz(3)
   createdAt           DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -377,6 +383,23 @@ model OrderTemplate {
   @@unique([agencyId, name])
   @@index([agencyId])
   @@map("order_templates")
+}
+
+// S10-02: per-agency SLA-конфіг per-пріоритет (спека 02-orders §C). Хвилини до першої
+// відповіді команди та до розв'язання; замовлення штампується дедлайнами при створенні.
+model SlaPolicy {
+  id                String        @id @default(uuid())
+  agencyId          String
+  priority          OrderPriority
+  firstResponseMins Int
+  resolutionMins    Int
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+  agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, priority])
+  @@index([agencyId])
+  @@map("sla_policies")
 }
 
 model OrderStage {
@@ -1265,6 +1288,7 @@ model Agency {
   orderTags            OrderTag[] // S10-01
   orderTagAssignments  OrderTagAssignment[] // S10-01
   orderTemplates       OrderTemplate[] // S10-01
+  slaPolicies          SlaPolicy[] // S10-02
 
   @@index([planId])
   @@map("agencies")

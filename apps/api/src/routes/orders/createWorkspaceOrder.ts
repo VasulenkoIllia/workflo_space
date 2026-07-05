@@ -6,6 +6,7 @@ import { isInternalTeam } from '../../auth/tokens.js'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { resolveApprovalMode } from '../../services/approvalPolicy.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { slaDueDates } from '../../services/sla.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
@@ -81,6 +82,8 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
           agencyDefault: agency.defaultApprovalMode as ApprovalMode,
         })
         const requiresApproval = approvalMode === ApprovalMode.UPFRONT
+        // S10-02: SLA-дедлайни з політики агенції для цього пріоритету
+        const sla = await slaDueDates(tx, agencyId, input.priority)
         const created = await tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
@@ -91,6 +94,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
             description: input.description ?? null,
             type: input.type,
             priority: input.priority,
+            ...sla,
             zeroBilled: input.zeroBilled,
             approvalMode,
             requiresApproval,

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { slaDueDates } from '../../services/sla.js'
 
 /**
  * S10-01: шаблони замовлень (спека 02-orders §E). Каталог owner-only (CRUD),
@@ -171,9 +172,12 @@ const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
         })
         if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
 
+        // S10-02: пріоритет шаблонного замовлення — medium (дефолт Order)
+        const sla = await slaDueDates(tx, agencyId, 'medium')
         return tx.order.create({
           data: {
             agency: { connect: { id: agencyId } },
+            ...sla,
             company: { connect: { id: company.id } },
             createdBy: { connect: { id: request.user.sub } },
             title: input.title ?? template.defaultTitle,

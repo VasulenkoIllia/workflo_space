@@ -288,6 +288,13 @@ const commentsRoute: FastifyPluginAsync = (fastify) => {
             )
           }
         }
+        // S10-02 SLA: перший ПУБЛІЧНИЙ коментар команди = перша відповідь (фіксуємо раз).
+        if (access.isInternal && !isInternal) {
+          await tx.order.updateMany({
+            where: { id: access.orderId, firstRespondedAt: null },
+            data: { firstRespondedAt: new Date() },
+          })
+        }
         const full = await tx.orderComment.findUniqueOrThrow({
           where: { id: c.id },
           select: COMMENT_SELECT,

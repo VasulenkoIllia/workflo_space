@@ -4,6 +4,8 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 // S10-01: теги замовлень (каталог owner + replace-set командою) і шаблони замовлень.
 const db = {
+  // S10-02: SLA-штампування при створенні (політики нема → null)
+  slaPolicy: { findFirst: vi.fn().mockResolvedValue(null) },
   orderTag: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   orderTagAssignment: { deleteMany: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
   orderTemplate: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },

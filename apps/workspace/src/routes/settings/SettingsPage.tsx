@@ -611,6 +611,7 @@ export function SettingsPage() {
         <TwoFactorSection app="workspace" />
         {isOwner && <AgencySecuritySection />}
         {isOwner && <OrderCatalogSection />}
+        {isOwner && <SlaPoliciesSection />}
         <LinkedAccountsSection app="workspace" />
         <SessionsSection />
         <LegalEntitiesSection />
@@ -825,6 +826,129 @@ function OrderCatalogSection() {
             </div>
           </div>
         </div>
+      </div>
+    </Card>
+  )
+}
+
+/** S10-02: SLA-політики per-пріоритет (owner). Хвилини до першої відповіді / розв'язання;
+ * штампуються на НОВІ замовлення цього пріоритету (наявні не перештамповуються). */
+const SLA_PRIORITIES = [
+  { value: 'urgent', label: 'Терміновий' },
+  { value: 'high', label: 'Високий' },
+  { value: 'medium', label: 'Середній' },
+  { value: 'low', label: 'Низький' },
+] as const
+
+function SlaPoliciesSection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['sla-policies'],
+    queryFn: () =>
+      api.get<{
+        policies: { priority: string; firstResponseMins: number; resolutionMins: number }[]
+      }>('/workspace/sla-policies'),
+  })
+  const upsert = useMutation({
+    mutationFn: (body: { priority: string; firstResponseMins: number; resolutionMins: number }) =>
+      api.put('/workspace/sla-policies', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['sla-policies'] }),
+  })
+  const remove = useMutation({
+    mutationFn: (priority: string) => api.delete(`/workspace/sla-policies/${priority}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['sla-policies'] }),
+  })
+  const [draft, setDraft] = useState<Record<string, { fr: string; res: string }>>({})
+
+  if (isLoading) return <Skeleton style={{ height: 140 }} />
+  const byPriority = new Map((data?.policies ?? []).map((p) => [p.priority, p]))
+
+  return (
+    <Card title="SLA · терміни реакції">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // хвилини до першої відповіді команди і до розв'язання; діють на НОВІ замовлення
+        пріоритету. Прострочення → breach-позначка + сповіщення власнику (перевірка кожні 15 хв).
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {SLA_PRIORITIES.map(({ value, label }) => {
+          const existing = byPriority.get(value)
+          const d = draft[value] ?? {
+            fr: existing ? String(existing.firstResponseMins) : '',
+            res: existing ? String(existing.resolutionMins) : '',
+          }
+          const setD = (patch: Partial<{ fr: string; res: string }>) =>
+            setDraft((prev) => ({ ...prev, [value]: { ...d, ...patch } }))
+          return (
+            <div key={value} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <span style={{ width: 110, fontSize: 13, paddingBottom: 8 }}>
+                {label}
+                {existing && (
+                  <span
+                    className="wfp-mono"
+                    style={{ fontSize: 10, color: 'var(--wf-accent)', marginLeft: 6 }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </span>
+              <div style={{ width: 150 }}>
+                <Input
+                  label="1-ша відповідь, хв"
+                  inputMode="numeric"
+                  value={d.fr}
+                  onChange={(e) => setD({ fr: e.target.value })}
+                />
+              </div>
+              <div style={{ width: 150 }}>
+                <Input
+                  label="Розв'язання, хв"
+                  inputMode="numeric"
+                  value={d.res}
+                  onChange={(e) => setD({ res: e.target.value })}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={upsert.isPending}
+                onClick={() => {
+                  const fr = Number(d.fr)
+                  const res = Number(d.res)
+                  if (!Number.isInteger(fr) || !Number.isInteger(res) || fr < 5 || res < fr) {
+                    toast.error('Хвилини: цілі числа, ≥5, розв\u2019язання ≥ першої відповіді')
+                    return
+                  }
+                  upsert.mutate(
+                    { priority: value, firstResponseMins: fr, resolutionMins: res },
+                    { onSuccess: () => toast.success(`SLA для «${label}» збережено`) }
+                  )
+                }}
+              >
+                Зберегти
+              </Button>
+              {existing && (
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 11, color: 'var(--wf-destructive)', paddingBottom: 10 }}
+                  onClick={() =>
+                    remove.mutate(value, {
+                      onSuccess: () => {
+                        setDraft((prev) => ({ ...prev, [value]: { fr: '', res: '' } }))
+                        toast.success('Політику знято')
+                      },
+                    })
+                  }
+                >
+                  зняти
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
     </Card>
   )

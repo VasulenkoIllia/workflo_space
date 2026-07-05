@@ -122,6 +122,7 @@ export function OrderDetailPage() {
         </div>
 
         <aside>
+          <SlaCard order={order} />
           <OrderTagsCard orderId={order.id} current={order.tags ?? []} />
           {order.company && (
             <Card title="Клієнт" style={{ marginBottom: 16 }}>
@@ -782,6 +783,71 @@ function OrderTagsCard({ orderId, current }: { orderId: string; current: OrderTa
           ))}
         </div>
       )}
+    </Card>
+  )
+}
+
+/** S10-02: SLA-статус замовлення — дедлайни реакції/розв'язання або факт порушення. */
+function SlaCard({
+  order,
+}: {
+  order: {
+    firstResponseDueAt?: string | null
+    resolutionDueAt?: string | null
+    firstRespondedAt?: string | null
+    slaBreachedAt?: string | null
+  }
+}) {
+  if (!order.firstResponseDueAt && !order.resolutionDueAt) return null
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  const rows: { k: string; v: string; warn: boolean }[] = []
+  if (order.firstResponseDueAt) {
+    rows.push(
+      order.firstRespondedAt
+        ? { k: 'перша відповідь', v: `✓ ${fmt(order.firstRespondedAt)}`, warn: false }
+        : {
+            k: 'відповісти до',
+            v: fmt(order.firstResponseDueAt),
+            warn: new Date(order.firstResponseDueAt).getTime() < Date.now(),
+          }
+    )
+  }
+  if (order.resolutionDueAt) {
+    rows.push({
+      k: 'розв’язати до',
+      v: fmt(order.resolutionDueAt),
+      warn: new Date(order.resolutionDueAt).getTime() < Date.now(),
+    })
+  }
+  return (
+    <Card title="SLA" style={{ marginBottom: 16 }}>
+      {order.slaBreachedAt && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-destructive)', marginBottom: 6 }}
+        >
+          ⚠ SLA порушено {fmt(order.slaBreachedAt)}
+        </div>
+      )}
+      <div className="wfp-side">
+        {rows.map((r) => (
+          <div className="wfp-side-row" key={r.k}>
+            <div className="wfp-side-k">{r.k}</div>
+            <div
+              className="wfp-side-v"
+              style={r.warn ? { color: 'var(--wf-destructive)' } : undefined}
+            >
+              {r.v}
+            </div>
+          </div>
+        ))}
+      </div>
     </Card>
   )
 }

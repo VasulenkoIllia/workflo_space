@@ -360,6 +360,8 @@ export type NotificationEvent =
   | 'system.company_member_added'
   // vault (17-РОТАЦІЯ): секрету спливає термін — нагадування власнику агенції (in-app)
   | 'credentials.rotation_due'
+  // S10-02 SLA: порушення терміну реакції/розв'язання — ескалація owner'у (in-app)
+  | 'orders.sla_breached'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

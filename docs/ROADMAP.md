@@ -126,6 +126,21 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **SLA-політики + breach-cron (S10-02) — ЗАКРИТО (2026-07-05). Блок S10-лишків: 07+01+02 за день.**
+  Канон спеки 02-orders §C: `SlaPolicy {agencyId, priority, firstResponseMins, resolutionMins}`
+  (unique per-пріоритет, RLS) + `Order` += firstResponseDueAt/resolutionDueAt/firstRespondedAt/
+  slaBreachedAt (міграція `20260705_sla`). **Штампування:** `services/sla.ts` на всіх 3 точках
+  створення (portal create, workspace create, from-template) — нема політики → null-и, cron не
+  чіпає; зміна політики заднім числом не перештамповує (свідомо). **Перша відповідь:** перший
+  ПУБЛІЧНИЙ коментар команди → firstRespondedAt (updateMany-гард — лише раз). **Cron кожні
+  15 хв:** прострочені first-response/resolution → slaBreachedAt + in-app `orders.sla_breached`
+  власникам (нова подія; один breach на замовлення). Роути: GET/PUT/DELETE
+  /workspace/sla-policies (owner-write, resolution ≥ firstResponse → 400). UI: settings-картка
+  «SLA · терміни реакції» (4 пріоритети, зберегти/зняти) + картка «SLA» у сайдбарі деталі
+  (дедлайни, ✓ факт відповіді, «⚠ SLA порушено»). Гейт: +5 тестів (api **799** unit; 3 старі
+  моки доповнені під slaPolicy/updateMany), turbo 56/56. Вживу: політика high 60хв/8год → нове
+  high-замовлення отримало обидва дедлайни. Лишок §C: % SLA-compliance у звітах — зріз 19.
+
 - **Теги + шаблони замовлень (S10-01) і кошик відновлення (S10-07) — ЗАКРИТО (2026-07-05).**
   **S10-07:** `GET /workspace/orders/deleted` (owner, вікно 30 днів, daysLeft) +
   `POST .../restore` (поза вікном → 410 остаточно, audit `order.restored`); кнопка «Кошик» на

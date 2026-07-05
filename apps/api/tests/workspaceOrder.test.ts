@@ -11,6 +11,8 @@ const agencyFindUniqueOrThrow = vi.fn()
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as object
   const prisma = {
+    // S10-02: SLA-штампування при створенні (політики нема → null)
+    slaPolicy: { findFirst: vi.fn().mockResolvedValue(null) },
     company: { findFirst: companyFindFirst },
     project: { findFirst: projectFindFirst },
     order: { create: orderCreate },

@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { startCredentialsRotationCron, stopCredentialsRotationCron } from './credentialsRotation.js'
+import { startSlaCheckCron, stopSlaCheckCron } from './slaCheck.js'
 import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
 import { startIdempotencyKeySweepCron, stopIdempotencyKeySweepCron } from './idempotencyKeySweep.js'
 import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
@@ -23,6 +24,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startIdempotencyKeySweepCron(logger)
   startTimerAutoStopCron(logger)
   startCredentialsRotationCron(logger)
+  startSlaCheckCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -33,4 +35,5 @@ export function stopCronJobs(): void {
   stopIdempotencyKeySweepCron()
   stopTimerAutoStopCron()
   stopCredentialsRotationCron()
+  stopSlaCheckCron()
 }
