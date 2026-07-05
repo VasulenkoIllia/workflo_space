@@ -10,6 +10,8 @@ import { OrdersPage } from '@/routes/orders/OrdersPage'
 import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
 import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
 import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
+import { MagicLoginPage } from '@/routes/auth/MagicLoginPage'
+import { ConfirmEmailChangePage } from '@/routes/auth/ConfirmEmailChangePage'
 import { SettingsPage } from '@/routes/settings/SettingsPage'
 import { TeamPage } from '@/routes/team/TeamPage'
 import { BillingPage } from '@/routes/billing/BillingPage'
@@ -31,6 +33,8 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/magic-login" element={<MagicLoginPage />} />
+      <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
 
       <Route
         element={

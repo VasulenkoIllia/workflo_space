@@ -38,6 +38,10 @@ export interface AuthState {
   /** 2FA-POLICY: present when the agency requires TOTP this member hasn't set up.
    * `blocking` = grace expired → AppLayout shows the forced-setup screen. */
   twoFactorSetup?: { required: boolean; deadline: string | null; blocking: boolean }
+  /** 01-Д: тимчасовий пароль — показуємо банер «змініть пароль». */
+  mustChangePassword?: boolean
+  /** 01-Г: нова адреса, що чекає підтвердження лінком. */
+  pendingEmail?: string | null
 }
 
 interface AuthContextValue {

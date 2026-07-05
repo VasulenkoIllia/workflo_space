@@ -19,6 +19,8 @@ export interface SessionResponse {
   companies: { id: string; name: string | null; slug: string | null; role: string }[]
   /** 2FA-POLICY: present only when the agency requires TOTP this member lacks. */
   twoFactorSetup?: TwoFactorSetupState
+  /** 01-Д: акаунт із тимчасовим паролем — треба змінити. */
+  mustChangePassword?: boolean
 }
 
 /**
@@ -41,6 +43,7 @@ export async function issueSessionForProfile(
       name: true,
       isActive: true,
       lastActiveAgencyId: true,
+      mustChangePassword: true,
     },
   })
   if (!profile || !profile.isActive) return null
@@ -105,5 +108,7 @@ export async function issueSessionForProfile(
       role: m.role,
     })),
     ...(twoFactorSetup.required ? { twoFactorSetup } : {}),
+    // 01-Д: тимчасовий пароль → фронт показує банер «змініть пароль»
+    ...(profile.mustChangePassword ? { mustChangePassword: true } : {}),
   }
 }

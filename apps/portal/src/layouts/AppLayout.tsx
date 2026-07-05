@@ -154,6 +154,32 @@ export function AppLayout() {
       }
     >
       <EmailVerifyBanner />
+      {/* 01-Д: акаунт із тимчасовим паролем — нагадуємо змінити. */}
+      {user?.mustChangePassword && (
+        <div
+          className="wfp-mono"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            padding: '8px 14px',
+            fontSize: 12,
+            borderBottom: '1px solid var(--wf-border)',
+            background: 'color-mix(in oklab, var(--wf-warning, #b45309) 8%, transparent)',
+          }}
+        >
+          <span>// у вас тимчасовий пароль — змініть його для безпеки акаунта</span>
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 12 }}
+            onClick={() => navigate('/settings')}
+          >
+            до налаштувань →
+          </button>
+        </div>
+      )}
       <Outlet />
       <CommandPalette
         open={cmdkOpen}

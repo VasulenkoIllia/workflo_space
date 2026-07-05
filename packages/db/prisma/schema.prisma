@@ -9,25 +9,33 @@ datasource db {
 }
 
 model Profile {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  passwordHash       String
-  name               String
-  role               Role      @default(client)
-  avatarUrl          String?
-  language           Language  @default(uk)
-  theme              Theme     @default(system)
-  isActive           Boolean   @default(true)
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                Role      @default(client)
+  avatarUrl           String?
+  language            Language  @default(uk)
+  theme               Theme     @default(system)
+  isActive            Boolean   @default(true)
   // Email ownership proven (S9 email-verify): set by /auth/verify-email, invite
   // accept (email-bound link) or password reset (mailbox-delivered link).
   // null = unverified. Login is NOT blocked; sensitive actions may gate on it.
-  emailVerifiedAt    DateTime? @db.Timestamptz(3)
+  emailVerifiedAt     DateTime? @db.Timestamptz(3)
   // Last agency a multi-agency staffer chose via /auth/switch-agency (ADR-004).
   // Soft preference — always re-validated against current agencyMemberships at
   // login/refresh, so a stale/dangling value harmlessly falls back to the first.
-  lastActiveAgencyId String?
-  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+  lastActiveAgencyId  String?
+  // 01-Б lockout: лічильник невдалих логінів + прогресивний лок (5+ фейлів → 15·30·60 хв).
+  // Успішний вхід скидає обидва. Generic 401 — існування локу не палимо.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.Timestamptz(3)
+  // 01-Г зміна email: нова адреса чекає підтвердження лінком (otp purpose=email_change).
+  pendingEmail        String?
+  // 01-Д: тимчасовий пароль → примусова зміна (знімається зміною пароля).
+  mustChangePassword  Boolean   @default(false)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
 
   companyMembership      CompanyMember[]
   ordersAssigned         Order[]               @relation("OrderAssignee")
@@ -1523,6 +1531,8 @@ enum OtpPurpose {
   two_fa
   phone_verify
   email_verify
+  magic_link
+  email_change
 }
 
 enum OtpChannel {

@@ -25,3 +25,11 @@ export {
 export { renderApprovalDecidedEmail, type ApprovalDecidedEmailVars } from './approvalDecided.js'
 export { renderDocumentSentEmail, type DocumentSentEmailVars } from './documentSent.js'
 export { renderPaymentReceivedEmail, type PaymentReceivedEmailVars } from './paymentReceived.js'
+export {
+  renderMagicLinkEmail,
+  renderEmailChangeConfirmEmail,
+  renderEmailChangeRequestedEmail,
+  type MagicLinkEmailVars,
+  type EmailChangeConfirmEmailVars,
+  type EmailChangeRequestedEmailVars,
+} from './authPack.js'

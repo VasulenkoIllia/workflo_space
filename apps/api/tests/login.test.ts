@@ -4,6 +4,7 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 // ─── Mock @workflo/db ────────────────────────────────────────────────────────
 const profileFindUnique = vi.fn()
+const profileUpdate = vi.fn()
 const companyMemberFindMany = vi.fn()
 const agencyMemberFindMany = vi.fn()
 const refreshTokenCreate = vi.fn()
@@ -11,7 +12,7 @@ const auditLogCreate = vi.fn()
 
 vi.mock('@workflo/db', () => ({
   prisma: {
-    profile: { findUnique: profileFindUnique },
+    profile: { findUnique: profileFindUnique, update: profileUpdate },
     companyMember: { findMany: companyMemberFindMany },
     agencyMember: { findMany: agencyMemberFindMany },
     refreshToken: { create: refreshTokenCreate },
@@ -39,8 +40,12 @@ function wireProfile(overrides: Record<string, unknown> = {}) {
     role: 'client',
     isActive: true,
     name: 'Test User',
+    // 01-Б lockout defaults: чистий акаунт без фейлів
+    failedLoginAttempts: 0,
+    lockedUntil: null,
     ...overrides,
   })
+  profileUpdate.mockResolvedValue({})
   companyMemberFindMany.mockResolvedValue([
     {
       companyId: 'company-1',
@@ -141,6 +146,89 @@ describe('POST /auth/login', () => {
     const res = await app.inject({ method: 'POST', url: '/auth/login', payload: validBody })
     expect(res.statusCode).toBe(401)
     expect(res.json().error.code).toBe('UNAUTHORIZED')
+    await app.close()
+  })
+
+  // ─── 01-Б lockout ──────────────────────────────────────────────────────────
+  it('increments failedLoginAttempts on a bad password, WITHOUT locking below 5', async () => {
+    wireProfile({ failedLoginAttempts: 2 })
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { ...validBody, password: 'wrong-password' },
+    })
+    expect(res.statusCode).toBe(401)
+    expect(profileUpdate).toHaveBeenCalledWith({
+      where: { id: 'profile-1' },
+      data: { failedLoginAttempts: 3 },
+    })
+    await app.close()
+  })
+
+  it('locks the account on the 5th failure (15 min), progressive 30/60 later', async () => {
+    wireProfile({ failedLoginAttempts: 4 })
+    const app = buildApp()
+    const before = Date.now()
+    await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { ...validBody, password: 'wrong-password' },
+    })
+    const call = profileUpdate.mock.calls[0][0]
+    expect(call.data.failedLoginAttempts).toBe(5)
+    const lockMs = call.data.lockedUntil.getTime() - before
+    expect(lockMs).toBeGreaterThan(14 * 60_000)
+    expect(lockMs).toBeLessThan(16 * 60_000)
+    await app.close()
+
+    // 7-й фейл → 60 хв (cap)
+    wireProfile({ failedLoginAttempts: 6 })
+    profileUpdate.mockClear()
+    const app2 = buildApp()
+    const before2 = Date.now()
+    await app2.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { ...validBody, password: 'wrong-password' },
+    })
+    const call2 = profileUpdate.mock.calls[0][0]
+    const lockMs2 = call2.data.lockedUntil.getTime() - before2
+    expect(lockMs2).toBeGreaterThan(59 * 60_000)
+    expect(lockMs2).toBeLessThan(61 * 60_000)
+    await app2.close()
+  })
+
+  it('returns the SAME generic 401 while locked, even with the CORRECT password', async () => {
+    wireProfile({ failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 10 * 60_000) })
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/login', payload: validBody })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.message).toBe('Невірний email або пароль')
+    // Пароль не перевіряється і сесія не видається — лок не оракул.
+    expect(refreshTokenCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('resets the lockout state on a successful login after failures', async () => {
+    wireProfile({ failedLoginAttempts: 3, lockedUntil: new Date(Date.now() - 60_000) })
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/login', payload: validBody })
+    expect(res.statusCode).toBe(200)
+    expect(profileUpdate).toHaveBeenCalledWith({
+      where: { id: 'profile-1' },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    })
+    await app.close()
+  })
+
+  // ─── 01-Д mustChangePassword ───────────────────────────────────────────────
+  it('exposes mustChangePassword in the session payload when the flag is set', async () => {
+    wireProfile({ mustChangePassword: true })
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/login', payload: validBody })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.mustChangePassword).toBe(true)
     await app.close()
   })
 

@@ -26,6 +26,8 @@ const meRoute: FastifyPluginAsync = (fastify) => {
         isActive: true,
         avatarUrl: true,
         emailVerifiedAt: true,
+        mustChangePassword: true,
+        pendingEmail: true,
       },
     })
 
@@ -84,6 +86,10 @@ const meRoute: FastifyPluginAsync = (fastify) => {
         agencyRole,
         agencyMemberships,
         ...(twoFactorSetup.required ? { twoFactorSetup } : {}),
+        // 01-Д: тимчасовий пароль → банер «змініть пароль»
+        ...(profile.mustChangePassword ? { mustChangePassword: true } : {}),
+        // 01-Г: очікує підтвердження зміни email → підказка в налаштуваннях
+        ...(profile.pendingEmail ? { pendingEmail: profile.pendingEmail } : {}),
       },
     })
   })

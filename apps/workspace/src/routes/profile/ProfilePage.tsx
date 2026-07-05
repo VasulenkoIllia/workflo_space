@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { TwoFactorSection } from '@workflo/app-core'
+import { EmailChangeSection, PasswordSection, TwoFactorSection } from '@workflo/app-core'
 import { Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/format'
@@ -62,8 +62,14 @@ export function ProfilePage() {
         </div>
       </Card>
 
-      {/* 2FA доступна КОЖНІЙ ролі тут (/settings — owner-only), сюди ж веде банер
-          2FA-політики агенції. */}
+      {/* Безпекові секції доступні КОЖНІЙ ролі тут (/settings — owner-only), сюди ж
+          ведуть банери 2FA-політики та mustChangePassword. */}
+      <PasswordSection cardStyle={{ marginBottom: 16 }} />
+      <EmailChangeSection
+        currentEmail={p?.email ?? ''}
+        pendingEmail={user?.pendingEmail}
+        cardStyle={{ marginBottom: 16 }}
+      />
       <div style={{ marginBottom: 16 }}>
         <TwoFactorSection app="workspace" />
       </div>

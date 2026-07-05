@@ -280,6 +280,8 @@ export enum OtpPurpose {
   TWO_FA = 'two_fa',
   PHONE_VERIFY = 'phone_verify',
   EMAIL_VERIFY = 'email_verify',
+  MAGIC_LINK = 'magic_link',
+  EMAIL_CHANGE = 'email_change',
 }
 
 export enum OtpChannel {
@@ -362,6 +364,10 @@ export type NotificationEvent =
   | 'credentials.rotation_due'
   // S10-02 SLA: порушення терміну реакції/розв'язання — ескалація owner'у (in-app)
   | 'orders.sla_breached'
+  // 01-А/01-Г: magic-link вхід + флоу зміни email
+  | 'auth.magic_link'
+  | 'auth.email_change_requested'
+  | 'auth.email_change_confirm'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

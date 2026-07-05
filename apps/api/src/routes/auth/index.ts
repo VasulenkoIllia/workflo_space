@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import forgotPasswordRoute from './forgotPassword.js'
 import loginRoute from './login.js'
+import magicLinkRoute from './magicLink.js'
+import changeEmailRoute from './changeEmail.js'
 import logoutRoute from './logout.js'
 import meRoute from './me.js'
 import refreshRoute from './refresh.js'
@@ -19,6 +21,8 @@ import verifyEmailRoute from './verifyEmail.js'
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(registerRoute)
   await fastify.register(loginRoute)
+  await fastify.register(magicLinkRoute)
+  await fastify.register(changeEmailRoute)
   await fastify.register(logoutRoute)
   await fastify.register(refreshRoute)
   await fastify.register(switchAgencyRoute)

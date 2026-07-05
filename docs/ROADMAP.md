@@ -126,6 +126,23 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Auth-пачка 01-А/Б/Г/Д (модуль 01) — ЗАКРИТО (2026-07-05).** Лишок модуля 01 — тільки
+  passkeys (01-Е, SaaS-фаза). Міграція `20260705_auth_pack` (Profile: failedLoginAttempts/
+  lockedUntil/pendingEmail/mustChangePassword; OtpPurpose += magic*link/email_change).
+  **01-Б lockout:** 5-й фейл → лок 15→30→60 хв (прогресія, cap), під локом generic 401 і
+  пароль не перевіряється (не оракул), успіх скидає. **01-А magic-link:** `/auth/magic-link`
+  (3/15хв, завжди 200) → лист → `/auth/magic-login`; 2FA НЕ обходиться (challenge як після
+  пароля); UI: «Увійти без пароля» на /login порталу + `/magic-login`. **01-Г зміна email:**
+  re-auth паролем + confirm-лінк на НОВУ адресу (TTL 24 год) + попередження на стару
+  (відхилення від спеки «підтвердження на обидві» — задокументовано в 01-auth.md); `pendingEmail`
+  до підтвердження; `EmailChangeSection` (app-core) у portal /settings + workspace /profile;
+  race-check зайнятості на confirm (409). **01-Д mustChangePassword:** прапорець у сесії +
+  `/auth/me` → банер в обох AppLayout; зміна пароля знімає. Бонус: спільна `PasswordSection`
+  в app-core — у workspace вперше зʼявилась зміна пароля (/profile). 3 нові email-шаблони
+  (uk/en, CRITICAL). Гейт: +20 тестів (api **825** unit), turbo 56/56. Вживу: повний
+  magic-link цикл (лист → вхід → replay 401), lockout-цикл (5 фейлів → лок → скидання),
+  зміна email (2 листи → confirm → вхід новою адресою), банер+секції на скрінах.
+  *Знахідка мимохідь: rate-limit віддає 500 замість 429 (error-handler) — окрема задача.\_
 - **Глобальний пошук + Cmd+K (S11-01/02, модуль 16) — ЗАКРИТО (2026-07-05).**
   FTS на **expression-GIN індексах** (конфіг `simple` — безсловниковий lowercase, чесний для
   змішаної uk/en; словникового `ukrainian` у стоковому PG нема; expression-індекси не входять

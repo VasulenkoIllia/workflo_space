@@ -25,6 +25,10 @@ export interface AuthState {
   profile: AuthProfile
   activeCompanyId?: string
   companies: AuthCompany[]
+  /** 01-Д: тимчасовий пароль — показуємо банер «змініть пароль». */
+  mustChangePassword?: boolean
+  /** 01-Г: нова адреса, що чекає підтвердження лінком. */
+  pendingEmail?: string | null
 }
 
 interface AuthContextValue {

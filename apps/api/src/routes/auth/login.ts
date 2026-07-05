@@ -34,6 +34,8 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
           isActive: true,
           name: true,
           lastActiveAgencyId: true,
+          failedLoginAttempts: true,
+          lockedUntil: true,
         },
       })
 
@@ -47,17 +49,49 @@ const loginRoute: FastifyPluginAsync = (fastify) => {
         throw invalidCredentials()
       }
 
-      const passwordOk = await verifyPassword(input.password, profile.passwordHash)
-      if (!passwordOk) {
+      // 01-Б lockout: активний лок → той самий generic 401 (існування локу не палимо),
+      // пароль НЕ перевіряємо (щоб лок не можна було використати як оракул).
+      if (profile.lockedUntil && profile.lockedUntil.getTime() > Date.now()) {
         writeAuditAsync(request.log, {
           actorId: profile.id,
           action: 'auth.login_failed',
           resourceType: 'profile',
           resourceId: profile.id,
           result: 'denied',
-          metadata: { reason: 'bad_password', ip: request.ip },
+          metadata: { reason: 'locked', ip: request.ip },
         })
         throw invalidCredentials()
+      }
+
+      const passwordOk = await verifyPassword(input.password, profile.passwordHash)
+      if (!passwordOk) {
+        // 01-Б: 5+ фейлів → прогресивний лок 15 → 30 → 60 хв (cap).
+        const attempts = profile.failedLoginAttempts + 1
+        const lockMins = attempts >= 5 ? Math.min(60, 15 * 2 ** Math.min(2, attempts - 5)) : null
+        await prisma.profile.update({
+          where: { id: profile.id },
+          data: {
+            failedLoginAttempts: attempts,
+            ...(lockMins ? { lockedUntil: new Date(Date.now() + lockMins * 60_000) } : {}),
+          },
+        })
+        writeAuditAsync(request.log, {
+          actorId: profile.id,
+          action: 'auth.login_failed',
+          resourceType: 'profile',
+          resourceId: profile.id,
+          result: 'denied',
+          metadata: { reason: 'bad_password', ip: request.ip, attempts, lockMins },
+        })
+        throw invalidCredentials()
+      }
+
+      // Успішний пароль → скидаємо lockout-стан.
+      if (profile.failedLoginAttempts > 0 || profile.lockedUntil) {
+        await prisma.profile.update({
+          where: { id: profile.id },
+          data: { failedLoginAttempts: 0, lockedUntil: null },
+        })
       }
 
       if (!profile.isActive) {

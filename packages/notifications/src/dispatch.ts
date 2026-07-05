@@ -23,6 +23,9 @@ import {
   renderPaymentReceivedEmail,
   renderWelcomeEmail,
   type RenderedEmail,
+  renderMagicLinkEmail,
+  renderEmailChangeConfirmEmail,
+  renderEmailChangeRequestedEmail,
 } from './email/templates/index.js'
 import {
   renderApprovalDecidedTelegram,
@@ -66,6 +69,9 @@ export type EventPayloadMap = {
   'auth.welcome': { portalUrl: string }
   'auth.password_reset': { resetUrl: string }
   'auth.email_verification': { verifyUrl: string }
+  'auth.magic_link': { loginUrl: string }
+  'auth.email_change_confirm': { confirmUrl: string }
+  'auth.email_change_requested': { newEmail: string }
   // One event, two templates: companyName present → company-member invite,
   // else executor invite (expiresAt used by the executor template).
   'system.invite_sent': {
@@ -131,6 +137,21 @@ export function renderEmailForEvent(
     case 'auth.email_verification':
       return renderEmailVerificationEmail({
         verifyUrl: (vars as EventPayloadMap['auth.email_verification']).verifyUrl,
+        locale,
+      })
+    case 'auth.magic_link':
+      return renderMagicLinkEmail({
+        loginUrl: (vars as EventPayloadMap['auth.magic_link']).loginUrl,
+        locale,
+      })
+    case 'auth.email_change_confirm':
+      return renderEmailChangeConfirmEmail({
+        confirmUrl: (vars as EventPayloadMap['auth.email_change_confirm']).confirmUrl,
+        locale,
+      })
+    case 'auth.email_change_requested':
+      return renderEmailChangeRequestedEmail({
+        newEmail: (vars as EventPayloadMap['auth.email_change_requested']).newEmail,
         locale,
       })
     case 'system.invite_sent': {

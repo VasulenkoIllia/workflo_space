@@ -163,6 +163,9 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'system.company_member_added': NotificationCategory.SYSTEM,
   'credentials.rotation_due': NotificationCategory.SYSTEM,
   'orders.sla_breached': NotificationCategory.ORDERS,
+  'auth.magic_link': NotificationCategory.AUTH,
+  'auth.email_change_requested': NotificationCategory.AUTH,
+  'auth.email_change_confirm': NotificationCategory.AUTH,
 }
 
 /**
@@ -216,6 +219,9 @@ export interface VaultField {
 export const CRITICAL_EVENTS: ReadonlyArray<NotificationEvent> = [
   // auth
   'auth.password_reset',
+  'auth.magic_link',
+  'auth.email_change_requested',
+  'auth.email_change_confirm',
   'auth.email_verification',
   'auth.login_from_new_device',
   // billing

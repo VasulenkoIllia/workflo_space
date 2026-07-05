@@ -1,8 +1,10 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button, Card, Icon, Input, Skeleton } from '@workflo/ui'
 import { useSearchParams } from 'react-router-dom'
+import { api, ApiError } from './api.js'
+import { PasswordStrengthMeter } from './PasswordStrengthMeter.js'
 import { formatDate, formatDateTime } from './format.js'
 import {
   describeUserAgent,
@@ -606,6 +608,186 @@ export function LinkedAccountsSection({
           </div>
         </div>
       )}
+    </Card>
+  )
+}
+
+/**
+ * Зміна пароля (self-service). PATCH /profile/password: перевіряє поточний,
+ * ставить новий і завершує ВСІ інші сесії. 01-Д: успішна зміна знімає
+ * mustChangePassword на боці бека.
+ */
+export function PasswordSection({ cardStyle }: { cardStyle?: CSSProperties }) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const mut = useMutation({
+    mutationFn: (body: { currentPassword: string; newPassword: string }) =>
+      api.patch('/profile/password', body),
+    meta: { suppressGlobalToast: true }, // surface the server error inline instead
+    onSuccess: () => {
+      toast.success('Пароль змінено. Інші сесії завершено.')
+      setCurrent('')
+      setNext('')
+      setConfirm('')
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Не вдалося змінити пароль'),
+  })
+
+  const submit = () => {
+    setError(null)
+    if (next.length < 8 || next.length > 128) {
+      setError('Пароль — від 8 до 128 символів')
+      return
+    }
+    if (next !== confirm) {
+      setError('Паролі не співпадають')
+      return
+    }
+    mut.mutate({ currentPassword: current, newPassword: next })
+  }
+
+  return (
+    <Card title="Безпека · пароль" style={cardStyle}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Input
+          label="Поточний пароль"
+          type="password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+        />
+        <div>
+          <Input
+            label="Новий пароль"
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+          />
+          <PasswordStrengthMeter value={next} />
+        </div>
+        <Input
+          label="Підтвердження"
+          type="password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          error={error ?? undefined}
+        />
+        <div>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            disabled={!current || !next || !confirm}
+            onClick={submit}
+          >
+            Змінити пароль
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * Зміна email (01-Г). Контроль акаунта доводиться паролем (re-auth), confirm-лінк
+ * летить на НОВУ адресу, попередження — на стару. Поки не підтверджено, бек тримає
+ * pendingEmail — показуємо його як «очікує підтвердження».
+ */
+export function EmailChangeSection({
+  currentEmail,
+  pendingEmail,
+  cardStyle,
+}: {
+  currentEmail: string
+  pendingEmail?: string | null
+  cardStyle?: CSSProperties
+}) {
+  const [newEmail, setNewEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [sentTo, setSentTo] = useState<string | null>(null)
+  const request = useMutation({
+    mutationFn: (body: { newEmail: string; password: string }) =>
+      api.post<{ pendingEmail: string }>('/auth/change-email', body),
+  })
+
+  const pending = sentTo ?? pendingEmail ?? null
+
+  const onSubmit = () => {
+    request.mutate(
+      { newEmail: newEmail.trim(), password },
+      {
+        onSuccess: (r) => {
+          setSentTo(r.pendingEmail)
+          setNewEmail('')
+          setPassword('')
+          toast.success('Лист підтвердження надіслано на нову адресу')
+        },
+        onError: (err) =>
+          toast.error(err instanceof ApiError ? err.message : 'Не вдалося надіслати запит'),
+      }
+    )
+  }
+
+  return (
+    <Card title="Безпека · email для входу" style={cardStyle}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <Icon name="inbox" size={16} />
+          <span style={{ fontWeight: 600 }}>{currentEmail}</span>
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            · поточна адреса
+          </span>
+        </div>
+        {pending && (
+          <div
+            className="wfp-mono"
+            style={{
+              fontSize: 12,
+              padding: '6px 10px',
+              border: '1px solid var(--wf-accent)',
+              borderRadius: 8,
+              color: 'var(--wf-accent)',
+            }}
+          >
+            // {pending} — очікує підтвердження. Перевірте пошту (лінк діє 24 год).
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200, maxWidth: 280 }}>
+            <Input
+              label="Нова адреса"
+              type="email"
+              autoComplete="off"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 180, maxWidth: 240 }}>
+            <Input
+              label="Пароль (підтвердження)"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="secondary"
+            loading={request.isPending}
+            disabled={newEmail.trim().length === 0 || password.length === 0}
+            onClick={onSubmit}
+          >
+            Змінити email
+          </Button>
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          Надішлемо лінк підтвердження на нову адресу, а попередження — на поточну.
+        </span>
+      </div>
     </Card>
   )
 }

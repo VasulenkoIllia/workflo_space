@@ -47,6 +47,24 @@ const uk: Dictionary = {
   'inviteCompanyMember.cta': 'Прийняти запрошення',
 
   // password reset
+  // 01-А magic-link + 01-Г зміна email
+  'magicLink.subject': 'Вхід у Workflo одним кліком',
+  'magicLink.h1': 'Вхід без пароля',
+  'magicLink.body':
+    'Натисніть кнопку, щоб увійти у свій кабінет. Посилання діє 15 хвилин і працює один раз.',
+  'magicLink.cta': 'Увійти',
+  'magicLink.ignore': 'Якщо ви не запитували вхід — просто проігноруйте цей лист.',
+  'emailChangeConfirm.subject': 'Підтвердьте нову email-адресу',
+  'emailChangeConfirm.h1': 'Зміна email',
+  'emailChangeConfirm.body':
+    'Ви вказали цю адресу як нову для акаунта Workflo. Підтвердьте її, щоб завершити зміну.',
+  'emailChangeConfirm.cta': 'Підтвердити адресу',
+  'emailChangeConfirm.ignore': 'Якщо це не ви — проігноруйте лист, адреса акаунта не зміниться.',
+  'emailChangeRequested.subject': 'Запит на зміну email вашого акаунта',
+  'emailChangeRequested.h1': 'Зміну email запитано',
+  'emailChangeRequested.body':
+    'На вашому акаунті Workflo запитано зміну адреси на {newEmail}. Якщо це були ви — підтвердіть лист на новій адресі.',
+  'emailChangeRequested.warn': 'Якщо це не ви — негайно змініть пароль у налаштуваннях.',
   'passwordReset.subject': 'Скидання пароля Workflo',
   'passwordReset.h1': 'Скидання пароля',
   'passwordReset.body':
@@ -172,6 +190,25 @@ const en: Dictionary = {
   'inviteCompanyMember.cta': 'Accept invitation',
 
   // password reset
+  // 01-А magic-link + 01-Г email change
+  'magicLink.subject': 'Sign in to Workflo with one click',
+  'magicLink.h1': 'Passwordless sign-in',
+  'magicLink.body':
+    'Click the button to sign in to your account. The link is valid for 15 minutes and works once.',
+  'magicLink.cta': 'Sign in',
+  'magicLink.ignore': 'If you did not request this, just ignore this email.',
+  'emailChangeConfirm.subject': 'Confirm your new email address',
+  'emailChangeConfirm.h1': 'Email change',
+  'emailChangeConfirm.body':
+    'You set this address as the new one for your Workflo account. Confirm it to finish the change.',
+  'emailChangeConfirm.cta': 'Confirm address',
+  'emailChangeConfirm.ignore':
+    'If this was not you, ignore this email — the account address will not change.',
+  'emailChangeRequested.subject': 'Email change requested on your account',
+  'emailChangeRequested.h1': 'Email change requested',
+  'emailChangeRequested.body':
+    'A change of your Workflo account address to {newEmail} was requested. If it was you, confirm the email sent to the new address.',
+  'emailChangeRequested.warn': 'If this was not you, change your password immediately.',
   'passwordReset.subject': 'Reset your Workflo password',
   'passwordReset.h1': 'Reset password',
   'passwordReset.body':

@@ -46,7 +46,11 @@ const changePasswordRoute: FastifyPluginAsync = (fastify) => {
       const passwordHash = await hashPassword(input.newPassword)
 
       await tenantTransaction(prisma, async (tx) => {
-        await tx.profile.update({ where: { id: profileId }, data: { passwordHash } })
+        await tx.profile.update({
+          where: { id: profileId },
+          // 01-Д: зміна пароля знімає прапорець тимчасового
+          data: { passwordHash, mustChangePassword: false },
+        })
         await tx.refreshToken.updateMany({
           where: { profileId, revokedAt: null },
           data: { revokedAt: new Date() },

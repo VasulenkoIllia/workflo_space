@@ -252,6 +252,30 @@ export function AppLayout() {
               , інакше вхід буде заблоковано
             </div>
           )}
+          {/* 01-Д: акаунт із тимчасовим паролем — нагадуємо змінити. */}
+          {user?.mustChangePassword && (
+            <div
+              className="wfp-mono"
+              style={{
+                fontSize: 12,
+                padding: '8px 12px',
+                marginBottom: 14,
+                border: '1px solid var(--wf-warning, #b45309)',
+                borderRadius: 'var(--wf-radius)',
+                color: 'var(--wf-warning, #b45309)',
+              }}
+            >
+              // у вас тимчасовий пароль — змініть його у{' '}
+              <button
+                type="button"
+                className="wfp-link"
+                style={{ fontSize: 12 }}
+                onClick={() => navigate('/profile')}
+              >
+                Профілі
+              </button>
+            </div>
+          )}
           <Outlet />
         </>
       )}

@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { loginSchema } from '@workflo/types'
 import { AuthShell, AuthHeader, AuthStatus, Input, Button } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
-import { ApiError } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { safeRedirect } from '@/lib/navigation'
 import { startGoogleLogin, useOauthProviders } from '@/lib/oauth'
 
@@ -29,6 +29,10 @@ export function LoginPage() {
   const [twoFactor, setTwoFactor] = useState(false)
   const [code, setCode] = useState('')
   const [verifying, setVerifying] = useState(false)
+  // 01-А magic-link: 'form' → email-only форма, 'sent' → «перевірте пошту»
+  const [magicStep, setMagicStep] = useState<'off' | 'form' | 'sent'>('off')
+  const [magicEmail, setMagicEmail] = useState('')
+  const [magicSending, setMagicSending] = useState(false)
 
   // OAuth redirect landings: ?oauth2fa=<challenge> → straight to the code step;
   // ?oauthError=<code> → inline error. Params are consumed (removed) on arrival.
@@ -76,6 +80,67 @@ export function LoginPage() {
     } finally {
       setVerifying(false)
     }
+  }
+
+  const sendMagicLink = async () => {
+    setFormError(null)
+    setMagicSending(true)
+    try {
+      await api.post('/auth/magic-link', { email: magicEmail.trim() })
+      setMagicStep('sent')
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Не вдалося надіслати посилання')
+    } finally {
+      setMagicSending(false)
+    }
+  }
+
+  if (magicStep !== 'off') {
+    return (
+      <AuthShell>
+        <AuthHeader title="Вхід без пароля" sub="// одноразове посилання на email" />
+        {magicStep === 'sent' ? (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+              Якщо акаунт із адресою <strong>{magicEmail.trim()}</strong> існує — лист уже в дорозі.
+              Посилання діє 15 хвилин.
+            </div>
+            <Button type="button" variant="ghost" fullWidth onClick={() => setMagicStep('off')}>
+              ← Назад до входу
+            </Button>
+          </>
+        ) : (
+          <>
+            <Input
+              label="Email"
+              type="email"
+              autoComplete="email"
+              placeholder="olena@brunky.ua"
+              value={magicEmail}
+              onChange={(e) => setMagicEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && magicEmail.trim().length > 3) void sendMagicLink()
+              }}
+              error={formError ?? undefined}
+            />
+            <Button
+              type="button"
+              variant="primary"
+              fullWidth
+              loading={magicSending}
+              disabled={magicEmail.trim().length < 4}
+              onClick={() => void sendMagicLink()}
+            >
+              Надіслати посилання
+            </Button>
+            <Button type="button" variant="ghost" fullWidth onClick={() => setMagicStep('off')}>
+              ← Вхід з паролем
+            </Button>
+          </>
+        )}
+        <AuthStatus />
+      </AuthShell>
+    )
   }
 
   if (twoFactor) {
@@ -140,6 +205,9 @@ export function LoginPage() {
           Увійти через Google
         </Button>
       )}
+      <Button type="button" variant="ghost" fullWidth onClick={() => setMagicStep('form')}>
+        Увійти без пароля (посилання на email)
+      </Button>
       <div className="wfp-auth-foot">
         немає акаунту?{' '}
         <Link to="/register" style={{ color: 'var(--wf-accent)' }}>

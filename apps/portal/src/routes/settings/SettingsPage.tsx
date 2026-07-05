@@ -3,17 +3,18 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Locale } from '@workflo/i18n'
 import {
+  EmailChangeSection,
   LinkedAccountsSection,
   NotificationsSection,
+  PasswordSection,
   SessionsSection,
   TelegramSection,
   TwoFactorSection,
 } from '@workflo/app-core'
 import { Button, Card, Input, Skeleton, useTheme, type ThemeMode } from '@workflo/ui'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
-import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
 import {
   useRequisites,
   useSaveRequisites,
@@ -127,7 +128,13 @@ export function SettingsPage() {
 
       <TelegramSection app="portal" cardStyle={{ marginBottom: 16 }} />
 
-      <PasswordSection />
+      <PasswordSection cardStyle={{ marginBottom: 16 }} />
+
+      <EmailChangeSection
+        currentEmail={user?.profile.email ?? ''}
+        pendingEmail={user?.pendingEmail}
+        cardStyle={{ marginBottom: 16 }}
+      />
 
       <TwoFactorSection app="portal" cardStyle={{ marginBottom: 16 }} />
 
@@ -303,77 +310,5 @@ function RequisitesForm({ initial }: { initial: Requisites | null }) {
         )}
       </div>
     </div>
-  )
-}
-
-function PasswordSection() {
-  const [current, setCurrent] = useState('')
-  const [next, setNext] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const mut = useMutation({
-    mutationFn: (body: { currentPassword: string; newPassword: string }) =>
-      api.patch('/profile/password', body),
-    meta: { suppressGlobalToast: true }, // surface the server error inline instead
-    onSuccess: () => {
-      toast.success('Пароль змінено. Інші сесії завершено.')
-      setCurrent('')
-      setNext('')
-      setConfirm('')
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : 'Не вдалося змінити пароль'),
-  })
-
-  const submit = () => {
-    setError(null)
-    if (next.length < 8 || next.length > 128) {
-      setError('Пароль — від 8 до 128 символів')
-      return
-    }
-    if (next !== confirm) {
-      setError('Паролі не співпадають')
-      return
-    }
-    mut.mutate({ currentPassword: current, newPassword: next })
-  }
-
-  return (
-    <Card title="Безпека · пароль" style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Input
-          label="Поточний пароль"
-          type="password"
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-        />
-        <div>
-          <Input
-            label="Новий пароль"
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-          />
-          <PasswordStrengthMeter value={next} />
-        </div>
-        <Input
-          label="Підтвердження"
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          error={error ?? undefined}
-        />
-        <div>
-          <Button
-            variant="primary"
-            loading={mut.isPending}
-            disabled={!current || !next || !confirm}
-            onClick={submit}
-          >
-            Змінити пароль
-          </Button>
-        </div>
-      </div>
-    </Card>
   )
 }
