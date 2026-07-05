@@ -15,6 +15,13 @@ const db = {
   },
   auditLog: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
   profile: { findUnique: vi.fn() },
+  credentialShare: {
+    findMany: vi.fn().mockResolvedValue([]),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  agencyMember: { findFirst: vi.fn() },
 }
 
 vi.mock('@workflo/db', () => ({
@@ -93,15 +100,18 @@ describe('GET /workspace/clients/:id/credentials — list', () => {
     await app.close()
   })
 
-  it('executor is forbidden (403)', async () => {
+  it('executor WITHOUT shares gets an empty list (17-SHARE graceful tab)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialShare.findMany.mockResolvedValue([])
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
       url: base,
       headers: { authorization: `Bearer ${token}` },
     })
-    expect(res.statusCode).toBe(403)
-    expect(db.company.findFirst).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credentials).toEqual([])
+    expect(db.credentialVault.findMany).not.toHaveBeenCalled()
     await app.close()
   })
 
@@ -137,13 +147,16 @@ describe('GET /workspace/vault — global (17-ГЛОБАЛ)', () => {
   })
 
   it('executor is forbidden (403)', async () => {
+    db.credentialShare.findMany.mockResolvedValue([])
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/vault',
       headers: { authorization: `Bearer ${token}` },
     })
-    expect(res.statusCode).toBe(403)
+    // 17-SHARE: no shares → honest empty vault (nav stays usable), not a 403
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credentials).toEqual([])
     expect(db.credentialVault.findMany).not.toHaveBeenCalled()
     await app.close()
   })
@@ -366,7 +379,9 @@ describe('POST /workspace/vault/step-up — password re-entry', () => {
     await app.close()
   })
 
-  it('executor is forbidden (403)', async () => {
+  it('executor CAN step-up (17-SHARE: reveal within shares needs a grant too)', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'POST',
@@ -374,7 +389,8 @@ describe('POST /workspace/vault/step-up — password re-entry', () => {
       headers: { authorization: `Bearer ${token}` },
       payload: { password: 'x' },
     })
-    expect(res.statusCode).toBe(403)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.grant).toContain(EXECUTOR.sub)
     await app.close()
   })
 

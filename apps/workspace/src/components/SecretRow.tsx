@@ -49,6 +49,9 @@ export function SecretRow({
   onNeedStepUp,
   showCompanyLink = false,
   showJournal = true,
+  readOnly = false,
+  sharedNames,
+  onManageShares,
   formatDate,
 }: {
   cred: SecretRowData
@@ -57,6 +60,12 @@ export function SecretRow({
   onNeedStepUp: (retry: () => void) => void
   showCompanyLink?: boolean
   showJournal?: boolean
+  /** 17-SHARE: executor view — reveal only (no revoke/delete/journal). */
+  readOnly?: boolean
+  /** 17-SHARE: executor names with access to THIS secret (owner view, дизайн-канон). */
+  sharedNames?: string[]
+  /** 17-SHARE: opens the per-secret share modal (owner view). */
+  onManageShares?: () => void
   formatDate: (iso: string) => string
 }) {
   const reveal = useRevealGlobal()
@@ -149,17 +158,22 @@ export function SecretRow({
               </span>
             )}
           </div>
-          {(showCompanyLink || cred.username || cred.url) && (
+          {(showCompanyLink || (readOnly && cred.companyName) || cred.username || cred.url) && (
             <div
               className="wfp-mono"
               style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 2 }}
             >
-              {showCompanyLink && cred.companyName && (
+              {showCompanyLink && cred.companyName ? (
                 <Link to={`/clients/${cred.companyId}`} className="wfp-link">
                   {cred.companyName}
                 </Link>
-              )}
-              {showCompanyLink && cred.companyName && (cred.username || cred.url) ? ' · ' : ''}
+              ) : readOnly && cred.companyName ? (
+                // executor has no /clients/:id access — plain client name for context
+                <span>{cred.companyName}</span>
+              ) : null}
+              {(showCompanyLink || readOnly) && cred.companyName && (cred.username || cred.url)
+                ? ' · '
+                : ''}
               {cred.username ?? ''}
               {cred.username && cred.url ? ' · ' : ''}
               {cred.url ?? ''}
@@ -178,7 +192,7 @@ export function SecretRow({
               {shown != null ? 'сховати' : 'показати'}
             </button>
           )}
-          {showJournal && (
+          {showJournal && !readOnly && (
             <button
               type="button"
               className="wfp-link"
@@ -188,21 +202,39 @@ export function SecretRow({
               журнал
             </button>
           )}
-          {!cred.revoked && (
+          {onManageShares && !readOnly && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12 }}
+              onClick={onManageShares}
+            >
+              доступи
+            </button>
+          )}
+          {!cred.revoked && !readOnly && (
             <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={onRevoke}>
               відкликати
             </button>
           )}
-          <button
-            type="button"
-            className="wfp-link"
-            style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
-            onClick={onDelete}
-          >
-            видалити
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="wfp-link"
+              style={{ fontSize: 12, color: 'var(--wf-destructive)' }}
+              onClick={onDelete}
+            >
+              видалити
+            </button>
+          )}
         </div>
       </div>
+
+      {sharedNames != null && sharedNames.length > 0 && (
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-accent)', marginTop: 4 }}>
+          доступ у команди: {sharedNames.join(', ')}
+        </div>
+      )}
 
       {/* 17-Д typed card: public fields always visible, secret fields after reveal */}
       {isTyped && (

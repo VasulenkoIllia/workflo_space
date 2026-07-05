@@ -134,6 +134,43 @@ export function useDeleteCredential(companyId: string) {
   })
 }
 
+// ── 17-SHARE: executor access grants (owner-managed) ─────────────────────────────────
+/** One active grant: either a point share (credentialId) or a whole-client share (companyId). */
+export interface VaultShare {
+  id: string
+  credentialId: string | null
+  companyId: string | null
+  executorId: string
+  grantedById: string
+  createdAt: string
+}
+
+export function useVaultShares(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['vault-shares', companyId],
+    queryFn: () =>
+      api.get<{ shares: VaultShare[] }>(`/workspace/vault/shares?companyId=${companyId}`),
+    enabled: enabled && companyId !== '',
+  })
+}
+
+export function useGrantShare() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { executorId: string; credentialId?: string; companyId?: string }) =>
+      api.post<{ share: VaultShare }>('/workspace/vault/shares', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['vault-shares'] }),
+  })
+}
+
+export function useRevokeShare() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (shareId: string) => api.delete(`/workspace/vault/shares/${shareId}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['vault-shares'] }),
+  })
+}
+
 // ── Global vault (17-ГЛОБАЛ): all secrets across the agency's clients ────────────────
 export interface GlobalCredential extends Credential {
   companyId: string

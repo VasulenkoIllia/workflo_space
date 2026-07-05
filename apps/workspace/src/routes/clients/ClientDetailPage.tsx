@@ -9,7 +9,17 @@ import {
   type VaultResourceType,
 } from '@workflo/types'
 import { VAULT_TYPE_OPTIONS, VaultTypedFieldsEditor } from '@workflo/app-core'
-import { Avatar, Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Modal,
+  Skeleton,
+  StatusDot,
+  Tabs,
+} from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
@@ -24,11 +34,16 @@ import {
 } from '@/lib/clients'
 import {
   type Credential,
+  type VaultShare,
   useCreateCredential,
   useCredentials,
   useDeleteCredential,
+  useGrantShare,
   useRevokeCredential,
+  useRevokeShare,
+  useVaultShares,
 } from '@/lib/credentials'
+import { type TeamMember, useTeam } from '@/lib/payouts'
 import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 import { useClientMargin } from '@/lib/margin'
@@ -403,6 +418,22 @@ function SecretsSection({ companyId }: { companyId: string }) {
   const [adding, setAdding] = useState(false)
   const [stepUpRetry, setStepUpRetry] = useState<(() => void) | null>(null)
 
+  // 17-SHARE (owner): executor grants — whole-client toggles + per-secret modal
+  const { data: teamData } = useTeam()
+  const executors = (teamData?.members ?? []).filter((m) => m.role === 'executor')
+  const { data: sharesData } = useVaultShares(companyId)
+  const shares = sharesData?.shares ?? []
+  const companyShares = shares.filter((s) => s.companyId === companyId)
+  const nameOf = (profileId: string) =>
+    executors.find((e) => e.profileId === profileId)?.name ?? '—'
+  const [shareModalCred, setShareModalCred] = useState<Credential | null>(null)
+
+  /** Executor names with access to a given secret (point ∪ whole-client). */
+  const sharedNamesFor = (credId: string) => [
+    ...companyShares.map((s) => nameOf(s.executorId)),
+    ...shares.filter((s) => s.credentialId === credId).map((s) => nameOf(s.executorId)),
+  ]
+
   if (isLoading) return <Skeleton style={{ height: 160 }} />
   const creds = data?.credentials ?? []
 
@@ -434,6 +465,15 @@ function SecretsSection({ companyId }: { companyId: string }) {
           + Додати секрет
         </Button>
       )}
+
+      {executors.length > 0 && (
+        <ExecutorAccessBlock
+          companyId={companyId}
+          executors={executors}
+          companyShares={companyShares}
+        />
+      )}
+
       <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
         {creds.length === 0 && !adding ? (
           <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
@@ -447,6 +487,8 @@ function SecretsSection({ companyId }: { companyId: string }) {
               onRevoke={() => doRevoke(c)}
               onDelete={() => doDelete(c)}
               onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
+              sharedNames={sharedNamesFor(c.id)}
+              onManageShares={executors.length > 0 ? () => setShareModalCred(c) : undefined}
               formatDate={formatDate}
             />
           ))
@@ -461,7 +503,151 @@ function SecretsSection({ companyId }: { companyId: string }) {
           retry?.()
         }}
       />
+      <SecretShareModal
+        cred={shareModalCred}
+        onClose={() => setShareModalCred(null)}
+        executors={executors}
+        shares={shares}
+        companyShares={companyShares}
+      />
     </Card>
+  )
+}
+
+/** 17-SHARE: whole-client access toggles («всі секрети клієнта», incl. future ones). */
+function ExecutorAccessBlock({
+  companyId,
+  executors,
+  companyShares,
+}: {
+  companyId: string
+  executors: TeamMember[]
+  companyShares: VaultShare[]
+}) {
+  const grant = useGrantShare()
+  const revokeShare = useRevokeShare()
+
+  return (
+    <div
+      style={{
+        border: '1px dashed var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        padding: 12,
+        marginTop: 14,
+      }}
+    >
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        ДОСТУП ВИКОНАВЦІВ · всі секрети клієнта (точковий — на рядку секрету → «доступи»)
+      </div>
+      <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+        {executors.map((e) => {
+          const share = companyShares.find((s) => s.executorId === e.profileId)
+          return (
+            <label
+              key={e.profileId}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+            >
+              <input
+                type="checkbox"
+                checked={share != null}
+                disabled={grant.isPending || revokeShare.isPending}
+                onChange={() => {
+                  if (share) {
+                    revokeShare.mutate(share.id, {
+                      onSuccess: () => toast.success(`Доступ ${e.name} відкликано`),
+                    })
+                  } else {
+                    grant.mutate(
+                      { executorId: e.profileId, companyId },
+                      {
+                        onSuccess: () => toast.success(`${e.name}: відкрито всі секрети клієнта`),
+                      }
+                    )
+                  }
+                }}
+              />
+              {e.name}
+              {share != null && (
+                <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-accent)' }}>
+                  всі секрети
+                </span>
+              )}
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** 17-SHARE: point shares of ONE secret (executors covered by a whole-client grant are
+ * shown checked and locked — manage those in the block above). */
+function SecretShareModal({
+  cred,
+  onClose,
+  executors,
+  shares,
+  companyShares,
+}: {
+  cred: Credential | null
+  onClose: () => void
+  executors: TeamMember[]
+  shares: VaultShare[]
+  companyShares: VaultShare[]
+}) {
+  const grant = useGrantShare()
+  const revokeShare = useRevokeShare()
+
+  return (
+    <Modal open={cred !== null} onClose={onClose} title={`Доступи · ${cred?.label ?? ''}`}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // точковий доступ саме до цього секрету; безстроково — до відкликання
+        </div>
+        {executors.map((e) => {
+          const viaCompany = companyShares.some((s) => s.executorId === e.profileId)
+          const point = cred
+            ? shares.find((s) => s.credentialId === cred.id && s.executorId === e.profileId)
+            : undefined
+          return (
+            <label
+              key={e.profileId}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+            >
+              <input
+                type="checkbox"
+                checked={viaCompany || point != null}
+                disabled={viaCompany || grant.isPending || revokeShare.isPending}
+                onChange={() => {
+                  if (!cred) return
+                  if (point) {
+                    revokeShare.mutate(point.id, {
+                      onSuccess: () => toast.success(`Доступ ${e.name} відкликано`),
+                    })
+                  } else {
+                    grant.mutate(
+                      { executorId: e.profileId, credentialId: cred.id },
+                      { onSuccess: () => toast.success(`${e.name}: доступ видано`) }
+                    )
+                  }
+                }}
+              />
+              {e.name}
+              {viaCompany && (
+                <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                  через «всі секрети клієнта»
+                </span>
+              )}
+            </label>
+          )
+        })}
+        <div>
+          <Button variant="ghost" onClick={onClose}>
+            Закрити
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

@@ -108,7 +108,8 @@ export default function App() {
         <Route
           path="/vault"
           element={
-            <RoleRoute allow={['owner']}>
+            // 17-SHARE: executor sees their shared subset; manager stays out (canon)
+            <RoleRoute allow={['owner', 'executor']}>
               <VaultPage />
             </RoleRoute>
           }

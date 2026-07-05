@@ -89,7 +89,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії, ✅ **UTM з contact-форми** (05.07), ✅ **activity-timeline** (05.07); лишок: пайплайн-редактор (custom-стадії — окремий зріз зі схемою).
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** (усі 05.07). Лишок: executor-share, ротація-нагадування. _Примітки: TOTP-2FA — коли модуль 01 видаватиме authenticator-secret; каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** + ✅ **executor-share (17-SHARE)** (усі 05.07). Лишок: ротація-нагадування. _Примітки: TOTP-2FA — коли модуль 01 видаватиме authenticator-secret; каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 
@@ -125,6 +125,24 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **Vault executor-share (17-SHARE) — ЗАКРИТО (2026-07-05).** Модель — **рішення власника
+  (вікторина 05.07): гібрид** (точковий share НА один секрет + «всі секрети клієнта» одним
+  grant'ом, вкл. майбутні), **безстроково до відкликання** (`expiresAt` лишений у моделі під
+  авто-expiry спеки — гейт чесно перевіряє, ніхто не видає), виконавцю — **свій розділ
+  «Секрети»**. `CredentialShare` (міграція, RLS wf_in_tenant, XOR-ціль route-enforced).
+  Роути `/workspace/vault/shares` GET/POST/DELETE — owner-only, одержувач мусить бути
+  виконавцем (manager заблокований каноном MANAGER_BLOCKED), дубль → 409, audit
+  share_granted/share_revoked. Read-шлях: `vaultShareAccess.ts` (owner все · executor union
+  активних share · list executor'а без share = порожньо, не 403 · reveal поза скоупом 403 ·
+  step-up відкрито виконавцям — reveal і їм потребує пароль). UI: на табі «Секрети» картки
+  клієнта — блок «Доступ виконавців» (client-level тумблери) + модалка «доступи» на рядку
+  (точкові; покриті client-share — замком) + рядок «доступ у команди: імена» (канон дизайну);
+  виконавець — nav «Секрети» (roles ox) → `/vault` read-only без журналу/CRUD. Гейт: +14
+  тестів (api **757** unit; 3 старі executor-403 тести свідомо переписані під нову поведінку),
+  turbo 56/56. Вживу: owner тумблером видав «всі секрети» Петру → виконавець у своєму /vault
+  побачив 2 секрети клієнта і розкрив typed-картку через ВЛАСНИЙ пароль-step-up → revoke →
+  порожній vault (API-перевірка). Лишок 17: ротація-нагадування, TOTP-модал.
 
 - **Vault типізовані шаблони секретів (17-Д) — ЗАКРИТО (2026-07-05).** Каталог
   `VAULT_RESOURCE_TYPES` (crm/server/hosting/api/db/other) + `VAULT_FIELD_KINDS` (url/login/

@@ -26,7 +26,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },
   { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
 
-  { group: 'Клієнти', roles: 'om' },
+  // 'omx': executor reaches «Секрети» (17-SHARE) under this group; clients/leads stay 'om'.
+  { group: 'Клієнти', roles: 'omx' },
   {
     id: 'clients',
     label: 'Клієнти',
@@ -35,8 +36,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     roles: 'om',
   },
   { id: 'leads', label: 'Ліди', icon: <Icon name="users" />, href: '/leads', roles: 'om' },
-  // Credentials vault (module 17-ГЛОБАЛ) — owner-only agency-wide secret store.
-  { id: 'vault', label: 'Секрети', icon: <Icon name="lock" />, href: '/vault', roles: 'o' },
+  // Credentials vault (17-ГЛОБАЛ + 17-SHARE): owner = all; executor = їхні розшарені секрети.
+  { id: 'vault', label: 'Секрети', icon: <Icon name="lock" />, href: '/vault', roles: 'ox' },
 
   { group: 'Фінанси', roles: 'o' },
   { id: 'billing', label: 'Рахунки', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },

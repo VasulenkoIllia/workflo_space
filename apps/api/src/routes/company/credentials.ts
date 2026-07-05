@@ -2,7 +2,7 @@ import { type Prisma, prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { verifyPassword } from '../../auth/password.js'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -14,6 +14,11 @@ import {
   typedCreateSchema,
 } from '../../services/vaultFields.js'
 import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.js'
+import {
+  executorShareMap,
+  resolveVaultScope,
+  scopeCoversCredential,
+} from '../../services/vaultShareAccess.js'
 
 /**
  * Credentials Vault (module 17) — agency-side. Envelope-encrypted secrets bound to a CLIENT
@@ -91,7 +96,7 @@ const toDto = (c: ListRow) => ({
   updatedAt: c.updatedAt,
 })
 
-/** Owner-gate + tenant-guard shared by every handler. Throws 403 / 404. */
+/** Owner-gate + tenant-guard shared by every WRITE handler. Throws 403 / 404. */
 async function assertOwnerCompany(user: AccessClaims, companyId: string) {
   const agencyId = requireActiveAgency(user)
   if (!isAgencyOwner(user, agencyId)) {
@@ -104,6 +109,23 @@ async function assertOwnerCompany(user: AccessClaims, companyId: string) {
   return agencyId
 }
 
+/** READ-gate (17-SHARE): owner → all; executor → their share scope; others → 403.
+ * Returns the scope so list/reveal can filter. Throws 403 / 404. */
+async function assertReadCompany(user: AccessClaims, companyId: string) {
+  const agencyId = requireActiveAgency(user)
+  const company = await withTenant((tx) =>
+    tx.company.findFirst({ where: { id: companyId, agencyId }, select: { id: true } })
+  )
+  if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
+  const scope = await resolveVaultScope(user, companyId)
+  // An executor WITHOUT shares still gets an empty list (graceful 360°-tab), but a
+  // client/manager gets a hard 403 — the workspace vault is not their surface.
+  if (scope === null && !(isInternalTeam(user) && !isAgencyManager(user, agencyId))) {
+    throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до секретів', 403)
+  }
+  return { agencyId, scope }
+}
+
 const credentialsRoute: FastifyPluginAsync = (fastify) => {
   // ── Global vault (17-ГЛОБАЛ): all secrets across the agency's clients, metadata only ──
   // Same table + reveal path, just an agency-wide view; each row carries its companyId so the
@@ -113,16 +135,28 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
+      // 17-SHARE: owner sees everything; an executor sees the union of their shares
+      // (whole-company grants + point grants); manager/client — nothing.
+      let shareFilter: object | null = null
       if (!isAgencyOwner(request.user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції має доступ до секретів',
-          403
-        )
+        const map = await executorShareMap(request.user)
+        if (!map) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до секретів', 403)
+        }
+        shareFilter = {
+          OR: [
+            ...(map.companyIds.length > 0 ? [{ companyId: { in: map.companyIds } }] : []),
+            ...(map.credentialIds.length > 0 ? [{ id: { in: map.credentialIds } }] : []),
+          ],
+        }
+        // no shares at all → honest empty vault, not a 403 (nav stays usable)
+        if (map.companyIds.length === 0 && map.credentialIds.length === 0) {
+          return reply.send({ success: true, data: { credentials: [] } })
+        }
       }
       const rows = await withTenant((tx) =>
         tx.credentialVault.findMany({
-          where: { agencyId },
+          where: { agencyId, ...(shareFilter ?? {}) },
           select: { ...LIST_SELECT, companyId: true, company: { select: { name: true } } },
           orderBy: [{ revokedAt: 'asc' }, { createdAt: 'desc' }],
         })
@@ -152,12 +186,9 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
-      if (!isAgencyOwner(request.user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції має доступ до секретів',
-          403
-        )
+      // 17-SHARE: executors with shares need grants too — manager stays blocked (canon).
+      if (!isInternalTeam(request.user) || isAgencyManager(request.user, agencyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до секретів', 403)
       }
       const { password } = stepUpSchema.parse(request.body)
 
@@ -185,16 +216,23 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
-  // ── List (metadata only, no plaintext) ────────────────────────────────────────
+  // ── List (metadata only, no plaintext; 17-SHARE: executor sees their scope) ────
   fastify.get<{ Params: { id: string } }>(
     '/workspace/clients/:id/credentials',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const companyId = request.params.id
-      await assertOwnerCompany(request.user, companyId)
+      const { scope } = await assertReadCompany(request.user, companyId)
+      if (scope === null) {
+        // executor without any share on this client — graceful empty tab
+        return reply.send({ success: true, data: { credentials: [] } })
+      }
       const rows = await withTenant((tx) =>
         tx.credentialVault.findMany({
-          where: { companyId },
+          where: {
+            companyId,
+            ...(scope.kind === 'subset' ? { id: { in: scope.credentialIds } } : {}),
+          },
           select: LIST_SELECT,
           orderBy: [{ revokedAt: 'asc' }, { createdAt: 'desc' }],
         })
@@ -318,7 +356,11 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { id: companyId, credId } = request.params
-      const agencyId = await assertOwnerCompany(request.user, companyId)
+      // 17-SHARE: reveal opens for executors within their share scope.
+      const { agencyId, scope } = await assertReadCompany(request.user, companyId)
+      if (!scopeCoversCredential(scope, credId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до цього секрету', 403)
+      }
 
       // Step-up gate (2FA-on-reveal): a live password grant is required before any decrypt.
       // 403 (not 401) so the API client doesn't mistake it for session-expiry and refresh/logout.

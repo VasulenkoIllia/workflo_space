@@ -10,12 +10,15 @@ import {
 } from '@/lib/credentials'
 import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
+import { useAuth } from '@/contexts/AuthContext'
 import { formatDate } from '@/lib/format'
 
-/** Global credentials vault (module 17-ГЛОБАЛ) — owner-only. Every client's secrets on one
- * screen with client/service/search filters. Same envelope-encrypted store as the 360° tab;
- * reveal/revoke/delete route back to the per-company endpoints via each row's companyId. */
+/** Global credentials vault (module 17-ГЛОБАЛ + 17-SHARE). Owner: every client's secrets with
+ * client/service/search filters + CRUD. Executor: read-only view of the secrets shared with
+ * them (reveal via the same step-up; no revoke/delete/journal). Manager never reaches this
+ * route. Reveal/revoke/delete route back to per-company endpoints via each row's companyId. */
 export function VaultPage() {
+  const { isOwner } = useAuth()
   const { data, isLoading } = useGlobalVault()
   const revoke = useRevokeGlobal()
   const del = useDeleteGlobal()
@@ -96,8 +99,12 @@ export function VaultPage() {
       ) : all.length === 0 ? (
         <EmptyState
           glyph="// vault"
-          title="Секретів ще немає"
-          description="Додайте доступи клієнта у картці клієнта → таб «Секрети»."
+          title={isOwner ? 'Секретів ще немає' : 'Вам ще не видано доступів'}
+          description={
+            isOwner
+              ? 'Додайте доступи клієнта у картці клієнта → таб «Секрети».'
+              : 'Власник агенції може відкрити вам секрети клієнта — точково або всі по клієнту.'
+          }
         />
       ) : (
         <>
@@ -163,7 +170,8 @@ export function VaultPage() {
                     onRevoke={() => doRevoke(c)}
                     onDelete={() => doDelete(c)}
                     onNeedStepUp={(retry) => setStepUpRetry(() => retry)}
-                    showCompanyLink
+                    showCompanyLink={isOwner}
+                    readOnly={!isOwner}
                     formatDate={formatDate}
                   />
                 ))}

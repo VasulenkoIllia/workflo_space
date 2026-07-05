@@ -548,12 +548,40 @@ model CredentialVault {
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
   createdById       String
   agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy         Profile   @relation("CredentialCreatedBy", fields: [createdById], references: [id])
+
+  shares    CredentialShare[]
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy Profile           @relation("CredentialCreatedBy", fields: [createdById], references: [id])
 
   @@index([agencyId])
   @@index([companyId, revokedAt])
   @@map("credential_vault")
+}
+
+// 17-SHARE (спека §C + рішення власника 05.07): owner grants an EXECUTOR read/reveal access —
+// either to ONE secret (credentialId set) or to ALL secrets of a client company (companyId set,
+// covers future secrets too). Exactly one of the two targets is set (route-enforced). Grants are
+// indefinite until revoked (owner decision 05.07); expiresAt is kept nullable for the spec's
+// auto-expiry — the access check already honors it, but no UI/API sets it yet.
+// executorId/grantedById are plain Profile ids (project convention, no FK).
+model CredentialShare {
+  id           String    @id @default(uuid())
+  agencyId     String
+  credentialId String?
+  companyId    String?
+  executorId   String
+  grantedById  String
+  revokedAt    DateTime? @db.Timestamptz(3)
+  expiresAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  credential CredentialVault? @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([executorId, revokedAt])
+  @@index([credentialId])
+  @@index([agencyId, companyId])
+  @@map("credential_shares")
 }
 
 // TOTP 2FA per profile (S9-01). The secret is KEK-encrypted with the SAME envelope
@@ -1140,6 +1168,7 @@ model Agency {
   leads                Lead[] // 26 (CRM)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
+  credentialShares     CredentialShare[] // 17-SHARE
 
   @@index([planId])
   @@map("agencies")
