@@ -89,7 +89,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії, ✅ **UTM з contact-форми** (05.07), ✅ **activity-timeline** (05.07); лишок: пайплайн-редактор (custom-стадії — окремий зріз зі схемою).
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** + ✅ **executor-share (17-SHARE)** + ✅ **TOTP-first step-up на reveal** (усі 05.07). Лишок: ротація-нагадування. _Примітка: каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** + ✅ **executor-share (17-SHARE)** + ✅ **TOTP-first step-up на reveal** + ✅ **ротація-нагадування (17-РОТАЦІЯ)** (усі 05.07 — **модуль 17 закрито повністю**). _Примітка: каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 
@@ -125,6 +125,29 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **Inbox-18 хвости: mute/archive + відповідальний за тред + «без відповіді > N год» — ЗАКРИТО (2026-07-05).**
+  Міграція `20260705_conversation_state`: `ConversationState {profileId, orderId, muted,
+archivedAt}` (RLS) + `Order.chatOwnerId`. **18-Б mute:** `GET/PUT /orders/:id/conversation`
+  (учасник, обидві апки); заглушені випадають із fan-out `chat.new_comment` у outbox-воркері —
+  **@mention пробиває mute свідомо**; archivedAt закладено під секцію «Чати». **18-В:**
+  `PATCH /workspace/orders/:id/chat-owner` (команда, target-валідація; null = «авто» = перший
+  assignee) + селект «відповідальний» і 🔔/🔕-тумблер у хедері чату (workspace ChatTab).
+  **18-Г:** `GET /workspace/chats/unanswered?hours=` (дефолт 4) — активні замовлення, де останнє
+  публічне повідомлення від клієнта старше за поріг; картка-алерт на дашборді owner/manager
+  (топ-6: год · замовлення · клієнт · відповідальний). Гейт: +6 тестів (api **783** unit; +1
+  мок-фікс воркера), turbo 56/56. Вживу (curl): mute persist → GET віддає ефективного
+  відповідального (авто=assignee) → PATCH chat-owner → unanswered чистий shape. Чесний субсет:
+  portal-mute UI і фільтр «мої треди» — разом із секцією «Чати» (беклог).
+
+- **Vault ротація-нагадування (17-РОТАЦІЯ) — ЗАКРИТО (2026-07-05). Модуль 17 повністю закрито.**
+  `credential_vault` += `expiresAt` + `rotationRemindedAt` (міграція, additive). Create-схеми
+  обох роутів приймають термін; `PATCH .../expiry` (workspace owner + portal власник компанії) —
+  зміна скидає вікно нагадувань. Cron daily: секрети з терміном ≤7 днів або минулим → **in-app**
+  `credentials.rotation_due` власникам агенції (нова подія без email/tg-шаблонів свідомо — nag,
+  не алерт; throttle 1/7днів per-секрет, cap 200/прохід). UI: спільний `VaultExpiryTag`
+  (app-core) «⚠ ротація за Nд»/«⚠ протерміновано» на рядках обох апок + дія «термін» (client-360,
+  /vault, портал). Гейт: +6 тестів (api 777), turbo 56/56; вживу: PATCH → DTO несе термін.
 
 - **TOTP-step-up у vault + політика «вимагати 2FA у команди» (2FA-POLICY) — ЗАКРИТО (2026-07-05).**
   Рішення власника (вікторина): **TOTP якщо є, інакше пароль** · **owner-тумблер для команди**

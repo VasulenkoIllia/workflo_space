@@ -24,6 +24,8 @@
 >
 > ✅ **UPDATE 2026-07-05 (четвертий зріз дня) — TOTP-first step-up + 2FA-політика агенції.** Reveal-модал з мокапа (Reveal2FAModal) реалізовано: `services/vaultStepUp.ts` — з увімкненим 2FA step-up приймає ЛИШЕ код автентифікатора/backup (`verifyChallenge`, replay-guard; пароль → 400 — даунгрейд неможливий), без 2FA — пароль-фолбек; модалки обох апок перемикаються по `/auth/2fa/status`. Плюс глобальна політика «вимагати 2FA у команди» — канон у [`01-auth.md §C-2`](01-auth.md) (owner-тумблер, грейс 7 днів, `tfaDue`-гейт 403 `TFA_SETUP_REQUIRED`, форс-екран). **Лишок модуля:** ротація-нагадування, inline-edit.
 
+> ✅ **UPDATE 2026-07-05 (п'ятий зріз дня) — 17-РОТАЦІЯ збудовано. Модуль 17 закрито повністю** (лишок — тільки inline-edit, поза скоупом рішень власника). `credential_vault` += `expiresAt` (термін дії, опційний; create-схеми обох роутів + `PATCH .../expiry` на обох поверхнях — зміна скидає вікно нагадувань) + `rotationRemindedAt` (throttle 1/7днів). Cron daily (`cron/credentialsRotation.ts`): секрети з терміном ≤7 днів (або минулим) → **in-app** нагадування `credentials.rotation_due` власникам агенції (нова подія; email/tg-шаблонів свідомо нема — це nag, не алерт; cap 200/прохід). UI: спільний `VaultExpiryTag` (app-core) — «⚠ ротація за Nд» / «⚠ протерміновано» на рядках обох апок; дія «термін» (prompt дати) на client-360, `/vault` і в порталі.
+
 ## Огляд
 
 Сейф для зберігання чутливих даних клієнта (CRM логіни, API keys, FTP-доступи, банкінг credentials etc) **прив'язаний до картки компанії**. Шифрування envelope: AES-256-GCM з master KEK у env + per-record DEK у БД.

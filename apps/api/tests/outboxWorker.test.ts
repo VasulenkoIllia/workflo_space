@@ -9,6 +9,8 @@ const notify = vi.fn().mockResolvedValue({ results: [], attempted: [] })
 vi.mock('@workflo/db', () => ({
   prisma: {
     order: { findUnique: orderFindUnique },
+    // 18-Б mute-фільтр воркера — за замовчуванням ніхто не заглушений
+    conversationState: { findMany: vi.fn().mockResolvedValue([]) },
     companyMember: { findMany: companyMemberFindMany },
     agencyMember: { findMany: agencyMemberFindMany },
     profile: { findUnique: profileFindUnique },

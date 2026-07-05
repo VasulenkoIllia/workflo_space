@@ -1,0 +1,219 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
+
+// 18-хвости: mute/archive (Б) + відповідальний за тред (В) + «без відповіді > N год» (Г).
+const db = {
+  order: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+  conversationState: { findUnique: vi.fn(), upsert: vi.fn() },
+  agencyMember: { findFirst: vi.fn(), findMany: vi.fn() },
+  agency: { findMany: vi.fn().mockResolvedValue([]) },
+  twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
+}
+
+vi.mock('@workflo/db', () => ({
+  prisma: db,
+  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+  withTenant: (fn: (tx: unknown) => unknown) => fn(db),
+  tenantTransaction: (_p: unknown, fn: (tx: unknown) => unknown) => fn(db),
+}))
+vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
+vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
+
+const { buildApp } = await import('../src/app.js')
+
+const AGENCY = 'agency-1'
+const ORDER = 'order-1'
+const OWNER = {
+  sub: 'owner-1',
+  email: 'o@e.com',
+  role: 'owner' as const,
+  activeAgencyId: AGENCY,
+  activeCompanyId: null,
+  agencyMemberships: [{ agencyId: AGENCY, role: 'owner' as const }],
+  memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
+}
+const CLIENT = {
+  sub: 'client-1',
+  email: 'c@e.com',
+  role: 'client' as const,
+  activeAgencyId: AGENCY,
+  activeCompanyId: 'company-1',
+  agencyMemberships: [] as Array<{ agencyId: string; role: 'owner' }>,
+  memberships: [{ companyId: 'company-1', role: 'owner' as const }],
+}
+
+const orderRow = {
+  id: ORDER,
+  agencyId: AGENCY,
+  companyId: 'company-1',
+  deletedAt: null,
+  chatOwnerId: null,
+  assigneeId: 'exec-1',
+}
+
+async function authed(claims: unknown) {
+  const app = buildApp()
+  await app.ready()
+  return { app, token: app.jwt.sign(claims as object) }
+}
+
+beforeEach(() => vi.clearAllMocks())
+afterEach(() => vi.clearAllMocks())
+
+describe('GET/PUT /orders/:id/conversation (18-Б)', () => {
+  it('participant reads default state + effective chat owner (авто = assignee)', async () => {
+    db.order.findUnique.mockResolvedValue(orderRow)
+    db.conversationState.findUnique.mockResolvedValue(null)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/orders/${ORDER}/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({
+      muted: false,
+      chatOwnerId: null,
+      effectiveChatOwnerId: 'exec-1',
+    })
+    await app.close()
+  })
+
+  it('PUT upserts mute per-user (scoped to profile+order)', async () => {
+    db.order.findUnique.mockResolvedValue(orderRow)
+    db.conversationState.upsert.mockResolvedValue({ muted: true, archivedAt: null })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/orders/${ORDER}/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { muted: true },
+    })
+    expect(res.statusCode).toBe(200)
+    const arg = db.conversationState.upsert.mock.calls[0]![0] as {
+      where: { profileId_orderId: { profileId: string; orderId: string } }
+      create: Record<string, unknown>
+    }
+    expect(arg.where.profileId_orderId).toEqual({ profileId: OWNER.sub, orderId: ORDER })
+    expect(arg.create.agencyId).toBe(AGENCY)
+    await app.close()
+  })
+
+  it('empty body → 400; foreign order → 404', async () => {
+    const { app, token } = await authed(OWNER)
+    db.order.findUnique.mockResolvedValue(orderRow)
+    const empty = await app.inject({
+      method: 'PUT',
+      url: `/orders/${ORDER}/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    })
+    expect(empty.statusCode).toBe(400)
+
+    db.order.findUnique.mockResolvedValue(null)
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/orders/order-x/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(missing.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('PATCH /workspace/orders/:id/chat-owner (18-В)', () => {
+  it('team sets a responsible member; non-member target → 400; client → 403', async () => {
+    db.order.findUnique.mockResolvedValue(orderRow)
+    db.agencyMember.findFirst.mockResolvedValue({ id: 'am-1' })
+    db.order.update.mockResolvedValue({})
+    const { app, token } = await authed(OWNER)
+    const ok = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/orders/${ORDER}/chat-owner`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { profileId: 'exec-1' },
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(db.order.update).toHaveBeenCalledWith({
+      where: { id: ORDER },
+      data: { chatOwnerId: 'exec-1' },
+    })
+
+    db.agencyMember.findFirst.mockResolvedValue(null)
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/orders/${ORDER}/chat-owner`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { profileId: 'stranger' },
+    })
+    expect(bad.statusCode).toBe(400)
+
+    const ctoken = app.jwt.sign(CLIENT as object)
+    const denied = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/orders/${ORDER}/chat-owner`,
+      headers: { authorization: `Bearer ${ctoken}` },
+      payload: { profileId: null },
+    })
+    expect(denied.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('GET /workspace/chats/unanswered (18-Г)', () => {
+  it('returns orders where the LAST public message is client-authored and older than N hours', async () => {
+    db.agencyMember.findMany.mockResolvedValue([{ profileId: 'owner-1' }, { profileId: 'exec-1' }])
+    const old = new Date(Date.now() - 6 * 3600_000)
+    const fresh = new Date(Date.now() - 1 * 3600_000)
+    db.order.findMany.mockResolvedValue([
+      {
+        id: 'o-1',
+        title: 'Клієнт чекає',
+        chatOwnerId: null,
+        assigneeId: 'exec-1',
+        company: { name: 'ТОВ' },
+        comments: [{ authorId: 'client-1', createdAt: old }],
+      },
+      {
+        id: 'o-2',
+        title: 'Команда відповіла',
+        chatOwnerId: null,
+        assigneeId: null,
+        company: { name: 'ТОВ' },
+        comments: [{ authorId: 'exec-1', createdAt: old }],
+      },
+      {
+        id: 'o-3',
+        title: 'Ще в межах порогу',
+        chatOwnerId: null,
+        assigneeId: null,
+        company: { name: 'ТОВ' },
+        comments: [{ authorId: 'client-1', createdAt: fresh }],
+      },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/chats/unanswered?hours=4',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data.unanswered as { orderId: string; hoursSince: number }[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.orderId).toBe('o-1')
+    expect(rows[0]!.hoursSince).toBeGreaterThanOrEqual(5)
+    await app.close()
+  })
+
+  it('client is forbidden (403)', async () => {
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/chats/unanswered',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})

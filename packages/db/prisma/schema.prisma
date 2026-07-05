@@ -267,20 +267,24 @@ model Order {
   projectId           String?
   project             Project?             @relation(fields: [projectId], references: [id])
   zeroBilled          Boolean              @default(false) // В12: задача в абонплаті — НЕ білиться, але час → собівартість
+  // 18-В: відповідальний за тред (хто винен клієнту відповідь). Plain Profile id
+  // (project convention); null = «авто» — UI трактує як першого assignee.
+  chatOwnerId         String?
   createdAt           DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
-  stages        OrderStage[]
-  comments      OrderComment[]
-  timeLogs      TimeLog[]
-  files         OrderFile[]
-  internalTasks InternalTask[]
-  estimateLine  EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
-  activityLogs  ActivityLog[]
-  chatReads     OrderChatRead[]
-  payments      Payment[]
-  documents     Document[]
-  agency        Agency          @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  stages             OrderStage[]
+  comments           OrderComment[]
+  timeLogs           TimeLog[]
+  files              OrderFile[]
+  internalTasks      InternalTask[]
+  estimateLine       EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
+  activityLogs       ActivityLog[]
+  chatReads          OrderChatRead[]
+  payments           Payment[]
+  documents          Document[]
+  conversationStates ConversationState[]
+  agency             Agency              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
@@ -296,6 +300,26 @@ model Order {
   @@index([deletedAt])
   @@index([projectId])
   @@map("orders")
+}
+
+// 18-Б: per-user conversation state of an order thread. muted → the outbox worker drops
+// chat.new_comment for this profile (mentions DELIBERATELY bypass mute); archivedAt →
+// «архівні» розділ у майбутній секції «Чати». profileId — plain Profile id (convention).
+model ConversationState {
+  id         String    @id @default(uuid())
+  agencyId   String
+  profileId  String
+  orderId    String
+  muted      Boolean   @default(false)
+  archivedAt DateTime? @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, orderId])
+  @@index([orderId, muted])
+  @@index([agencyId])
+  @@map("conversation_state")
 }
 
 model OrderStage {
@@ -1180,6 +1204,7 @@ model Agency {
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
+  conversationStates   ConversationState[] // 18-Б
 
   @@index([planId])
   @@map("agencies")

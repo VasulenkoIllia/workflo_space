@@ -5,6 +5,8 @@ import { Donut, type DonutSegment } from '@/components/Donut'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/format'
 import { useBillingOverview, num } from '@/lib/billing'
+import { useUnansweredChats } from '@/lib/chats'
+import { useTeam } from '@/lib/payouts'
 import { usePnl, isoDay } from '@/lib/finance'
 import { catColor, catLabel } from '@/lib/expenseCategories'
 import { useOrders, countByStatus, type WorkspaceOrder } from '@/lib/orders'
@@ -72,6 +74,8 @@ export function OwnerDashboard() {
           </button>
         </div>
       </div>
+
+      <UnansweredChatsCard />
 
       {isOwner && (
         <>
@@ -339,6 +343,63 @@ function AttentionItem({
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+/** 18-Г «без відповіді > N год»: активні замовлення, де клієнт чекає на відповідь команди.
+ * Рендериться лише коли є що показати. */
+function UnansweredChatsCard() {
+  const navigate = useNavigate()
+  const { data } = useUnansweredChats(4)
+  const { data: teamData } = useTeam()
+  const nameOf = (id: string | null) =>
+    teamData?.members.find((m) => m.profileId === id)?.name ?? 'не призначено'
+  const rows = data?.unanswered ?? []
+  if (rows.length === 0) return null
+  return (
+    <div
+      className="wfp-card"
+      style={{ marginBottom: 14, borderColor: 'var(--wf-warning, #b45309)' }}
+    >
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-warning, #b45309)', marginBottom: 8 }}
+      >
+        // чати без відповіді довше 4 год · {rows.length}
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {rows.slice(0, 6).map((r) => (
+          <button
+            key={r.orderId}
+            type="button"
+            onClick={() => navigate(`/orders/${r.orderId}`)}
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'baseline',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              color: 'var(--wf-fg)',
+              textAlign: 'left',
+              fontSize: 13,
+            }}
+          >
+            <span
+              className="wfp-mono"
+              style={{ fontSize: 11, color: 'var(--wf-destructive)', width: 52, flexShrink: 0 }}
+            >
+              {r.hoursSince} год
+            </span>
+            <span style={{ fontWeight: 500 }}>{r.title}</span>
+            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              {r.companyName ?? ''} · відп.: {nameOf(r.chatOwnerId)}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

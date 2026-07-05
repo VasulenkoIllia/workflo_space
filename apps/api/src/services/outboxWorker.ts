@@ -335,8 +335,18 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
     preview: p.preview,
     orderUrl: `${portalUrl}/orders/${p.orderId}`,
   }
-  if (recipients.length) {
-    await deliverToRecipients(logger, recipients, 'chat.new_comment', vars, {
+  // 18-Б mute: заглушені розмови не отримують chat.new_comment (жоден канал).
+  // @mention (mentionRecipients нижче) пробиває mute свідомо — пряме звертання важливіше.
+  const mutedRows = recipients.length
+    ? await prisma.conversationState.findMany({
+        where: { orderId: p.orderId, muted: true, profileId: { in: recipients } },
+        select: { profileId: true },
+      })
+    : []
+  const mutedSet = new Set(mutedRows.map((m) => m.profileId))
+  const unmuted = recipients.filter((id) => !mutedSet.has(id))
+  if (unmuted.length) {
+    await deliverToRecipients(logger, unmuted, 'chat.new_comment', vars, {
       title: 'Новий коментар',
       body: `${authorName} · «${order.title}»`,
     })

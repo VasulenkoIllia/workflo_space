@@ -156,6 +156,8 @@ Mobile: 2-screen flow (list → detail → back).
 
 **`OrderChatRead` модель** (зараз немає в схемі) + unread-counter cache; **mention-access predicate** (точно: учасник order, не лише mentioned-in-text — IDOR); `agencyId` + tenant-guard на `/messages/*`; cursor-формат пагінації; edit/delete propagation у inbox-preview.
 
+> ✅ **UPDATE 2026-07-05 — хвости Б/В/Г збудовано** (окремо від секції «Чати», яка лишається в беклозі). **Б mute/archive:** `ConversationState {profileId, orderId, muted, archivedAt}` (RLS) + `GET/PUT /orders/:id/conversation` (будь-який учасник, обидві апки); заглушені НЕ отримують `chat.new_comment` (фільтр у outbox-воркері), **@mention пробиває mute свідомо**; archivedAt закладено під майбутню секцію «Чати». **В відповідальний:** `Order.chatOwnerId` + `PATCH /workspace/orders/:id/chat-owner` (команда; null = «авто» = перший assignee); селект у хедері чату (workspace ChatTab). **Г «без відповіді > N год»:** `GET /workspace/chats/unanswered?hours=` — активні замовлення, де останнє публічне повідомлення від клієнта старше за поріг; картка на дашборді owner/manager (топ-6, з відповідальним). Чесний субсет: portal-mute UI і фільтр «мої треди» — разом із секцією «Чати».
+
 ### B. Mute / archive ✅
 
 - `ConversationState { profileId, orderId, muted Boolean, archivedAt }`. Заглушені — без unread-bump; архівні — окремий розділ.
