@@ -14,6 +14,9 @@
 > 🔄 **design-v2 (2026-06-20):** доставлено **portal-secrets** — клієнтський перегляд/шеринг доступів (3 екрани: список ресурсів, reveal з 2FA, журнал доступу): [`portal-secrets.jsx`](../../design-v2/project/portal-secrets.jsx). Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
 >
 > ✅ **UPDATE 2026-07-01 — agency-side MVP збудовано** (банер «бекенд greenfield» застарів): `CredentialVault` модель + RLS, envelope AES-256-GCM (`credentialCrypto.ts`, KEK у env), ендпоінти list/create/reveal/revoke/delete + глобальний `/vault` + per-secret журнал доступів + **step-up повторним паролем** на reveal (grant 5хв) + per-owner reveal-throttle (10/год). UI: таб «Секрети» картки 360° + екран `/vault`. **Ще НЕ збудовано:** `PUT`/inline-edit секрету (§122/§179), portal self-service (17-А) + 2FA-модал на порталі, типізовані картки (17-Д), executor-share (`CredentialShare`), нагадування про ротацію.
+>
+> ✅ **UPDATE 2026-07-05 — 17-А portal self-service + 17-Б журнал клієнту збудовано.**
+> `portalCredentials.ts`: `/portal/vault/step-up` + `/portal/credentials` (list/create/reveal/revoke/delete/audit); доступ — **лише власник компанії** (`can credentials.*`, member → 403); reveal за тим самим grant-механізмом + throttle 10/год; клієнт **відкликає будь-який** доступ, **видаляє лише додані ним** (агенційні → 403 з чесним повідомленням). **Email-verified гейт** на чутливі дії (закрито відкладений S9-борг). Журнал клієнту — хто/коли, **без IP/UA** (телеметрія лишається агенційною). UI: portal `/secrets` — список + «Додати ресурс» + reveal з авто-hide 20с + журнал + бейдж «додано вами». +20 route-тестів. **Лишок модуля:** типізовані картки (17-Д), TOTP-модал з мокапа, executor-share, ротація-нагадування, inline-edit.
 
 ## Огляд
 

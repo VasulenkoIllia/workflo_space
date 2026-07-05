@@ -19,6 +19,7 @@ import { ReferralsPage } from '@/routes/referrals/ReferralsPage'
 import { OrderCreatePage } from '@/routes/orders/OrderCreatePage'
 import { InboxPage } from '@/routes/inbox/InboxPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
+import { SecretsPage } from '@/routes/secrets/SecretsPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/referrals" element={<ReferralsPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/secrets" element={<SecretsPage />} />
         </Route>
         <Route path="/documents" element={<Placeholder title="Документи" />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
@@ -57,7 +59,6 @@ export default function App() {
         <Route path="/inbox" element={<InboxPage />} />
         {/* design-v2 PORTAL_NAV destinations — Placeholder until their feature wave */}
         <Route path="/company" element={<Placeholder title="Моя компанія" />} />
-        <Route path="/secrets" element={<Placeholder title="Секрети" />} />
         <Route path="/settings/integrations" element={<Placeholder title="Інтеграції" />} />
         <Route path="/" element={<Navigate to="/orders" replace />} />
       </Route>

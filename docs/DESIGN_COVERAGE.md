@@ -769,6 +769,17 @@ Module 16 (Search & Filters) is largely DESIGN-only with a thin code stub. Desig
 > (`SecretRow`) and the `/vault` screen. **Still MISS:** portal self-service + portal 2FA modal
 > (17-А), typed secret cards/templates (17-Д), executor scoped-share, rotation reminders. The
 > table rows (759/763) and ROADMAP reflect this; the prose below is retained for design-history.
+>
+> **UPDATE 2026-07-05 — 17-А + 17-Б (client-side) ЗБУДОВАНО.** Portal self-service:
+> `apps/api/src/routes/company/portalCredentials.ts` — `/portal/vault/step-up` +
+> `/portal/credentials` list/create/reveal/revoke/delete/audit; company-OWNER-only через
+> `can('credentials.*')` (member 403), reveal за тим самим grant+throttle, **revoke будь-якого**
+> доступу (канон дизайну), **hard-delete лише власноруч доданих** (агенційні — 403 з чесним
+> повідомленням). **Email-verified гейт** (борг S9) на create/reveal/revoke/delete. Журнал
+> клієнту — хто/коли **без IP/UA** (операційна телеметрія лишається агенційною). UI: portal
+> `/secrets` (SecretsPage під CompanyGate) — список, «Додати ресурс», reveal з step-up
+> (авто-hide 20с), журнал, бейдж «додано вами». Чесний субсет: типізовані картки (17-Д) і
+> TOTP-модал з мокапа — пізніше; executor-share, ротація — окремі зрізи.
 
 Module 17 is a clean case of design-ahead, code-greenfield, docs-stale. DESIGN: design-v2 actually covers the module well across four files — PortalSecrets + Reveal2FAModal + PortalAddSecretModal (portal-secrets.jsx, all 3 portal screens incl. an access journal), C360Secrets + AddSecretModal (workspace-client360-tabs.jsx, typed cards + journal), WorkspaceVault (workspace-content.jsx, the global /vault screen with filters/search/stats), and an older flat ClientCreds (workspace-clients.jsx). CODE: nothing real exists — portal /secrets is the generic Placeholder (App.tsx:50, nav.tsx:28), workspace has no /vault route and ClientDetailPage has no Secrets tab (it's a bare orders list), there is no API route under apps/api/src, and no CredentialVault/CredentialShare model in schema.prisma (only an audit_logs comment mentions credential reveals). So every screen is MISSING/PLACEHOLDER and all conformance is NA. DOCS: DESIGN_SYSTEM.md §5.13.2 (line 549) and modules/17-credentials.md line 12 correctly call the backend greenfield/zero. The drift is concentrated in DESIGN_SPEC_FULL.md §17: its 'Що перевірити' notes #1/#3/#4/#5 and several Мокап-file columns are stale — they say the global vault, the access journal, the Portal secrets screen and the typed 17-Д cards are 'not drawn / nav-only / on no surface', but all of them now exist in design-v2 (the spec text predates the design-v2 delivery that the module doc's line-12 banner already records, and its 'Релевантні файли' still points at the old design/ bundle). The only genuine remaining design gap (already correctly noted) is the reveal flow's countdown/autohide/429 states and a missing 2FA modal on the Workspace side.
 
