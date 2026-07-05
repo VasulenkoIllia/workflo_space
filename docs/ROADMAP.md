@@ -126,6 +126,23 @@
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **Звіти-надбудови S11 (модулі 19/02/26) — ЗАКРИТО (2026-07-05).** Три надбудови на
+  даних цього тижня: **(1) SLA-compliance** — `GET /workspace/reports/sla` (owner):
+  met/late/pending для першої відповіді і розвʼязання, % лише по «розсуджених»,
+  розріз по виконавцях + список порушень; done-момент з ActivityLog (у Order нема doneAt),
+  скасовані поза знаменником; блок на `/reports`. **(2) Джерела лідів (26-В)** —
+  `GET /workspace/reports/lead-sources`: utmSource→manual→«(без джерела)», воронка з %
+  конверсії, гроші зі сконвертованих замовлень per-currency (виставлено/оплачено, курси
+  не зшиваються) + топ-кампанії; блок на `/reports`. **(3) Місячний email-дайджест
+  власнику** — міграція `20260705_monthly_report` (Agency.monthlyReportEnabled/LastSentAt),
+  owner-тумблер «Звіти на email» у /settings (`GET/PATCH /workspace/agency/report-settings`),
+  cron `C-monthly_report` (доба) шле за попередній UTC-місяць лист `reports.monthly`
+  (CRITICAL, uk/en): замовлення/оплати/години/ліди/SLA; відправка раз на місяць через
+  lastSentAt-гейт. Це owner-дайджест, НЕ 19-Г (клієнтський PDF-звіт — відкритий).
+  Гейт: +14 тестів (api **839** unit), turbo 56/56, drift-free. Вживу: обидва звіти
+  curl+скрін /reports (SLA 100% на реальному замовленні, google/july-promo у джерелах),
+  тумблер → cron → лист «Місячний звіт агенції — червень 2026» у Mailpit з реальними
+  цифрами (5 замовлень), повторний прогін чесно 0 (гейт місяця).
 - **Auth-пачка 01-А/Б/Г/Д (модуль 01) — ЗАКРИТО (2026-07-05).** Лишок модуля 01 — тільки
   passkeys (01-Е, SaaS-фаза). Міграція `20260705_auth_pack` (Profile: failedLoginAttempts/
   lockedUntil/pendingEmail/mustChangePassword; OtpPurpose += magic*link/email_change).

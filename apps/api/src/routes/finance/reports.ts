@@ -3,7 +3,9 @@ import { ApiErrorCode, AppError, pnlQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { computeHoursReport, hoursReportToCsv } from '../../services/hoursReport.js'
+import { computeLeadSourceReport } from '../../services/leadSourceReport.js'
 import { computePnl, pnlToCsv } from '../../services/pnl.js'
+import { computeSlaReport } from '../../services/slaReport.js'
 
 /**
  * Financial + ops reports (S5-10 / 19) — owner-only over a date window, JSON or CSV:
@@ -46,6 +48,34 @@ const reportsRoute: FastifyPluginAsync = (fastify) => {
         .header('content-type', 'text/csv; charset=utf-8')
         .header('content-disposition', `attachment; filename="hours_${query.from}_${query.to}.csv"`)
         .send(hoursReportToCsv(report))
+    }
+  )
+
+  // ── SLA-compliance (S11, 02-orders §C) ────────────────────────────────────────
+  fastify.get(
+    '/workspace/reports/sla',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const query = pnlQuerySchema.parse(request.query)
+      const agencyId = ownerAgency(request.user)
+      const report = await withTenant((tx) =>
+        computeSlaReport(tx, { agencyId, from: query.from, to: query.to })
+      )
+      return reply.send({ success: true, data: report })
+    }
+  )
+
+  // ── Джерела лідів: UTM → конверсія → гроші (S11, модуль 26) ──────────────────
+  fastify.get(
+    '/workspace/reports/lead-sources',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const query = pnlQuerySchema.parse(request.query)
+      const agencyId = ownerAgency(request.user)
+      const report = await withTenant((tx) =>
+        computeLeadSourceReport(tx, { agencyId, from: query.from, to: query.to })
+      )
+      return reply.send({ success: true, data: report })
     }
   )
 

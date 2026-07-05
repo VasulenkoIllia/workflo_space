@@ -358,6 +358,9 @@ Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE 
 - `Order` додає `firstResponseDueAt`, `resolutionDueAt` (обчислюються при створенні з policy), `firstRespondedAt`, `slaBreachedAt`.
 - Cron `C-sla_check` (кожні 15хв): прострочення first-response/resolution → `slaBreachedAt` + escalation owner'у (event `orders.sla_breached`).
 - UI: badge «SLA: 1г 20хв» / червоний при breach. Звіти: % SLA-compliance.
+- **UPDATE 05.07.2026:** % SLA-compliance реалізовано — `GET /workspace/reports/sla` + блок
+  на `/reports` (owner): met/late/pending по обох сторонах SLA, розріз по виконавцях,
+  список порушень; done-момент з ActivityLog. Деталі: `19-reports.md` UPDATE-нотатка.
 
 ### D. Залежності між замовленнями ✅
 

@@ -166,6 +166,8 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'auth.magic_link': NotificationCategory.AUTH,
   'auth.email_change_requested': NotificationCategory.AUTH,
   'auth.email_change_confirm': NotificationCategory.AUTH,
+  // S11: місячний дайджест — системна розсилка, opt-in тумблером агенції
+  'reports.monthly': NotificationCategory.SYSTEM,
 }
 
 /**
@@ -224,6 +226,8 @@ export const CRITICAL_EVENTS: ReadonlyArray<NotificationEvent> = [
   'auth.email_change_confirm',
   'auth.email_verification',
   'auth.login_from_new_device',
+  // reports: сенс фічі — саме email; opt-in на рівні агенції, тому prefs не питаємо
+  'reports.monthly',
   // billing
   'billing.invoice_sent',
   'billing.invoice_paid',

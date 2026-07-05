@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Card, EmptyState, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
-import { type HoursReport, useHoursReport } from '@/lib/reports'
+import {
+  type HoursReport,
+  type LeadSourceRow,
+  type SlaSideStats,
+  useHoursReport,
+  useLeadSourceReport,
+  useSlaReport,
+} from '@/lib/reports'
 import { type ExportTable } from '@/lib/exportTable'
 import { ExportButtons } from '@/components/ExportButtons'
 
@@ -55,7 +62,214 @@ const dateInput = (value: string, onChange: (v: string) => void) => (
   />
 )
 
-/** Звіти — hours plan-vs-actual (19, 12-ПЛАН-ФАКТ). Owner-only (route-gated). */
+/** «92% · 11/12 вчасно» — компактне подання SLA-сторони; pending не тягне % вниз. */
+function slaCell(s: SlaSideStats) {
+  const judged = s.met + s.late
+  const color =
+    s.compliancePct == null
+      ? 'var(--wf-fg-muted)'
+      : s.compliancePct >= 90
+        ? 'var(--wf-accent)'
+        : s.compliancePct >= 70
+          ? 'var(--wf-warning)'
+          : 'var(--wf-destructive)'
+  return (
+    <span>
+      <span style={{ color, fontWeight: 600 }}>
+        {s.compliancePct == null ? '—' : `${s.compliancePct}%`}
+      </span>
+      <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        {judged > 0 ? ` · ${s.met}/${judged} вчасно` : ''}
+        {s.pending > 0 ? ` · ${s.pending} в очік.` : ''}
+      </span>
+    </span>
+  )
+}
+
+const fmtMoneyBag = (bag: Record<string, number>): string => {
+  const parts = Object.entries(bag).map(([cur, amt]) => `${amt} ${cur}`)
+  return parts.length > 0 ? parts.join(' · ') : '—'
+}
+
+const SOURCE_KIND_LABEL: Record<LeadSourceRow['kind'], string> = {
+  utm: 'utm',
+  manual: 'вручну',
+  none: '—',
+}
+
+/** SLA-compliance блок (S11): загальні % + розріз по виконавцях + список порушень. */
+function SlaSection({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = useSlaReport(from, to)
+  if (isLoading) return <Skeleton style={{ height: 200 }} />
+  if (!data || data.total === 0) {
+    return (
+      <Card title="SLA-виконання" style={{ marginBottom: 20 }}>
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // за період немає замовлень із SLA (політики → налаштування, штампуються при створенні)
+        </div>
+      </Card>
+    )
+  }
+  return (
+    <Card title={`SLA-виконання · ${data.total} замовл. із SLA`} style={{ marginBottom: 20 }}>
+      <div className="wfp-stats" style={{ marginBottom: 14 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">перша відповідь</div>
+          <div className="wfp-stat-v">{slaCell(data.firstResponse)}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">розв’язання</div>
+          <div className="wfp-stat-v">{slaCell(data.resolution)}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">порушення</div>
+          <div
+            className="wfp-stat-v"
+            style={{
+              color: data.breachedOrders.length > 0 ? 'var(--wf-destructive)' : 'var(--wf-accent)',
+            }}
+          >
+            {data.breachedOrders.length}
+          </div>
+        </div>
+      </div>
+      {data.byAssignee.length > 0 && (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Виконавець</th>
+              <th className="wfp-num">Замовлень</th>
+              <th>Перша відповідь</th>
+              <th>Розв’язання</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.byAssignee.map((r) => (
+              <tr key={r.assigneeId ?? '(none)'}>
+                <td>{r.name}</td>
+                <td className="wfp-num">{r.total}</td>
+                <td>{slaCell(r.firstResponse)}</td>
+                <td>{slaCell(r.resolution)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {data.breachedOrders.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+          >
+            // останні порушення
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {data.breachedOrders.slice(0, 8).map((b) => (
+              <div key={`${b.orderId}-${b.kind}`} style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+                <span
+                  className="wfp-mono"
+                  style={{ fontSize: 11, color: 'var(--wf-destructive)', width: 120 }}
+                >
+                  {b.kind === 'first_response' ? 'відповідь' : 'розв’язання'}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>{b.title}</span>
+                <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  {b.assigneeName ?? 'без виконавця'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Джерела лідів (S11): utm-source → воронка → гроші (per-currency, без зшивання курсів). */
+function LeadSourcesSection({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = useLeadSourceReport(from, to)
+  if (isLoading) return <Skeleton style={{ height: 200 }} />
+  if (!data || data.totalLeads === 0) {
+    return (
+      <Card title="Джерела лідів" style={{ marginBottom: 20 }}>
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // за період лідів немає
+        </div>
+      </Card>
+    )
+  }
+  return (
+    <Card title={`Джерела лідів · ${data.totalLeads} за період`} style={{ marginBottom: 20 }}>
+      <table className="wfp-table">
+        <thead>
+          <tr>
+            <th>Джерело</th>
+            <th className="wfp-num">Лідів</th>
+            <th className="wfp-num">Виграно</th>
+            <th className="wfp-num">Конверсія</th>
+            <th className="wfp-num">Виставлено</th>
+            <th className="wfp-num">Оплачено</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.rows.map((r) => (
+            <tr key={r.source}>
+              <td>
+                {r.source}{' '}
+                <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                  {SOURCE_KIND_LABEL[r.kind]}
+                </span>
+              </td>
+              <td className="wfp-num">{r.leads}</td>
+              <td className="wfp-num">
+                {r.won}
+                {r.lost > 0 && (
+                  <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                    {' '}
+                    / −{r.lost}
+                  </span>
+                )}
+              </td>
+              <td className="wfp-num">{r.conversionPct == null ? '—' : `${r.conversionPct}%`}</td>
+              <td className="wfp-num">{fmtMoneyBag(r.revenue)}</td>
+              <td className="wfp-num" style={{ color: 'var(--wf-accent)' }}>
+                {fmtMoneyBag(r.paidRevenue)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.campaigns.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+          >
+            // топ-кампанії (utm_campaign)
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {data.campaigns.map((c) => (
+              <div
+                key={`${c.source}-${c.campaign}`}
+                style={{ display: 'flex', gap: 8, fontSize: 13 }}
+              >
+                <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  {c.source} /
+                </span>
+                <span style={{ flex: 1 }}>{c.campaign}</span>
+                <span className="wfp-mono" style={{ fontSize: 11 }}>
+                  {c.leads} лідів · {c.won} won
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Звіти — hours plan-vs-actual (19, 12-ПЛАН-ФАКТ) + SLA + джерела лідів (S11). Owner-only (route-gated). */
 export function ReportsPage() {
   const range = useMemo(() => {
     const d = new Date()
@@ -88,6 +302,9 @@ export function ReportsPage() {
           />
         </span>
       </div>
+
+      <SlaSection from={from} to={to} />
+      <LeadSourcesSection from={from} to={to} />
 
       {isLoading ? (
         <Skeleton style={{ height: 280 }} />

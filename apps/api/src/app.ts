@@ -27,6 +27,7 @@ import teamRoutes from './routes/team/index.js'
 import telegramLinkRoutes from './routes/telegram/index.js'
 import tenantBrandingRoute from './routes/tenant/branding.js'
 import agencySecurityRoute from './routes/tenant/agencySecurity.js'
+import agencyReportsRoute from './routes/tenant/agencyReports.js'
 import searchRoute from './routes/search.js'
 import walletRoutes from './routes/wallet/index.js'
 
@@ -96,6 +97,7 @@ export function buildApp() {
   app.register(healthRoute)
   app.register(tenantBrandingRoute)
   app.register(agencySecurityRoute)
+  app.register(agencyReportsRoute)
   app.register(searchRoute)
   app.register(authRoutes)
   app.register(profileRoutes)

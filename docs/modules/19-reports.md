@@ -218,3 +218,22 @@ New: ReportSchedule, ReportDefinition; revenue_monthly_mv (migration)
 | 19-Д | **Порівняння періодів**                        | [бек дрібний]      | ±% MoM на дашборді                                                                                                                        |
 
 **Для ТЗ дизайнеру:** 5 екранів звітів v1 (А); шаблон місячного звіту клієнта — PDF + Portal-вигляд (Г); дельти на дашборді (Д).
+
+> **UPDATE 05.07.2026 — зріз S11 «звіти-надбудови» реалізовано:**
+>
+> - **SLA-compliance** — `GET /workspace/reports/sla?from&to` (owner): met/late/pending для
+>   першої відповіді та розвʼязання, % лише по «розсуджених» (pending не тягне вниз),
+>   розріз по виконавцях + список останніх порушень. Момент закриття (`doneAt`) береться з
+>   ActivityLog (`status_changed`→done; fallback updatedAt — у Order нема doneAt).
+>   Скасовані — поза знаменником розвʼязання. UI: блок на `/reports`.
+> - **Джерела лідів** — `GET /workspace/reports/lead-sources?from&to` (owner): групування
+>   utmSource → ручне source → «(без джерела)», воронка (won/lost/converted, % конверсії),
+>   гроші зі сконвертованих замовлень **per-currency** (курси не зшиваються): виставлено
+>   (totalAmount??fixedPrice) і оплачено (paidAt). + топ-кампанії (utm_campaign). Закриває 26-В.
+> - **Місячний email-дайджест власнику** — `Agency.monthlyReportEnabled` (owner-тумблер у
+>   /settings «Звіти на email», `GET/PATCH /workspace/agency/report-settings`) + cron
+>   `C-monthly_report` (доба): за ПОПЕРЕДНІЙ UTC-місяць власникам летить лист
+>   `reports.monthly` (CRITICAL) — замовлення/оплати/години/ліди/SLA. Одна відправка на
+>   місяць гейтиться `monthlyReportLastSentAt`; щойно увімкнули → перший лист на наступному
+>   прогоні. **Це НЕ 19-Г** (клієнтський місячний звіт із PDF по білінг-циклу — досі відкритий);
+>   це owner-дайджест на тих самих сервісах.

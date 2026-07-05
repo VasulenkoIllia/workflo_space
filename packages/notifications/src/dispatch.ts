@@ -26,6 +26,7 @@ import {
   renderMagicLinkEmail,
   renderEmailChangeConfirmEmail,
   renderEmailChangeRequestedEmail,
+  renderMonthlyReportEmail,
 } from './email/templates/index.js'
 import {
   renderApprovalDecidedTelegram,
@@ -72,6 +73,7 @@ export type EventPayloadMap = {
   'auth.magic_link': { loginUrl: string }
   'auth.email_change_confirm': { confirmUrl: string }
   'auth.email_change_requested': { newEmail: string }
+  'reports.monthly': { periodLabel: string; rows: [string, string][] }
   // One event, two templates: companyName present → company-member invite,
   // else executor invite (expiresAt used by the executor template).
   'system.invite_sent': {
@@ -154,6 +156,10 @@ export function renderEmailForEvent(
         newEmail: (vars as EventPayloadMap['auth.email_change_requested']).newEmail,
         locale,
       })
+    case 'reports.monthly': {
+      const v = vars as EventPayloadMap['reports.monthly']
+      return renderMonthlyReportEmail({ periodLabel: v.periodLabel, rows: v.rows, locale })
+    }
     case 'system.invite_sent': {
       // One event, two templates — disambiguated by presence of companyName.
       const v = vars as {

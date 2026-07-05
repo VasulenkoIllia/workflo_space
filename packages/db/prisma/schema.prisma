@@ -1255,6 +1255,11 @@ model Agency {
   // Portal clients are never affected. null = policy off.
   requireTwoFactorAt DateTime? @db.Timestamptz(3)
 
+  // S11 scheduled email-звіти: owner-тумблер «місячний звіт на email». Cron шле
+  // власникам дайджест за попередній місяць; lastSentAt гейтить одну відправку на місяць.
+  monthlyReportEnabled    Boolean   @default(false)
+  monthlyReportLastSentAt DateTime? @db.Timestamptz(3)
+
   members          AgencyMember[]
   companies        Company[]
   orders           Order[]

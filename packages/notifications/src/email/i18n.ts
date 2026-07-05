@@ -65,6 +65,14 @@ const uk: Dictionary = {
   'emailChangeRequested.body':
     'На вашому акаунті Workflo запитано зміну адреси на {newEmail}. Якщо це були ви — підтвердіть лист на новій адресі.',
   'emailChangeRequested.warn': 'Якщо це не ви — негайно змініть пароль у налаштуваннях.',
+
+  // S11 monthly digest
+  'monthlyReport.subject': 'Місячний звіт агенції',
+  'monthlyReport.body':
+    'Короткий підсумок минулого місяця по вашій агенції у Workflo. Деталі — у розділі «Звіти».',
+  'monthlyReport.footer':
+    'Розсилку можна вимкнути в налаштуваннях агенції (розділ «Звіти на email»).',
+
   'passwordReset.subject': 'Скидання пароля Workflo',
   'passwordReset.h1': 'Скидання пароля',
   'passwordReset.body':
@@ -209,6 +217,13 @@ const en: Dictionary = {
   'emailChangeRequested.body':
     'A change of your Workflo account address to {newEmail} was requested. If it was you, confirm the email sent to the new address.',
   'emailChangeRequested.warn': 'If this was not you, change your password immediately.',
+
+  // S11 monthly digest
+  'monthlyReport.subject': 'Agency monthly report',
+  'monthlyReport.body':
+    'A short summary of last month for your agency in Workflo. Details are in the Reports section.',
+  'monthlyReport.footer': 'You can disable this digest in agency settings ("Email reports").',
+
   'passwordReset.subject': 'Reset your Workflo password',
   'passwordReset.h1': 'Reset password',
   'passwordReset.body':

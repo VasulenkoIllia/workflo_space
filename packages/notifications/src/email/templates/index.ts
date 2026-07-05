@@ -33,3 +33,4 @@ export {
   type EmailChangeConfirmEmailVars,
   type EmailChangeRequestedEmailVars,
 } from './authPack.js'
+export { renderMonthlyReportEmail, type MonthlyReportEmailVars } from './monthlyReport.js'

@@ -116,6 +116,55 @@ function AgencySecuritySection() {
   )
 }
 
+/** S11 (owner-only): тумблер «місячний звіт на email» — cron шле власникам дайджест
+ * за попередній місяць (замовлення/гроші/ліди/SLA). */
+function EmailReportsSection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['agency-report-settings'],
+    queryFn: () =>
+      api.get<{ monthlyReportEnabled: boolean; monthlyReportLastSentAt: string | null }>(
+        '/workspace/agency/report-settings'
+      ),
+  })
+  const patch = useMutation({
+    mutationFn: (monthlyReportEnabled: boolean) =>
+      api.patch('/workspace/agency/report-settings', { monthlyReportEnabled }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-report-settings'] }),
+  })
+
+  if (isLoading) return <Skeleton style={{ height: 80 }} />
+  if (!data) return null
+
+  return (
+    <Card title="Звіти на email">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+        <input
+          type="checkbox"
+          checked={data.monthlyReportEnabled}
+          disabled={patch.isPending}
+          onChange={(e) =>
+            patch.mutate(e.target.checked, {
+              onSuccess: () =>
+                toast.success(
+                  e.target.checked
+                    ? 'Місячний звіт увімкнено — перший лист прийде на наступному прогоні'
+                    : 'Місячний звіт вимкнено'
+                ),
+            })
+          }
+        />
+        Місячний звіт власникам на email
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        {data.monthlyReportLastSentAt
+          ? `// дайджест за попередній місяць: замовлення · гроші · ліди · SLA. Останній: ${formatDate(data.monthlyReportLastSentAt)}`
+          : '// дайджест за попередній місяць: замовлення · гроші · ліди · SLA. Ще не надсилався.'}
+      </div>
+    </Card>
+  )
+}
+
 function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
   const save = useSavePaymentSettings()
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
@@ -610,6 +659,7 @@ export function SettingsPage() {
       <div style={{ display: 'grid', gap: 18 }}>
         <TwoFactorSection app="workspace" />
         {isOwner && <AgencySecuritySection />}
+        {isOwner && <EmailReportsSection />}
         {isOwner && <OrderCatalogSection />}
         {isOwner && <SlaPoliciesSection />}
         <LinkedAccountsSection app="workspace" />

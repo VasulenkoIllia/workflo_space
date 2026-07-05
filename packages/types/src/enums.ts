@@ -368,6 +368,8 @@ export type NotificationEvent =
   | 'auth.magic_link'
   | 'auth.email_change_requested'
   | 'auth.email_change_confirm'
+  // S11: місячний email-дайджест власнику (owner-тумблер у settings)
+  | 'reports.monthly'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {
