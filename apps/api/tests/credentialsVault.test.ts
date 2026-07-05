@@ -525,3 +525,70 @@ describe('revoke + delete', () => {
     await app.close()
   })
 })
+
+describe('17-Д typed templates (agency side)', () => {
+  it('typed create stores public fields plain + secrets encrypted; reveal returns fields', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.create.mockResolvedValue({
+      ...metaRow,
+      resourceType: 'api',
+      publicFields: [{ kind: 'url', value: 'https://api.x' }],
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'Stripe',
+        resourceType: 'api',
+        fields: [
+          { kind: 'url', value: 'https://api.x' },
+          { kind: 'api_key', value: 'sk_live_42' },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const arg = db.credentialVault.create.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(arg.data.resourceType).toBe('api')
+    expect(arg.data.publicFields).toEqual([{ kind: 'url', value: 'https://api.x' }])
+    expect(JSON.stringify(arg.data.publicFields)).not.toContain('sk_live_42')
+    expect(JSON.stringify(res.json())).not.toContain('sk_live_42')
+
+    // reveal returns the structured secret fields
+    const enc = encryptSecret(JSON.stringify([{ kind: 'api_key', value: 'sk_live_42' }]), getKek()!)
+    db.credentialVault.findFirst.mockResolvedValue({
+      id: CRED,
+      revokedAt: null,
+      resourceType: 'api',
+      ...enc,
+    })
+    const rev = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(rev.statusCode).toBe(200)
+    expect(rev.json().data.secretFields).toEqual([{ kind: 'api_key', value: 'sk_live_42' }])
+    await app.close()
+  })
+
+  it('typed create without secret fields → 400', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'X',
+        resourceType: 'crm',
+        fields: [{ kind: 'login', value: 'admin' }],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(db.credentialVault.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+})

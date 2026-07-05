@@ -28,3 +28,4 @@ export * from './orderChat.js'
 export * from './OrderChatView.js'
 // Shared Settings sections — 2FA / sessions / linked accounts / notifications / telegram.
 export * from './SettingsSections.js'
+export * from './VaultTypedFields.js'

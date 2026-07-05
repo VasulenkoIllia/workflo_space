@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { apiErrorMessage } from '@/lib/api'
-import { LoyaltyTier, OrderInternalStatus } from '@workflo/types'
+import {
+  LoyaltyTier,
+  OrderInternalStatus,
+  type VaultField,
+  type VaultResourceType,
+} from '@workflo/types'
+import { VAULT_TYPE_OPTIONS, VaultTypedFieldsEditor } from '@workflo/app-core'
 import { Avatar, Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
@@ -459,6 +465,13 @@ function SecretsSection({ companyId }: { companyId: string }) {
   )
 }
 
+const DEFAULT_TYPED_FIELDS: VaultField[] = [
+  { kind: 'url', value: '' },
+  { kind: 'login', value: '' },
+  { kind: 'password', value: '' },
+]
+
+/** 17-Д: typed card builder — resource type + a dynamic field list from the shared catalog. */
 function AddCredentialForm({
   create,
   onDone,
@@ -466,34 +479,25 @@ function AddCredentialForm({
   create: ReturnType<typeof useCreateCredential>
   onDone: () => void
 }) {
-  const [f, setF] = useState({
-    label: '',
-    service: '',
-    url: '',
-    username: '',
-    secret: '',
-    notes: '',
-  })
-  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const [label, setLabel] = useState('')
+  const [resourceType, setResourceType] = useState<VaultResourceType>('other')
+  const [fields, setFields] = useState<VaultField[]>(DEFAULT_TYPED_FIELDS)
+  const [notes, setNotes] = useState('')
 
   const submit = () => {
-    if (f.label.trim() === '') {
+    const filled = fields
+      .map((f) => ({ ...f, value: f.value.trim() }))
+      .filter((f) => f.value !== '')
+    if (label.trim() === '') {
       toast.error('Вкажіть назву')
       return
     }
-    if (f.secret === '') {
-      toast.error('Вкажіть секрет')
+    if (filled.length === 0) {
+      toast.error('Заповніть хоча б одне поле')
       return
     }
     create.mutate(
-      {
-        label: f.label.trim(),
-        service: f.service.trim() || null,
-        url: f.url.trim() || null,
-        username: f.username.trim() || null,
-        secret: f.secret,
-        notes: f.notes.trim() || null,
-      },
+      { label: label.trim(), resourceType, fields: filled, notes: notes.trim() || null },
       {
         onSuccess: () => {
           toast.success('Секрет додано')
@@ -513,38 +517,25 @@ function AddCredentialForm({
         gap: 10,
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          gap: 10,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        }}
-      >
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 200px' }}>
         <Input
           label="Назва"
-          value={f.label}
+          value={label}
           placeholder="Bitrix24 admin"
-          onChange={(e) => set('label', e.target.value)}
+          onChange={(e) => setLabel(e.target.value)}
         />
-        <Input
-          label="Сервіс"
-          value={f.service}
-          placeholder="bitrix24 / ftp / …"
-          onChange={(e) => set('service', e.target.value)}
+        <Select
+          label="Тип"
+          value={resourceType}
+          onChange={(v) => setResourceType(v as VaultResourceType)}
+          options={VAULT_TYPE_OPTIONS}
         />
-        <Input label="URL" value={f.url} onChange={(e) => set('url', e.target.value)} />
-        <Input label="Логін" value={f.username} onChange={(e) => set('username', e.target.value)} />
       </div>
-      <Input
-        label="Секрет / пароль"
-        type="password"
-        value={f.secret}
-        onChange={(e) => set('secret', e.target.value)}
-      />
+      <VaultTypedFieldsEditor fields={fields} onChange={setFields} />
       <Input
         label="Нотатки (без секретів)"
-        value={f.notes}
-        onChange={(e) => set('notes', e.target.value)}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
       />
       <div style={{ display: 'flex', gap: 8 }}>
         <Button variant="primary" loading={create.isPending} onClick={submit}>

@@ -89,7 +89,7 @@
 
 1. **Лендінг EN-i18n + рестрктуризація** (коли визначиш фінальні тексти/структуру) → Lighthouse≥90.
 2. **Leads-добудова** — ✅ lead-detail, ✅ lost-reason при drag, ✅ % конверсії, ✅ **UTM з contact-форми** (05.07), ✅ **activity-timeline** (05.07); лишок: пайплайн-редактор (custom-стадії — окремий зріз зі схемою).
-3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** (обидва 05.07). Лишок: executor-share, ротація-нагадування, типізовані шаблони (17-Д). _Примітка: TOTP-2FA (замість пароля) — коли модуль 01 видаватиме authenticator-secret._
+3. **Vault/Секрети (модуль 17)** — ✅ agency-side MVP + ✅ глобальний список (17-ГЛОБАЛ) + ✅ журнал доступів owner-facing (17-Б) + ✅ **2FA на reveal** (step-up повторним паролем, grant 5хв) + ✅ **portal self-service (17-А)** + ✅ **журнал клієнту (17-Б portal-side)** + ✅ **типізовані шаблони (17-Д)** (усі 05.07). Лишок: executor-share, ротація-нагадування. _Примітки: TOTP-2FA — коли модуль 01 видаватиме authenticator-secret; каталог типів 17-Д — тимчасовий з design-v2, фінальний перелік від власника підміняється у `VAULT_RESOURCE_TYPES` (@workflo/types)._
 4. ✅ **Member-mgmt write — зроблено** (owner-only, email-флоу): invite client member (POST `…/members/invite`, reuse portal-accept) + reset-password on-behalf (POST `…/members/:profileId/reset-password`, reuse forgot-password machinery).
 5. **DR/інфра-блок** (беклог) — перед першим зовнішнім платним тенантом (див. нижче).
 
@@ -125,6 +125,25 @@
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **Vault типізовані шаблони секретів (17-Д) — ЗАКРИТО (2026-07-05).** Каталог
+  `VAULT_RESOURCE_TYPES` (crm/server/hosting/api/db/other) + `VAULT_FIELD_KINDS` (url/login/
+  email/note відкриті · password/api_key/token/secret_w 🔒) у `@workflo/types` — **єдина точка
+  підміни** під фінальний перелік власника (патерн REACTION_EMOJIS; БД не мігрувати). Міграція
+  `20260705_vault_typed_templates` (additive, drift-free): `credential_vault` += `resourceType`
+  - `publicFields Json`. **Секретні поля картки — один envelope-пейлоад** (JSON-масив у наявних
+    ciphertext-колонках) → одна audit-подія і один тік throttle на reveal картки; legacy-рядки
+    (resourceType null) працюють без змін. `services/vaultFields.ts` спільний для обох роутів;
+    create приймає обидва шейпи (typed вимагає ≥1 🔒-поля — 400 на all-public), невідомий
+    тип/kind → 400; reveal typed → `secretFields[]`. UI — **спільні компоненти в
+    `@workflo/app-core`** (`VaultTypedFieldsEditor` — kind-select+значення+«+ поле»;
+    `VaultTypedCardFields` — відкриті поля з per-field «копіювати», секретні маскою до reveal):
+    підключено в portal `/secrets` (модалка) і workspace client-360 add-форму + `SecretRow`
+    (обидва `/vault` і таб «Секрети»). Гейт: +6 тестів (api **743** unit), turbo 56/56. Вживу:
+    клієнт створив typed-картку KeyCRM (url+login+password+api_key) → відкриті поля видно одразу,
+    секретні «••••» → reveal через пароль → «Пароль … копіювати · API-ключ … копіювати» (скрін);
+    owner бачить ту саму картку в workspace `/vault`. Лишок 17: executor-share,
+    ротація-нагадування, TOTP-модал.
 
 - **Vault portal self-service + журнал клієнту (17-А + 17-Б portal-side) — ЗАКРИТО (2026-07-05).**
   Новий `portalCredentials.ts`: `/portal/vault/step-up` + `/portal/credentials`

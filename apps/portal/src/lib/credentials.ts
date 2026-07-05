@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiErrorCode } from '@workflo/types'
+import { ApiErrorCode, type VaultField, type VaultResourceType } from '@workflo/types'
 import { api } from '@/lib/api'
 
 /** Error code the reveal endpoint returns (HTTP 403) when a step-up grant is required. */
@@ -40,6 +40,10 @@ export interface PortalCredential {
   service: string | null
   url: string | null
   username: string | null
+  /** 17-Д: key of VAULT_RESOURCE_TYPES; null = legacy freeform row. */
+  resourceType: string | null
+  /** 17-Д: ordered NON-secret fields of a typed card (secret ones live behind /reveal). */
+  publicFields: VaultField[] | null
   notes: string | null
   revoked: boolean
   revokedAt: string | null
@@ -57,6 +61,20 @@ export interface PortalCredentialInput {
   notes?: string | null
 }
 
+/** 17-Д typed card create-body (mirrors the backend typedCreateSchema). */
+export interface PortalTypedCredentialInput {
+  label: string
+  resourceType: VaultResourceType
+  fields: VaultField[]
+  notes?: string | null
+}
+
+/** Reveal payload: legacy rows → `secret`, typed cards → `secretFields`. */
+export interface RevealResult {
+  secret?: string
+  secretFields?: VaultField[]
+}
+
 export function usePortalCredentials(enabled = true) {
   return useQuery({
     queryKey: ['portal-credentials'],
@@ -68,7 +86,7 @@ export function usePortalCredentials(enabled = true) {
 export function useCreatePortalCredential() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: PortalCredentialInput) =>
+    mutationFn: (body: PortalCredentialInput | PortalTypedCredentialInput) =>
       api.post<{ credential: PortalCredential }>('/portal/credentials', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['portal-credentials'] }),
   })
@@ -77,7 +95,7 @@ export function useCreatePortalCredential() {
 export function useRevealPortalCredential() {
   return useMutation({
     mutationFn: (credId: string) =>
-      api.post<{ secret: string }>(`/portal/credentials/${credId}/reveal`, {
+      api.post<RevealResult>(`/portal/credentials/${credId}/reveal`, {
         grant: getRevealGrant(),
       }),
   })

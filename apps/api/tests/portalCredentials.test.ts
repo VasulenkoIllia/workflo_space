@@ -413,3 +413,114 @@ describe('GET /portal/credentials/:credId/audit — client journal (17-Б)', () 
     await app.close()
   })
 })
+
+describe('17-Д typed templates (portal)', () => {
+  it('typed create splits fields: public plain, secret encrypted as JSON', async () => {
+    verifiedProfile()
+    db.credentialVault.create.mockResolvedValue({
+      ...metaRow,
+      resourceType: 'server',
+      publicFields: [{ kind: 'url', value: 'ssh://1.2.3.4' }],
+    })
+    const { app, token } = await authed(CLIENT_OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/portal/credentials',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: '1С сервер',
+        resourceType: 'server',
+        fields: [
+          { kind: 'url', value: 'ssh://1.2.3.4' },
+          { kind: 'login', value: 'root' },
+          { kind: 'password', value: 'sup3r' },
+          { kind: 'token', value: 'tok_123' },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const arg = db.credentialVault.create.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(arg.data.resourceType).toBe('server')
+    expect(arg.data.service).toBe('server')
+    // public half stored plain, secret half NOT among plain fields
+    expect(arg.data.publicFields).toEqual([
+      { kind: 'url', value: 'ssh://1.2.3.4' },
+      { kind: 'login', value: 'root' },
+    ])
+    expect(arg.data.ciphertext).toBeInstanceOf(Buffer)
+    const plainJson = JSON.stringify(arg.data.publicFields)
+    expect(plainJson).not.toContain('sup3r')
+    expect(plainJson).not.toContain('tok_123')
+    expect(JSON.stringify(res.json())).not.toContain('sup3r')
+    await app.close()
+  })
+
+  it('typed create with NO secret field → 400 (a vault card must protect something)', async () => {
+    verifiedProfile()
+    const { app, token } = await authed(CLIENT_OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/portal/credentials',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'Public only',
+        resourceType: 'crm',
+        fields: [{ kind: 'url', value: 'https://x' }],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(db.credentialVault.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('typed create with an unknown kind / type → 400', async () => {
+    verifiedProfile()
+    const { app, token } = await authed(CLIENT_OWNER)
+    const bad1 = await app.inject({
+      method: 'POST',
+      url: '/portal/credentials',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'X',
+        resourceType: 'spaceship',
+        fields: [{ kind: 'password', value: 'p' }],
+      },
+    })
+    expect(bad1.statusCode).toBe(400)
+    const bad2 = await app.inject({
+      method: 'POST',
+      url: '/portal/credentials',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { label: 'X', resourceType: 'crm', fields: [{ kind: 'pin_code', value: '1234' }] },
+    })
+    expect(bad2.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('reveal of a typed card returns structured secretFields', async () => {
+    verifiedProfile()
+    db.auditLog.count.mockResolvedValue(0) // the throttle test above left 10 in the shared mock
+    const secretFields = [
+      { kind: 'password', value: 'sup3r' },
+      { kind: 'api_key', value: 'key_9' },
+    ]
+    const enc = encryptSecret(JSON.stringify(secretFields), getKek()!)
+    db.credentialVault.findFirst.mockResolvedValue({
+      id: CRED,
+      revokedAt: null,
+      resourceType: 'server',
+      ...enc,
+    })
+    const { app, token } = await authed(CLIENT_OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/portal/credentials/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.secretFields).toEqual(secretFields)
+    expect(res.json().data.secret).toBeUndefined()
+    await app.close()
+  })
+})

@@ -175,6 +175,42 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
 export const REACTION_EMOJIS = ['👍', '✅', '🔥', '❤️', '😂', '👀'] as const
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number]
 
+/**
+ * 17-Д: типізовані шаблони секретів у Vault. Канон — design-v2 `WF_C360.RESOURCE_TYPES`/
+ * `FIELD_KINDS` (workspace-client360-data.js). «Перелік типів від власника» (рішення 11.06) —
+ * коли власник затвердить фінальний список, підмінюється ТУТ: API валідовує проти цих ключів,
+ * обидва фронти рендерять селект типу, поля картки та іконки з цього каталогу. БД не мігрувати —
+ * `resourceType`/`fields[].kind` лишаться ключами-ідентифікаторами.
+ */
+export const VAULT_RESOURCE_TYPES = {
+  crm: { label: 'CRM', icon: 'building' },
+  server: { label: 'Сервер', icon: 'shield' },
+  hosting: { label: 'Хостинг', icon: 'globe' },
+  api: { label: 'API / сервіс', icon: 'key' },
+  db: { label: 'База даних', icon: 'building' },
+  other: { label: 'Інше', icon: 'lock' },
+} as const
+export type VaultResourceType = keyof typeof VAULT_RESOURCE_TYPES
+
+/** Поля картки секрету: `secret: true` — значення шифрується і показується лише через reveal. */
+export const VAULT_FIELD_KINDS = {
+  url: { label: 'URL / ресурс', icon: 'globe', secret: false },
+  login: { label: 'Логін', icon: 'users', secret: false },
+  email: { label: 'Email', icon: 'mail', secret: false },
+  password: { label: 'Пароль', icon: 'lock', secret: true },
+  api_key: { label: 'API-ключ', icon: 'key', secret: true },
+  token: { label: 'Токен', icon: 'key', secret: true },
+  secret_w: { label: 'Secret / webhook', icon: 'shield', secret: true },
+  note: { label: 'Нотатка', icon: 'edit', secret: false },
+} as const
+export type VaultFieldKind = keyof typeof VAULT_FIELD_KINDS
+
+/** Одне поле типізованої картки секрету (kind → каталог VAULT_FIELD_KINDS). */
+export interface VaultField {
+  kind: VaultFieldKind
+  value: string
+}
+
 export const CRITICAL_EVENTS: ReadonlyArray<NotificationEvent> = [
   // auth
   'auth.password_reset',

@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import {
+  VAULT_TYPE_OPTIONS,
+  VaultTypedCardFields,
+  VaultTypedFieldsEditor,
+  vaultTypeLabel,
+} from '@workflo/app-core'
+import type { VaultField, VaultResourceType } from '@workflo/types'
 import { Button, Card, EmptyState, Icon, Input, Modal, Skeleton } from '@workflo/ui'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   hasValidRevealGrant,
   type PortalCredential,
-  type PortalCredentialInput,
+  type PortalTypedCredentialInput,
+  type RevealResult,
   STEP_UP_REQUIRED,
   useCreatePortalCredential,
   useDeletePortalCredential,
@@ -169,7 +177,7 @@ function PortalSecretRow({
   onNeedStepUp: (retry: () => void) => void
 }) {
   const reveal = useRevealPortalCredential()
-  const [shown, setShown] = useState<string | null>(null)
+  const [shown, setShown] = useState<RevealResult | null>(null)
   const [showLog, setShowLog] = useState(false)
   const audit = usePortalCredentialAudit(cred.id, showLog)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -185,7 +193,7 @@ function PortalSecretRow({
   const runReveal = () => {
     reveal.mutate(cred.id, {
       onSuccess: (r) => {
-        setShown(r.secret)
+        setShown(r)
         clearHideTimer()
         hideTimer.current = setTimeout(() => setShown(null), AUTO_HIDE_MS)
       },
@@ -206,10 +214,12 @@ function PortalSecretRow({
     else onNeedStepUp(runReveal)
   }
   const copy = () => {
-    if (shown == null) return
-    void navigator.clipboard?.writeText(shown)
+    if (shown?.secret == null) return
+    void navigator.clipboard?.writeText(shown.secret)
     toast.success('Скопійовано')
   }
+  const isTyped = cred.resourceType != null
+  const typeLabel = vaultTypeLabel(cred.resourceType)
 
   return (
     <div
@@ -231,12 +241,12 @@ function PortalSecretRow({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 500 }}>
             {cred.label}
-            {cred.service && (
+            {(typeLabel ?? cred.service) && (
               <span
                 className="wfp-mono"
                 style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
               >
-                {cred.service}
+                {typeLabel ?? cred.service}
               </span>
             )}
             {cred.mine && (
@@ -305,7 +315,15 @@ function PortalSecretRow({
         </div>
       </div>
 
-      {shown != null && (
+      {/* 17-Д typed card: public fields always visible, secret fields after reveal */}
+      {isTyped && (
+        <VaultTypedCardFields
+          publicFields={cred.publicFields ?? []}
+          secretFields={shown?.secretFields ?? null}
+        />
+      )}
+
+      {!isTyped && shown?.secret != null && (
         <div
           style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}
         >
@@ -319,7 +337,7 @@ function PortalSecretRow({
               wordBreak: 'break-all',
             }}
           >
-            {shown}
+            {shown.secret}
           </code>
           <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={copy}>
             копіювати
@@ -357,39 +375,49 @@ function PortalSecretRow({
   )
 }
 
+const DEFAULT_TYPED_FIELDS: VaultField[] = [
+  { kind: 'url', value: '' },
+  { kind: 'login', value: '' },
+  { kind: 'password', value: '' },
+]
+
+/** 17-Д: typed card builder — resource type + a dynamic field list from the shared catalog. */
 function AddSecretModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreatePortalCredential()
-  const [f, setF] = useState({
-    label: '',
-    service: '',
-    url: '',
-    username: '',
-    secret: '',
-    notes: '',
-  })
-  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
+  const [label, setLabel] = useState('')
+  const [resourceType, setResourceType] = useState<VaultResourceType>('other')
+  const [fields, setFields] = useState<VaultField[]>(DEFAULT_TYPED_FIELDS)
+  const [notes, setNotes] = useState('')
 
   const close = () => {
-    setF({ label: '', service: '', url: '', username: '', secret: '', notes: '' })
+    setLabel('')
+    setResourceType('other')
+    setFields(DEFAULT_TYPED_FIELDS)
+    setNotes('')
     onClose()
   }
 
   const submit = () => {
-    if (f.label.trim() === '' || f.secret === '') {
-      toast.error('Назва і значення секрету обовʼязкові')
+    const filled = fields
+      .map((f) => ({ ...f, value: f.value.trim() }))
+      .filter((f) => f.value !== '')
+    if (label.trim() === '') {
+      toast.error('Вкажіть назву ресурсу')
       return
     }
-    const body: PortalCredentialInput = {
-      label: f.label.trim(),
-      service: f.service.trim() || null,
-      url: f.url.trim() || null,
-      username: f.username.trim() || null,
-      secret: f.secret,
-      notes: f.notes.trim() || null,
+    if (filled.length === 0) {
+      toast.error('Заповніть хоча б одне поле')
+      return
+    }
+    const body: PortalTypedCredentialInput = {
+      label: label.trim(),
+      resourceType,
+      fields: filled,
+      notes: notes.trim() || null,
     }
     create.mutate(body, {
       onSuccess: () => {
-        toast.success('Секрет збережено (зашифровано)')
+        toast.success('Ресурс збережено (секретні поля зашифровано)')
         close()
       },
     })
@@ -398,47 +426,46 @@ function AddSecretModal({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <Modal open={open} onClose={close} title="Додати ресурс">
       <div style={{ display: 'grid', gap: 12 }}>
-        <Input
-          label="Назва *"
-          placeholder="Напр. «Адмінка сайту»"
-          value={f.label}
-          onChange={(e) => set('label', e.target.value)}
-        />
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 180px' }}>
           <Input
-            label="Сервіс"
-            placeholder="wordpress / ftp / crm…"
-            value={f.service}
-            onChange={(e) => set('service', e.target.value)}
+            label="Назва *"
+            placeholder="Напр. «Адмінка сайту»"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
           />
-          <Input
-            label="Логін"
-            value={f.username}
-            onChange={(e) => set('username', e.target.value)}
-          />
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+              ТИП
+            </span>
+            <select
+              style={{
+                background: 'var(--wf-surface)',
+                color: 'var(--wf-fg)',
+                border: '1px solid var(--wf-border)',
+                borderRadius: 'var(--wf-radius)',
+                padding: '8px 10px',
+                fontSize: 13,
+              }}
+              value={resourceType}
+              onChange={(e) => setResourceType(e.target.value as VaultResourceType)}
+            >
+              {VAULT_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <Input
-          label="URL входу"
-          placeholder="https://…"
-          value={f.url}
-          onChange={(e) => set('url', e.target.value)}
-        />
-        <Input
-          label="Секрет (пароль / ключ / токен) *"
-          type="password"
-          value={f.secret}
-          onChange={(e) => set('secret', e.target.value)}
-        />
+
+        <VaultTypedFieldsEditor fields={fields} onChange={setFields} />
+
         <Input
           label="Нотатки"
           placeholder="Необовʼязково"
-          value={f.notes}
-          onChange={(e) => set('notes', e.target.value)}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
         />
-        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-          // значення буде зашифровано; команда агенції побачить його лише через «показати» з
-          підтвердженням пароля
-        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button variant="primary" loading={create.isPending} onClick={submit}>
             Зберегти

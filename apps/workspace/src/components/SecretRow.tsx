@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import { VaultTypedCardFields, vaultTypeLabel } from '@workflo/app-core'
+import type { VaultField } from '@workflo/types'
 import {
   hasValidRevealGrant,
+  type RevealResult,
   STEP_UP_REQUIRED,
   useCredentialAudit,
   useRevealGlobal,
@@ -17,6 +20,8 @@ export interface SecretRowData {
   service: string | null
   url: string | null
   username: string | null
+  resourceType: string | null
+  publicFields: VaultField[] | null
   revoked: boolean
   companyName?: string | null
 }
@@ -55,10 +60,12 @@ export function SecretRow({
   formatDate: (iso: string) => string
 }) {
   const reveal = useRevealGlobal()
-  const [shown, setShown] = useState<string | null>(null)
+  const [shown, setShown] = useState<RevealResult | null>(null)
   const [showLog, setShowLog] = useState(false)
   const audit = useCredentialAudit(cred.companyId, cred.id, showLog && showJournal)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isTyped = cred.resourceType != null
+  const typeLabel = vaultTypeLabel(cred.resourceType)
 
   const clearHideTimer = () => {
     if (hideTimer.current !== null) {
@@ -74,7 +81,7 @@ export function SecretRow({
       { companyId: cred.companyId, credId: cred.id },
       {
         onSuccess: (r) => {
-          setShown(r.secret)
+          setShown(r)
           clearHideTimer()
           hideTimer.current = setTimeout(() => setShown(null), AUTO_HIDE_MS)
         },
@@ -100,8 +107,8 @@ export function SecretRow({
     else onNeedStepUp(runReveal)
   }
   const copy = () => {
-    if (shown == null) return
-    void navigator.clipboard?.writeText(shown)
+    if (shown?.secret == null) return
+    void navigator.clipboard?.writeText(shown.secret)
     toast.success('Скопійовано')
   }
 
@@ -125,12 +132,12 @@ export function SecretRow({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 500 }}>
             {cred.label}
-            {cred.service && (
+            {(typeLabel ?? cred.service) && (
               <span
                 className="wfp-mono"
                 style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginLeft: 8 }}
               >
-                {cred.service}
+                {typeLabel ?? cred.service}
               </span>
             )}
             {cred.revoked && (
@@ -197,7 +204,15 @@ export function SecretRow({
         </div>
       </div>
 
-      {shown != null && (
+      {/* 17-Д typed card: public fields always visible, secret fields after reveal */}
+      {isTyped && (
+        <VaultTypedCardFields
+          publicFields={cred.publicFields ?? []}
+          secretFields={shown?.secretFields ?? null}
+        />
+      )}
+
+      {!isTyped && shown?.secret != null && (
         <div
           style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}
         >
@@ -211,7 +226,7 @@ export function SecretRow({
               wordBreak: 'break-all',
             }}
           >
-            {shown}
+            {shown.secret}
           </code>
           <button type="button" className="wfp-link" style={{ fontSize: 12 }} onClick={copy}>
             копіювати

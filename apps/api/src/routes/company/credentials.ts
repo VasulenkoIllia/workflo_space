@@ -1,4 +1,4 @@
-import { prisma, withTenant } from '@workflo/db'
+import { type Prisma, prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
@@ -7,6 +7,12 @@ import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { verifyPassword } from '../../auth/password.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { decryptSecret, encryptSecret, requireKek } from '../../services/credentialCrypto.js'
+import {
+  isTypedCreateBody,
+  revealPayload,
+  splitTypedFields,
+  typedCreateSchema,
+} from '../../services/vaultFields.js'
 import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.js'
 
 /**
@@ -39,13 +45,16 @@ const stepUpSchema = z.object({ password: z.string().min(1).max(200) }).strict()
 const REVEAL_MAX_PER_WINDOW = 10
 const REVEAL_WINDOW_MS = 60 * 60 * 1000
 
-// Plain metadata only — never the ciphertext or envelope bytes.
+// Plain metadata only — never the ciphertext or envelope bytes. publicFields are the
+// NON-secret fields of a typed card (17-Д) — plain by definition.
 const LIST_SELECT = {
   id: true,
   label: true,
   service: true,
   url: true,
   username: true,
+  resourceType: true,
+  publicFields: true,
   notes: true,
   revokedAt: true,
   createdAt: true,
@@ -59,6 +68,8 @@ type ListRow = {
   service: string | null
   url: string | null
   username: string | null
+  resourceType: string | null
+  publicFields: unknown
   notes: string | null
   revokedAt: Date | null
   createdAt: Date
@@ -71,6 +82,8 @@ const toDto = (c: ListRow) => ({
   service: c.service,
   url: c.url,
   username: c.username,
+  resourceType: c.resourceType,
+  publicFields: c.publicFields ?? null,
   notes: c.notes,
   revoked: c.revokedAt != null,
   revokedAt: c.revokedAt,
@@ -242,22 +255,44 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const companyId = request.params.id
       const agencyId = await assertOwnerCompany(request.user, companyId)
-      const input = createSchema.parse(request.body)
       const kek = requireKek()
-      const enc = encryptSecret(input.secret, kek)
+
+      // 17-Д: typed card (resourceType + fields[]) or legacy freeform (single secret).
+      let data: Omit<
+        Prisma.CredentialVaultUncheckedCreateInput,
+        'agencyId' | 'companyId' | 'createdById'
+      >
+      if (isTypedCreateBody(request.body)) {
+        const input = typedCreateSchema.parse(request.body)
+        const { publicFields, secretPlaintext } = splitTypedFields(input.fields)
+        data = {
+          label: input.label,
+          service: input.resourceType, // keeps the /vault service filter meaningful
+          resourceType: input.resourceType,
+          // interface → Prisma JSON input (interfaces lack the implicit index signature)
+          publicFields: publicFields as unknown as Prisma.InputJsonValue,
+          notes: input.notes ?? null,
+          ...encryptSecret(secretPlaintext, kek),
+        }
+      } else {
+        const input = createSchema.parse(request.body)
+        data = {
+          label: input.label,
+          service: input.service ?? null,
+          url: input.url ?? null,
+          username: input.username ?? null,
+          notes: input.notes ?? null,
+          ...encryptSecret(input.secret, kek),
+        }
+      }
 
       const created = await withTenant((tx) =>
         tx.credentialVault.create({
           data: {
             agencyId,
             companyId,
-            label: input.label,
-            service: input.service ?? null,
-            url: input.url ?? null,
-            username: input.username ?? null,
-            notes: input.notes ?? null,
             createdById: request.user.sub,
-            ...enc,
+            ...data,
           },
           select: LIST_SELECT,
         })
@@ -331,6 +366,7 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
           select: {
             id: true,
             revokedAt: true,
+            resourceType: true,
             encryptedDek: true,
             dekIv: true,
             dekAuthTag: true,
@@ -359,7 +395,8 @@ const credentialsRoute: FastifyPluginAsync = (fastify) => {
 
       // Secrets must never be cached by any intermediary or the browser.
       void reply.header('Cache-Control', 'no-store')
-      return reply.send({ success: true, data: { secret } })
+      // 17-Д: typed rows return the decrypted secret FIELDS; legacy rows the raw string.
+      return reply.send({ success: true, data: revealPayload(row.resourceType, secret) })
     }
   )
 

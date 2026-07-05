@@ -1,4 +1,4 @@
-import { prisma, withTenant } from '@workflo/db'
+import { type Prisma, prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
@@ -8,6 +8,12 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { decryptSecret, encryptSecret, requireKek } from '../../services/credentialCrypto.js'
+import {
+  isTypedCreateBody,
+  revealPayload,
+  splitTypedFields,
+  typedCreateSchema,
+} from '../../services/vaultFields.js'
 import { issueRevealGrant, verifyRevealGrant } from '../../services/vaultGrant.js'
 
 /**
@@ -48,6 +54,8 @@ const LIST_SELECT = {
   service: true,
   url: true,
   username: true,
+  resourceType: true,
+  publicFields: true,
   notes: true,
   revokedAt: true,
   createdAt: true,
@@ -61,6 +69,8 @@ type ListRow = {
   service: string | null
   url: string | null
   username: string | null
+  resourceType: string | null
+  publicFields: unknown
   notes: string | null
   revokedAt: Date | null
   createdAt: Date
@@ -73,6 +83,8 @@ const toDto = (c: ListRow, viewerId: string) => ({
   service: c.service,
   url: c.url,
   username: c.username,
+  resourceType: c.resourceType,
+  publicFields: c.publicFields ?? null,
   notes: c.notes,
   revoked: c.revokedAt != null,
   revokedAt: c.revokedAt,
@@ -218,22 +230,44 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId, companyId } = assertVaultAccess(request.user, 'credentials.update')
       await requireVerifiedEmail(request.user.sub)
-      const input = createSchema.parse(request.body)
       const kek = requireKek()
-      const enc = encryptSecret(input.secret, kek)
+
+      // 17-Д: typed card (resourceType + fields[]) or legacy freeform (single secret).
+      let data: Omit<
+        Prisma.CredentialVaultUncheckedCreateInput,
+        'agencyId' | 'companyId' | 'createdById'
+      >
+      if (isTypedCreateBody(request.body)) {
+        const input = typedCreateSchema.parse(request.body)
+        const { publicFields, secretPlaintext } = splitTypedFields(input.fields)
+        data = {
+          label: input.label,
+          service: input.resourceType,
+          resourceType: input.resourceType,
+          // interface → Prisma JSON input (interfaces lack the implicit index signature)
+          publicFields: publicFields as unknown as Prisma.InputJsonValue,
+          notes: input.notes ?? null,
+          ...encryptSecret(secretPlaintext, kek),
+        }
+      } else {
+        const input = createSchema.parse(request.body)
+        data = {
+          label: input.label,
+          service: input.service ?? null,
+          url: input.url ?? null,
+          username: input.username ?? null,
+          notes: input.notes ?? null,
+          ...encryptSecret(input.secret, kek),
+        }
+      }
 
       const created = await withTenant((tx) =>
         tx.credentialVault.create({
           data: {
             agencyId,
             companyId,
-            label: input.label,
-            service: input.service ?? null,
-            url: input.url ?? null,
-            username: input.username ?? null,
-            notes: input.notes ?? null,
             createdById: request.user.sub,
-            ...enc,
+            ...data,
           },
           select: LIST_SELECT,
         })
@@ -304,6 +338,7 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
           select: {
             id: true,
             revokedAt: true,
+            resourceType: true,
             encryptedDek: true,
             dekIv: true,
             dekAuthTag: true,
@@ -336,7 +371,8 @@ const portalCredentialsRoute: FastifyPluginAsync = (fastify) => {
       })
 
       void reply.header('Cache-Control', 'no-store')
-      return reply.send({ success: true, data: { secret } })
+      // 17-Д: typed rows return the decrypted secret FIELDS; legacy rows the raw string.
+      return reply.send({ success: true, data: revealPayload(row.resourceType, secret) })
     }
   )
 
