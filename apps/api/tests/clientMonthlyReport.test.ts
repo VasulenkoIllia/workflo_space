@@ -26,6 +26,7 @@ vi.mock('@workflo/db', () => ({
     company: { findUnique: companyFindUnique },
     companyMember: { findMany: companyMemberFindMany },
     document: { create: documentCreate },
+    emailTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
     $queryRaw: queryRaw,
   },
   Prisma: {
@@ -38,6 +39,11 @@ vi.mock('@workflo/db', () => ({
 const sendMail = vi.fn().mockResolvedValue({})
 vi.mock('@workflo/notifications', () => ({
   notify: vi.fn(),
+  // 08-EMAIL: справжня сигнатура — без override лист лишається системним
+  applyEmailOverride: (
+    tpl: { subject: string; html: string },
+    override: { subject?: string | null } | undefined
+  ) => (override?.subject ? { ...tpl, subject: override.subject } : tpl),
   getMailer: () => ({ sendMail }),
   getActiveFrom: () => ({ name: 'workflo', address: 'no-reply@workflo.space' }),
   renderClientMonthlyReportEmail: (v: { periodLabel: string; agencyName: string }) => ({

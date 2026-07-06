@@ -18,6 +18,8 @@ export { resolveTargetChannels, type ResolverPrisma } from './resolver.js'
 
 // Dispatchers — exported for direct-send flows that bypass resolver (e.g. cron).
 export {
+  applyEmailOverride,
+  type EmailOverride,
   dispatchEmail,
   dispatchInApp,
   dispatchTelegram,

@@ -1151,6 +1151,26 @@ model DocumentTemplate {
   @@map("document_templates")
 }
 
+// 08-EMAIL (рішення власника 06.07): owner-override листів — ТЕМА + ВСТУПНИЙ ТЕКСТ
+// поверх системного макета, окремо uk/en, лише бізнес-листи (auth — системні).
+// event — NotificationEvent-ключ або псевдо-ключ ('reports.client_monthly').
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  event       String
+  locale      String // 'uk' | 'en'
+  subject     String?
+  intro       String?
+  updatedById String? // plain Profile id (project convention)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, event, locale])
+  @@index([agencyId])
+  @@map("email_templates")
+}
+
 model BlogPost {
   id          String       @id @default(uuid())
   slug        String       @unique
@@ -1302,6 +1322,7 @@ model Agency {
 
   members           AgencyMember[]
   documentTemplates DocumentTemplate[]
+  emailTemplates    EmailTemplate[]
   companies         Company[]
   orders            Order[]
   payments          Payment[]

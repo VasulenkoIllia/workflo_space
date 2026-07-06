@@ -12,6 +12,7 @@ import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import {
   DocumentTemplatesSection,
+  EmailTemplatesSection,
   PdfBrandingSection,
 } from '@/routes/settings/DocumentTemplatesSection'
 import { useAuth } from '@/contexts/AuthContext'
@@ -748,6 +749,7 @@ export function SettingsPage() {
         {isOwner && <WorkflowSection />}
         {isOwner && <DocumentTemplatesSection />}
         {isOwner && <PdfBrandingSection />}
+        {isOwner && <EmailTemplatesSection />}
         {isOwner && <OrderCatalogSection />}
         {isOwner && <SlaPoliciesSection />}
         <LinkedAccountsSection app="workspace" />

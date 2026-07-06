@@ -171,3 +171,42 @@ New: SuppressedEmail, AgencyEmailDomain; NotificationLog + messageId
 **Відхилено:** Б (email-міст у чат: reply на сповіщення → коментар) — остаточно (відкладався з 03).
 
 **Для ТЗ дизайнеру:** налаштування пошти тенанта: 3 рівні підключення + статус DNS-верифікації + матриця категорія→відправник (Г).
+
+---
+
+## UPDATE (06.07.2026) — 08-EMAIL: owner-редаговані шаблони листів ✅
+
+> Рішення власника (вікторина 06.07): **лише бізнес-листи** (auth-критичні — системні
+> назавжди), редагується **тема + вступний абзац** поверх системного макета, **uk та en
+> окремо**. Порожнє поле/локаль = системний текст.
+
+- **Модель:** `EmailTemplate { agencyId, event, locale, subject?, intro?, updatedById }`,
+  `@@unique([agencyId, event, locale])`, RLS `wf_in_tenant`. Міграція
+  `20260707_email_templates` (drift-free). Нема рядка = системний лист.
+- **Каталог:** `EDITABLE_EMAIL_EVENTS` (services/emailTemplates.ts) — 12 подій
+  (orders.created/status_changed/assigned/approval_requested/approval_decided,
+  chat.new_comment/mentioned, billing.invoice_sent/invoice_paid,
+  documents.completion_act_ready, reports.monthly + псевдо-подія reports.client_monthly)
+  з label та списком `{{змінних}}` (= ключі vars події; невідомий токен лишається видимим).
+- **Пакет notifications:** `EmailOverride { subject?, intro? }`; `applyEmailOverride`
+  підставляє `{{vars}}` у тему, а вступ (html-екранований) підміняє ПЕРШИЙ
+  `<p style="margin:0 0 16px;…">` фіксованого макета — верстку зламати неможливо.
+  `NotifyInput.emailOverrides` per-locale; `dispatchEmail` бере override за
+  `recipient.locale`.
+- **Резолв:** `resolveEmailOverrides(profileId, event)` — агенція з agencyMember або
+  companyMember→company.agencyId; читає через `withTenant` (email_templates під FORCE
+  RLS; у воркері контекст bypass, у запиті — tenant-GUC). Викликається у
+  `dispatchNotification` (fire-and-forget) і в **outbox-воркері** (обидва notify-шляхи:
+  status_changed-цикл і deliverToRecipients) — збій резолву ніколи не блокує доставку.
+  Cron клієнтського місячного звіту накладає override псевдо-події reports.client_monthly.
+- **API (owner-only):** GET/PUT/DELETE `/workspace/agency/email-templates[/:event]` —
+  events+templates; PUT приймає `{uk?, en?}`, обидва поля локалі порожні → deleteMany
+  локалі; невідома/auth-подія → 400; аудит-лог. UI: картка «Email-шаблони» у /settings
+  (селект події, бейдж системний/кастомний, підказка змінних, uk/en тема+вступ,
+  Зберегти/Скинути до системного).
+- **Verify вживу:** PUT override chat.new_comment → коментар власника → Mailpit-лист
+  клієнту з темою «[TEST-08] Workflo Owner написав у «Google Sheets дашборд продажів»» і
+  кастомним вступом з підставленим {{preview}}; системний вступ зник, решта макета ціла.
+  Reset з UI повернув «системний». Знайдено й виправлено дорогою: (1) резолв сирим prisma
+  упирався в RLS → withTenant; (2) чат/білінг-події шле outbox-воркер повз
+  dispatchNotification → override резолвиться і у воркері.

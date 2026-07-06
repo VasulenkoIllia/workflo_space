@@ -3,6 +3,7 @@ import { type NotifyDeps, type NotifyInput, notify } from '@workflo/notification
 import type { NotificationEvent } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
 import { writeAuditAsync } from './audit.js'
+import { resolveEmailOverrides } from './emailTemplates.js'
 
 /**
  * AR-24 (audit 2026-06-11): the notifications package does its own DB I/O, but it
@@ -108,7 +109,13 @@ export function dispatchNotification<E extends NotificationEvent>(
   input: NotifyInput<E>
 ): void {
   const deps = buildNotifyDeps(logger)
-  void notify(deps, input).catch((err: unknown) => {
+  void (async () => {
+    // 08-EMAIL: owner-override теми/вступу (лише бізнес-події; збій резолву не валить лист)
+    const emailOverrides =
+      input.emailOverrides ??
+      (await resolveEmailOverrides(input.profileId, input.event).catch(() => undefined))
+    await notify(deps, { ...input, emailOverrides })
+  })().catch((err: unknown) => {
     logger.error({ err, event: input.event, profileId: input.profileId }, 'notify dispatch failed')
   })
 }

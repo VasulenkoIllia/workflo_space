@@ -400,19 +400,59 @@ export function renderTelegramForEvent(
 }
 
 // ─── Single-channel dispatch helpers ────────────────────────────────────────
+/** 08-EMAIL: owner-override листа — тема + вступний абзац поверх системного макета. */
+export interface EmailOverride {
+  subject?: string | null
+  intro?: string | null
+}
+
+/** Підстановка {{ключ}} зі значень vars події; невідомий токен лишається видимим. */
+function substituteEventVars(text: string, vars: Record<string, unknown>): string {
+  return text.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (token, key: string) => {
+    const value = vars[key]
+    if (value === undefined || value === null || typeof value === 'object') return token
+    return String(value as string | number | boolean)
+  })
+}
+
+/**
+ * 08-EMAIL: накласти override. intro підміняє ПЕРШИЙ <p> системного листа (наш
+ * фіксований макет: heading → lead-параграф → решта) — верстку зламати неможливо.
+ */
+export function applyEmailOverride(
+  tpl: RenderedEmail,
+  override: EmailOverride | undefined,
+  vars: Record<string, unknown>
+): RenderedEmail {
+  if (!override) return tpl
+  let { subject, html } = tpl
+  if (override.subject) subject = substituteEventVars(override.subject, vars)
+  if (override.intro) {
+    const intro = substituteEventVars(override.intro, vars)
+    const safe = intro.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    html = html.replace(
+      /<p style="margin:0 0 16px;[^"]*">[\s\S]*?<\/p>/,
+      `<p style="margin:0 0 16px;font-size:15px;line-height:1.55;">${safe}</p>`
+    )
+  }
+  return { subject, html }
+}
+
 export async function dispatchEmail(
   event: NotificationEvent,
   recipient: Recipient,
   vars: Record<string, unknown>,
-  attachments?: EmailPayload['attachments']
+  attachments?: EmailPayload['attachments'],
+  override?: EmailOverride
 ): Promise<DispatchResult> {
-  const tpl = renderEmailForEvent(event, recipient, vars)
-  if (!tpl) {
+  const rendered = renderEmailForEvent(event, recipient, vars)
+  if (!rendered) {
     return {
       channel: NotificationChannel.EMAIL,
       result: { status: 'skipped', reason: 'no_template' },
     }
   }
+  const tpl = applyEmailOverride(rendered, override, vars)
   const payload: EmailPayload = {
     to: recipient.email,
     subject: tpl.subject,

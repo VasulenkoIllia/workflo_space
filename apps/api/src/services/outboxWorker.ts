@@ -9,6 +9,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { captureException } from '../observability/sentry.js'
 import { renderDocumentAttachmentById } from './documentRender.js'
+import { resolveEmailOverrides } from './emailTemplates.js'
 import { buildNotifyDeps } from './notifications.js'
 import { type OutboxEventView, type OutboxHandler, processOutboxBatch } from './outbox.js'
 
@@ -82,8 +83,12 @@ async function handleOrderStatusChanged(
   let failedRecipients = 0
   let maxRetryAfterSec = 0
   for (const r of recipients) {
+    const emailOverrides = await resolveEmailOverrides(r.profileId, 'orders.status_changed').catch(
+      () => undefined
+    )
     const outcome = await notify(deps, {
       profileId: r.profileId,
+      emailOverrides,
       event: 'orders.status_changed',
       vars: {
         orderTitle: order.title,
@@ -152,7 +157,16 @@ async function deliverToRecipients<E extends NotificationEvent>(
   let delivered = 0
   let failed = 0
   for (const profileId of recipientProfileIds) {
-    const outcome = await notify(deps, { profileId, event, vars, inApp, attachments })
+    // 08-EMAIL: owner-override теми/вступу (збій резолву не блокує доставку)
+    const emailOverrides = await resolveEmailOverrides(profileId, event).catch(() => undefined)
+    const outcome = await notify(deps, {
+      profileId,
+      event,
+      vars,
+      inApp,
+      attachments,
+      emailOverrides,
+    })
     const attempted = outcome.results.filter((r) => r.result.status !== 'skipped')
     attemptedTotal += attempted.length
     if (attempted.length === 0) continue

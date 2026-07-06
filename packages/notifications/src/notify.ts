@@ -110,6 +110,8 @@ export interface NotifyInput<E extends NotificationEvent = NotificationEvent> {
   inApp?: { title: string; body: string }
   /** 06-SEND: вкладення для email-каналу (PDF документа); інші канали ігнорують. */
   attachments?: EmailPayload['attachments']
+  /** 08-EMAIL: owner-override теми/вступу per-locale (резолвиться викликачем). */
+  emailOverrides?: Partial<Record<'uk' | 'en', { subject?: string | null; intro?: string | null }>>
 }
 
 export interface NotifyOutcome {
@@ -197,7 +199,13 @@ export async function notify<E extends NotificationEvent>(
     let result: DispatchResult
 
     if (channel === NotificationChannel.EMAIL) {
-      result = await dispatchEmail(input.event, recipient, vars, input.attachments)
+      result = await dispatchEmail(
+        input.event,
+        recipient,
+        vars,
+        input.attachments,
+        input.emailOverrides?.[recipient.locale ?? 'uk']
+      )
     } else if (channel === NotificationChannel.TELEGRAM) {
       result = await dispatchTelegram(input.event, recipient, vars)
       if (

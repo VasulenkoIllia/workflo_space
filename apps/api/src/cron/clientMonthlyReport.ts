@@ -1,5 +1,10 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
-import { getActiveFrom, getMailer, renderClientMonthlyReportEmail } from '@workflo/notifications'
+import {
+  applyEmailOverride,
+  getActiveFrom,
+  getMailer,
+  renderClientMonthlyReportEmail,
+} from '@workflo/notifications'
 import {
   ChromiumUnavailableError,
   htmlToPdf,
@@ -178,11 +183,22 @@ export async function runClientMonthlyReportOnce(
           ['Оплачено за період', moneyLabel(numbers.paid)],
           ['Поточний борг', moneyLabel(numbers.debt)],
         ]
-        const rendered = renderClientMonthlyReportEmail({
-          agencyName: agency.name,
-          periodLabel,
-          rows,
+        // 08-EMAIL: owner-override теми/вступу (псевдо-подія reports.client_monthly, uk)
+        const override = await prisma.emailTemplate.findUnique({
+          where: {
+            agencyId_event_locale: {
+              agencyId: agency.id,
+              event: 'reports.client_monthly',
+              locale: 'uk',
+            },
+          },
+          select: { subject: true, intro: true },
         })
+        const rendered = applyEmailOverride(
+          renderClientMonthlyReportEmail({ agencyName: agency.name, periodLabel, rows }),
+          override ?? undefined,
+          { periodLabel, agencyName: agency.name }
+        )
         const from = getActiveFrom()
         await getMailer().sendMail({
           from: `"${from.name}" <${from.address}>`,

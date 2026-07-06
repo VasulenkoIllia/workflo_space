@@ -419,3 +419,169 @@ export function PdfBrandingSection() {
     </Card>
   )
 }
+
+/** 08-EMAIL (owner-only): override теми/вступу бізнес-листів, окремо uk/en.
+ * Порожні поля локалі = системний текст. Auth-листи не редагуються свідомо. */
+interface MailTplRow {
+  event: string
+  locale: string
+  subject: string | null
+  intro: string | null
+}
+interface MailTplData {
+  events: { event: string; label: string; vars: string[] }[]
+  templates: MailTplRow[]
+}
+
+export function EmailTemplatesSection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['email-templates'],
+    queryFn: () => api.get<MailTplData>('/workspace/agency/email-templates'),
+  })
+  const [event, setEvent] = useState('billing.invoice_sent')
+  const [fields, setFields] = useState({ ukSubject: '', ukIntro: '', enSubject: '', enIntro: '' })
+  const [dirty, setDirty] = useState(false)
+
+  const rowsFor = (ev: string) => data?.templates.filter((t) => t.event === ev) ?? []
+  const hasOverride = rowsFor(event).length > 0
+
+  useEffect(() => {
+    const uk = rowsFor(event).find((t) => t.locale === 'uk')
+    const en = rowsFor(event).find((t) => t.locale === 'en')
+    setFields({
+      ukSubject: uk?.subject ?? '',
+      ukIntro: uk?.intro ?? '',
+      enSubject: en?.subject ?? '',
+      enIntro: en?.intro ?? '',
+    })
+    setDirty(false)
+  }, [event, data])
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.put(`/workspace/agency/email-templates/${event}`, {
+        uk: { subject: fields.ukSubject, intro: fields.ukIntro },
+        en: { subject: fields.enSubject, intro: fields.enIntro },
+      }),
+    onSuccess: () => {
+      toast.success('Шаблон листа збережено')
+      setDirty(false)
+      void qc.invalidateQueries({ queryKey: ['email-templates'] })
+    },
+    onError: () => toast.error('Не вдалося зберегти'),
+  })
+  const reset = useMutation({
+    mutationFn: () => api.delete(`/workspace/agency/email-templates/${event}`),
+    onSuccess: () => {
+      toast.success('Повернуто системний текст')
+      void qc.invalidateQueries({ queryKey: ['email-templates'] })
+    },
+  })
+
+  if (isLoading) return <Skeleton style={{ height: 140 }} />
+  if (!data) return null
+
+  const meta = data.events.find((e) => e.event === event)
+  const upd =
+    (k: keyof typeof fields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setFields((f) => ({ ...f, [k]: e.target.value }))
+      setDirty(true)
+    }
+
+  return (
+    <Card title="Email-шаблони">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // тема + вступний абзац поверх системного листа. Auth-листи (пароль/вхід) — не редагуються.
+        Порожньо = системний текст.
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ minWidth: 260 }}>
+          <Select
+            label="Лист"
+            value={event}
+            onChange={setEvent}
+            options={data.events.map((e) => ({ value: e.event, label: e.label }))}
+          />
+        </div>
+        <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          {hasOverride ? 'кастомний' : 'системний'}
+        </span>
+      </div>
+      {meta && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 12 }}
+        >
+          // змінні: {meta.vars.map((v) => `{{${v}}}`).join(' · ')}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 14 }}>
+        {(
+          [
+            { code: 'uk', label: 'Українська', s: 'ukSubject', i: 'ukIntro' },
+            { code: 'en', label: 'English', s: 'enSubject', i: 'enIntro' },
+          ] as const
+        ).map((loc) => (
+          <div
+            key={loc.code}
+            style={{
+              border: '1px solid var(--wf-border)',
+              borderRadius: 'var(--wf-radius)',
+              padding: 12,
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+              {loc.label.toUpperCase()}
+            </span>
+            <Input
+              label="Тема (порожньо = системна)"
+              value={fields[loc.s]}
+              onChange={upd(loc.s)}
+              placeholder="Напр.: Рахунок {{invoiceNumber}} від workflo"
+            />
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                ВСТУПНИЙ ТЕКСТ (порожньо = системний)
+              </span>
+              <textarea
+                style={{ ...areaStyle, minHeight: 60 }}
+                value={fields[loc.i]}
+                onChange={upd(loc.i)}
+                placeholder="Перший абзац листа — з {{змінними}} події"
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+        <Button
+          variant="primary"
+          size="sm"
+          loading={save.isPending}
+          disabled={!dirty}
+          onClick={() => save.mutate()}
+        >
+          Зберегти
+        </Button>
+        {hasOverride && (
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={reset.isPending}
+            onClick={() => reset.mutate()}
+          >
+            Скинути до системного
+          </Button>
+        )}
+      </div>
+    </Card>
+  )
+}
