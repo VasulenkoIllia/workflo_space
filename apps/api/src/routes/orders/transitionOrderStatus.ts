@@ -95,6 +95,34 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
+      // 06-ПІДПИС договір-гейт (рішення власника 06.07, тумблер агенції): без
+      // ПРИЙНЯТОГО клієнтом договору робота не стартує. Рамкова семантика: будь-який
+      // accepted-договір цієї КОМПАНІЇ (не per-order). Внутрішні замовлення без
+      // компанії гейт не чіпає.
+      if (to === OrderInternalStatus.IN_PROGRESS && order.companyId) {
+        const agency = await withTenant((tx) =>
+          tx.agency.findUnique({
+            where: { id: order.agencyId },
+            select: { requireSignedContract: true },
+          })
+        )
+        if (agency?.requireSignedContract) {
+          const contract = await withTenant((tx) =>
+            tx.document.findFirst({
+              where: { companyId: order.companyId ?? '', type: 'contract', status: 'accepted' },
+              select: { id: true },
+            })
+          )
+          if (!contract) {
+            throw new AppError(
+              ApiErrorCode.CONFLICT,
+              'Немає прийнятого договору з клієнтом — старт роботи заблоковано (вимога агенції)',
+              409
+            )
+          }
+        }
+      }
+
       const isInternal = isInternalTeam(user)
       const isReopen = from === OrderInternalStatus.DONE && to === OrderInternalStatus.REVISION
       const isCompanyOwner =

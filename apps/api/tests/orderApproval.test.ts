@@ -13,6 +13,9 @@ const orderFindUniqueOrThrow = vi.fn()
 const activityCreate = vi.fn()
 const outboxCreate = vi.fn()
 const auditLogCreate = vi.fn()
+// 06-ПІДПИС: договір-гейт (тумблер агенції + пошук accepted-договору)
+const agencyFindUnique = vi.fn()
+const documentFindFirst = vi.fn()
 
 function txImpl(arg: unknown) {
   if (typeof arg === 'function') {
@@ -39,6 +42,9 @@ vi.mock('@workflo/db', async (importOriginal) => {
     activityLog: { create: activityCreate },
     outboxEvent: { create: outboxCreate },
     auditLog: { create: auditLogCreate },
+    // 06-ПІДПИС: договір-гейт читає тумблер агенції + шукає accepted-договір
+    agency: { findUnique: agencyFindUnique },
+    document: { findFirst: documentFindFirst },
     $transaction: transaction,
   }
   return {
@@ -128,6 +134,9 @@ beforeEach(() => {
   activityCreate.mockResolvedValue({})
   outboxCreate.mockResolvedValue({})
   orderUpdateMany.mockResolvedValue({ count: 1 })
+  // 06-ПІДПИС: дефолт — гейт вимкнено, договорів нема (старі сценарії без змін)
+  agencyFindUnique.mockResolvedValue({ requireSignedContract: false })
+  documentFindFirst.mockResolvedValue(null)
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -560,6 +569,68 @@ describe('PATCH /orders/:id/status — 02-В advance gate (hourly_prepaid + mone
     const { app, token } = await authed(TEAM)
     const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
     expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+})
+
+describe('PATCH /orders/:id/status — 06-ПІДПИС договір-гейт (тумблер агенції)', () => {
+  const base = {
+    id: 'order-1',
+    agencyId: AGENCY,
+    companyId: COMPANY,
+    internalStatus: 'estimating',
+    requiresApproval: false,
+    approvalStatus: null,
+    deletedAt: null,
+    project: null,
+    company: null,
+  }
+  const started = {
+    id: 'order-1',
+    internalStatus: 'in_progress',
+    clientStatus: 'in_progress',
+    onHoldReason: null,
+    cancelledReason: null,
+    updatedAt: new Date(),
+  }
+
+  it('409 blocks → in_progress when the toggle is ON and no accepted contract exists', async () => {
+    agencyFindUnique.mockResolvedValue({ requireSignedContract: true })
+    documentFindFirst.mockResolvedValue(null)
+    orderFindUnique.mockResolvedValue(base)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.message).toContain('договору')
+    expect(orderUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('passes with an ACCEPTED company contract (рамкова семантика)', async () => {
+    agencyFindUnique.mockResolvedValue({ requireSignedContract: true })
+    documentFindFirst.mockResolvedValue({ id: 'doc-1' })
+    orderFindUnique.mockResolvedValue(base)
+    orderFindUniqueOrThrow.mockResolvedValue(started)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(200)
+    // шукали саме accepted-договір цієї компанії
+    expect(documentFindFirst.mock.calls[0][0].where).toMatchObject({
+      companyId: COMPANY,
+      type: 'contract',
+      status: 'accepted',
+    })
+    await app.close()
+  })
+
+  it('toggle OFF → no gate (стара поведінка)', async () => {
+    agencyFindUnique.mockResolvedValue({ requireSignedContract: false })
+    orderFindUnique.mockResolvedValue(base)
+    orderFindUniqueOrThrow.mockResolvedValue(started)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(200)
+    expect(documentFindFirst).not.toHaveBeenCalled()
     await app.close()
   })
 })

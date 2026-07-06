@@ -168,6 +168,8 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'auth.email_change_confirm': NotificationCategory.AUTH,
   // S11: місячний дайджест — системна розсилка, opt-in тумблером агенції
   'reports.monthly': NotificationCategory.SYSTEM,
+  // 06-ПІДПИС: прийняття документа клієнтом — in-app власникам (без email-шаблону)
+  'documents.accepted': NotificationCategory.DOCUMENTS,
 }
 
 /**

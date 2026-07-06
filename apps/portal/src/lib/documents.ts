@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_URL, api, getAccessToken } from '@/lib/api'
 
 export type DocumentType =
@@ -8,7 +8,7 @@ export type DocumentType =
   | 'specification'
   | 'reconciliation_act'
   | 'contract'
-export type DocumentStatus = 'draft' | 'generated' | 'sent'
+export type DocumentStatus = 'draft' | 'generated' | 'sent' | 'accepted' // 06-ПІДПИС
 
 export interface OrderDocument {
   id: string
@@ -17,6 +17,9 @@ export interface OrderDocument {
   status: DocumentStatus
   generatedAt: string
   sentAt: string | null
+  // 06-ПІДПИС: хто/коли прийняв (договір/акт)
+  acceptedAt?: string | null
+  acceptedByName?: string | null
 }
 
 export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -32,6 +35,7 @@ export const DOC_STATUS_LABEL: Record<DocumentStatus, string> = {
   draft: 'чернетка',
   generated: 'сформовано',
   sent: 'надіслано',
+  accepted: 'прийнято', // 06-ПІДПИС
 }
 
 /** Short code for the `.wfp-doc-type-pill` (design: documents-screens.jsx DocumentsIndex). */
@@ -49,6 +53,7 @@ export const DOC_STATUS_BADGE: Record<DocumentStatus, string> = {
   draft: 'soft',
   generated: 'partial',
   sent: 'partial',
+  accepted: 'paid', // зелений тон — той самий, що «оплачено»
 }
 
 /** Read-only: the client sees documents the team issued on their order. */
@@ -59,6 +64,16 @@ export function useOrderDocuments(orderId: string) {
       api
         .get<{ documents: OrderDocument[] }>(`/orders/${orderId}/documents`)
         .then((r) => r.documents),
+  })
+}
+
+/** 06-ПІДПИС: клієнт приймає договір/акт — клік + ПІБ (typed signature). */
+export function useAcceptDocument(orderId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ docId, fullName }: { docId: string; fullName: string }) =>
+      api.post(`/portal/documents/${docId}/accept`, { fullName }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-documents', orderId] }),
   })
 }
 

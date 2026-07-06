@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { toast } from 'sonner'
-import { EmptyState, Skeleton } from '@workflo/ui'
+import { Button, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
   DOC_STATUS_BADGE,
@@ -7,12 +9,36 @@ import {
   DOC_TYPE_CODE,
   DOC_TYPE_LABEL,
   openDocumentPdf,
+  useAcceptDocument,
   useOrderDocuments,
+  type OrderDocument,
 } from '@/lib/documents'
 
-/** Client-side: read-only list of documents the team issued on this order. */
+/** 06-ПІДПИС: договір і акт клієнт може ПРИЙНЯТИ (typed signature — клік + ПІБ). */
+const ACCEPTABLE_TYPES = new Set(['contract', 'completion_act'])
+
+/** Client-side: list of documents the team issued on this order + accept-флоу. */
 export function DocumentsTab({ orderId }: { orderId: string }) {
   const { data: documents = [], isLoading } = useOrderDocuments(orderId)
+  const accept = useAcceptDocument(orderId)
+  const [accepting, setAccepting] = useState<OrderDocument | null>(null)
+  const [fullName, setFullName] = useState('')
+
+  const submitAccept = () => {
+    if (!accepting) return
+    accept.mutate(
+      { docId: accepting.id, fullName: fullName.trim() },
+      {
+        onSuccess: () => {
+          toast.success(`${accepting.number} прийнято`)
+          setAccepting(null)
+          setFullName('')
+        },
+        onError: (err) =>
+          toast.error(err instanceof ApiError ? err.message : 'Не вдалося прийняти документ'),
+      }
+    )
+  }
 
   if (isLoading) {
     return (
@@ -84,8 +110,58 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
           >
             {formatDate(d.generatedAt)}
           </span>
+          {/* 06-ПІДПИС: надіслані договір/акт клієнт приймає (клік + ПІБ) */}
+          {ACCEPTABLE_TYPES.has(d.type) && d.status === 'sent' ? (
+            <Button size="sm" variant="primary" onClick={() => setAccepting(d)}>
+              Прийняти
+            </Button>
+          ) : d.status === 'accepted' && d.acceptedByName ? (
+            <span
+              className="wfp-mono"
+              style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}
+              title={d.acceptedAt ? `Прийнято ${formatDate(d.acceptedAt)}` : undefined}
+            >
+              ✓ {d.acceptedByName}
+            </span>
+          ) : (
+            <span />
+          )}
         </div>
       ))}
+
+      {accepting && (
+        <Modal
+          open
+          title={`Прийняти ${DOC_TYPE_LABEL[accepting.type]} ${accepting.number}`}
+          onClose={() => setAccepting(null)}
+        >
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+              Введіть ваше ПІБ як підпис. Ми зафіксуємо ПІБ, час і IP-адресу прийняття — це
+              підтвердження вашої згоди з документом.
+            </div>
+            <Input
+              label="Прізвище Імʼя По батькові"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Іваненко Іван Іванович"
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button variant="ghost" onClick={() => setAccepting(null)}>
+                Скасувати
+              </Button>
+              <Button
+                variant="primary"
+                loading={accept.isPending}
+                disabled={fullName.trim().length < 3}
+                onClick={submitAccept}
+              >
+                ✓ Прийняти документ
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

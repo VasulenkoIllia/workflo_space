@@ -254,12 +254,16 @@ export enum DocumentType {
   COMPLETION_ACT = 'completion_act',
   SPECIFICATION = 'specification',
   RECONCILIATION_ACT = 'reconciliation_act',
+  // 19-Г: місячний звіт клієнту (company-scoped, без замовлення)
+  MONTHLY_REPORT = 'monthly_report',
 }
 
 export enum DocumentStatus {
   DRAFT = 'draft',
   GENERATED = 'generated',
   SENT = 'sent',
+  // 06-ПІДПИС: клієнт прийняв (договір/акт) — клік + ПІБ у порталі
+  ACCEPTED = 'accepted',
 }
 
 // ─── Invites ────────────────────────────────────────────────────────────────
@@ -370,6 +374,8 @@ export type NotificationEvent =
   | 'auth.email_change_confirm'
   // S11: місячний email-дайджест власнику (owner-тумблер у settings)
   | 'reports.monthly'
+  // 06-ПІДПИС: клієнт прийняв договір/акт у порталі (in-app власникам)
+  | 'documents.accepted'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

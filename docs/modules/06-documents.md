@@ -309,6 +309,23 @@ Cron `C02:recurring_billing` (`05-billing.md`) створює `Document(type='in
 - **Фаза 2 — Дія.Підпис / КЕП** (юридично значущий): інтеграція з Дія.Підпис API; адаптер `SignatureProvider` (click | diia | kep), вибір per-agency/per-document-type.
 - Event `documents.signed` → notify owner. Підписаний PDF immutable.
 
+> **UPDATE 06.07.2026 — фаза 1 реалізована (рішення власника: клік + ПІБ, скоуп договір+акт,
+> гейт-тумблер агенції).** Відхилення від чернетки вище — простіша модель полів:
+>
+> - Статус `accepted` (не `signed` — чесна назва для не-КЕП прийняття). `Document` +=
+>   `acceptedAt / acceptedById / acceptedByName / acceptedIp` (typed signature: ПІБ, час,
+>   IP, акаунт; повний слід і в audit_logs). Без hash/signatureType — це фаза 2 (КЕП/Дія).
+> - `POST /portal/documents/:docId/accept {fullName}` — клієнт-учасник компанії; лише
+>   типи `contract`/`completion_act`; лише зі статусу `sent` (атомарний claim, replay 409).
+>   Event `documents.accepted` → in-app власникам (email-шаблону нема свідомо).
+> - **Договір-гейт:** `Agency.requireSignedContract` (owner-тумблер «Воркфлоу · договір»
+>   у /settings, `GET/PATCH /workspace/agency/workflow-settings`, вимкнено за
+>   замовчуванням) → перехід замовлення `→ in_progress` блокується 409, поки компанія
+>   не має ПРИЙНЯТОГО договору. Рамкова семантика: будь-який accepted-договір КОМПАНІЇ
+>   (не per-order); внутрішніх замовлень без компанії не стосується.
+> - UI: портал «Документи»-таб — кнопка «Прийняти» на надісланих договорах/актах →
+>   модалка з ПІБ; після — бейдж «прийнято» + «✓ ПІБ» в обох апках.
+
 ### C. Кастомні шаблони документів ✅
 
 - `DocumentTemplate { id, agencyId, type, name, layout Json, isDefault, @@unique([agencyId, type, name]) }` (admin, модуль 20). Поля/тексти/умови понад branding. Резолюція: agency-template → agency-default → платформний хардкод (3 рівні).

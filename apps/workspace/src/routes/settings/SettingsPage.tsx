@@ -202,6 +202,50 @@ function EmailReportsSection() {
   )
 }
 
+/** 06-ПІДПИС (owner-only): договір-гейт — «без прийнятого договору робота не стартує».
+ * Рамкова семантика: accepted-договір КОМПАНІЇ (не per-order). */
+function WorkflowSection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['agency-workflow-settings'],
+    queryFn: () =>
+      api.get<{ requireSignedContract: boolean }>('/workspace/agency/workflow-settings'),
+  })
+  const patch = useMutation({
+    mutationFn: (requireSignedContract: boolean) =>
+      api.patch('/workspace/agency/workflow-settings', { requireSignedContract }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-workflow-settings'] }),
+  })
+
+  if (isLoading) return <Skeleton style={{ height: 70 }} />
+  if (!data) return null
+
+  return (
+    <Card title="Воркфлоу · договір">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+        <input
+          type="checkbox"
+          checked={data.requireSignedContract}
+          disabled={patch.isPending}
+          onChange={(e) =>
+            patch.mutate(e.target.checked, {
+              onSuccess: () =>
+                toast.success(
+                  e.target.checked ? 'Договір-гейт увімкнено' : 'Договір-гейт вимкнено'
+                ),
+            })
+          }
+        />
+        Вимагати прийнятий договір до старту роботи
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // замовлення клієнта не перейде «в роботу», поки компанія не прийняла договір у порталі
+        (клік + ПІБ). Внутрішніх замовлень не стосується.
+      </div>
+    </Card>
+  )
+}
+
 function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
   const save = useSavePaymentSettings()
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
@@ -697,6 +741,7 @@ export function SettingsPage() {
         <TwoFactorSection app="workspace" />
         {isOwner && <AgencySecuritySection />}
         {isOwner && <EmailReportsSection />}
+        {isOwner && <WorkflowSection />}
         {isOwner && <OrderCatalogSection />}
         {isOwner && <SlaPoliciesSection />}
         <LinkedAccountsSection app="workspace" />

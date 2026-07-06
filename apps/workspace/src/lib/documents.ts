@@ -9,7 +9,7 @@ export type DocumentType =
   | 'reconciliation_act'
   | 'contract'
   | 'monthly_report' // 19-Г
-export type DocumentStatus = 'draft' | 'generated' | 'sent'
+export type DocumentStatus = 'draft' | 'generated' | 'sent' | 'accepted' // 06-ПІДПИС
 
 export interface OrderDocument {
   id: string
@@ -18,6 +18,9 @@ export interface OrderDocument {
   status: DocumentStatus
   generatedAt: string
   sentAt: string | null
+  // 06-ПІДПИС: хто/коли прийняв
+  acceptedAt?: string | null
+  acceptedByName?: string | null
 }
 
 export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -34,6 +37,7 @@ export const DOC_STATUS_LABEL: Record<DocumentStatus, string> = {
   draft: 'чернетка',
   generated: 'сформовано',
   sent: 'надіслано',
+  accepted: 'прийнято', // 06-ПІДПИС
 }
 
 /** Short code for the `.wfp-doc-type-pill` (design: documents-screens.jsx DocumentsIndex). */
@@ -52,6 +56,7 @@ export const DOC_STATUS_BADGE: Record<DocumentStatus, string> = {
   draft: 'soft',
   generated: 'partial',
   sent: 'partial',
+  accepted: 'paid', // зелений тон
 }
 
 /** A client document with its originating order (28-Б client card «Документи» tab). */

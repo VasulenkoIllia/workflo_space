@@ -14,7 +14,9 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { writeAuditAsync } from '../../services/audit.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMonthlyReport.js'
+import { dispatchNotification } from '../../services/notifications.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 
@@ -58,6 +60,9 @@ const DOC_SELECT = {
   status: true,
   generatedAt: true,
   sentAt: true,
+  // 06-ПІДПИС: хто і коли прийняв (для бейджів/тултіпів обох апок)
+  acceptedAt: true,
+  acceptedByName: true,
 } as const
 
 const fmtMoney = (v: unknown): string =>
@@ -444,6 +449,97 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
         }
         throw err
       }
+    }
+  )
+
+  // ── 06-ПІДПИС: клієнт приймає договір/акт у порталі (клік + ПІБ) ─────────────
+  // Typed signature: фіксуємо ПІБ/час/IP/акаунт (аудит + поля документа). Приймати
+  // можна лише НАДІСЛАНЕ (sent) — атомарний claim sent→accepted (TOCTOU як у send).
+  fastify.post<{ Params: { docId: string } }>(
+    '/portal/documents/:docId/accept',
+    {
+      preHandler: [fastify.authenticate],
+      config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      const { fullName } = z
+        .object({ fullName: z.string().trim().min(3).max(120) })
+        .strict()
+        .parse(request.body)
+      const user = request.user
+
+      const doc = await withTenant((tx) =>
+        tx.document.findFirst({
+          where: { id: request.params.docId, type: { in: ['contract', 'completion_act'] } },
+          select: {
+            id: true,
+            type: true,
+            number: true,
+            agencyId: true,
+            companyId: true,
+            company: { select: { name: true } },
+          },
+        })
+      )
+      if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+      if (!user.memberships.some((m) => m.companyId === doc.companyId)) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)
+      }
+
+      const now = new Date()
+      await tenantTransaction(prisma, async (tx) => {
+        const claim = await tx.document.updateMany({
+          where: { id: doc.id, status: 'sent' },
+          data: {
+            status: 'accepted',
+            acceptedAt: now,
+            acceptedById: user.sub,
+            acceptedByName: fullName,
+            acceptedIp: request.ip,
+          },
+        })
+        if (claim.count === 0) {
+          throw new AppError(
+            ApiErrorCode.VALIDATION_ERROR,
+            'Документ ще не надіслано або вже прийнято',
+            409
+          )
+        }
+      })
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId: doc.agencyId,
+        action: 'documents.accepted',
+        resourceType: 'document',
+        resourceId: doc.id,
+        result: 'allowed',
+        metadata: { number: doc.number, type: doc.type, fullName, ip: request.ip },
+      })
+
+      // In-app власникам агенції (без email-шаблону — notify пропустить email сам)
+      const owners = await withTenant((tx) =>
+        tx.agencyMember.findMany({
+          where: { agencyId: doc.agencyId, role: 'owner' },
+          select: { profileId: true },
+        })
+      )
+      for (const o of owners) {
+        dispatchNotification(request.log, {
+          profileId: o.profileId,
+          event: 'documents.accepted',
+          vars: { number: doc.number, fullName },
+          inApp: {
+            title: `Документ ${doc.number} прийнято`,
+            body: `${doc.company?.name ?? 'Клієнт'}: ${fullName} прийняв(ла) ${DOC_TYPE_LABEL[doc.type] ?? doc.type}.`,
+          },
+        })
+      }
+
+      return reply.send({
+        success: true,
+        data: { id: doc.id, status: 'accepted', acceptedAt: now, acceptedByName: fullName },
+      })
     }
   )
 

@@ -1080,25 +1080,31 @@ model ActivityLog {
 }
 
 model Document {
-  id            String         @id @default(uuid())
-  agencyId      String
-  type          DocumentType
-  number        String
-  orderId       String?
-  order         Order?         @relation(fields: [orderId], references: [id])
-  companyId     String
-  company       Company        @relation(fields: [companyId], references: [id])
-  status        DocumentStatus @default(draft)
-  storedAs      String?
-  sentAt        DateTime?      @db.Timestamptz(3)
-  generatedAt   DateTime       @default(now()) @db.Timestamptz(3)
-  createdById   String
-  createdBy     Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
-  executorId    String?
-  executor      Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
-  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
-  legalEntityId String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
-  legalEntity   LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  id             String         @id @default(uuid())
+  agencyId       String
+  type           DocumentType
+  number         String
+  orderId        String?
+  order          Order?         @relation(fields: [orderId], references: [id])
+  companyId      String
+  company        Company        @relation(fields: [companyId], references: [id])
+  status         DocumentStatus @default(draft)
+  storedAs       String?
+  sentAt         DateTime?      @db.Timestamptz(3)
+  // 06-ПІДПИС: прийняття клієнтом (typed signature) — ПІБ/час/IP/акаунт.
+  // acceptedById — plain Profile id (project convention, без FK).
+  acceptedAt     DateTime?      @db.Timestamptz(3)
+  acceptedById   String?
+  acceptedByName String?
+  acceptedIp     String?
+  generatedAt    DateTime       @default(now()) @db.Timestamptz(3)
+  createdById    String
+  createdBy      Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  executorId     String?
+  executor       Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+  agency         Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  legalEntityId  String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
+  legalEntity    LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, type, number])
   @@index([agencyId])
@@ -1265,6 +1271,8 @@ model Agency {
   // 19-Г: місячний звіт КЛІЄНТАМ (PDF-документ + email) — окремий тумблер
   clientMonthlyReportEnabled    Boolean   @default(false)
   clientMonthlyReportLastSentAt DateTime? @db.Timestamptz(3)
+  // 06-ПІДПИС: «без прийнятого договору робота не стартує» (рамковий договір компанії)
+  requireSignedContract         Boolean   @default(false)
 
   members          AgencyMember[]
   companies        Company[]
@@ -1524,6 +1532,8 @@ enum DocumentStatus {
   draft
   generated
   sent
+  // 06-ПІДПИС: клієнт прийняв (договір/акт) — клік + ПІБ у порталі
+  accepted
 }
 
 enum PaymentType {
