@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useCommentStream } from '@workflo/app-core'
 import { EmptyState, Skeleton } from '@workflo/ui'
+import { api } from '@/lib/api'
 import { useConversations, useSetConversationState, type Conversation } from '@/lib/chats'
 import { ChatTab } from '@/routes/orders/ChatTab'
 
@@ -13,7 +14,31 @@ import { ChatTab } from '@/routes/orders/ChatTab'
  * і прев'ю; праворуч повний чат замовлення (спільний <ChatTab> з mute/відповідальним).
  * Фільтри «всі / мої / без відповіді / архів» — по прапорцях list-ендпоінта.
  */
-type Filter = 'all' | 'mine' | 'unanswered' | 'archived'
+type Filter = 'all' | 'mine' | 'unanswered' | 'snoozed' | 'archived'
+
+/** 18-Б: тред відкладено і час ще не настав. */
+const isSnoozedNow = (c: { snoozedUntil: string | null }): boolean =>
+  c.snoozedUntil != null && new Date(c.snoozedUntil).getTime() > Date.now()
+
+/** 18-Б: snooze минув — «повернути непрочитаною» = ⏰-маркер у списку. */
+const isSnoozeDue = (c: { snoozedUntil: string | null }): boolean =>
+  c.snoozedUntil != null && new Date(c.snoozedUntil).getTime() <= Date.now()
+
+const SNOOZE_PRESETS: { label: string; hours?: number; tomorrow?: boolean }[] = [
+  { label: 'на 1 год', hours: 1 },
+  { label: 'на 4 год', hours: 4 },
+  { label: 'до завтра 9:00', tomorrow: true },
+]
+
+function presetToIso(p: (typeof SNOOZE_PRESETS)[number]): string {
+  if (p.tomorrow) {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    d.setHours(9, 0, 0, 0)
+    return d.toISOString()
+  }
+  return new Date(Date.now() + (p.hours ?? 1) * 3_600_000).toISOString()
+}
 
 /** Вузький екран → master-detail стає «список ⇄ чат» з кнопкою назад. */
 function useIsNarrow(): boolean {
@@ -31,6 +56,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'всі' },
   { id: 'mine', label: 'мої' },
   { id: 'unanswered', label: 'без відповіді' },
+  { id: 'snoozed', label: 'відкладені' },
   { id: 'archived', label: 'архів' },
 ]
 
@@ -45,6 +71,9 @@ const timeShort = (iso: string): string => {
 function matches(c: Conversation, filter: Filter): boolean {
   if (filter === 'archived') return c.archived
   if (c.archived) return false
+  if (filter === 'snoozed') return isSnoozedNow(c)
+  // 18-Б: активний snooze ховає тред з основних фільтрів до настання часу
+  if (isSnoozedNow(c)) return false
   if (filter === 'mine') return c.mine
   if (filter === 'unanswered')
     return (
@@ -93,8 +122,14 @@ function ThreadRow({
           }}
         >
           {c.muted ? '🔕 ' : ''}
+          {isSnoozeDue(c) ? '⏰ ' : ''}
           {c.title}
         </span>
+        {isSnoozedNow(c) && (
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-warning, #b45309)' }}>
+            ⏰ до {timeShort(c.snoozedUntil ?? '')}
+          </span>
+        )}
         {c.lastMessage && (
           <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
             {timeShort(c.lastMessage.at)}
@@ -174,6 +209,30 @@ export function ChatsPage() {
     setSelectedId(id)
     // відкриття чату маркує прочитаним (markCommentsRead у <OrderChat>) → оновити бейджі
     setTimeout(() => void qc.invalidateQueries({ queryKey: ['ws-conversations'] }), 1500)
+  }
+
+  // 18-Б: відкриття треда з простроченим snooze знімає ⏰ (увагу повернуто).
+  const openThread = (c: Conversation) => {
+    select(c.orderId)
+    if (isSnoozeDue(c)) {
+      void api
+        .put(`/orders/${c.orderId}/conversation`, { snoozeUntil: null })
+        .then(() => qc.invalidateQueries({ queryKey: ['ws-conversations'] }))
+    }
+  }
+
+  const snooze = (until: string | null) => {
+    if (!selected) return
+    setConvState.mutate(
+      { snoozeUntil: until },
+      {
+        onSuccess: () => {
+          toast.success(until ? 'Розмову відкладено' : 'Snooze знято')
+          void qc.invalidateQueries({ queryKey: ['ws-conversations'] })
+          if (until) setSelectedId(null) // відкладений тред зникає з основного списку
+        },
+      }
+    )
   }
 
   const toggleArchive = () => {
@@ -268,7 +327,7 @@ export function ChatsPage() {
                       key={c.orderId}
                       c={c}
                       active={c.orderId === selectedId}
-                      onClick={() => select(c.orderId)}
+                      onClick={() => openThread(c)}
                     />
                   ))}
                 </div>
@@ -307,15 +366,55 @@ export function ChatsPage() {
                   <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
                     {selected.companyName ?? 'внутрішнє'}
                   </span>
-                  <button
-                    type="button"
-                    className="wfp-link"
-                    style={{ fontSize: 12, marginLeft: 'auto' }}
-                    onClick={toggleArchive}
-                    disabled={setConvState.isPending}
-                  >
-                    {selected.archived ? '↩ повернути з архіву' : '🗄 в архів'}
-                  </button>
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+                    {isSnoozedNow(selected) ? (
+                      <button
+                        type="button"
+                        className="wfp-link"
+                        style={{ fontSize: 12 }}
+                        onClick={() => snooze(null)}
+                        disabled={setConvState.isPending}
+                      >
+                        ⏰ зняти snooze
+                      </button>
+                    ) : (
+                      <select
+                        className="wfp-mono"
+                        style={{
+                          background: 'var(--wf-surface)',
+                          color: 'var(--wf-fg)',
+                          border: '1px solid var(--wf-border)',
+                          borderRadius: 'var(--wf-radius)',
+                          fontSize: 11,
+                          padding: '2px 6px',
+                        }}
+                        value=""
+                        disabled={setConvState.isPending}
+                        onChange={(e) => {
+                          const p = SNOOZE_PRESETS[Number(e.target.value)]
+                          if (p) snooze(presetToIso(p))
+                        }}
+                      >
+                        <option value="" disabled>
+                          ⏰ відкласти…
+                        </option>
+                        {SNOOZE_PRESETS.map((p, i) => (
+                          <option key={p.label} value={i}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      className="wfp-link"
+                      style={{ fontSize: 12 }}
+                      onClick={toggleArchive}
+                      disabled={setConvState.isPending}
+                    >
+                      {selected.archived ? '↩ повернути з архіву' : '🗄 в архів'}
+                    </button>
+                  </span>
                 </div>
                 <ChatTab orderId={selected.orderId} />
               </div>

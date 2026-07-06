@@ -22,10 +22,12 @@ const putStateSchema = z
   .object({
     muted: z.boolean().optional(),
     archived: z.boolean().optional(),
+    // 18-Б: ISO-час «відкласти до» (null = зняти snooze)
+    snoozeUntil: z.string().datetime().nullable().optional(),
   })
   .strict()
-  .refine((d) => d.muted !== undefined || d.archived !== undefined, {
-    message: 'Потрібно вказати muted або archived',
+  .refine((d) => d.muted !== undefined || d.archived !== undefined || d.snoozeUntil !== undefined, {
+    message: 'Потрібно вказати muted, archived або snoozeUntil',
   })
 
 const chatOwnerSchema = z.object({ profileId: z.string().min(1).nullable() }).strict()
@@ -45,7 +47,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
         Promise.all([
           tx.conversationState.findUnique({
             where: { profileId_orderId: { profileId: request.user.sub, orderId: access.orderId } },
-            select: { muted: true, archivedAt: true },
+            select: { muted: true, archivedAt: true, snoozedUntil: true },
           }),
           tx.order.findUnique({
             where: { id: access.orderId },
@@ -58,6 +60,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
         data: {
           muted: state?.muted ?? false,
           archivedAt: state?.archivedAt ?? null,
+          snoozedUntil: state?.snoozedUntil ?? null,
           // 18-В: ефективний відповідальний (явний або «авто» = перший assignee)
           chatOwnerId: order?.chatOwnerId ?? null,
           effectiveChatOwnerId: order?.chatOwnerId ?? order?.assigneeId ?? null,
@@ -81,14 +84,18 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
             orderId: access.orderId,
             muted: input.muted ?? false,
             archivedAt: input.archived ? new Date() : null,
+            snoozedUntil: input.snoozeUntil ? new Date(input.snoozeUntil) : null,
           },
           update: {
             ...(input.muted !== undefined ? { muted: input.muted } : {}),
             ...(input.archived !== undefined
               ? { archivedAt: input.archived ? new Date() : null }
               : {}),
+            ...(input.snoozeUntil !== undefined
+              ? { snoozedUntil: input.snoozeUntil ? new Date(input.snoozeUntil) : null }
+              : {}),
           },
-          select: { muted: true, archivedAt: true },
+          select: { muted: true, archivedAt: true, snoozedUntil: true },
         })
       )
       return reply.send({ success: true, data: state })
@@ -182,7 +189,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
             },
             conversationStates: {
               where: { profileId: me },
-              select: { muted: true, archivedAt: true },
+              select: { muted: true, archivedAt: true, snoozedUntil: true },
             },
           },
           take: 300,
@@ -244,6 +251,8 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
               unread: unreadByOrder.get(o.id) ?? 0,
               muted: state?.muted ?? false,
               archived: state?.archivedAt != null,
+              // 18-Б: фронт ховає майбутні snooze з основних фільтрів; прострочені → ⏰
+              snoozedUntil: state?.snoozedUntil?.toISOString() ?? null,
               chatOwnerId: effectiveOwnerId,
               chatOwnerName: effectiveOwnerId ? (ownerName.get(effectiveOwnerId) ?? null) : null,
               mine: effectiveOwnerId === me,

@@ -321,15 +321,18 @@ model Order {
 // chat.new_comment for this profile (mentions DELIBERATELY bypass mute); archivedAt →
 // «архівні» розділ у майбутній секції «Чати». profileId — plain Profile id (convention).
 model ConversationState {
-  id         String    @id @default(uuid())
-  agencyId   String
-  profileId  String
-  orderId    String
-  muted      Boolean   @default(false)
-  archivedAt DateTime? @db.Timestamptz(3)
-  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
-  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid())
+  agencyId     String
+  profileId    String
+  orderId      String
+  muted        Boolean   @default(false)
+  archivedAt   DateTime? @db.Timestamptz(3)
+  // 18-Б snooze: до цього часу тред схований з основних фільтрів хабу; після —
+  // повертається з ⏰-маркером. NULL = не відкладено.
+  snoozedUntil DateTime? @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, orderId])
   @@index([orderId, muted])
@@ -1257,8 +1260,11 @@ model Agency {
 
   // S11 scheduled email-звіти: owner-тумблер «місячний звіт на email». Cron шле
   // власникам дайджест за попередній місяць; lastSentAt гейтить одну відправку на місяць.
-  monthlyReportEnabled    Boolean   @default(false)
-  monthlyReportLastSentAt DateTime? @db.Timestamptz(3)
+  monthlyReportEnabled          Boolean   @default(false)
+  monthlyReportLastSentAt       DateTime? @db.Timestamptz(3)
+  // 19-Г: місячний звіт КЛІЄНТАМ (PDF-документ + email) — окремий тумблер
+  clientMonthlyReportEnabled    Boolean   @default(false)
+  clientMonthlyReportLastSentAt DateTime? @db.Timestamptz(3)
 
   members          AgencyMember[]
   companies        Company[]
@@ -1510,6 +1516,8 @@ enum DocumentType {
   completion_act
   specification
   reconciliation_act
+  // 19-Г: місячний звіт клієнту (company-scoped, orderId null)
+  monthly_report
 }
 
 enum DocumentStatus {

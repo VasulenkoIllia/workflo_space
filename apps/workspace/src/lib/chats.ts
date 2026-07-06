@@ -22,7 +22,7 @@ export function useConversationState(orderId: string) {
 export function useSetConversationState(orderId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { muted?: boolean; archived?: boolean }) =>
+    mutationFn: (body: { muted?: boolean; archived?: boolean; snoozeUntil?: string | null }) =>
       api.put(`/orders/${orderId}/conversation`, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['conversation-state', orderId] }),
   })
@@ -66,6 +66,8 @@ export interface Conversation {
   unread: number
   muted: boolean
   archived: boolean
+  /** 18-Б: майбутній час → тред відкладено; минулий → «повернувся» з ⏰. */
+  snoozedUntil: string | null
   chatOwnerId: string | null
   chatOwnerName: string | null
   /** ефективний відповідальний = я */

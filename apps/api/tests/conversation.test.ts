@@ -410,3 +410,79 @@ describe('GET /portal/conversations (18-А, portal-inbox)', () => {
     await app.close()
   })
 })
+
+describe('18-Б snooze', () => {
+  it('PUT snoozeUntil sets the timestamp; null clears it', async () => {
+    db.order.findUnique.mockResolvedValue(orderRow)
+    db.conversationState.upsert.mockResolvedValue({
+      muted: false,
+      archivedAt: null,
+      snoozedUntil: new Date(),
+    })
+    const { app, token } = await authed(OWNER)
+    const until = new Date(Date.now() + 3_600_000).toISOString()
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/orders/${ORDER}/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { snoozeUntil: until },
+    })
+    expect(res.statusCode).toBe(200)
+    const arg = db.conversationState.upsert.mock.calls[0]![0] as {
+      update: { snoozedUntil: Date }
+      create: { snoozedUntil: Date }
+    }
+    expect(arg.update.snoozedUntil.toISOString()).toBe(until)
+    expect(arg.create.snoozedUntil.toISOString()).toBe(until)
+
+    // null → зняти snooze
+    await app.inject({
+      method: 'PUT',
+      url: `/orders/${ORDER}/conversation`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { snoozeUntil: null },
+    })
+    const arg2 = db.conversationState.upsert.mock.calls[1]![0] as {
+      update: { snoozedUntil: Date | null }
+    }
+    expect(arg2.update.snoozedUntil).toBeNull()
+    await app.close()
+  })
+
+  it('workspace list exposes snoozedUntil from the per-user state', async () => {
+    const until = new Date(Date.now() + 3_600_000)
+    db.agencyMember.findMany.mockResolvedValue([{ profileId: 'owner-1' }])
+    db.order.findMany.mockResolvedValue([
+      {
+        id: 'o-1',
+        title: 'Тред',
+        internalStatus: 'in_progress',
+        chatOwnerId: null,
+        assigneeId: null,
+        companyId: 'company-1',
+        company: { name: 'ТОВ' },
+        comments: [
+          {
+            content: 'msg',
+            isInternal: false,
+            createdAt: new Date(),
+            authorId: 'client-1',
+            author: { name: 'Клієнт' },
+          },
+        ],
+        conversationStates: [{ muted: false, archivedAt: null, snoozedUntil: until }],
+      },
+    ])
+    db.$queryRaw.mockResolvedValue([])
+    db.profile.findMany.mockResolvedValue([])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/conversations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.conversations[0].snoozedUntil).toBe(until.toISOString())
+    await app.close()
+  })
+})
