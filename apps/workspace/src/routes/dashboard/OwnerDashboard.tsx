@@ -10,7 +10,68 @@ import { useTeam } from '@/lib/payouts'
 import { usePnl, isoDay } from '@/lib/finance'
 import { catColor, catLabel } from '@/lib/expenseCategories'
 import { useOrders, countByStatus, type WorkspaceOrder } from '@/lib/orders'
+import { useMomReport, type MomReport } from '@/lib/reports'
 import { KanbanBoard } from '@/routes/orders/KanbanBoard'
+
+/** 19-Д: «+12%» / «−8%» / «—» — дельта MoM, зелений угору / червоний униз. */
+function MomDelta({ pct }: { pct: number | null }) {
+  if (pct == null)
+    return (
+      <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        —
+      </span>
+    )
+  const up = pct >= 0
+  return (
+    <span
+      className="wfp-mono"
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        color: up ? 'var(--wf-accent)' : 'var(--wf-destructive)',
+      }}
+    >
+      {up ? '▲' : '▼'} {Math.abs(pct)}%
+    </span>
+  )
+}
+
+/** 19-Д: рядок «місяць до місяця» — поточні значення + дельта проти попереднього. */
+function MomStrip({ mom }: { mom: MomReport }) {
+  const items: { label: string; value: string; pct: number | null }[] = [
+    { label: 'виручка', value: `${mom.current.revenueUsd} USD`, pct: mom.pct.revenueUsd },
+    { label: 'замовлення', value: String(mom.current.ordersCreated), pct: mom.pct.ordersCreated },
+    { label: 'ліди', value: String(mom.current.leadsCreated), pct: mom.pct.leadsCreated },
+    { label: 'години', value: String(mom.current.hoursLogged), pct: mom.pct.hoursLogged },
+  ]
+  return (
+    <div
+      className="wfp-mono"
+      style={{
+        display: 'flex',
+        gap: 18,
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        fontSize: 12,
+        padding: '8px 12px',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        marginBottom: 14,
+      }}
+    >
+      <span style={{ fontSize: 10, color: 'var(--wf-fg-muted)', textTransform: 'uppercase' }}>
+        місяць до місяця
+      </span>
+      {items.map((i) => (
+        <span key={i.label} style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
+          <span style={{ color: 'var(--wf-fg-muted)', fontSize: 11 }}>{i.label}</span>
+          <span style={{ fontWeight: 600 }}>{i.value}</span>
+          <MomDelta pct={i.pct} />
+        </span>
+      ))}
+    </div>
+  )
+}
 
 /** Owner home — agency-wide overview: finance KPIs + expense donut, then orders attention/board. */
 export function OwnerDashboard() {
@@ -27,6 +88,8 @@ export function OwnerDashboard() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
   })()
   const pnl = usePnl(monthFrom, isoDay(new Date()), isOwner)
+  // 19-Д: дельти MoM (owner-only endpoint)
+  const mom = useMomReport(isOwner)
   const orders = data?.orders ?? []
 
   const o = overview.data
@@ -79,6 +142,9 @@ export function OwnerDashboard() {
 
       {isOwner && (
         <>
+          {/* 19-Д: ±% MoM */}
+          {mom.data && <MomStrip mom={mom.data} />}
+
           {/* ── Фінанси (design-v2 owner overview) ── */}
           <div className="wfp-stats" style={{ marginBottom: 14 }}>
             <div className="wfp-stat">

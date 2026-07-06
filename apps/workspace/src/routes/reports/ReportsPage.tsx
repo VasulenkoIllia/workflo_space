@@ -3,10 +3,14 @@ import { Card, EmptyState, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
 import {
   type HoursReport,
+  type LeadSourceReport,
   type LeadSourceRow,
+  type RevenueReport,
+  type SlaReport,
   type SlaSideStats,
   useHoursReport,
   useLeadSourceReport,
+  useRevenueReport,
   useSlaReport,
 } from '@/lib/reports'
 import { type ExportTable } from '@/lib/exportTable'
@@ -97,6 +101,204 @@ const SOURCE_KIND_LABEL: Record<LeadSourceRow['kind'], string> = {
   none: '—',
 }
 
+/** 19-Б: SLA-звіт → один XLSX-лист по виконавцях. */
+function buildSlaTables(r: SlaReport): ExportTable[] {
+  const side = (s: SlaSideStats) =>
+    `${s.compliancePct == null ? '—' : `${s.compliancePct}%`} (${s.met}/${s.met + s.late})`
+  return [
+    {
+      sheet: 'SLA по виконавцях',
+      headers: ['Виконавець', 'Замовлень', 'Перша відповідь', 'Розв’язання'],
+      rows: [
+        ...r.byAssignee.map((a) => [a.name, a.total, side(a.firstResponse), side(a.resolution)]),
+        ['РАЗОМ', r.total, side(r.firstResponse), side(r.resolution)],
+      ],
+    },
+  ]
+}
+
+/** 19-Б: джерела лідів → XLSX. */
+function buildLeadSourceTables(r: LeadSourceReport): ExportTable[] {
+  return [
+    {
+      sheet: 'Джерела лідів',
+      headers: [
+        'Джерело',
+        'Тип',
+        'Лідів',
+        'Виграно',
+        'Втрачено',
+        'Конверсія %',
+        'Виставлено',
+        'Оплачено',
+      ],
+      rows: r.rows.map((x) => [
+        x.source,
+        x.kind,
+        x.leads,
+        x.won,
+        x.lost,
+        x.conversionPct,
+        fmtMoneyBag(x.revenue),
+        fmtMoneyBag(x.paidRevenue),
+      ]),
+    },
+  ]
+}
+
+/** 19-Б: виручка → три листи (місяці / клієнти / дебіторка). */
+function buildRevenueTables(r: RevenueReport): ExportTable[] {
+  return [
+    {
+      sheet: 'По місяцях',
+      headers: ['Місяць', 'Виручка USD', 'Оплат', 'Нові клієнти'],
+      rows: [
+        ...r.byMonth.map((m) => [m.month, m.revenueUsd, m.payments, m.newClients]),
+        ['РАЗОМ', r.totalRevenueUsd, r.totalPayments, r.totalNewClients],
+      ],
+    },
+    {
+      sheet: 'По клієнтах',
+      headers: ['Клієнт', 'Виручка USD', 'Оплат'],
+      rows: r.byClient.map((c) => [c.name, c.revenueUsd, c.payments]),
+    },
+    {
+      sheet: 'Дебіторка',
+      headers: ['Клієнт', 'Борг', 'Найстаріший, днів'],
+      rows: r.debtors.map((d) => [d.name, fmtMoneyBag(d.debt), d.oldestDays]),
+    },
+  ]
+}
+
+/** 19-А: виручка по місяцях/клієнтах + нові клієнти + дебіторка з віком. */
+function RevenueSection({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = useRevenueReport(from, to)
+  if (isLoading) return <Skeleton style={{ height: 240 }} />
+  if (!data) return null
+  return (
+    <Card
+      title="Виручка"
+      aux={
+        <ExportButtons
+          getTables={() => buildRevenueTables(data)}
+          filename={`revenue_${from}_${to}`}
+          disabled={data.byMonth.length === 0 && data.debtors.length === 0}
+        />
+      }
+      style={{ marginBottom: 20 }}
+    >
+      <div className="wfp-stats" style={{ marginBottom: 14 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">виручка за період</div>
+          <div className="wfp-stat-v" style={{ color: 'var(--wf-accent)' }}>
+            {data.totalRevenueUsd} USD
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">оплат</div>
+          <div className="wfp-stat-v">{data.totalPayments}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">нових клієнтів</div>
+          <div className="wfp-stat-v">{data.totalNewClients}</div>
+        </div>
+      </div>
+
+      {data.byMonth.length > 0 && (
+        <table className="wfp-table" style={{ marginBottom: 14 }}>
+          <thead>
+            <tr>
+              <th>Місяць</th>
+              <th className="wfp-num">Виручка USD</th>
+              <th className="wfp-num">Оплат</th>
+              <th className="wfp-num">Нові клієнти</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.byMonth.map((m) => (
+              <tr key={m.month}>
+                <td className="wfp-mono" style={{ fontSize: 12 }}>
+                  {m.month}
+                </td>
+                <td className="wfp-num">{m.revenueUsd}</td>
+                <td className="wfp-num">{m.payments}</td>
+                <td className="wfp-num">{m.newClients}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {data.byClient.length > 0 && (
+        <>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', margin: '4px 0 6px' }}
+          >
+            // по клієнтах
+          </div>
+          <table className="wfp-table" style={{ marginBottom: 14 }}>
+            <thead>
+              <tr>
+                <th>Клієнт</th>
+                <th className="wfp-num">Виручка USD</th>
+                <th className="wfp-num">Оплат</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.byClient.map((c) => (
+                <tr key={c.companyId}>
+                  <td>{c.name}</td>
+                  <td className="wfp-num">{c.revenueUsd}</td>
+                  <td className="wfp-num">{c.payments}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', margin: '4px 0 6px' }}
+      >
+        // дебіторка (поточний стан, не залежить від періоду)
+      </div>
+      {data.debtors.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-accent)' }}>
+          ✓ боргів немає
+        </div>
+      ) : (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Клієнт</th>
+              <th className="wfp-num">Борг</th>
+              <th className="wfp-num">Найстаріший, днів</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.debtors.map((d) => (
+              <tr key={d.companyId}>
+                <td>{d.name}</td>
+                <td className="wfp-num" style={{ color: 'var(--wf-destructive)' }}>
+                  {fmtMoneyBag(d.debt)}
+                </td>
+                <td
+                  className="wfp-num"
+                  style={{ color: d.oldestDays > 30 ? 'var(--wf-destructive)' : undefined }}
+                >
+                  {d.oldestDays}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
+
 /** SLA-compliance блок (S11): загальні % + розріз по виконавцях + список порушень. */
 function SlaSection({ from, to }: { from: string; to: string }) {
   const { data, isLoading } = useSlaReport(from, to)
@@ -111,7 +313,17 @@ function SlaSection({ from, to }: { from: string; to: string }) {
     )
   }
   return (
-    <Card title={`SLA-виконання · ${data.total} замовл. із SLA`} style={{ marginBottom: 20 }}>
+    <Card
+      title={`SLA-виконання · ${data.total} замовл. із SLA`}
+      aux={
+        <ExportButtons
+          getTables={() => buildSlaTables(data)}
+          filename={`sla_${from}_${to}`}
+          disabled={data.byAssignee.length === 0}
+        />
+      }
+      style={{ marginBottom: 20 }}
+    >
       <div className="wfp-stats" style={{ marginBottom: 14 }}>
         <div className="wfp-stat">
           <div className="wfp-stat-k">перша відповідь</div>
@@ -199,7 +411,17 @@ function LeadSourcesSection({ from, to }: { from: string; to: string }) {
     )
   }
   return (
-    <Card title={`Джерела лідів · ${data.totalLeads} за період`} style={{ marginBottom: 20 }}>
+    <Card
+      title={`Джерела лідів · ${data.totalLeads} за період`}
+      aux={
+        <ExportButtons
+          getTables={() => buildLeadSourceTables(data)}
+          filename={`lead_sources_${from}_${to}`}
+          disabled={data.rows.length === 0}
+        />
+      }
+      style={{ marginBottom: 20 }}
+    >
       <table className="wfp-table">
         <thead>
           <tr>
@@ -303,6 +525,7 @@ export function ReportsPage() {
         </span>
       </div>
 
+      <RevenueSection from={from} to={to} />
       <SlaSection from={from} to={to} />
       <LeadSourcesSection from={from} to={to} />
 
