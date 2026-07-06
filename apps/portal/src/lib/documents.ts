@@ -20,6 +20,60 @@ export interface OrderDocument {
   // 06-ПІДПИС: хто/коли прийняв (договір/акт)
   acceptedAt?: string | null
   acceptedByName?: string | null
+  // 06-ДОГОВІР-2: зовнішній договір
+  signedExternally?: boolean
+  externalUrl?: string | null
+  storedAs?: string | null
+}
+
+/** 06-SEND: документ у зведеному списку порталу (/documents) — з замовленням або без. */
+export interface PortalDocument extends OrderDocument {
+  order: { id: string; title: string } | null
+}
+
+/** 06-SEND: усі надіслані/прийняті документи компаній клієнта. */
+export function usePortalDocuments() {
+  return useQuery({
+    queryKey: ['portal-documents'],
+    queryFn: () =>
+      api.get<{ documents: PortalDocument[] }>('/portal/documents').then((r) => r.documents),
+  })
+}
+
+/** 06-SEND: відкриття будь-якого документа зі зведеного списку. */
+export async function openPortalDocument(doc: PortalDocument): Promise<void> {
+  if (doc.signedExternally) {
+    if (doc.storedAs) return openStoredFile(doc)
+    if (doc.externalUrl) {
+      window.open(doc.externalUrl, '_blank', 'noopener')
+      return
+    }
+    throw new Error('Для договору не додано ні файл, ні посилання')
+  }
+  const token = getAccessToken()
+  const url = doc.order
+    ? `${API_URL}/orders/${doc.order.id}/documents/${doc.id}/pdf`
+    : `${API_URL}/documents/${doc.id}/pdf` // monthly_report без замовлення
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Не вдалося відкрити документ')
+  const blobUrl = URL.createObjectURL(await res.blob())
+  window.open(blobUrl, '_blank')
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+}
+
+async function openStoredFile(doc: PortalDocument): Promise<void> {
+  const token = getAccessToken()
+  const res = await fetch(`${API_URL}/documents/${doc.id}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Не вдалося відкрити файл')
+  const blobUrl = URL.createObjectURL(await res.blob())
+  window.open(blobUrl, '_blank')
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
 }
 
 export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -73,7 +127,10 @@ export function useAcceptDocument(orderId: string) {
   return useMutation({
     mutationFn: ({ docId, fullName }: { docId: string; fullName: string }) =>
       api.post(`/portal/documents/${docId}/accept`, { fullName }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-documents', orderId] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order-documents', orderId] })
+      void qc.invalidateQueries({ queryKey: ['portal-documents'] })
+    },
   })
 }
 

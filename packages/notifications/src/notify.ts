@@ -1,4 +1,5 @@
 import { NotificationChannel, type NotificationEvent } from '@workflo/types'
+import type { EmailPayload } from './adapters/EmailAdapter.js'
 import {
   dispatchEmail,
   dispatchInApp,
@@ -107,6 +108,8 @@ export interface NotifyInput<E extends NotificationEvent = NotificationEvent> {
    * those are rich HTML — in_app needs plain compact text.)
    */
   inApp?: { title: string; body: string }
+  /** 06-SEND: вкладення для email-каналу (PDF документа); інші канали ігнорують. */
+  attachments?: EmailPayload['attachments']
 }
 
 export interface NotifyOutcome {
@@ -194,7 +197,7 @@ export async function notify<E extends NotificationEvent>(
     let result: DispatchResult
 
     if (channel === NotificationChannel.EMAIL) {
-      result = await dispatchEmail(input.event, recipient, vars)
+      result = await dispatchEmail(input.event, recipient, vars, input.attachments)
     } else if (channel === NotificationChannel.TELEGRAM) {
       result = await dispatchTelegram(input.event, recipient, vars)
       if (
@@ -287,6 +290,8 @@ export interface NotifyRecipientInput<E extends NotificationEvent = Notification
   vars: NotifyVars<E>
   /** Channels to dispatch on. Defaults to email only (the always-available channel). */
   channels?: ReadonlyArray<NotificationChannel>
+  /** 06-SEND: вкладення для email-каналу. */
+  attachments?: EmailPayload['attachments']
 }
 
 /**
@@ -309,7 +314,7 @@ export async function notifyRecipient<E extends NotificationEvent>(
   for (const channel of channels) {
     attempted.push(channel)
     if (channel === NotificationChannel.EMAIL) {
-      results.push(await dispatchEmail(input.event, input.recipient, vars))
+      results.push(await dispatchEmail(input.event, input.recipient, vars, input.attachments))
     } else if (channel === NotificationChannel.TELEGRAM) {
       results.push(await dispatchTelegram(input.event, input.recipient, vars))
     } else {

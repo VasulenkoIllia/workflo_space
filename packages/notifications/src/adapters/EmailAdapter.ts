@@ -1,12 +1,20 @@
 import type { Transporter } from 'nodemailer'
 import { getMailer, getActiveFrom } from '../email/mailer.js'
 
+export interface EmailAttachment {
+  filename: string
+  content: Buffer | string
+  contentType?: string
+}
+
 export interface EmailPayload {
   to: string
   subject: string
   html: string
   /** Optional From override; defaults to SMTP_FROM_NAME <SMTP_FROM>. */
   from?: { name: string; address: string }
+  /** 06-SEND: вкладення (PDF документа тощо) — прокидаються в nodemailer як є. */
+  attachments?: EmailAttachment[]
 }
 
 /**
@@ -51,6 +59,7 @@ export async function sendEmail(
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
+      ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     })) as RawSentInfo
 
     if (info.rejected && info.rejected.length > 0) {

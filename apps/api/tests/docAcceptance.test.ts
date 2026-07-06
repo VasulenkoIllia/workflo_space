@@ -4,7 +4,7 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 // 06-ПІДПИС: прийняття документів клієнтом (клік + ПІБ) + договір-гейт + тумблер.
 const db = {
-  document: { findFirst: vi.fn(), updateMany: vi.fn() },
+  document: { findFirst: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
   agency: { findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
   agencyMember: { findMany: vi.fn() },
   twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -254,6 +254,53 @@ describe('POST /workspace/companies/:companyId/contracts/external (06-ДОГОВ
       payload: { number: 'X', contractDate: '2026-06-01', signerName: 'Петренко П.П.' },
     })
     expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('GET /portal/documents (06-SEND, зведений список клієнта)', () => {
+  it('client gets only SENT/ACCEPTED docs of own companies; company-less → []', async () => {
+    db.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        type: 'invoice',
+        number: 'INV-1',
+        status: 'sent',
+        generatedAt: new Date(),
+        sentAt: new Date(),
+        acceptedAt: null,
+        acceptedByName: null,
+        signedExternally: false,
+        contractDate: null,
+        externalUrl: null,
+        storedAs: null,
+        order: { id: 'o-1', title: 'Лендінг' },
+      },
+    ])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/documents',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.documents).toHaveLength(1)
+    const where = db.document.findMany.mock.calls[0][0].where
+    // клієнтський скоуп + чернетки/несформовані не течуть
+    expect(where.companyId).toEqual({ in: ['company-1'] })
+    expect(where.status).toEqual({ in: ['sent', 'accepted'] })
+
+    // акаунт без компанії → грейсфул порожньо, без запиту
+    db.document.findMany.mockClear()
+    const noCompany = app.jwt.sign({ ...CLIENT, memberships: [] })
+    const empty = await app.inject({
+      method: 'GET',
+      url: '/portal/documents',
+      headers: { authorization: `Bearer ${noCompany}` },
+    })
+    expect(empty.statusCode).toBe(200)
+    expect(empty.json().data.documents).toEqual([])
+    expect(db.document.findMany).not.toHaveBeenCalled()
     await app.close()
   })
 })

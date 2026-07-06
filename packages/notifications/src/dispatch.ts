@@ -403,7 +403,8 @@ export function renderTelegramForEvent(
 export async function dispatchEmail(
   event: NotificationEvent,
   recipient: Recipient,
-  vars: Record<string, unknown>
+  vars: Record<string, unknown>,
+  attachments?: EmailPayload['attachments']
 ): Promise<DispatchResult> {
   const tpl = renderEmailForEvent(event, recipient, vars)
   if (!tpl) {
@@ -412,7 +413,12 @@ export async function dispatchEmail(
       result: { status: 'skipped', reason: 'no_template' },
     }
   }
-  const payload: EmailPayload = { to: recipient.email, subject: tpl.subject, html: tpl.html }
+  const payload: EmailPayload = {
+    to: recipient.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    ...(attachments?.length ? { attachments } : {}),
+  }
   const result = await sendEmail(payload)
   return { channel: NotificationChannel.EMAIL, result }
 }

@@ -23,6 +23,7 @@ import { InboxPage } from '@/routes/inbox/InboxPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
 import { SecretsPage } from '@/routes/secrets/SecretsPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
+import { DocumentsPage } from '@/routes/documents/DocumentsPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -59,7 +60,7 @@ export default function App() {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/secrets" element={<SecretsPage />} />
         </Route>
-        <Route path="/documents" element={<Placeholder title="Документи" />} />
+        <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/support" element={<Placeholder title="Підтримка" />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/inbox" element={<InboxPage />} />

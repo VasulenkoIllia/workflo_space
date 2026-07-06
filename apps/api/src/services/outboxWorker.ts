@@ -8,6 +8,7 @@ import {
 import type { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { captureException } from '../observability/sentry.js'
+import { renderDocumentAttachmentById } from './documentRender.js'
 import { buildNotifyDeps } from './notifications.js'
 import { type OutboxEventView, type OutboxHandler, processOutboxBatch } from './outbox.js'
 
@@ -141,7 +142,9 @@ async function deliverToRecipients<E extends NotificationEvent>(
   recipientProfileIds: string[],
   event: E,
   vars: NotifyVars<E>,
-  inApp: { title: string; body: string }
+  inApp: { title: string; body: string },
+  // 06-SEND: вкладення email-каналу (PDF документа); інші канали ігнорують
+  attachments?: { filename: string; content: Buffer | string; contentType: string }[]
 ): Promise<void> {
   if (recipientProfileIds.length === 0) return
   const deps = buildNotifyDeps(logger)
@@ -149,7 +152,7 @@ async function deliverToRecipients<E extends NotificationEvent>(
   let delivered = 0
   let failed = 0
   for (const profileId of recipientProfileIds) {
-    const outcome = await notify(deps, { profileId, event, vars, inApp })
+    const outcome = await notify(deps, { profileId, event, vars, inApp, attachments })
     const attempted = outcome.results.filter((r) => r.result.status !== 'skipped')
     attemptedTotal += attempted.length
     if (attempted.length === 0) continue
@@ -382,6 +385,8 @@ async function handleDocumentSent(
   const isInvoice = p.docType === 'invoice' || p.docType === 'advance_invoice'
   const portalUrl = process.env.PORTAL_URL ?? 'https://portal.workflo.space'
   const url = `${portalUrl}/orders/${p.orderId}`
+  // 06-SEND: PDF документа їде вкладенням (email лише для invoice-типів — решта in_app)
+  const attachment = isInvoice ? await renderDocumentAttachmentById(p.docId) : null
   await deliverToRecipients(
     logger,
     await clientMemberIds(order.companyId, p.actorId),
@@ -398,7 +403,8 @@ async function handleDocumentSent(
     {
       title: isInvoice ? 'Виставлено рахунок' : 'Новий документ',
       body: `${p.number} — надіслано`,
-    }
+    },
+    attachment ? [attachment] : undefined
   )
 }
 
