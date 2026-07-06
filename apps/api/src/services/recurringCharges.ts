@@ -412,14 +412,23 @@ export async function closeProjectCycle(
     },
   })
   if (!p) return { created: 0, due: 0, gated: 0 }
-  // П3 contract-gate: a project that requires a contract but has none attached can be
-  // worked on, but invoice/act generation is blocked until the signed contract is linked.
-  if (p.contractRequired && !p.contractDocumentId) {
-    throw new AppError(
-      ApiErrorCode.CONFLICT,
-      'Генерація заблокована: прив’яжіть підписаний договір до проєкту',
-      409
-    )
+  // П3 contract-gate (посилено 06-ДОГОВІР-2, рішення власника 06.07): договір має бути
+  // ПРИЙНЯТИМ (accepted у порталі або зареєстрований зовнішній) — привʼязана чернетка
+  // білінг більше не відкриває.
+  if (p.contractRequired) {
+    const accepted = p.contractDocumentId
+      ? await tx.document.findFirst({
+          where: { id: p.contractDocumentId, status: 'accepted' },
+          select: { id: true },
+        })
+      : null
+    if (!accepted) {
+      throw new AppError(
+        ApiErrorCode.CONFLICT,
+        'Генерація заблокована: прив’яжіть ПРИЙНЯТИЙ (підписаний) договір до проєкту',
+        409
+      )
+    }
   }
   const tier = (p.company.tierOverride ?? p.company.loyaltyTier) as LoyaltyTier
   // P-4: manual close bills a completed period → issue anchor = periodEnd + net terms
@@ -447,10 +456,9 @@ export async function generateRecurringCharges(
   tx: Prisma.TransactionClient,
   opts: GenerateOptions
 ): Promise<GenerateResult> {
-  // П3 contract-gate: a project requiring a contract with none attached is HELD — its
-  // `nextCycleAt` is not advanced, so once the signed contract is linked the missed cycles
-  // catch up (bounded by MAX_CATCHUP_PERIODS). Same predicate counts the held projects.
-  const contractGate = { contractRequired: true, contractDocumentId: null }
+  // П3 contract-gate (посилено 06-ДОГОВІР-2): проект, що вимагає договір без
+  // ПРИЙНЯТОГО привʼязаного, — HELD (nextCycleAt не рухається, цикли наздоженуть,
+  // коли договір приймуть). Прийнятість — JS-постфільтр (contractDocumentId без FK).
   const dueWhere = {
     active: true,
     billingModel: { in: ['fixed_monthly_advance', 'hourly_postpaid', 'hourly_prepaid'] },
@@ -459,29 +467,43 @@ export async function generateRecurringCharges(
     ...(opts.agencyId ? { agencyId: opts.agencyId } : {}),
   } satisfies Prisma.ProjectWhereInput
 
-  const [due, gated] = await Promise.all([
-    tx.project.findMany({
-      where: {
-        ...dueWhere,
-        NOT: contractGate, // exclude held projects from generation
-      },
-      select: {
-        id: true,
-        agencyId: true,
-        companyId: true,
-        currency: true,
-        billingModel: true,
-        billingCycle: true,
-        abonAmount: true,
-        clientHourlyRate: true,
-        includedHoursCap: true,
-        advanceGatePct: true,
-        nextCycleAt: true,
-        ...TERMS_TIER_SELECT,
-      },
-    }),
-    tx.project.count({ where: { ...dueWhere, ...contractGate } }),
-  ])
+  const allDue = await tx.project.findMany({
+    where: dueWhere,
+    select: {
+      id: true,
+      agencyId: true,
+      companyId: true,
+      currency: true,
+      billingModel: true,
+      billingCycle: true,
+      abonAmount: true,
+      clientHourlyRate: true,
+      includedHoursCap: true,
+      advanceGatePct: true,
+      nextCycleAt: true,
+      contractRequired: true,
+      contractDocumentId: true,
+      ...TERMS_TIER_SELECT,
+    },
+  })
+  // Прийнятість договорів — одним запитом по всіх привʼязаних id
+  const contractIds = [
+    ...new Set(allDue.map((p) => p.contractDocumentId).filter((id): id is string => id != null)),
+  ]
+  const acceptedIds = new Set(
+    contractIds.length > 0
+      ? (
+          await tx.document.findMany({
+            where: { id: { in: contractIds }, status: 'accepted' },
+            select: { id: true },
+          })
+        ).map((d) => d.id)
+      : []
+  )
+  const isHeld = (p: (typeof allDue)[number]): boolean =>
+    p.contractRequired && !(p.contractDocumentId != null && acceptedIds.has(p.contractDocumentId))
+  const due = allDue.filter((p) => !isHeld(p))
+  const gated = allDue.length - due.length
 
   const rows: Prisma.ServiceChargeCreateManyInput[] = []
   const advances: Array<{ id: string; nextCycleAt: Date }> = []

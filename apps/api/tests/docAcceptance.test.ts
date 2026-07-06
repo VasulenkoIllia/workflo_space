@@ -180,3 +180,80 @@ describe('GET/PATCH /workspace/agency/workflow-settings (договір-гейт
     await app.close()
   })
 })
+
+describe('POST /workspace/companies/:companyId/contracts/external (06-ДОГОВІР-2)', () => {
+  const dbAny = db as unknown as {
+    company?: { findFirst: ReturnType<typeof vi.fn> }
+    document: { findFirst: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> } & {
+      create?: ReturnType<typeof vi.fn>
+    }
+  }
+
+  it('owner registers an external contract (JSON, no file) → accepted immediately', async () => {
+    dbAny.company = { findFirst: vi.fn().mockResolvedValue({ id: 'company-1' }) }
+    dbAny.document.create = vi.fn().mockResolvedValue({
+      id: 'doc-x',
+      type: 'contract',
+      number: '№ 12/2026',
+      status: 'accepted',
+      generatedAt: new Date(),
+      sentAt: null,
+      acceptedAt: new Date('2026-06-01'),
+      acceptedByName: 'Петренко П.П.',
+      signedExternally: true,
+      contractDate: new Date('2026-06-01'),
+      externalUrl: 'https://docs.example.com/contract',
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/companies/company-1/contracts/external',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        number: '№ 12/2026',
+        contractDate: '2026-06-01',
+        signerName: 'Петренко П.П.',
+        externalUrl: 'https://docs.example.com/contract',
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const created = dbAny.document.create.mock.calls[0][0].data
+    expect(created).toMatchObject({
+      type: 'contract',
+      number: '№ 12/2026',
+      status: 'accepted',
+      signedExternally: true,
+      acceptedByName: 'Петренко П.П.',
+    })
+    expect(created.contractDate).toBeInstanceOf(Date)
+    await app.close()
+  })
+
+  it('409 on duplicate contract number for the company', async () => {
+    dbAny.company = { findFirst: vi.fn().mockResolvedValue({ id: 'company-1' }) }
+    dbAny.document.create = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/companies/company-1/contracts/external',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { number: '№ 12/2026', contractDate: '2026-06-01', signerName: 'Петренко П.П.' },
+    })
+    expect(res.statusCode).toBe(409)
+    await app.close()
+  })
+
+  it('403 for a portal client', async () => {
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/companies/company-1/contracts/external',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { number: 'X', contractDate: '2026-06-01', signerName: 'Петренко П.П.' },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})

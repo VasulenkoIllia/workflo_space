@@ -21,6 +21,11 @@ export interface OrderDocument {
   // 06-ПІДПИС: хто/коли прийняв
   acceptedAt?: string | null
   acceptedByName?: string | null
+  // 06-ДОГОВІР-2: зовнішній договір
+  signedExternally?: boolean
+  contractDate?: string | null
+  externalUrl?: string | null
+  storedAs?: string | null
 }
 
 export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -104,6 +109,70 @@ export function useSendDocument(orderId: string) {
       api.post<{ document: OrderDocument }>(`/orders/${orderId}/documents/${docId}/send`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['order-documents', orderId] }),
   })
+}
+
+/** 06-ДОГОВІР-2: реєстрація зовнішнього договору (номер/дата/підписант + файл або лінк). */
+export async function registerExternalContract(
+  companyId: string,
+  input: {
+    number: string
+    contractDate: string
+    signerName: string
+    externalUrl?: string
+    file?: File | null
+  }
+): Promise<void> {
+  const token = getAccessToken()
+  const url = `${API_URL}/workspace/companies/${companyId}/contracts/external`
+  let res: Response
+  if (input.file) {
+    const fd = new FormData()
+    fd.append('number', input.number)
+    fd.append('contractDate', input.contractDate)
+    fd.append('signerName', input.signerName)
+    if (input.externalUrl) fd.append('externalUrl', input.externalUrl)
+    fd.append('file', input.file)
+    res = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      body: fd,
+    })
+  } else {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        number: input.number,
+        contractDate: input.contractDate,
+        signerName: input.signerName,
+        ...(input.externalUrl ? { externalUrl: input.externalUrl } : {}),
+      }),
+    })
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: { message?: string }
+    } | null
+    throw new Error(body?.error?.message ?? 'Не вдалося зареєструвати договір')
+  }
+}
+
+/** 06-ДОГОВІР-2: відкрити збережений файл зовнішнього договору. */
+export async function openContractFile(doc: OrderDocument): Promise<void> {
+  const token = getAccessToken()
+  const res = await fetch(`${API_URL}/documents/${doc.id}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Не вдалося відкрити файл')
+  const blobUrl = URL.createObjectURL(await res.blob())
+  window.open(blobUrl, '_blank')
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
 }
 
 /**

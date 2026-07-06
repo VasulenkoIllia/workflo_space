@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { apiErrorMessage } from '@/lib/api'
@@ -59,7 +60,9 @@ import {
   type ClientDocument,
   DOC_STATUS_LABEL,
   DOC_TYPE_LABEL,
+  openContractFile,
   openDocumentPdf,
+  registerExternalContract,
   useClientDocuments,
 } from '@/lib/documents'
 import { isoDay } from '@/lib/finance'
@@ -267,18 +270,143 @@ const DOC_STATUS_COLOR: Record<string, string> = {
   draft: 'var(--wf-fg-muted)',
   generated: 'var(--wf-fg-subtle)',
   sent: 'var(--wf-accent)',
+  accepted: 'var(--wf-success, var(--wf-accent))', // 06-ПІДПИС
+}
+
+/** 06-ДОГОВІР-2: модалка реєстрації договору, підписаного поза системою. */
+function ExternalContractModal({
+  companyId,
+  onClose,
+  onDone,
+}: {
+  companyId: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [number, setNumber] = useState('')
+  const [contractDate, setContractDate] = useState('')
+  const [signerName, setSignerName] = useState('')
+  const [externalUrl, setExternalUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    setSaving(true)
+    try {
+      await registerExternalContract(companyId, {
+        number: number.trim(),
+        contractDate,
+        signerName: signerName.trim(),
+        externalUrl: externalUrl.trim() || undefined,
+        file,
+      })
+      toast.success('Зовнішній договір зареєстровано')
+      onDone()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не вдалося зареєструвати договір')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open title="Зовнішній договір" onClose={onClose}>
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // договір підписано поза системою — фіксуємо реквізити; номер підтягнеться в рахунки/акти
+          як «Підстава»
+        </div>
+        <Input
+          label="Номер договору"
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          placeholder="№ 12/2026"
+        />
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            ДАТА ПІДПИСАННЯ
+          </span>
+          <input
+            type="date"
+            value={contractDate}
+            onChange={(e) => setContractDate(e.target.value)}
+            style={{
+              background: 'var(--wf-surface)',
+              color: 'var(--wf-fg)',
+              border: '1px solid var(--wf-border)',
+              borderRadius: 'var(--wf-radius)',
+              padding: '8px 10px',
+              fontSize: 14,
+            }}
+          />
+        </label>
+        <Input
+          label="Підписант (ПІБ з боку клієнта)"
+          value={signerName}
+          onChange={(e) => setSignerName(e.target.value)}
+        />
+        <Input
+          label="Посилання на договір (опційно)"
+          value={externalUrl}
+          onChange={(e) => setExternalUrl(e.target.value)}
+          placeholder="https://…"
+        />
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            ФАЙЛ ДОГОВОРУ (PDF, опційно)
+          </span>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            style={{ fontSize: 13 }}
+          />
+        </label>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={onClose}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={saving}
+            disabled={
+              number.trim().length === 0 || contractDate === '' || signerName.trim().length < 3
+            }
+            onClick={() => void submit()}
+          >
+            Зареєструвати
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 /** Документи tab (28-Б): all of the client's documents across orders. Internal-non-manager
  * (backend 403s managers → hidden). PDF opens via the Bearer-authed blob fetch. */
 function DocumentsSection({ companyId }: { companyId: string }) {
   const { isManager } = useAuth()
+  const qc = useQueryClient()
   const { data: docs, isLoading } = useClientDocuments(companyId, !isManager)
+  const [externalOpen, setExternalOpen] = useState(false)
   if (isManager) return null
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const documents = docs ?? []
 
   const open = (d: ClientDocument) => {
+    // 06-ДОГОВІР-2: зовнішній договір з файлом → storage; лише лінк → нове вікно
+    if (d.signedExternally) {
+      if (d.storedAs) {
+        openContractFile(d).catch((err) =>
+          toast.error(apiErrorMessage(err, 'Не вдалося відкрити файл'))
+        )
+      } else if (d.externalUrl) {
+        window.open(d.externalUrl, '_blank', 'noopener')
+      } else {
+        toast.info('Для цього договору не додано ні файл, ні посилання')
+      }
+      return
+    }
     // 19-Г: monthly_report без замовлення відкривається generic-роутом
     openDocumentPdf(d.order?.id ?? null, d).catch((err) =>
       toast.error(apiErrorMessage(err, 'Не вдалося відкрити документ'))
@@ -286,7 +414,32 @@ function DocumentsSection({ companyId }: { companyId: string }) {
   }
 
   return (
-    <Card title="Документи" aux={`${documents.length}`}>
+    <Card
+      title="Документи"
+      aux={
+        <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 12 }}
+            onClick={() => setExternalOpen(true)}
+          >
+            + Зовнішній договір
+          </button>
+          <span>{documents.length}</span>
+        </span>
+      }
+    >
+      {externalOpen && (
+        <ExternalContractModal
+          companyId={companyId}
+          onClose={() => setExternalOpen(false)}
+          onDone={() => {
+            setExternalOpen(false)
+            void qc.invalidateQueries({ queryKey: ['client-documents', companyId] })
+          }}
+        />
+      )}
       {documents.length === 0 ? (
         <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
           // ще немає документів — генеруються з замовлення
@@ -307,7 +460,18 @@ function DocumentsSection({ companyId }: { companyId: string }) {
             {documents.map((d) => (
               <tr key={d.id}>
                 <td className="wfp-mono">{d.number}</td>
-                <td>{DOC_TYPE_LABEL[d.type]}</td>
+                <td>
+                  {DOC_TYPE_LABEL[d.type]}
+                  {d.signedExternally && (
+                    <span
+                      className="wfp-mono"
+                      style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}
+                    >
+                      {' '}
+                      · зовнішній
+                    </span>
+                  )}
+                </td>
                 <td>
                   {d.order ? (
                     <Link to={`/orders/${d.order.id}`} className="wfp-link">
@@ -326,13 +490,9 @@ function DocumentsSection({ companyId }: { companyId: string }) {
                   {formatDate(d.generatedAt)}
                 </td>
                 <td className="wfp-num">
-                  {d.order ? (
-                    <button className="wfp-link" type="button" onClick={() => open(d)}>
-                      відкрити
-                    </button>
-                  ) : (
-                    '—'
-                  )}
+                  <button className="wfp-link" type="button" onClick={() => open(d)}>
+                    відкрити
+                  </button>
                 </td>
               </tr>
             ))}

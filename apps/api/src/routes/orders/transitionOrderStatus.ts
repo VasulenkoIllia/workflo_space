@@ -40,8 +40,8 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             approvalStatus: true,
             deletedAt: true,
             // 02-В advance gate (hourly_prepaid only): needs the project's model + the
-            // client's money-account balance.
-            project: { select: { billingModel: true } },
+            // client's money-account balance. contractRequired — 06-ДОГОВІР-2 каскад.
+            project: { select: { billingModel: true, contractRequired: true } },
             company: { select: { moneyBalance: true } },
           },
         })
@@ -99,14 +99,24 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       // ПРИЙНЯТОГО клієнтом договору робота не стартує. Рамкова семантика: будь-який
       // accepted-договір цієї КОМПАНІЇ (не per-order). Внутрішні замовлення без
       // компанії гейт не чіпає.
+      // 06-ДОГОВІР-2 каскад (рішення 06.07): проект має пріоритет — effective =
+      // project.contractRequired ?? agency.requireSignedContract. Проект явно
+      // «без договору» → старт-гейт його замовлення не чіпає; проект «з договором» →
+      // гейт діє навіть без агентського тумблера.
       if (to === OrderInternalStatus.IN_PROGRESS && order.companyId) {
-        const agency = await withTenant((tx) =>
-          tx.agency.findUnique({
-            where: { id: order.agencyId },
-            select: { requireSignedContract: true },
-          })
-        )
-        if (agency?.requireSignedContract) {
+        let effectiveRequire: boolean
+        if (order.project) {
+          effectiveRequire = order.project.contractRequired
+        } else {
+          const agency = await withTenant((tx) =>
+            tx.agency.findUnique({
+              where: { id: order.agencyId },
+              select: { requireSignedContract: true },
+            })
+          )
+          effectiveRequire = agency?.requireSignedContract ?? false
+        }
+        if (effectiveRequire) {
           const contract = await withTenant((tx) =>
             tx.document.findFirst({
               where: { companyId: order.companyId ?? '', type: 'contract', status: 'accepted' },

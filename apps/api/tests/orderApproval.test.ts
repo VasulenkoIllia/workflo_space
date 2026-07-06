@@ -634,3 +634,54 @@ describe('PATCH /orders/:id/status — 06-ПІДПИС договір-гейт (
     await app.close()
   })
 })
+
+describe('PATCH /orders/:id/status — 06-ДОГОВІР-2 каскад (проект → агенція)', () => {
+  const base = {
+    id: 'order-1',
+    agencyId: AGENCY,
+    companyId: COMPANY,
+    internalStatus: 'estimating',
+    requiresApproval: false,
+    approvalStatus: null,
+    deletedAt: null,
+    company: null,
+  }
+  const started = {
+    id: 'order-1',
+    internalStatus: 'in_progress',
+    clientStatus: 'in_progress',
+    onHoldReason: null,
+    cancelledReason: null,
+    updatedAt: new Date(),
+  }
+
+  it('проект явно «без договору» → старт-гейт НЕ застосовується (навіть з увімкненим тумблером агенції)', async () => {
+    agencyFindUnique.mockResolvedValue({ requireSignedContract: true })
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      project: { billingModel: 'fixed_monthly_advance', contractRequired: false },
+    })
+    orderFindUniqueOrThrow.mockResolvedValue(started)
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(200)
+    // проект вирішив — агенцію навіть не питали, договір не шукали
+    expect(agencyFindUnique).not.toHaveBeenCalled()
+    expect(documentFindFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('проект «з договором» → гейт діє навіть коли тумблер агенції вимкнено', async () => {
+    agencyFindUnique.mockResolvedValue({ requireSignedContract: false })
+    documentFindFirst.mockResolvedValue(null)
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      project: { billingModel: 'fixed_monthly_advance', contractRequired: true },
+    })
+    const { app, token } = await authed(TEAM)
+    const res = await patch(app, token, '/orders/order-1/status', { status: 'in_progress' })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.message).toContain('договору')
+    await app.close()
+  })
+})

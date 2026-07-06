@@ -1080,31 +1080,36 @@ model ActivityLog {
 }
 
 model Document {
-  id             String         @id @default(uuid())
-  agencyId       String
-  type           DocumentType
-  number         String
-  orderId        String?
-  order          Order?         @relation(fields: [orderId], references: [id])
-  companyId      String
-  company        Company        @relation(fields: [companyId], references: [id])
-  status         DocumentStatus @default(draft)
-  storedAs       String?
-  sentAt         DateTime?      @db.Timestamptz(3)
+  id               String         @id @default(uuid())
+  agencyId         String
+  type             DocumentType
+  number           String
+  orderId          String?
+  order            Order?         @relation(fields: [orderId], references: [id])
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id])
+  status           DocumentStatus @default(draft)
+  storedAs         String?
+  sentAt           DateTime?      @db.Timestamptz(3)
   // 06-ПІДПИС: прийняття клієнтом (typed signature) — ПІБ/час/IP/акаунт.
   // acceptedById — plain Profile id (project convention, без FK).
-  acceptedAt     DateTime?      @db.Timestamptz(3)
-  acceptedById   String?
-  acceptedByName String?
-  acceptedIp     String?
-  generatedAt    DateTime       @default(now()) @db.Timestamptz(3)
-  createdById    String
-  createdBy      Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
-  executorId     String?
-  executor       Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
-  agency         Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
-  legalEntityId  String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
-  legalEntity    LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  acceptedAt       DateTime?      @db.Timestamptz(3)
+  acceptedById     String?
+  acceptedByName   String?
+  acceptedIp       String?
+  // 06-ДОГОВІР-2: договір, підписаний поза системою (власний номер + дата +
+  // файл у storedAs або посилання). Одразу accepted.
+  signedExternally Boolean        @default(false)
+  contractDate     DateTime?      @db.Timestamptz(3)
+  externalUrl      String?
+  generatedAt      DateTime       @default(now()) @db.Timestamptz(3)
+  createdById      String
+  createdBy        Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  executorId       String?
+  executor         Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+  agency           Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  legalEntityId    String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
+  legalEntity      LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, type, number])
   @@index([agencyId])

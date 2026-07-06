@@ -69,6 +69,7 @@ export interface DocumentRenderData {
   dueDate?: string // invoice: сплатити до
   paymentPurpose?: string // invoice: призначення платежу
   basisRef?: string // act: підстава (рахунок №… від …)
+  contractRef?: string // 06-ДОГОВІР-2: «Договір № … від …» (invoice/act)
   periodFrom?: string
   periodTo?: string
   description?: string | null // specification: контекст із замовлення
@@ -222,7 +223,7 @@ function invoiceBody(d: DocumentRenderData): string {
   return [
     head(d, d.dueDate ? [{ k: 'сплатити до', v: d.dueDate }] : []),
     parties(d, '// Постачальник · From', '// Платник · To'),
-    projectRow(d),
+    projectRow(d, d.contractRef ? [{ k: 'договір', v: d.contractRef }] : []),
     linesTable(lines, 'Опис робіт'),
     totalsBox(d, totals),
     purpose,
@@ -243,7 +244,10 @@ function completionActBody(d: DocumentRenderData): string {
   return [
     head(d, period),
     parties(d, '// Виконавець', '// Замовник'),
-    projectRow(d, d.basisRef ? [{ k: 'підстава', v: d.basisRef }] : []),
+    projectRow(d, [
+      ...(d.basisRef ? [{ k: 'підстава', v: d.basisRef }] : []),
+      ...(d.contractRef ? [{ k: 'договір', v: d.contractRef }] : []),
+    ]),
     `<h2>Перелік виконаних робіт</h2>`,
     linesTable(lines, 'Найменування робіт'),
     totalsBox(d, totals),
