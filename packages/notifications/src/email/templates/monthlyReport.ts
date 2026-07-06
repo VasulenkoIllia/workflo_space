@@ -42,3 +42,30 @@ export function renderMonthlyReportEmail(vars: MonthlyReportEmailVars): Rendered
     html: renderLayout({ locale, title: subject, preheader: subject, bodyHtml }),
   }
 }
+
+/**
+ * 19-Г: лист КЛІЄНТУ з місячним звітом (PDF у вкладенні). Ті самі rows-рядки,
+ * інша тональність (клієнтська) і згадка про вкладення.
+ */
+export interface ClientMonthlyReportEmailVars {
+  agencyName: string
+  periodLabel: string
+  rows: [string, string][]
+  locale?: LocaleKey
+}
+
+export function renderClientMonthlyReportEmail(vars: ClientMonthlyReportEmailVars): RenderedEmail {
+  const locale: LocaleKey = vars.locale ?? 'uk'
+  const t = bindTranslator(locale)
+  const subject = `${t('clientMonthlyReport.subject')} — ${vars.periodLabel} — ${vars.agencyName}`
+  const bodyHtml = [
+    renderHeading(subject),
+    renderParagraph(t('clientMonthlyReport.body')),
+    renderRows(vars.rows),
+    renderMuted(t('clientMonthlyReport.footer')),
+  ].join('\n')
+  return {
+    subject,
+    html: renderLayout({ locale, title: subject, preheader: subject, bodyHtml }),
+  }
+}

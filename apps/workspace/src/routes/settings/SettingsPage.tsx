@@ -123,18 +123,24 @@ function EmailReportsSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['agency-report-settings'],
     queryFn: () =>
-      api.get<{ monthlyReportEnabled: boolean; monthlyReportLastSentAt: string | null }>(
-        '/workspace/agency/report-settings'
-      ),
+      api.get<{
+        monthlyReportEnabled: boolean
+        monthlyReportLastSentAt: string | null
+        clientMonthlyReportEnabled: boolean
+        clientMonthlyReportLastSentAt: string | null
+      }>('/workspace/agency/report-settings'),
   })
   const patch = useMutation({
-    mutationFn: (monthlyReportEnabled: boolean) =>
-      api.patch('/workspace/agency/report-settings', { monthlyReportEnabled }),
+    mutationFn: (body: { monthlyReportEnabled?: boolean; clientMonthlyReportEnabled?: boolean }) =>
+      api.patch('/workspace/agency/report-settings', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-report-settings'] }),
   })
 
   if (isLoading) return <Skeleton style={{ height: 80 }} />
   if (!data) return null
+
+  const lastNote = (at: string | null): string =>
+    at ? `Останній: ${formatDate(at)}` : 'Ще не надсилався.'
 
   return (
     <Card title="Звіти на email">
@@ -144,22 +150,53 @@ function EmailReportsSection() {
           checked={data.monthlyReportEnabled}
           disabled={patch.isPending}
           onChange={(e) =>
-            patch.mutate(e.target.checked, {
-              onSuccess: () =>
-                toast.success(
-                  e.target.checked
-                    ? 'Місячний звіт увімкнено — перший лист прийде на наступному прогоні'
-                    : 'Місячний звіт вимкнено'
-                ),
-            })
+            patch.mutate(
+              { monthlyReportEnabled: e.target.checked },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    e.target.checked
+                      ? 'Місячний звіт увімкнено — перший лист прийде на наступному прогоні'
+                      : 'Місячний звіт вимкнено'
+                  ),
+              }
+            )
           }
         />
         Місячний звіт власникам на email
       </label>
       <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
-        {data.monthlyReportLastSentAt
-          ? `// дайджест за попередній місяць: замовлення · гроші · ліди · SLA. Останній: ${formatDate(data.monthlyReportLastSentAt)}`
-          : '// дайджест за попередній місяць: замовлення · гроші · ліди · SLA. Ще не надсилався.'}
+        // дайджест за попередній місяць: замовлення · гроші · ліди · SLA.{' '}
+        {lastNote(data.monthlyReportLastSentAt)}
+      </div>
+
+      {/* 19-Г: місячний звіт КЛІЄНТАМ — PDF-документ + лист кожній активній компанії */}
+      <label
+        style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, marginTop: 14 }}
+      >
+        <input
+          type="checkbox"
+          checked={data.clientMonthlyReportEnabled}
+          disabled={patch.isPending}
+          onChange={(e) =>
+            patch.mutate(
+              { clientMonthlyReportEnabled: e.target.checked },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    e.target.checked
+                      ? 'Звіти клієнтам увімкнено — листи підуть на наступному прогоні'
+                      : 'Звіти клієнтам вимкнено'
+                  ),
+              }
+            )
+          }
+        />
+        Місячний звіт клієнтам (PDF на email)
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // кожній активній компанії: що зроблено · години · оплати · борг. На «Email для документів»
+        з реквізитів (або власникам компанії). {lastNote(data.clientMonthlyReportLastSentAt)}
       </div>
     </Card>
   )

@@ -72,6 +72,12 @@ const uk: Dictionary = {
     'Короткий підсумок минулого місяця по вашій агенції у Workflo. Деталі — у розділі «Звіти».',
   'monthlyReport.footer':
     'Розсилку можна вимкнути в налаштуваннях агенції (розділ «Звіти на email»).',
+  // 19-Г client monthly report (PDF attached)
+  'clientMonthlyReport.subject': 'Місячний звіт',
+  'clientMonthlyReport.body':
+    'Короткий підсумок нашої роботи за минулий місяць. Повний звіт — у PDF-вкладенні до цього листа.',
+  'clientMonthlyReport.footer':
+    'Питання по звіту? Просто відповідайте на цей лист або напишіть у чат відповідного замовлення.',
 
   'passwordReset.subject': 'Скидання пароля Workflo',
   'passwordReset.h1': 'Скидання пароля',
@@ -223,6 +229,12 @@ const en: Dictionary = {
   'monthlyReport.body':
     'A short summary of last month for your agency in Workflo. Details are in the Reports section.',
   'monthlyReport.footer': 'You can disable this digest in agency settings ("Email reports").',
+  // 19-Г client monthly report (PDF attached)
+  'clientMonthlyReport.subject': 'Monthly report',
+  'clientMonthlyReport.body':
+    'A short summary of our work over the past month. The full report is attached as a PDF.',
+  'clientMonthlyReport.footer':
+    'Questions about the report? Just reply to this email or write in the chat of the relevant order.',
 
   'passwordReset.subject': 'Reset your Workflo password',
   'passwordReset.h1': 'Reset password',

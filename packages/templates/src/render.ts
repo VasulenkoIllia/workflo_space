@@ -499,3 +499,7 @@ export function renderDocumentHtml(kind: DocumentKind, d: DocumentRenderData): s
 ${body}
 </body></html>`
 }
+
+// 19-Г: спільний стиль/екранування для standalone-шаблонів (client monthly report).
+export const DOCUMENT_CSS = CSS
+export const escapeHtml = esc

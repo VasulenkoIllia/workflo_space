@@ -237,3 +237,24 @@ New: ReportSchedule, ReportDefinition; revenue_monthly_mv (migration)
 >   місяць гейтиться `monthlyReportLastSentAt`; щойно увімкнули → перший лист на наступному
 >   прогоні. **Це НЕ 19-Г** (клієнтський місячний звіт із PDF по білінг-циклу — досі відкритий);
 >   це owner-дайджест на тих самих сервісах.
+
+> **UPDATE 06.07.2026 — 19-Г місячний звіт клієнту реалізовано** (з уточненням: «по
+> білінг-циклу» v1 = календарний UTC-місяць — персональні цикли компаній підуть разом
+> із 06-В, коли той зʼявиться).
+>
+> - **Документ:** новий `DocumentType.monthly_report` (company-scoped, `orderId = null`,
+>   номер `RPT-YYYY-######` через DocumentCounter, статус одразу `sent`). PDF-рендер —
+>   власний шаблон `renderClientMonthlyReportHtml` (@workflo/templates, той самий
+>   фірмовий стиль): нові замовлення · завершені (doneAt з ActivityLog) · години по
+>   проєктах · оплати за період · поточний борг (формула billing/overview, per-currency).
+> - **Доставка:** cron `C-client_monthly_report` (доба, гейт `clientMonthlyReportLastSentAt`
+>   раз на місяць) — для кожної АКТИВНОЇ компанії (замовлення/оплати/час у минулому
+>   місяці; порожнім не шлемо) лист із **PDF-вкладенням** на `Company.documentEmail`
+>   (+cc, 06-Г) або, fallback, власникам компанії. Без Chromium — HTML-вкладення
+>   (той самий graceful-патерн, що PDF-роут).
+> - **Перегляд:** generic `GET /documents/:docId/pdf` (команда агенції крім manager АБО
+>   клієнт-учасник компанії) — рендер детермінований (вікно = попередній місяць від
+>   generatedAt, місяць закритий). Документ видно в картці клієнта 360° → «Документи»
+>   (тип «Місячний звіт», відкривається без замовлення).
+> - **Тумблер:** другий чекбокс «Місячний звіт клієнтам (PDF на email)» у картці
+>   «Звіти на email» (/settings, owner) — `GET/PATCH /workspace/agency/report-settings`.

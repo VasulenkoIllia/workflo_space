@@ -6,6 +6,7 @@ import {
   type DocumentRenderData,
   type ReconciliationRow,
   htmlToPdf,
+  renderClientMonthlyReportHtml,
   renderDocumentHtml,
 } from '@workflo/templates'
 import { ApiErrorCode, AppError } from '@workflo/types'
@@ -13,6 +14,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMonthlyReport.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 
@@ -36,6 +38,7 @@ const NUMBER_PREFIX: Record<string, string> = {
   specification: 'SPC',
   reconciliation_act: 'REC',
   contract: 'CTR',
+  monthly_report: 'RPT', // 19-Г: місячний звіт клієнту
 }
 
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -45,6 +48,7 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   specification: 'Специфікація',
   reconciliation_act: 'Акт звірки',
   contract: 'Договір',
+  monthly_report: 'Місячний звіт', // 19-Г
 }
 
 const DOC_SELECT = {
@@ -437,6 +441,81 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
             .header('Content-Type', 'text/html; charset=utf-8')
             .header('X-Document-Format', 'html-fallback')
             .send(html)
+        }
+        throw err
+      }
+    }
+  )
+
+  // ── 19-Г: PDF company-scoped документа БЕЗ замовлення (monthly_report) ───────
+  // Команда агенції (не manager — фінартефакт) АБО клієнт-учасник компанії документа.
+  // Дані перераховуються з вікна попереднього місяця відносно generatedAt —
+  // місяць закритий, тож рендер детермінований.
+  fastify.get<{ Params: { docId: string } }>(
+    '/documents/:docId/pdf',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const doc = await withTenant((tx) =>
+        tx.document.findFirst({
+          where: { id: request.params.docId, type: 'monthly_report' },
+          select: {
+            id: true,
+            number: true,
+            generatedAt: true,
+            agencyId: true,
+            companyId: true,
+            agency: { select: { name: true } },
+            company: { select: { name: true } },
+          },
+        })
+      )
+      if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+
+      const isTeam =
+        isInternalTeam(user) &&
+        user.agencyMemberships.some((m) => m.agencyId === doc.agencyId) &&
+        !isAgencyManager(user, doc.agencyId)
+      const isCompanyClient = user.memberships.some((m) => m.companyId === doc.companyId)
+      if (!isTeam && !isCompanyClient) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)
+      }
+
+      const g = doc.generatedAt
+      const monthStart = new Date(Date.UTC(g.getUTCFullYear(), g.getUTCMonth(), 1))
+      const prevStart = new Date(Date.UTC(g.getUTCFullYear(), g.getUTCMonth() - 1, 1))
+      const numbers = await withTenant((tx) =>
+        computeClientMonthlyNumbers(tx, {
+          agencyId: doc.agencyId,
+          companyId: doc.companyId,
+          from: prevStart,
+          to: monthStart,
+        })
+      )
+      const html = renderClientMonthlyReportHtml({
+        agencyName: doc.agency.name,
+        companyName: doc.company.name,
+        periodLabel: new Intl.DateTimeFormat('uk-UA', { month: 'long', year: 'numeric' }).format(
+          prevStart
+        ),
+        number: doc.number,
+        generatedAt: doc.generatedAt.toLocaleDateString('uk-UA'),
+        newOrders: numbers.newOrders,
+        completedOrders: numbers.completedOrders,
+        hoursByProject: numbers.hoursByProject,
+        totalHours: numbers.totalHours,
+        paidLabel: moneyLabel(numbers.paid),
+        debtLabel: moneyLabel(numbers.debt),
+      })
+      try {
+        const pdf = await htmlToPdf(html)
+        return reply
+          .header('Content-Type', 'application/pdf')
+          .header('Content-Disposition', `inline; filename="${doc.number}.pdf"`)
+          .send(pdf)
+      } catch (err) {
+        if (err instanceof ChromiumUnavailableError) {
+          return reply.header('Content-Type', 'text/html; charset=utf-8').send(html)
         }
         throw err
       }

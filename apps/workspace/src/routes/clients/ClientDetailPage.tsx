@@ -279,8 +279,8 @@ function DocumentsSection({ companyId }: { companyId: string }) {
   const documents = docs ?? []
 
   const open = (d: ClientDocument) => {
-    if (!d.order) return
-    openDocumentPdf(d.order.id, d).catch((err) =>
+    // 19-Г: monthly_report без замовлення відкривається generic-роутом
+    openDocumentPdf(d.order?.id ?? null, d).catch((err) =>
       toast.error(apiErrorMessage(err, 'Не вдалося відкрити документ'))
     )
   }

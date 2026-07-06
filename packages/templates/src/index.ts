@@ -9,3 +9,7 @@ export {
   type ContractSection,
 } from './render.js'
 export { htmlToPdf, ChromiumUnavailableError } from './pdf.js'
+export {
+  renderClientMonthlyReportHtml,
+  type ClientMonthlyReportData,
+} from './clientMonthlyReport.js'
