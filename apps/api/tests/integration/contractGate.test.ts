@@ -25,6 +25,21 @@ run('contract-gate П3 (real PG)', () => {
   function setContract(id: string | null) {
     return prisma.project.update({ where: { id: projectId }, data: { contractDocumentId: id } })
   }
+  // 06-ДОГОВІР-2: гейт вимагає ПРИЙНЯТИЙ договір — привʼязана чернетка не рахується,
+  // тож тест створює справжній Document у потрібному статусі.
+  function createContract(status: 'draft' | 'accepted') {
+    return prisma.document.create({
+      data: {
+        agencyId,
+        companyId,
+        type: 'contract',
+        number: `CG-${tag}-${status}`,
+        status,
+        createdById: creatorId,
+        ...(status === 'accepted' ? { acceptedAt: new Date(), acceptedByName: 'CG Test' } : {}),
+      },
+    })
+  }
   function setAnchor(nextCycleAt: Date | null) {
     return prisma.project.update({ where: { id: projectId }, data: { nextCycleAt } })
   }
@@ -56,10 +71,12 @@ run('contract-gate П3 (real PG)', () => {
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
     await setContract(null)
     await setAnchor(null)
+    await prisma.document.deleteMany({ where: { agencyId } })
   })
 
   afterAll(async () => {
     await prisma.serviceCharge.deleteMany({ where: { agencyId } })
+    await prisma.document.deleteMany({ where: { agencyId } })
     await prisma.project.deleteMany({ where: { agencyId } })
     await prisma.company.deleteMany({ where: { id: companyId } })
     await prisma.agency.deleteMany({ where: { id: agencyId } })
@@ -77,10 +94,19 @@ run('contract-gate П3 (real PG)', () => {
     expect(p.nextCycleAt?.toISOString()).toBe('2026-07-01T00:00:00.000Z') // unchanged → catches up later
   })
 
-  it('attaching the signed contract unblocks generation (catch-up)', async () => {
+  it('attaching the ACCEPTED contract unblocks generation (catch-up); a draft does not', async () => {
     await setAnchor(new Date('2026-07-01T00:00:00Z'))
     await generate(new Date('2026-07-15T00:00:00Z')) // held, nothing created
-    await setContract(randomUUID()) // sign + link the contract
+
+    // 06-ДОГОВІР-2: чернетка привʼязана — гейт лишається закритим
+    const draft = await createContract('draft')
+    await setContract(draft.id)
+    const held = await generate(new Date('2026-07-15T00:00:00Z'))
+    expect(held.created).toBe(0)
+    expect(held.gated).toBe(1)
+
+    const accepted = await createContract('accepted')
+    await setContract(accepted.id) // прийнятий договір відкриває гейт
     const res = await generate(new Date('2026-07-15T00:00:00Z'))
     expect(res.created).toBe(1)
     expect(res.gated).toBe(0)
