@@ -4,16 +4,15 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useCommentStream } from '@workflo/app-core'
 import { EmptyState, Skeleton } from '@workflo/ui'
-import { useConversations, useSetConversationState, type Conversation } from '@/lib/chats'
+import { useConversations, useSetConversationState, type PortalConversation } from '@/lib/chats'
 import { ChatTab } from '@/routes/orders/ChatTab'
 
 /**
- * «Чати» (18-А, рішення власника 05.07): єдиний хаб розмов. Master-detail —
- * зліва треди, згруповані КЛІЄНТ → замовлення (канон групування), з unread-бейджами
- * і прев'ю; праворуч повний чат замовлення (спільний <ChatTab> з mute/відповідальним).
- * Фільтри «всі / мої / без відповіді / архів» — по прапорцях list-ендпоінта.
+ * «Чати» в порталі (18-А): всі розмови моїх замовлень одним списком. Master-detail,
+ * як у workspace-хабі, але клієнтський субсет: без відповідального/«без відповіді»,
+ * лише публічні повідомлення (бек фільтрує), фільтри «всі / архів».
  */
-type Filter = 'all' | 'mine' | 'unanswered' | 'archived'
+type Filter = 'all' | 'archived'
 
 /** Вузький екран → master-detail стає «список ⇄ чат» з кнопкою назад. */
 function useIsNarrow(): boolean {
@@ -27,13 +26,6 @@ function useIsNarrow(): boolean {
   return narrow
 }
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'всі' },
-  { id: 'mine', label: 'мої' },
-  { id: 'unanswered', label: 'без відповіді' },
-  { id: 'archived', label: 'архів' },
-]
-
 const timeShort = (iso: string): string => {
   const d = new Date(iso)
   const sameDay = d.toDateString() === new Date().toDateString()
@@ -42,25 +34,12 @@ const timeShort = (iso: string): string => {
     : d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })
 }
 
-function matches(c: Conversation, filter: Filter): boolean {
-  if (filter === 'archived') return c.archived
-  if (c.archived) return false
-  if (filter === 'mine') return c.mine
-  if (filter === 'unanswered')
-    return (
-      c.lastMessage != null &&
-      !c.lastMessage.authorIsTeam &&
-      !['done', 'cancelled'].includes(c.internalStatus)
-    )
-  return true
-}
-
 function ThreadRow({
   c,
   active,
   onClick,
 }: {
-  c: Conversation
+  c: PortalConversation
   active: boolean
   onClick: () => void
 }) {
@@ -127,13 +106,9 @@ function ThreadRow({
             marginTop: 2,
           }}
         >
-          {c.lastMessage.isInternal ? '🔒 ' : ''}
-          {c.lastMessage.authorName}: {c.lastMessage.preview}
+          {c.lastMessage.isMine ? 'Ви' : c.lastMessage.authorName}: {c.lastMessage.preview}
         </div>
       )}
-      <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginTop: 2 }}>
-        {c.chatOwnerName ? `відп.: ${c.chatOwnerName}` : 'без відповідального'}
-      </div>
     </button>
   )
 }
@@ -144,26 +119,14 @@ export function ChatsPage() {
   const isNarrow = useIsNarrow()
   const [filter, setFilter] = useState<Filter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Живий чат обраного треда (SSE); '' → no-op усередині хука.
   useCommentStream(selectedId ?? '')
   const setConvState = useSetConversationState(selectedId ?? '')
 
   const rows = useMemo(
-    () => (data?.conversations ?? []).filter((c) => matches(c, filter)),
+    () =>
+      (data?.conversations ?? []).filter((c) => (filter === 'archived' ? c.archived : !c.archived)),
     [data, filter]
   )
-  // Канон 18-А: групування клієнт → замовлення (порядок груп = найсвіжіше повідомлення).
-  const groups = useMemo(() => {
-    const m = new Map<string, { name: string; rows: Conversation[] }>()
-    for (const c of rows) {
-      const key = c.companyId ?? '(internal)'
-      const g = m.get(key) ?? { name: c.companyName ?? 'Внутрішні', rows: [] }
-      g.rows.push(c)
-      m.set(key, g)
-    }
-    return [...m.values()]
-  }, [rows])
-
   const selected = rows.find((c) => c.orderId === selectedId) ?? null
   const unreadTotal = (data?.conversations ?? []).reduce(
     (s, c) => s + (c.archived ? 0 : c.unread),
@@ -172,8 +135,7 @@ export function ChatsPage() {
 
   const select = (id: string) => {
     setSelectedId(id)
-    // відкриття чату маркує прочитаним (markCommentsRead у <OrderChat>) → оновити бейджі
-    setTimeout(() => void qc.invalidateQueries({ queryKey: ['ws-conversations'] }), 1500)
+    setTimeout(() => void qc.invalidateQueries({ queryKey: ['portal-conversations'] }), 1500)
   }
 
   const toggleArchive = () => {
@@ -181,27 +143,29 @@ export function ChatsPage() {
     setConvState.mutate(
       { archived: !selected.archived },
       {
-        onSuccess: () => {
-          toast.success(selected.archived ? 'Розмову повернено' : 'Розмову архівовано')
-          void qc.invalidateQueries({ queryKey: ['ws-conversations'] })
-        },
+        onSuccess: () =>
+          toast.success(selected.archived ? 'Розмову повернено' : 'Розмову архівовано'),
       }
     )
   }
 
   return (
     <div>
-      <div className="wfp-ph">
-        <div className="wfp-ph-l">
-          <div className="wfp-ph-sub">
-            // всі розмови з клієнтами{unreadTotal > 0 ? ` · непрочитаних: ${unreadTotal}` : ''}
-          </div>
-          <h1 className="wfp-ph-h1">Чати</h1>
-        </div>
+      <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Чати</div>
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 16 }}
+      >
+        // розмови по ваших замовленнях{unreadTotal > 0 ? ` · непрочитаних: ${unreadTotal}` : ''}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, margin: '12px 0 16px' }}>
-        {FILTERS.map((f) => (
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {(
+          [
+            { id: 'all', label: 'всі' },
+            { id: 'archived', label: 'архів' },
+          ] as { id: Filter; label: string }[]
+        ).map((f) => (
           <button
             key={f.id}
             type="button"
@@ -219,13 +183,13 @@ export function ChatsPage() {
       ) : (data?.conversations ?? []).length === 0 ? (
         <EmptyState
           title="Розмов ще немає"
-          description="Щойно в замовленнях зʼявляться повідомлення — вони зберуться тут."
+          description="Напишіть у чат будь-якого замовлення — розмова зʼявиться тут."
         />
       ) : (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isNarrow ? '1fr' : 'minmax(260px, 340px) 1fr',
+            gridTemplateColumns: isNarrow ? '1fr' : 'minmax(240px, 320px) 1fr',
             gap: 16,
             alignItems: 'start',
           }}
@@ -249,29 +213,13 @@ export function ChatsPage() {
                 // за цим фільтром порожньо
               </div>
             ) : (
-              groups.map((g) => (
-                <div key={g.name}>
-                  <div
-                    className="wfp-mono"
-                    style={{
-                      fontSize: 10,
-                      color: 'var(--wf-fg-muted)',
-                      padding: '8px 10px 2px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '.06em',
-                    }}
-                  >
-                    {g.name}
-                  </div>
-                  {g.rows.map((c) => (
-                    <ThreadRow
-                      key={c.orderId}
-                      c={c}
-                      active={c.orderId === selectedId}
-                      onClick={() => select(c.orderId)}
-                    />
-                  ))}
-                </div>
+              rows.map((c) => (
+                <ThreadRow
+                  key={c.orderId}
+                  c={c}
+                  active={c.orderId === selectedId}
+                  onClick={() => select(c.orderId)}
+                />
               ))
             )}
           </div>
@@ -304,9 +252,6 @@ export function ChatsPage() {
                   >
                     {selected.title} ↗
                   </Link>
-                  <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-                    {selected.companyName ?? 'внутрішнє'}
-                  </span>
                   <button
                     type="button"
                     className="wfp-link"

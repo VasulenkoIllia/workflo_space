@@ -347,3 +347,66 @@ describe('GET /workspace/conversations (18-А, хаб «Чати»)', () => {
     await app.close()
   })
 })
+
+describe('GET /portal/conversations (18-А, portal-inbox)', () => {
+  it('client sees own-company threads with PUBLIC-only preview and unread', async () => {
+    db.order.findMany.mockResolvedValue([
+      {
+        id: 'o-1',
+        title: 'Лендінг',
+        clientStatus: 'in_progress',
+        companyId: 'company-1',
+        company: { name: 'ТОВ Тест' },
+        comments: [
+          {
+            content: 'Публічна відповідь команди',
+            createdAt: new Date('2026-07-05T10:00:00Z'),
+            authorId: 'owner-1',
+            author: { name: 'Власник' },
+          },
+        ],
+        conversationStates: [],
+      },
+    ])
+    db.$queryRaw.mockResolvedValue([{ orderId: 'o-1', unread: 2n }])
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/conversations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data.conversations as Record<string, unknown>[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      orderId: 'o-1',
+      unread: 2,
+      lastMessage: { authorName: 'Власник', isMine: false },
+    })
+
+    // КЛІЄНТСЬКИЙ скоуп: лише мої компанії + лише публічні коментарі (прев'ю)
+    const where = db.order.findMany.mock.calls[0]![0].where
+    expect(where.companyId).toEqual({ in: ['company-1'] })
+    expect(where.comments.some.isInternal).toBe(false)
+    const select = db.order.findMany.mock.calls[0]![0].select
+    expect(select.comments.where.isInternal).toBe(false)
+    // ... і в unread-запиті — фільтр isInternal = false
+    const sqlArg = db.$queryRaw.mock.calls[0]![0] as { strings: readonly string[] }
+    expect(sqlArg.strings.join('?')).toContain('"isInternal" = false')
+    await app.close()
+  })
+
+  it('company-less account gets an empty list (no query)', async () => {
+    const noCompany = { ...CLIENT, memberships: [] }
+    const { app, token } = await authed(noCompany)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/conversations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.conversations).toEqual([])
+    expect(db.order.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+})

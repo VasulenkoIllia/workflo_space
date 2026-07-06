@@ -22,6 +22,7 @@ import { OrderCreatePage } from '@/routes/orders/OrderCreatePage'
 import { InboxPage } from '@/routes/inbox/InboxPage'
 import { ProjectsPage } from '@/routes/projects/ProjectsPage'
 import { SecretsPage } from '@/routes/secrets/SecretsPage'
+import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { Placeholder } from '@/routes/Placeholder'
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
             (фінд.#4) instead of a 400. */}
         <Route element={<CompanyGate />}>
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/chats" element={<ChatsPage />} />
           <Route path="/orders/new" element={<OrderCreatePage />} />
           <Route path="/orders/:id" element={<OrderDetailPage />} />
           <Route path="/billing" element={<BillingPage />} />

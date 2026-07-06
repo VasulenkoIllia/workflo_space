@@ -258,6 +258,100 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
     }
   )
 
+  // ── 18-А: portal-inbox клієнта — «всі чати моїх замовлень одним списком» ──────
+  fastify.get(
+    '/portal/conversations',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const me = user.sub
+      const companyIds = user.memberships.map((m) => m.companyId)
+      if (companyIds.length === 0) {
+        // Акаунт без компанії — грейсфул порожньо (той самий патерн, що CompanyGate).
+        return reply.send({ success: true, data: { conversations: [] } })
+      }
+
+      const data = await withTenant(async (tx) => {
+        // КЛІЄНТСЬКИЙ скоуп: лише замовлення моїх компаній і ЛИШЕ публічні повідомлення —
+        // внутрішні нотатки команди не існують для порталу (ні в прев'ю, ні в unread).
+        const orders = await tx.order.findMany({
+          where: {
+            companyId: { in: companyIds },
+            deletedAt: null,
+            comments: { some: { deletedAt: null, isInternal: false } },
+          },
+          select: {
+            id: true,
+            title: true,
+            clientStatus: true,
+            companyId: true,
+            company: { select: { name: true } },
+            comments: {
+              where: { deletedAt: null, isInternal: false },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                content: true,
+                createdAt: true,
+                authorId: true,
+                author: { select: { name: true } },
+              },
+            },
+            conversationStates: {
+              where: { profileId: me },
+              select: { muted: true, archivedAt: true },
+            },
+          },
+          take: 200,
+        })
+        if (orders.length === 0) return { conversations: [] }
+
+        const orderIds = orders.map((o) => o.id)
+        const unreadRows = await tx.$queryRaw<{ orderId: string; unread: bigint }[]>(Prisma.sql`
+          SELECT c."orderId", count(*) AS unread
+          FROM order_comments c
+          LEFT JOIN order_chat_reads r
+            ON r."orderId" = c."orderId" AND r."profileId" = ${me}
+          WHERE c."orderId" = ANY(${orderIds})
+            AND c."deletedAt" IS NULL
+            AND c."isInternal" = false
+            AND c."authorId" <> ${me}
+            AND (r."lastReadAt" IS NULL OR c."createdAt" > r."lastReadAt")
+          GROUP BY c."orderId"
+        `)
+        const unreadByOrder = new Map(unreadRows.map((r) => [r.orderId, Number(r.unread)]))
+
+        const conversations = orders
+          .map((o) => {
+            const last = o.comments[0]
+            const state = o.conversationStates[0]
+            return {
+              orderId: o.id,
+              title: o.title,
+              clientStatus: o.clientStatus,
+              companyName: o.company?.name ?? null,
+              lastMessage: last
+                ? {
+                    preview: last.content.slice(0, 140),
+                    authorName: last.author.name,
+                    isMine: last.authorId === me,
+                    at: last.createdAt.toISOString(),
+                  }
+                : null,
+              unread: unreadByOrder.get(o.id) ?? 0,
+              muted: state?.muted ?? false,
+              archived: state?.archivedAt != null,
+            }
+          })
+          .sort((a, b) => (b.lastMessage?.at ?? '').localeCompare(a.lastMessage?.at ?? ''))
+
+        return { conversations }
+      })
+
+      return reply.send({ success: true, data })
+    }
+  )
+
   // ── 18-Г: «без відповіді > N год» (view поверх коментарів) ────────────────────
   fastify.get(
     '/workspace/chats/unanswered',

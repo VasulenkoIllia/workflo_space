@@ -9,6 +9,8 @@ import { Icon, type SidebarNavEntry } from '@workflo/ui'
 export const PORTAL_NAV: SidebarNavEntry[] = [
   { id: 'inbox', label: 'Інбокс', icon: <Icon name="inbox" />, href: '/inbox' },
   { id: 'orders', label: 'Замовлення', icon: <Icon name="list" />, href: '/orders' },
+  // 18-А: всі чати моїх замовлень одним списком
+  { id: 'chats', label: 'Чати', icon: <Icon name="inbox" />, href: '/chats' },
   { id: 'projects', label: 'Проєкти', icon: <Icon name="kanban" />, href: '/projects' },
 
   { group: 'Фінанси' },
