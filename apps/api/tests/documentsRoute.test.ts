@@ -21,6 +21,9 @@ const db = {
   exchangeRate: { findUnique: vi.fn() },
   serviceCharge: { findMany: vi.fn() },
   payment: { findMany: vi.fn() },
+  // 06-А: buildRenderData тягне шаблон агенції; pdf-роут — брендинг (null = системні)
+  documentTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
+  agency: { findUnique: vi.fn().mockResolvedValue(null) },
   $queryRaw: vi.fn(),
 }
 

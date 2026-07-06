@@ -352,6 +352,21 @@ agency.requireSignedContract`. Проект явно «без договору»
 
 - `DocumentTemplate { id, agencyId, type, name, layout Json, isDefault, @@unique([agencyId, type, name]) }` (admin, модуль 20). Поля/тексти/умови понад branding. Резолюція: agency-template → agency-default → платформний хардкод (3 рівні).
 
+> **UPDATE 06.07.2026 — 06-А реалізовано (рішення власника: секції з {{змінними}}, всі
+> типи, лого + акцент).** Спрощення проти чернетки: `DocumentTemplate {agencyId, type,
+body Json, @@unique([agencyId, type])}` — ОДИН шаблон на тип (без name-варіантів),
+> 2-рівнева резолюція agency → системний хардкод. body: contract → `{sections:[{h,p[]}]}`;
+> інші типи → `{note?, purpose? (лише рахунки)}`. Підстановки: {{client}} {{client_legal}}
+> {{agency}} {{order}} {{project}} {{amount}} {{number}} {{date}} {{contract}} — невідомий
+> токен лишається видимим у PDF. Роути (owner): `GET/PUT/DELETE
+/workspace/agency/document-templates(/:type)` — GET віддає overrides + довідку змінних +
+> типовий договір, префілений {{токенами}} (стартова точка редактора).
+> **PDF-брендинг** — поля на Agency (`pdfLogoKey` у storage + `pdfAccentColor` hex), НЕ
+> singleton-таблиця: `GET/PUT /workspace/agency/pdf-branding` (multipart лого PNG/JPEG
+> ≤512КБ або JSON accent/removeLogo) + `GET …/logo` для прев'ю. Рендер: лого data-URI в
+> шапці всіх PDF, акцент підміняє системний колір у CSS. UI: дві картки в /settings
+> («Шаблони документів» — редактор секцій/приміток + «PDF-брендинг»).
+
 ### D. Групові операції ✅
 
 - `POST /documents/bulk-generate { type, companyIds[], period }`, `POST /documents/bulk-send { documentIds[] }`, `GET /documents/export.zip?ids=`. Через outbox (черга, тема #2) — щоб масова генерація PDF не блокувала. Корисно для місячного закриття (акти звірки всім).

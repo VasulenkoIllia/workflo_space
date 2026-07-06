@@ -10,6 +10,10 @@ import {
 } from '@workflo/app-core'
 import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import {
+  DocumentTemplatesSection,
+  PdfBrandingSection,
+} from '@/routes/settings/DocumentTemplatesSection'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/format'
@@ -742,6 +746,8 @@ export function SettingsPage() {
         {isOwner && <AgencySecuritySection />}
         {isOwner && <EmailReportsSection />}
         {isOwner && <WorkflowSection />}
+        {isOwner && <DocumentTemplatesSection />}
+        {isOwner && <PdfBrandingSection />}
         {isOwner && <OrderCatalogSection />}
         {isOwner && <SlaPoliciesSection />}
         <LinkedAccountsSection app="workspace" />

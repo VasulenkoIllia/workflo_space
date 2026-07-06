@@ -16,6 +16,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { randomUUID } from 'node:crypto'
 import { writeAuditAsync } from '../../services/audit.js'
+import { applyTemplate } from '../../services/documentTemplates.js'
 import { getStorage } from '../../services/storage.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMonthlyReport.js'
 import { dispatchNotification } from '../../services/notifications.js'
@@ -143,6 +144,34 @@ interface DocRow {
  * звірка — з реальних charges/payments компанії. Дані читаються свіжими (без снапшоту —
  * D2 follow-up).
  */
+/** 06-А: брендинг агенції для PDF — лого як data-URI + акцент. null-safe. */
+async function loadPdfBranding(
+  agencyId: string,
+  agencyName: string
+): Promise<DocumentRenderData['branding']> {
+  const agency = await prisma.agency.findUnique({
+    where: { id: agencyId },
+    select: { pdfLogoKey: true, pdfAccentColor: true },
+  })
+  if (!agency) return undefined
+  let logoDataUri: string | undefined
+  if (agency.pdfLogoKey) {
+    try {
+      const buffer = await getStorage().read(agency.pdfLogoKey)
+      const mime = agency.pdfLogoKey.endsWith('.png') ? 'image/png' : 'image/jpeg'
+      logoDataUri = `data:${mime};base64,${buffer.toString('base64')}`
+    } catch {
+      logoDataUri = undefined // файл зник — рендеримо без лого, не валимо PDF
+    }
+  }
+  if (!logoDataUri && !agency.pdfAccentColor) return undefined
+  return {
+    logoDataUri,
+    brandName: agencyName,
+    accentColor: agency.pdfAccentColor ?? undefined,
+  }
+}
+
 async function buildRenderData(
   tx: Prisma.TransactionClient,
   doc: DocRow
@@ -329,6 +358,14 @@ async function buildRenderData(
     data.contractPlace = doc.legalEntity?.legalAddress?.split(',')[0]?.trim() || undefined
   }
 
+  // 06-А: шаблон агенції накладається ПІСЛЯ повної збірки даних (щоб {{змінні}}
+  // мали значення, включно з contractRef).
+  const template = await tx.documentTemplate.findUnique({
+    where: { agencyId_type: { agencyId: doc.agencyId, type: doc.type as never } },
+    select: { body: true },
+  })
+  if (template) applyTemplate(data, doc.type, template.body)
+
   return data
 }
 
@@ -460,6 +497,7 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
       }
 
       const data = await withTenant((tx) => buildRenderData(tx, doc))
+      data.branding = await loadPdfBranding(doc.agencyId, doc.agency.name)
       const html = renderDocumentHtml(doc.type as DocumentKind, data)
 
       try {

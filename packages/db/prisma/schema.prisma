@@ -1133,6 +1133,24 @@ model DocumentCounter {
   @@map("document_counters")
 }
 
+// 06-А (рішення власника 06.07): per-agency шаблони документів. body JSONB:
+// contract → {sections:[{title,body}]} з {{змінними}}; інші типи → {note?, purpose?}.
+// Один шаблон на тип (v1); нема рядка = системний шаблон (2-рівнева резолюція).
+model DocumentTemplate {
+  id          String       @id @default(uuid())
+  agencyId    String
+  agency      Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  type        DocumentType
+  body        Json
+  updatedById String? // plain Profile id (project convention)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, type])
+  @@index([agencyId])
+  @@map("document_templates")
+}
+
 model BlogPost {
   id          String       @id @default(uuid())
   slug        String       @unique
@@ -1278,27 +1296,31 @@ model Agency {
   clientMonthlyReportLastSentAt DateTime? @db.Timestamptz(3)
   // 06-ПІДПИС: «без прийнятого договору робота не стартує» (рамковий договір компанії)
   requireSignedContract         Boolean   @default(false)
+  // 06-А PDF-брендинг: лого (storage-key) + акцентний hex-колір на всіх PDF
+  pdfLogoKey                    String?
+  pdfAccentColor                String?
 
-  members          AgencyMember[]
-  companies        Company[]
-  orders           Order[]
-  payments         Payment[]
-  documents        Document[]
-  serviceCharges   ServiceCharge[]
-  orderComments    OrderComment[]
-  orderFiles       OrderFile[]
-  timeLogs         TimeLog[]
-  services         Service[]
-  executorRates    ExecutorRate[]
-  auditLogs        AuditLog[]
-  internalTasks    InternalTask[]
-  activityLogs     ActivityLog[]
-  invites          Invite[]
-  documentCounters DocumentCounter[]
-  paymentSettings  PaymentSettings?
-  exchangeRate     ExchangeRate?
-  usageCounters    UsageCounter[]
-  featureFlags     AgencyFeatureFlag[]
+  members           AgencyMember[]
+  documentTemplates DocumentTemplate[]
+  companies         Company[]
+  orders            Order[]
+  payments          Payment[]
+  documents         Document[]
+  serviceCharges    ServiceCharge[]
+  orderComments     OrderComment[]
+  orderFiles        OrderFile[]
+  timeLogs          TimeLog[]
+  services          Service[]
+  executorRates     ExecutorRate[]
+  auditLogs         AuditLog[]
+  internalTasks     InternalTask[]
+  activityLogs      ActivityLog[]
+  invites           Invite[]
+  documentCounters  DocumentCounter[]
+  paymentSettings   PaymentSettings?
+  exchangeRate      ExchangeRate?
+  usageCounters     UsageCounter[]
+  featureFlags      AgencyFeatureFlag[]
 
   // Sprint 5 — financial core
   walletTransactions   WalletTransaction[]

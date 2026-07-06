@@ -80,6 +80,10 @@ export interface DocumentRenderData {
   operations?: ReconciliationRow[]
   contractPlace?: string // contract: місце укладання
   contractSections?: ContractSection[] // нема → типові рамкові розділи
+  // 06-А: редагована примітка з шаблону агенції (всі типи, крім contract — там секції)
+  customNote?: string
+  // 06-А PDF-брендинг: лого (data-URI), назва замість «workflo.space», акцентний колір
+  branding?: { logoDataUri?: string; brandName?: string; accentColor?: string }
 }
 
 /** Minimal HTML-escape — all interpolated values are user/tenant data. */
@@ -119,11 +123,16 @@ function head(d: DocumentRenderData, extraRows: { k: string; v: string }[] = [])
         `<div class="doctype-r"><span class="doctype-l">${esc(r.k)}</span><span class="doctype-d">${esc(r.v)}</span></div>`
     )
     .join('')
+  const brandBlock = d.branding?.logoDataUri
+    ? `<img src="${d.branding.logoDataUri}" alt="" style="max-height:42px;max-width:220px;display:block" />`
+    : d.branding?.brandName
+      ? `<div class="brand-name">${esc(d.branding.brandName)}<span class="brand-dot">.</span></div>`
+      : `<div class="brand-name">workflo<span class="brand-dot">.</span>space</div>
+      <div class="brand-sub">цифровий офіс команди автоматизаторів</div>`
   return `
   <div class="brand">
     <div>
-      <div class="brand-name">workflo<span class="brand-dot">.</span>space</div>
-      <div class="brand-sub">цифровий офіс команди автоматизаторів</div>
+      ${brandBlock}
     </div>
     <div class="doctype">
       <div class="doctype-t">${esc(d.typeLabel)}</div>
@@ -211,6 +220,12 @@ function foot(d: DocumentRenderData): string {
 
 // ── per-type bodies ───────────────────────────────────────────────────────────
 
+/** 06-А: редагована примітка з шаблону агенції ({{змінні}} вже підставлені). */
+function noteBlock(d: DocumentRenderData): string {
+  if (!d.customNote) return ''
+  return `<div class="note"><span class="note-l">примітка</span>${esc(d.customNote)}</div>`
+}
+
 function invoiceBody(d: DocumentRenderData): string {
   const lines = d.lines?.length ? d.lines : fallbackLines(d)
   const totals: { k: string; v: string; grand?: boolean }[] = []
@@ -227,6 +242,7 @@ function invoiceBody(d: DocumentRenderData): string {
     linesTable(lines, 'Опис робіт'),
     totalsBox(d, totals),
     purpose,
+    noteBlock(d),
     issuerSig(d),
     foot(d),
   ].join('\n')
@@ -255,6 +271,7 @@ function completionActBody(d: DocumentRenderData): string {
      <p class="p">Виконавець передав, а Замовник прийняв роботи (послуги), наведені в цьому Акті.
      Роботи виконано в повному обсязі та у встановлені строки. Якість робіт відповідає вимогам
      Замовника. Сторони претензій одна до одної не мають.</p>`,
+    noteBlock(d),
     sigs(d),
     foot(d),
   ].join('\n')
@@ -273,6 +290,7 @@ function specificationBody(d: DocumentRenderData): string {
       { k: 'бюджет', v: `${d.amount} ${d.currency}`, grand: true },
       ...(d.uahTotal ? [{ k: 'в гривні', v: `₴${d.uahTotal}` }] : []),
     ]),
+    noteBlock(d),
     sigs(d),
     foot(d),
   ].join('\n')
@@ -495,10 +513,17 @@ const BODY_BY_KIND: Record<DocumentKind, (d: DocumentRenderData) => string> = {
 
 export function renderDocumentHtml(kind: DocumentKind, d: DocumentRenderData): string {
   const body = BODY_BY_KIND[kind](d)
+  // 06-А брендинг: акцентний колір агенції підміняє системний у CSS (крапка бренду
+  // та тотал-плашки). Формат кольору валідовано на вході (#hex).
+  let css = CSS
+  const accent = d.branding?.accentColor
+  if (accent) {
+    css = css.split('#A3D90D').join(accent).split('#d3f36b').join(accent)
+  }
   return `<!doctype html>
 <html lang="uk"><head><meta charset="utf-8" />
 <title>${esc(d.typeLabel)} ${esc(d.number)}</title>
-<style>${CSS}</style></head>
+<style>${css}</style></head>
 <body>
 ${body}
 </body></html>`
