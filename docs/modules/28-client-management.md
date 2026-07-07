@@ -22,18 +22,19 @@ Tenant: усе agency-scoped (`agencyId` + `isInternalTeam`) + кожна дія
 
 ## 1. Функції / API (Workspace, `isInternalTeam` + agency-scoped)
 
-| Метод    | URL                                                               | Опис                                                                    | Право       |
-| -------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------- |
-| `GET`    | `/workspace/clients`                                              | Список клієнтів (Company) агенції + фільтри/пошук/lTV/лояльність        | team        |
-| `GET`    | `/workspace/clients/:companyId`                                   | Картка: інфо + члени + замовлення + білінг + credentials + lead-джерело | team        |
-| `PATCH`  | `/workspace/clients/:companyId`                                   | Редагувати картку (name/notes/currency/language/tierOverride/реквізити) | owner/admin |
-| `GET`    | `/workspace/clients/:companyId/members`                           | Команда клієнта                                                         | team        |
-| `POST`   | `/workspace/clients/:companyId/members/invite`                    | Запросити користувача клієнта (agency-side)                             | owner/admin |
-| `PATCH`  | `/workspace/clients/:companyId/members/:profileId`                | Змінити роль/права члена клієнта                                        | owner/admin |
-| `DELETE` | `/workspace/clients/:companyId/members/:profileId`                | Зняти члена (профіль лишається)                                         | owner/admin |
-| `POST`   | `/workspace/clients/:companyId/members/:profileId/reset-password` | **Адмін-скидання пароля** (див. §2)                                     | owner/admin |
-| `POST`   | `/workspace/clients/:companyId/deactivate`                        | Деактивувати клієнта (read-only, не видаляти)                           | owner       |
-| `POST`   | `/workspace/clients/:companyId/export`                            | Експорт даних клієнта (GDPR, на запит) → RETENTION.md                   | owner       |
+| Метод    | URL                                                               | Опис                                                                    | Право                |
+| -------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------- |
+| `GET`    | `/workspace/clients`                                              | Список клієнтів (Company) агенції + фільтри/пошук/lTV/лояльність        | team                 |
+| `GET`    | `/workspace/clients/:companyId`                                   | Картка: інфо + члени + замовлення + білінг + credentials + lead-джерело | team                 |
+| `PATCH`  | `/workspace/clients/:companyId`                                   | Редагувати картку (name/notes/currency/language/tierOverride/реквізити) | owner/admin          |
+| `GET`    | `/workspace/clients/:companyId/members`                           | Команда клієнта                                                         | team                 |
+| `GET`    | `/workspace/clients/:companyId/activity`                          | 360° «Активність» — агрег. timeline (замовлення+платежі+документи)      | internal-non-manager |
+| `POST`   | `/workspace/clients/:companyId/members/invite`                    | Запросити користувача клієнта (agency-side)                             | owner/admin          |
+| `PATCH`  | `/workspace/clients/:companyId/members/:profileId`                | Змінити роль/права члена клієнта                                        | owner/admin          |
+| `DELETE` | `/workspace/clients/:companyId/members/:profileId`                | Зняти члена (профіль лишається)                                         | owner/admin          |
+| `POST`   | `/workspace/clients/:companyId/members/:profileId/reset-password` | **Адмін-скидання пароля** (див. §2)                                     | owner/admin          |
+| `POST`   | `/workspace/clients/:companyId/deactivate`                        | Деактивувати клієнта (read-only, не видаляти)                           | owner                |
+| `POST`   | `/workspace/clients/:companyId/export`                            | Експорт даних клієнта (GDPR, на запит) → RETENTION.md                   | owner                |
 
 > Перевикористовує наявне: invite-флоу (`createMemberInvite`), `provisionAgency`-стиль провіжну, credentials (17). Не дублює self-service (13-settings) — це агенційний паралель.
 

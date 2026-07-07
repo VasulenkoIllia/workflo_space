@@ -27,11 +27,13 @@ import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
 import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
 import {
+  useClientActivity,
   useClientMembers,
   useInviteClientMember,
   useRemoveClientMember,
   useResetClientMemberPassword,
   useUpdateClientMemberRole,
+  type ClientActivityItem,
 } from '@/lib/clients'
 import {
   type Credential,
@@ -66,7 +68,7 @@ import {
   useClientDocuments,
 } from '@/lib/documents'
 import { isoDay } from '@/lib/finance'
-import { deadlineMeta, formatDate, formatMoney } from '@/lib/format'
+import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 
 const LEGAL_TYPE_LABEL: Record<string, string> = {
   fop: 'ФОП',
@@ -128,15 +130,16 @@ export function ClientDetailPage() {
   ).length
   const totalValue = orders.reduce((s, o) => s + (o.totalAmount ?? 0), 0)
 
-  // Projects/Finance/Requisites/Секрети are internal-non-manager on the backend → a manager
-  // sees only Огляд (the rest would 403). «Секрети» (vault, module 17) is owner-only. The
-  // Активність tab from the design stays backend-blocked (no per-client activity API yet).
+  // Projects/Finance/Requisites/Активність/Секрети are internal-non-manager on the backend → a
+  // manager sees only Огляд (the rest would 403). «Секрети» (vault, module 17) is owner-only.
+  // «Активність» — агрегований per-client timeline (28-Б, GET /clients/:id/activity).
   const ALL_TABS = [
     { id: 'overview', label: 'Огляд' },
     { id: 'people', label: 'Люди' },
     { id: 'projects', label: 'Проєкти' },
     { id: 'finance', label: 'Фінанси' },
     { id: 'docs', label: 'Документи' },
+    { id: 'activity', label: 'Активність' },
     { id: 'secrets', label: 'Секрети' },
     { id: 'requisites', label: 'Реквізити' },
   ]
@@ -261,6 +264,7 @@ export function ClientDetailPage() {
         </>
       )}
       {safeTab === 'docs' && <DocumentsSection companyId={id} />}
+      {safeTab === 'activity' && <ActivitySection companyId={id} />}
       {safeTab === 'secrets' && <SecretsSection companyId={id} />}
       {safeTab === 'requisites' && <RequisitesSection companyId={id} />}
     </div>
@@ -920,6 +924,74 @@ function AddCredentialForm({
 
 /** «Люди» tab (28-Б): the client company's member roster. Internal-non-manager → hidden for
  * managers. The agency OWNER can change roles / remove members (last-owner-guarded on backend). */
+const ACTIVITY_GLYPH: Record<ClientActivityItem['kind'], string> = {
+  order: '◆',
+  payment: '$',
+  document: '¶',
+}
+const ACTIVITY_TONE: Record<ClientActivityItem['kind'], string> = {
+  order: 'var(--wf-fg-secondary)',
+  payment: 'var(--wf-accent)',
+  document: 'var(--wf-fg-secondary)',
+}
+
+/** 28-Б «Активність» — агрегований per-client timeline (замовлення+платежі+документи). */
+function ActivitySection({ companyId }: { companyId: string }) {
+  const { isManager } = useAuth()
+  const { data, isLoading } = useClientActivity(companyId, !isManager)
+  if (isManager) return null
+  if (isLoading) return <Skeleton style={{ height: 200 }} />
+  const items = data ?? []
+  return (
+    <Card title="Активність" aux={`${items.length}`}>
+      {items.length === 0 ? (
+        <EmptyState
+          title="Поки порожньо"
+          description="Тут з'являться події замовлень, платежі та документи цього клієнта."
+        />
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {items.map((it) => (
+            <div
+              key={it.id}
+              style={{
+                display: 'flex',
+                gap: 12,
+                alignItems: 'baseline',
+                padding: '8px 0',
+                borderBottom: '1px solid var(--wf-border-subtle, var(--wf-border))',
+              }}
+            >
+              <span
+                className="wfp-mono"
+                style={{ fontSize: 13, color: ACTIVITY_TONE[it.kind], width: 14, flexShrink: 0 }}
+                aria-hidden
+              >
+                {ACTIVITY_GLYPH[it.kind]}
+              </span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 14 }}>
+                  {it.orderId ? (
+                    <Link to={`/orders/${it.orderId}`} className="wfp-link">
+                      {it.title}
+                    </Link>
+                  ) : (
+                    it.title
+                  )}
+                </div>
+                <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  {formatDateTime(it.at)}
+                  {it.actorName ? ` · ${it.actorName}` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function PeopleSection({ companyId }: { companyId: string }) {
   const { isManager, isOwner } = useAuth()
   const { data, isLoading } = useClientMembers(companyId, !isManager)

@@ -23,6 +23,28 @@ export function useClientMembers(companyId: string, enabled = true) {
   })
 }
 
+/** GET /workspace/clients/:id/activity — агрегований timeline (28-Б «Активність»).
+ * Об'єднує події замовлень + платежі + документи клієнта. Internal-non-manager. */
+export interface ClientActivityItem {
+  id: string
+  kind: 'order' | 'payment' | 'document'
+  at: string
+  title: string
+  orderId: string | null
+  actorName: string | null
+}
+
+export function useClientActivity(companyId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['client-activity', companyId],
+    queryFn: () =>
+      api
+        .get<{ items: ClientActivityItem[] }>(`/workspace/clients/${companyId}/activity`)
+        .then((r) => r.items),
+    enabled: companyId !== '' && enabled,
+  })
+}
+
 /** PATCH role — agency owner only (28-Б). Backend refuses demoting the last owner (409). */
 export function useUpdateClientMemberRole(companyId: string) {
   const qc = useQueryClient()

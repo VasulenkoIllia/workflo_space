@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import clientActivityRoute from './clientActivity.js'
 import credentialsRoute from './credentials.js'
 import listCompaniesRoute from './listCompanies.js'
 import clientMembersRoute from './members.js'
@@ -12,6 +13,7 @@ import vaultSharesRoute from './vaultShares.js'
 const companyRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(companyRequisitesRoute)
   await fastify.register(clientMembersRoute)
+  await fastify.register(clientActivityRoute)
   await fastify.register(credentialsRoute)
   await fastify.register(portalCredentialsRoute)
   await fastify.register(vaultSharesRoute)
