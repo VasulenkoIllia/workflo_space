@@ -26,6 +26,7 @@ import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { DocumentsPage } from '@/routes/documents/DocumentsPage'
 import { Placeholder } from '@/routes/Placeholder'
 import { SupportPage } from '@/routes/support/SupportPage'
+import { CalendarPage } from '@/routes/calendar/CalendarPage'
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
         </Route>
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/support" element={<SupportPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         {/* design-v2 PORTAL_NAV destinations — Placeholder until their feature wave */}

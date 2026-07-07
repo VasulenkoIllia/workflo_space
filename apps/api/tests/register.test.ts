@@ -116,7 +116,7 @@ describe('POST /auth/register', () => {
     await app.close()
   })
 
-  it('creates profile, company, owner membership, settings + 24 preferences', async () => {
+  it('creates profile, company, owner membership, settings + 27 preferences', async () => {
     wireHappyPath()
     const app = buildApp()
     await app.inject({ method: 'POST', url: '/auth/register', payload: validBody })
@@ -127,7 +127,7 @@ describe('POST /auth/register', () => {
       expect.objectContaining({ data: expect.objectContaining({ role: 'owner' }) })
     )
     const prefArg = txNotificationPreferenceCreateMany.mock.calls[0][0]
-    expect(prefArg.data).toHaveLength(24) // 8 categories × 3 channels (29-Support додав SUPPORT)
+    expect(prefArg.data).toHaveLength(27) // 9 categories × 3 channels (SUPPORT + CALENDAR)
     await app.close()
   })
 

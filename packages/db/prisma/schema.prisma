@@ -45,6 +45,8 @@ model Profile {
   internalTasksAssigned  InternalTask[]        @relation("InternalTaskAssignee")
   comments               OrderComment[]
   ticketMessages         TicketMessage[]
+  calendarEventsCreated  CalendarEvent[]       @relation("CalendarEventCreatedBy")
+  calendarAttendee       CalendarAttendee[]    @relation("CalendarAttendee")
   timeLogs               TimeLog[]
   notificationSettings   NotificationSettings?
   refreshTokens          RefreshToken[]
@@ -211,6 +213,7 @@ model Company {
   credentials        CredentialVault[] // 17-CREDENTIALS
   agency             Agency               @relation(fields: [agencyId], references: [id])
   tickets            Ticket[]
+  calendarEvents     CalendarEvent[]
 
   @@unique([agencyId, slug])
   @@index([agencyId])
@@ -1452,6 +1455,7 @@ model Agency {
   usageCounters     UsageCounter[]
   featureFlags      AgencyFeatureFlag[]
   tickets           Ticket[]
+  calendarEvents    CalendarEvent[]
 
   // Sprint 5 — financial core
   walletTransactions   WalletTransaction[]
@@ -2117,4 +2121,65 @@ model TicketMessage {
   @@index([agencyId])
   @@index([ticketId, createdAt])
   @@map("ticket_messages")
+}
+
+// ── 24 CALENDAR (зустрічі команда↔команда і команда↔клієнт) ───────────────────
+enum CalendarEventType {
+  internal_meeting // команда↔команда
+  client_meeting // команда↔клієнт
+}
+
+enum AttendeeResponse {
+  pending
+  accepted
+  declined
+}
+
+/// Зустріч у календарі. Дедлайни замовлень і відпустки — read-only проєкції у
+/// /calendar/view, окремих рядків тут НЕ створюємо (без дублю стану). timezone —
+/// IANA per-event (ризик R5): зберігаємо, рендеримо у TZ глядача.
+model CalendarEvent {
+  id          String            @id @default(uuid())
+  agencyId    String
+  title       String
+  description String?
+  type        CalendarEventType
+  startsAt    DateTime          @db.Timestamptz(3)
+  endsAt      DateTime          @db.Timestamptz(3)
+  timezone    String            @default("Europe/Kyiv")
+  location    String? // фіз. адреса
+  meetingUrl  String? // Zoom/Meet/Telegram-call
+  companyId   String? // для client_meeting
+  createdById String
+  cancelledAt DateTime?         @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  agency    Agency             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  company   Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy Profile            @relation("CalendarEventCreatedBy", fields: [createdById], references: [id])
+  attendees CalendarAttendee[]
+
+  @@index([agencyId, startsAt])
+  @@index([companyId, startsAt])
+  @@index([createdById])
+  @@map("calendar_events")
+}
+
+/// Запрошений на зустріч (MVP — лише Profile; зовнішні email-гості — Фаза 2 через D2).
+model CalendarAttendee {
+  id          String           @id @default(uuid())
+  agencyId    String
+  eventId     String
+  event       CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile          @relation("CalendarAttendee", fields: [profileId], references: [id])
+  response    AttendeeResponse @default(pending)
+  respondedAt DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([eventId, profileId])
+  @@index([agencyId])
+  @@index([profileId, eventId])
+  @@map("calendar_attendees")
 }

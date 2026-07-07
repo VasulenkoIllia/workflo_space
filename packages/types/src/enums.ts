@@ -166,6 +166,18 @@ export enum TicketPriority {
   URGENT = 'urgent',
 }
 
+/** 24 Calendar: тип зустрічі + відповідь запрошеного. */
+export enum CalendarEventType {
+  INTERNAL_MEETING = 'internal_meeting',
+  CLIENT_MEETING = 'client_meeting',
+}
+
+export enum AttendeeResponse {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  DECLINED = 'declined',
+}
+
 /**
  * Derived (computed) charge state for read DTOs (S5-07, module 25). A function of
  * Σ(allocations) vs `totalAmount` + `dueDate` — NOT the stored `ChargeStatus`
@@ -330,6 +342,7 @@ export enum NotificationCategory {
   DOCUMENTS = 'documents',
   LOYALTY = 'loyalty',
   SUPPORT = 'support',
+  CALENDAR = 'calendar',
   SYSTEM = 'system',
 }
 
@@ -374,6 +387,10 @@ export type NotificationEvent =
   | 'support.new_ticket'
   | 'support.ticket_reply'
   | 'support.ticket_status'
+  | 'calendar.invited'
+  | 'calendar.updated'
+  | 'calendar.cancelled'
+  | 'calendar.reminder'
   | 'billing.payment_failed'
   | 'billing.refund_issued'
   | 'billing.subscription_charged'

@@ -3,7 +3,7 @@ import { NotificationChannel } from '@workflo/types'
 import { notify, type NotifyPrisma } from '../src/notify.js'
 
 function makePrismaStub(opts: {
-  prefs?: Array<{ channel: string }>
+  prefs?: Array<{ channel: string; enabled?: boolean }>
   hasSettings?: boolean
   hasProfile?: boolean
   telegramChatId?: string | null
@@ -17,7 +17,9 @@ function makePrismaStub(opts: {
 
   return {
     notificationPreference: {
-      findMany: vi.fn().mockResolvedValue(prefs),
+      findMany: vi
+        .fn()
+        .mockResolvedValue(prefs.map((p) => ({ channel: p.channel, enabled: p.enabled ?? true }))),
     },
     notificationSettings: {
       findUnique: vi

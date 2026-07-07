@@ -43,6 +43,7 @@ export const PORTAL_NAV: SidebarNavEntry[] = [
 
   { group: 'Підтримка' },
   { id: 'support', label: 'Підтримка', icon: <Icon name="inbox" />, href: '/support' },
+  { id: 'calendar', label: 'Зустрічі', icon: <Icon name="file" />, href: '/calendar' },
 ]
 
 /**

@@ -192,3 +192,35 @@ New: BookingLink; MeetingProvider interface (packages)
 | 24-МІТИНГИ | **MeetingProvider: Google Meet + Zoom** — авто-створення відеолінка для зустрічей/бронювань       | [бек]               | Наголос власника: «інтеграція з гугл календарем, мітом і зумом» |
 
 **Для ТЗ дизайнеру (попередньо):** календар із шарами джерел (А); налаштування типів бронювань (В); кнопка «запланувати дзвінок» у замовленні (Г); вибір відео-провайдера (МІТИНГИ).
+
+---
+
+## UPDATE (07.07.2026) — 24 CALENDAR MVP (Фаза 1) ✅ (реалізовано)
+
+> Рішення власника (07.07): створює **owner + виконавець**; **reminder-cron у MVP**;
+> UI — **місячна сітка**. Відпустки (модуль 23) відсутні → view = зустрічі + дедлайни.
+> Зовнішні email-гості й recurrence — Фаза 2.
+
+- **Моделі** (міграція `20260707_calendar`, RLS): `CalendarEvent {agencyId, title, description?,
+type, startsAt, endsAt, timezone(IANA), location?, meetingUrl?, companyId?, createdById,
+cancelledAt?}`, `CalendarAttendee {agencyId, eventId, profileId, response, respondedAt?}`
+  @@unique([eventId,profileId]). Енуми CalendarEventType(internal/client_meeting),
+  AttendeeResponse(pending/accepted/declined). Relations + FK (agency/company/createdBy/profile).
+- **API:** POST/GET `/calendar/events` (create+invite owner/executor; список свої+де запрошений),
+  PATCH `:id` (creator/owner), POST `:id/cancel`, POST `:id/respond` (accept/decline),
+  GET `/calendar/view?from&to` (зустрічі + дедлайни замовлень як read-only проєкція; клієнт —
+  лише дедлайни своїх компаній). Валідація запрошених (член агенції або компанії події).
+- **Нотифікації** (in-app): calendar.invited/updated/cancelled + **reminder-cron** (кожні 15хв,
+  вікно [now+45; now+60]хв → рівно один прогін). Нова категорія CALENDAR у матриці.
+- **⚠️ Виправлено загальний баг нотифікацій:** нові категорії (SUPPORT, CALENDAR) не мали
+  preference-рядків у НАЯВНИХ користувачів → in-app мовчки губились. Резолвер тепер дефолтить
+  IN_APP для «неконфігурованої» категорії (0 рядків) і поважає явне «все вимкнено»; міграція
+  бекфілить обидві категорії × 3 канали для наявних NotificationSettings.
+- **UI:** workspace `/calendar` (нав «Робота») — місячна grid-сітка (зустрічі + ⏳ дедлайни),
+  create-модалка (тип/дата/час/локація/лінк/запрошені команда+клієнт), клік події → деталь
+  (учасники+відповіді, скасувати). Портал `/calendar` («Зустрічі») — список запрошень +
+  accept/decline. TZ per-event рендериться у tz події.
+- **Гейт:** +5 unit (api **909**), turbo 56/56, інтеграційні 155/155, drift-free. Вживу:
+  owner створив client-зустріч → клієнт бачить + нотиф → accept → view злив зустріч+дедлайни →
+  reminder-cron надіслав нагадування; cancel notify.
+- **Відкладено (Фаза 2):** зовнішні email-гості (D2), recurrence, ICS, booking-лінки, відео-провайдери.

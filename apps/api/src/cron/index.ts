@@ -6,6 +6,7 @@ import { startIdempotencyKeySweepCron, stopIdempotencyKeySweepCron } from './ide
 import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
 import { startClientMonthlyReportCron, stopClientMonthlyReportCron } from './clientMonthlyReport.js'
 import { startDunningCron, stopDunningCron } from './dunning.js'
+import { startCalendarReminderCron, stopCalendarReminderCron } from './calendarReminder.js'
 import { startMonthlyReportCron, stopMonthlyReportCron } from './monthlyReport.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 import { startRefreshTokenSweepCron, stopRefreshTokenSweepCron } from './refreshTokenSweep.js'
@@ -31,6 +32,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startMonthlyReportCron(logger)
   startClientMonthlyReportCron(logger)
   startDunningCron(logger)
+  startCalendarReminderCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -45,4 +47,5 @@ export function stopCronJobs(): void {
   stopMonthlyReportCron()
   stopClientMonthlyReportCron()
   stopDunningCron()
+  stopCalendarReminderCron()
 }

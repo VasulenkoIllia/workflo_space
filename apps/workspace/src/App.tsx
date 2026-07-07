@@ -23,6 +23,7 @@ import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { SupportPage } from '@/routes/support/SupportPage'
+import { CalendarPage } from '@/routes/calendar/CalendarPage'
 import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
 import { LeadDetailPage } from '@/routes/leads/LeadDetailPage'
 import { VaultPage } from '@/routes/vault/VaultPage'
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/support" element={<SupportPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route
           path="/settings"

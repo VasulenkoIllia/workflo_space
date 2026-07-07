@@ -14,8 +14,8 @@ export interface ResolverPrisma {
   notificationPreference: {
     findMany: (args: {
       where: { settingsId: string; category: string; enabled?: boolean; channel?: { in: string[] } }
-      select?: { channel: true }
-    }) => Promise<Array<{ channel: string }>>
+      select?: { channel: true; enabled?: true }
+    }) => Promise<Array<{ channel: string; enabled?: boolean }>>
   }
 }
 
@@ -37,16 +37,24 @@ export async function resolveTargetChannels(
   const category = EVENT_TO_CATEGORY[event]
   const isCritical = CRITICAL_EVENTS.includes(event)
 
+  // Тягнемо ВСІ рядки категорії (не лише enabled), щоб відрізнити «категорію ще не
+  // конфігуровано» (жодного рядка — новий модуль для наявного користувача) від «усе
+  // вимкнено вручну». Перше → дефолт IN_APP (нова категорія не має мовчки зникати);
+  // друге → поважаємо вибір (0 каналів).
   const prefs = await prisma.notificationPreference.findMany({
-    where: { settingsId, category, enabled: true },
-    select: { channel: true },
+    where: { settingsId, category },
+    select: { channel: true, enabled: true },
   })
 
   const userChannels = new Set<NotificationChannel>()
-  for (const p of prefs) {
-    const ch = p.channel as NotificationChannel
-    if (CHANNELS[ch]?.enabled) {
-      userChannels.add(ch)
+  if (prefs.length === 0) {
+    userChannels.add(NotificationChannel.IN_APP)
+  } else {
+    for (const p of prefs) {
+      const ch = p.channel as NotificationChannel
+      if (p.enabled && CHANNELS[ch]?.enabled) {
+        userChannels.add(ch)
+      }
     }
   }
 
