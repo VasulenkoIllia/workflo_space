@@ -9,6 +9,7 @@ import securityHeadersPlugin from './plugins/securityHeaders.js'
 import adminRoutes from './routes/admin/index.js'
 import authRoutes from './routes/auth/index.js'
 import billingRoutes from './routes/billing/index.js'
+import supportRoutes from './routes/support/index.js'
 import companyRoutes from './routes/company/index.js'
 import contentRoutes from './routes/content/index.js'
 import documentRoutes from './routes/documents/index.js'
@@ -115,6 +116,7 @@ export function buildApp() {
   app.register(orderRoutes)
   app.register(fileRoutes)
   app.register(billingRoutes)
+  app.register(supportRoutes)
   app.register(companyRoutes)
   app.register(documentRoutes)
   app.register(telegramLinkRoutes)

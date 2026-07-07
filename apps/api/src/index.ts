@@ -3,6 +3,7 @@ import { buildApp } from './app.js'
 import { validateRuntimeEnv } from './config/env.js'
 import { flushSentry, initSentry } from './observability/sentry.js'
 import { closeAllChatStreams } from './routes/orders/commentsStream.js'
+import { closeAllTicketStreams } from './routes/support/stream.js'
 import { shouldRunWorkersInline, startWorkers, stopWorkers } from './workers.js'
 
 const port = Number(process.env.API_PORT ?? 4000)
@@ -38,7 +39,7 @@ async function shutdown(signal: string) {
   }
 
   // Live SSE sockets keep server.close() pending forever — end them first.
-  const sseClosed = closeAllChatStreams()
+  const sseClosed = closeAllChatStreams() + closeAllTicketStreams()
   if (sseClosed > 0) app.log.info({ sseClosed }, 'Live SSE streams closed')
 
   await app.close()

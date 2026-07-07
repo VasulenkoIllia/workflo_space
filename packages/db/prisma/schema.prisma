@@ -44,6 +44,7 @@ model Profile {
   chargesApprovalDecided ServiceCharge[]       @relation("ChargeApprovalDecidedBy")
   internalTasksAssigned  InternalTask[]        @relation("InternalTaskAssignee")
   comments               OrderComment[]
+  ticketMessages         TicketMessage[]
   timeLogs               TimeLog[]
   notificationSettings   NotificationSettings?
   refreshTokens          RefreshToken[]
@@ -209,6 +210,7 @@ model Company {
   projects           Project[] // 05-ПРОЕКТИ (S5.6 P-1)
   credentials        CredentialVault[] // 17-CREDENTIALS
   agency             Agency               @relation(fields: [agencyId], references: [id])
+  tickets            Ticket[]
 
   @@unique([agencyId, slug])
   @@index([agencyId])
@@ -1449,6 +1451,7 @@ model Agency {
   exchangeRate      ExchangeRate?
   usageCounters     UsageCounter[]
   featureFlags      AgencyFeatureFlag[]
+  tickets           Ticket[]
 
   // Sprint 5 — financial core
   walletTransactions   WalletTransaction[]
@@ -2051,4 +2054,67 @@ enum ChargeFrequency {
   monthly
   quarterly
   annual
+}
+
+// ── 29 SUPPORT (тікети підтримки — звернення поза замовленням) ────────────────
+enum TicketStatus {
+  open
+  pending // чекаємо відповіді клієнта
+  resolved
+  closed
+}
+
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+/// Тікет підтримки: клієнт звертається ПОЗА замовленням (загальне питання/проблема/запит).
+/// Команда веде зі статусами/пріоритетами/призначенням. Клієнт бачить лише свої тікети
+/// й лише public-повідомлення (internal-нотатки — leak-guard, як OrderComment).
+model Ticket {
+  id              String         @id @default(uuid())
+  agencyId        String
+  companyId       String? // компанія-клієнт (null = звернення без компанії, рідко)
+  openedById      String // Profile, що відкрив
+  subject         String
+  category        String? // пресет MVP (питання/проблема/запит/інше); конфіговані — потім
+  priority        TicketPriority @default(normal)
+  status          TicketStatus   @default(open)
+  assignedToId    String? // executor
+  source          String         @default("portal") // portal | email | telegram
+  firstResponseAt DateTime?      @db.Timestamptz(3) // перша team-відповідь (SLA-хук на майбутнє)
+  resolvedAt      DateTime?      @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+
+  agency   Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  company  Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  messages TicketMessage[]
+
+  @@index([agencyId, status])
+  @@index([companyId])
+  @@index([assignedToId])
+  @@map("tickets")
+}
+
+/// Повідомлення треду тікета — дзеркалить OrderComment (isInternal leak-guard + edit/delete + SSE).
+model TicketMessage {
+  id         String    @id @default(uuid())
+  agencyId   String
+  ticketId   String
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     Profile   @relation(fields: [authorId], references: [id])
+  content    String
+  isInternal Boolean   @default(false) // team-only нотатка (клієнт не бачить)
+  editedAt   DateTime? @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
 }

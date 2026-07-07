@@ -22,6 +22,7 @@ import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
+import { SupportPage } from '@/routes/support/SupportPage'
 import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
 import { LeadDetailPage } from '@/routes/leads/LeadDetailPage'
 import { VaultPage } from '@/routes/vault/VaultPage'
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/inbox" element={<InboxPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route
           path="/settings"

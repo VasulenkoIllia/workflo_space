@@ -132,3 +132,34 @@ Leak-guard, participant-IDOR, tenant-guard — як у 03/02 (перевикор
 Багаторівневі guided-тури «за руку»: (1) клієнт у Portal — що де налаштовується і як працювати; (2) виконавець у Workspace; (3) onboarding нового owner-тенанта на SaaS. **Рівні екскурсії залежать від ролі і відкритого функціоналу.** Реалізація — ПІСЛЯ закриття функціоналу (рішення власника: «на потім, але цікаво реалізувати»). → у план як окрема пізня фаза + дизайн-ТЗ на тур-оверлеї.
 
 **Для ТЗ дизайнеру:** дизайн-ТЗ на тур-оверлеї продуктових турів (⭐, окрема пізня фаза).
+
+---
+
+## UPDATE (07.07.2026) — 29-P1 SUPPORT MVP ✅ (реалізовано)
+
+> Рішення власника (07.07): будуємо MVP-ядро; категорія — **фіксований пресет**
+> (питання/проблема/запит/інше); відкривати може **будь-який учасник компанії**;
+> realtime — **SSE одразу** (chatBus-патерн).
+
+- **Моделі** (міграція `20260707_support_tickets`, RLS): `Ticket {agencyId, companyId?,
+openedById, subject, category?, priority, status, assignedToId?, source, firstResponseAt?,
+resolvedAt?}`, `TicketMessage {agencyId, ticketId, authorId, content, isInternal,
+editedAt?, deletedAt?}` (дзеркалить OrderComment — author-relation для leak-guard-мітки
+  kind). Енуми TicketStatus(open/pending/resolved/closed), TicketPriority(low/normal/high/urgent).
+- **API:** Portal — POST/GET `/support/tickets`, GET `/support/tickets/:id` (public-only),
+  POST `/support/tickets/:id/messages`. Workspace — GET `/workspace/tickets` (фільтри
+  status/priority/assignee), PATCH `/workspace/tickets/:id` (status/priority/assign/category).
+  SSE — GET `/support/tickets/:id/messages/stream` (leak-guard re-fetch з БД, ticketBus).
+- **Статус-логіка:** команда відповіла публічно → pending + firstResponseAt; клієнт
+  відповів → open; PATCH resolved → resolvedAt. Internal-нотатки статус не чіпають і
+  клієнту невидимі (`isInternal:false` у клієнтському where + serialize мітить kind).
+- **Нотифікації** (in-app): support.new_ticket (команді), support.ticket_reply (протилежній
+  стороні), support.ticket_status (клієнту). Нова категорія `SUPPORT` у матриці preferences.
+- **UI:** портал `/support` (був Placeholder) — список + «+ Звернення» (пресет-категорія +
+  пріоритет) + тред-модалка з live-SSE; workspace `/support` (нова, у нав «Робота») —
+  черга з фільтрами + master-detail (статус/пріоритет/призначення + public/internal-реплай).
+- **Гейт:** +5 unit (api **904**), turbo 56/56, інтеграційні 155/155, drift-free. Вживу:
+  клієнт відкрив тікет → команда у черзі+нотиф → internal-нотатка + public-відповідь
+  (клієнт бачить лише public) → клієнт відповів (open) → resolved. SSE в обох UI.
+- **Відкладено (P2):** SLA+breach-cron, chat-hub інтеграція, convert-to-order, категорії-CRUD,
+  canned-replies, KB, CSAT, email-джерело.

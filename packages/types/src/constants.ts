@@ -152,6 +152,9 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'billing.payment_refunded': NotificationCategory.BILLING,
   'billing.debt_written_off': NotificationCategory.BILLING,
   'billing.credit_note_issued': NotificationCategory.BILLING,
+  'support.new_ticket': NotificationCategory.SUPPORT,
+  'support.ticket_reply': NotificationCategory.SUPPORT,
+  'support.ticket_status': NotificationCategory.SUPPORT,
   'billing.payment_failed': NotificationCategory.BILLING,
   'billing.refund_issued': NotificationCategory.BILLING,
   'billing.subscription_charged': NotificationCategory.BILLING,
@@ -363,3 +366,13 @@ export const NOTIFICATION_ROLLUP_THRESHOLD = 3
 
 /** Auto-stop a running timer after this many hours (safety net for forgotten timers). */
 export const TIME_TRACKING_AUTO_STOP_HOURS = 8
+
+/** 29 Support MVP: фіксований пресет категорій тікета (конфіговані per-agency — потім). */
+export const TICKET_CATEGORIES = ['question', 'problem', 'request', 'other'] as const
+export type TicketCategory = (typeof TICKET_CATEGORIES)[number]
+export const TICKET_CATEGORY_LABEL: Record<TicketCategory, string> = {
+  question: 'Питання',
+  problem: 'Проблема',
+  request: 'Запит',
+  other: 'Інше',
+}

@@ -151,6 +151,21 @@ export enum ChargeStatus {
   WRITTEN_OFF = 'written_off',
 }
 
+/** 29 Support: тікет-статус (open→pending↔resolved→closed) + пріоритет. */
+export enum TicketStatus {
+  OPEN = 'open',
+  PENDING = 'pending',
+  RESOLVED = 'resolved',
+  CLOSED = 'closed',
+}
+
+export enum TicketPriority {
+  LOW = 'low',
+  NORMAL = 'normal',
+  HIGH = 'high',
+  URGENT = 'urgent',
+}
+
 /**
  * Derived (computed) charge state for read DTOs (S5-07, module 25). A function of
  * Σ(allocations) vs `totalAmount` + `dueDate` — NOT the stored `ChargeStatus`
@@ -314,6 +329,7 @@ export enum NotificationCategory {
   BILLING = 'billing',
   DOCUMENTS = 'documents',
   LOYALTY = 'loyalty',
+  SUPPORT = 'support',
   SYSTEM = 'system',
 }
 
@@ -355,6 +371,9 @@ export type NotificationEvent =
   | 'billing.payment_refunded'
   | 'billing.debt_written_off'
   | 'billing.credit_note_issued'
+  | 'support.new_ticket'
+  | 'support.ticket_reply'
+  | 'support.ticket_status'
   | 'billing.payment_failed'
   | 'billing.refund_issued'
   | 'billing.subscription_charged'
