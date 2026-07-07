@@ -10,6 +10,7 @@ export interface Payout {
   period: string
   baseSalary: string
   billableHours: string
+  paidHours: string
   hourlyEarned: string
   commissionAmount: string
   referralBonusAmount: string

@@ -112,6 +112,9 @@ export function ProfilePage() {
                     <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
                       оклад {formatMoney(num(row.baseSalary))} · комісія{' '}
                       {formatMoney(num(row.commissionAmount))}
+                      {num(row.hourlyEarned)
+                        ? ` · погодинно ${formatMoney(num(row.hourlyEarned))} (${num(row.paidHours)} год)`
+                        : ''}
                       {num(row.referralBonusAmount)
                         ? ` · реф ${formatMoney(num(row.referralBonusAmount))}`
                         : ''}

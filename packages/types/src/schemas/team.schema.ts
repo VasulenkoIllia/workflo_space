@@ -22,8 +22,8 @@ export const periodString = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expecte
 export const createExecutorRateSchema = z
   .object({
     monthlySalary: money.nullish(),
-    // Базова собівартість години (rateResolution каскад §2.3 fallback) — НЕ клієнтська
-    // ставка і (поки) не входить у payout (S5-D6 відкладено).
+    // Собівартість години (rateResolution каскад §2.3) І СТАВКА ОПЛАТИ погодинника: payout
+    // hourlyEarned = прийняті payableHours × hourlyRate (07.07, S5-D6 розблоковано). НЕ клієнтська ставка.
     hourlyRate: money.nullish(),
     commissionPercent: z.number().finite().min(0).max(100).optional(),
     currency: z.enum(['USD', 'UAH', 'EUR']).optional(),

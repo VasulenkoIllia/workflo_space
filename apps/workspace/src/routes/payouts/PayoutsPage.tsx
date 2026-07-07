@@ -113,6 +113,9 @@ function PayoutRow({ p, name }: { p: Payout; name: string }) {
         <div style={{ fontWeight: 600 }}>{name}</div>
         <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
           оклад {formatMoney(num(p.baseSalary))} · комісія {formatMoney(num(p.commissionAmount))}
+          {num(p.hourlyEarned)
+            ? ` · погодинно ${formatMoney(num(p.hourlyEarned))} (${num(p.paidHours)} год)`
+            : ''}
           {num(p.referralBonusAmount) ? ` · реф ${formatMoney(num(p.referralBonusAmount))}` : ''}
         </div>
       </div>

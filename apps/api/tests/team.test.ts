@@ -13,6 +13,7 @@ const payoutFindMany = vi.fn()
 const payoutUpsert = vi.fn()
 const payoutUpdate = vi.fn()
 const timeLogAggregate = vi.fn()
+const settlementAggregate = vi.fn() // PAYROLL: Σ прийнятих payableHours
 const paymentAggregate = vi.fn()
 const auditLogCreate = vi.fn()
 const referralSettingsFindUnique = vi.fn() // P-9b: employee-referral % lookup in generatePayout
@@ -41,6 +42,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
       update: payoutUpdate,
     },
     timeLog: { aggregate: timeLogAggregate },
+    orderExecutorSettlement: { aggregate: settlementAggregate },
     payment: { aggregate: paymentAggregate },
     auditLog: { create: auditLogCreate },
     referralSettings: { findUnique: referralSettingsFindUnique },
@@ -63,6 +65,7 @@ const mockTx = {
   executorPayout: { findUnique: payoutFindUnique, upsert: payoutUpsert },
   executorRate: { findFirst: rateFindFirst },
   timeLog: { aggregate: timeLogAggregate },
+  orderExecutorSettlement: { aggregate: settlementAggregate },
   payment: { aggregate: paymentAggregate },
   referralSettings: { findUnique: referralSettingsFindUnique },
   company: { findMany: companyFindMany },
@@ -109,6 +112,7 @@ beforeEach(() => {
   auditLogCreate.mockResolvedValue({})
   referralSettingsFindUnique.mockResolvedValue(null) // P-9b: no settings → 0% → no bonus
   companyFindMany.mockResolvedValue([])
+  settlementAggregate.mockResolvedValue({ _sum: { payableHours: null } }) // PAYROLL: no accepted hours
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -141,9 +145,45 @@ describe('generatePayout (service)', () => {
     })
     expect(res.baseSalary).toBe('1000.00')
     expect(res.billableHours).toBe('20.00')
+    expect(res.paidHours).toBe('0.00')
     expect(res.hourlyEarned).toBe('0.00')
     expect(res.commissionAmount).toBe('500.00') // 10% of 5000
     expect(res.total).toBe('1500.00')
+  })
+
+  it('PAYROLL: погодинник — hourlyEarned = прийняті payableHours × hourlyRate', async () => {
+    payoutFindUnique.mockResolvedValue(null)
+    // погодинник: без окладу, ставка 40/год
+    rateFindFirst.mockResolvedValue({
+      monthlySalary: null,
+      hourlyRate: Dec('40.00'),
+      commissionPercent: Dec('0.00'),
+      currency: 'USD',
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('10.00') } }) // залоговано 10
+    settlementAggregate.mockResolvedValue({ _sum: { payableHours: Dec('5.00') } }) // прийнято 5
+    paymentAggregate.mockResolvedValue({ _sum: { amountUsd: null } })
+    payoutUpsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: PAYOUT_ID,
+        executorId: EXEC_ID,
+        period: '2026-06',
+        ...create,
+        status: 'draft',
+        approvedBy: null,
+        paidAt: null,
+      })
+    )
+    const res = await generatePayout(mockTx as never, {
+      agencyId: 'agency-1',
+      executorId: EXEC_ID,
+      period: '2026-06',
+    })
+    expect(res.baseSalary).toBe('0.00')
+    expect(res.billableHours).toBe('10.00') // залоговано (інфо)
+    expect(res.paidHours).toBe('5.00') // прийнято (оплатне)
+    expect(res.hourlyEarned).toBe('200.00') // 5 × 40 — платимо за прийняті, не за залоговані
+    expect(res.total).toBe('200.00')
   })
 
   it('does not recompute an approved payout (idempotent / no clobber)', async () => {
@@ -153,6 +193,7 @@ describe('generatePayout (service)', () => {
       period: '2026-06',
       baseSalary: Dec('1000.00'),
       billableHours: Dec('0.00'),
+      paidHours: Dec('0.00'),
       hourlyEarned: Dec('0.00'),
       commissionAmount: Dec('0.00'),
       referralBonusAmount: Dec('0.00'),
@@ -411,6 +452,7 @@ describe('payout workflow', () => {
       period: '2026-06',
       baseSalary: Dec('1000.00'),
       billableHours: Dec('0.00'),
+      paidHours: Dec('0.00'),
       hourlyEarned: Dec('0.00'),
       commissionAmount: Dec('0.00'),
       referralBonusAmount: Dec('0.00'),

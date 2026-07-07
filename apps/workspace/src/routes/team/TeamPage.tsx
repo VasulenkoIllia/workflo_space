@@ -332,7 +332,7 @@ function EditMemberModal({ member, onClose }: { member: TeamMember; onClose: () 
             onChange={(e) => setSalary(e.target.value)}
           />
           <Input
-            label="Собівартість, $/год"
+            label="Ставка год (собівар.=оплата)"
             type="number"
             value={hourly}
             onChange={(e) => setHourly(e.target.value)}
@@ -343,6 +343,9 @@ function EditMemberModal({ member, onClose }: { member: TeamMember; onClose: () 
             value={commission}
             onChange={(e) => setCommission(e.target.value)}
           />
+        </div>
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // ставка год = собівартість (маржа) + оплата погодиннику (payout за прийняті години)
         </div>
         <Select
           label="Валюта"

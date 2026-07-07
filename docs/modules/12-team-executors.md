@@ -351,8 +351,18 @@ TimeLog → таймерна модель (T2); `ExecutorRate` додає `hourl
 
 ### B. Авто-розрахунок виплат ✅
 
-- `ExecutorPayout { id, agencyId, executorId, period(month), baseSalary, commissionAmount, billableHours, hourlyEarned, total, status(draft|approved|paid), approvedBy, createdAt }`.
-- Обчислюється з `ExecutorRate` (оклад + % комісії від оплачених замовлень) + `time_logs` (білабельні години × ставка). Payout-відомість + `/team/payouts`.
+- `ExecutorPayout { id, agencyId, executorId, period(month), baseSalary, commissionAmount, billableHours, paidHours, hourlyEarned, referralBonusAmount, total, status(draft|approved|paid), approvedBy, createdAt }`.
+- `total = baseSalary + hourlyEarned + commissionAmount + referralBonusAmount`:
+  - **baseSalary** = `ExecutorRate.monthlySalary` активної у періоді ставки (окладні);
+  - **commissionAmount** = `commissionPercent` × Σ підтверджених платежів по замовленнях виконавця;
+  - **billableHours** = Σ `TimeLog.hours` у періоді — **залоговано** (інформаційно);
+  - **paidHours** = Σ прийнятих `OrderExecutorSettlement.payableHours` по замовленнях, ПРИЙНЯТИХ
+    (`Order.acceptedAt`) у періоді — **оплатні** години (ПРИЙМАННЯ→PAYROLL, 07.07);
+  - **hourlyEarned** = `paidHours × ExecutorRate.hourlyRate` (погодинники; окладні → hourlyRate null → 0).
+    Замикає money-loop приймання: платимо за ПРИЙНЯТІ години (owner/тімлід звірив), а не за сирі залоговані.
+- `ExecutorRate.hourlyRate` = **і собівартість години** (маржа, rateResolution каскад §2.3) **і ставка
+  оплати** погодинника (payout). Payout-відомість + `/team/payouts`, owner-only, ідемпотентна генерація.
+- _Відкладено:_ hourly-cost у P&L (зараз P&L рахує лише monthlySalary; погодинники → 0 у expenses — окремий зріз реконсиляції).
 
 ### C. Timesheet approval ✅
 

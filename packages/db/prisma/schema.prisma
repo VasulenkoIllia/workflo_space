@@ -1076,7 +1076,7 @@ model ExecutorRate {
   executorId        String
   executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
   monthlySalary     Decimal?  @db.Decimal(10, 2)
-  hourlyRate        Decimal?  @db.Decimal(10, 2) // 12-КОМПЕНСАЦІЇ (P-5): БАЗОВА собівартість години (fallback каскаду §2.3)
+  hourlyRate        Decimal?  @db.Decimal(10, 2) // 12-КОМПЕНСАЦІЇ (P-5): собівартість години (каскад §2.3) + СТАВКА ОПЛАТИ погодинника (payout hourlyEarned, 07.07 S5-D6)
   zeroCostDefault   Boolean   @default(false) // 22 (P-5): глобальна «нульова собівартість» (owner/партнери); каскад tier 3
   currency          String    @default("USD") // currency of monthlySalary/hourlyRate — needed for P&L (module 22)
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
@@ -1889,7 +1889,10 @@ model ExecutorPayout {
   executorId          String
   period              String // 'YYYY-MM'
   baseSalary          Decimal      @default(0) @db.Decimal(10, 2)
-  billableHours       Decimal      @default(0) @db.Decimal(8, 2)
+  billableHours       Decimal      @default(0) @db.Decimal(8, 2) // Σ TimeLog у періоді (залоговано, інфо)
+  // ПРИЙМАННЯ→PAYROLL (07.07): оплатні год = Σ прийнятих payableHours (order.acceptedAt у періоді);
+  // hourlyEarned = paidHours × ExecutorRate.hourlyRate (для погодинних; для окладних hourlyRate null).
+  paidHours           Decimal      @default(0) @db.Decimal(8, 2)
   hourlyEarned        Decimal      @default(0) @db.Decimal(10, 2)
   commissionAmount    Decimal      @default(0) @db.Decimal(10, 2)
   // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): % of net income from clients this executor referred

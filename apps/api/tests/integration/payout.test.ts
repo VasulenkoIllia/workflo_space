@@ -54,6 +54,7 @@ run('S5-04 payout (real PG)', () => {
     await prisma.executorPayout.deleteMany({ where: { agencyId } })
     await prisma.payment.deleteMany({ where: { agencyId } })
     await prisma.timeLog.deleteMany({ where: { agencyId } })
+    await prisma.orderExecutorSettlement.deleteMany({ where: { agencyId } })
     await prisma.executorRate.deleteMany({ where: { agencyId } })
     await prisma.order.deleteMany({ where: { agencyId } })
     await prisma.company.deleteMany({ where: { id: companyId } })
@@ -67,7 +68,9 @@ run('S5-04 payout (real PG)', () => {
     await prisma.executorPayout.deleteMany({ where: { agencyId } })
     await prisma.payment.deleteMany({ where: { agencyId } })
     await prisma.timeLog.deleteMany({ where: { agencyId } })
+    await prisma.orderExecutorSettlement.deleteMany({ where: { agencyId } })
     await prisma.executorRate.deleteMany({ where: { agencyId } })
+    await prisma.order.update({ where: { id: orderId }, data: { acceptedAt: null } })
   })
 
   async function seedRate(monthlySalary: number, commissionPercent: number, from = '2026-05-01') {
@@ -79,6 +82,30 @@ run('S5-04 payout (real PG)', () => {
         commissionPercent,
         effectiveFrom: new Date(`${from}T00:00:00Z`),
       },
+    })
+  }
+  // PAYROLL: погодинна ставка (без окладу)
+  async function seedHourlyRate(hourlyRate: number, from = '2026-05-01') {
+    await prisma.executorRate.create({
+      data: { agencyId, executorId, hourlyRate, effectiveFrom: new Date(`${from}T00:00:00Z`) },
+    })
+  }
+  // ПРИЙМАННЯ: прийняте замовлення + settlement з payableHours
+  async function seedAcceptedSettlement(payableHours: number, acceptedAt = '2026-06-20') {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { acceptedAt: new Date(`${acceptedAt}T00:00:00Z`) },
+    })
+    await prisma.orderExecutorSettlement.upsert({
+      where: { orderId_profileId: { orderId, profileId: executorId } },
+      create: {
+        agencyId,
+        orderId,
+        profileId: executorId,
+        trackedHours: payableHours,
+        payableHours,
+      },
+      update: { payableHours },
     })
   }
   async function seedHours(hours: number, date = '2026-06-10') {
@@ -117,6 +144,19 @@ run('S5-04 payout (real PG)', () => {
     expect(p.commissionAmount).toBe('500.00') // 10% of 5000
     expect(p.total).toBe('1500.00')
     expect(p.status).toBe('draft')
+  })
+
+  it('PAYROLL: hourly executor — hourlyEarned = accepted payableHours × hourlyRate', async () => {
+    await seedHourlyRate(40)
+    await seedHours(10) // залоговано 10 (billableHours, інфо)
+    await seedAcceptedSettlement(5) // прийнято 5 (paidHours, оплатне)
+
+    const p = await generate('2026-06')
+    expect(p.baseSalary).toBe('0.00')
+    expect(p.billableHours).toBe('10.00') // Σ TimeLog
+    expect(p.paidHours).toBe('5.00') // прийняті payableHours
+    expect(p.hourlyEarned).toBe('200.00') // 5 × 40 — платимо за прийняті, не за залоговані
+    expect(p.total).toBe('200.00')
   })
 
   it('generation is idempotent (re-run refreshes the draft, one row per executor+period)', async () => {

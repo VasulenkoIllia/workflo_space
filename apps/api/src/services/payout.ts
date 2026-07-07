@@ -9,9 +9,11 @@ import { computeEmployeeReferralBonus } from './referral.js'
  *
  * `total = baseSalary + hourlyEarned + commissionAmount + referralBonusAmount`.
  *  - baseSalary = the ExecutorRate active in the period (`monthlySalary`);
- *  - billableHours = Σ TimeLog.hours in the period (recorded);
- *  - hourlyEarned = 0 — ExecutorRate carries no hourly rate yet (a flagged future
- *    column); billableHours is tracked so it can light up without a recalc;
+ *  - billableHours = Σ TimeLog.hours in the period (recorded — informational);
+ *  - paidHours = Σ ACCEPTED payableHours (OrderExecutorSettlement) on orders accepted
+ *    (`acceptedAt`) in the period — the reconciled hours we actually pay for (ПРИЙМАННЯ);
+ *  - hourlyEarned = paidHours × ExecutorRate.hourlyRate (погодинники; окладні → hourlyRate
+ *    null → 0). Замикає money-loop приймання: платимо за прийняті, а не сирі залоговані години;
  *  - commissionAmount = commissionPercent × Σ confirmed revenue (amountUsd) on orders
  *    assigned to the executor in the period.
  *  - referralBonusAmount = employee-referral % × Σ net income of clients this executor
@@ -51,7 +53,8 @@ export async function getActiveRate(
       OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: bounds.start } }],
     },
     orderBy: { effectiveFrom: 'desc' },
-    select: { monthlySalary: true, commissionPercent: true, currency: true },
+    // hourlyRate — ставка оплати погодинника (07.07 S5-D6), поряд із cost-роллю в маржі.
+    select: { monthlySalary: true, hourlyRate: true, commissionPercent: true, currency: true },
   })
 }
 
@@ -77,6 +80,7 @@ export interface PayoutDto {
   period: string
   baseSalary: string
   billableHours: string
+  paidHours: string
   hourlyEarned: string
   commissionAmount: string
   referralBonusAmount: string
@@ -93,6 +97,7 @@ interface PayoutRow {
   period: string
   baseSalary: Prisma.Decimal
   billableHours: Prisma.Decimal
+  paidHours: Prisma.Decimal
   hourlyEarned: Prisma.Decimal
   commissionAmount: Prisma.Decimal
   referralBonusAmount: Prisma.Decimal
@@ -109,6 +114,7 @@ export const PAYOUT_SELECT = {
   period: true,
   baseSalary: true,
   billableHours: true,
+  paidHours: true,
   hourlyEarned: true,
   commissionAmount: true,
   referralBonusAmount: true,
@@ -126,6 +132,7 @@ export function payoutDto(p: PayoutRow): PayoutDto {
     period: p.period,
     baseSalary: p.baseSalary.toFixed(2),
     billableHours: p.billableHours.toFixed(2),
+    paidHours: p.paidHours.toFixed(2),
     hourlyEarned: p.hourlyEarned.toFixed(2),
     commissionAmount: p.commissionAmount.toFixed(2),
     referralBonusAmount: p.referralBonusAmount.toFixed(2),
@@ -166,8 +173,9 @@ export async function generatePayout(
   const baseSalary = new Prisma.Decimal(rate?.monthlySalary ?? 0)
   const currency = rate?.currency ?? 'USD'
   const commissionPct = new Prisma.Decimal(rate?.commissionPercent ?? 0)
+  const payHourly = new Prisma.Decimal(rate?.hourlyRate ?? 0)
 
-  const [hoursAgg, commAgg] = await Promise.all([
+  const [hoursAgg, paidAgg, commAgg] = await Promise.all([
     tx.timeLog.aggregate({
       where: {
         agencyId: args.agencyId,
@@ -175,6 +183,16 @@ export async function generatePayout(
         date: { gte: bounds.start, lte: bounds.end },
       },
       _sum: { hours: true },
+    }),
+    // ПРИЙМАННЯ→PAYROLL: платимо за ПРИЙНЯТІ payableHours на замовленнях, ПРИЙНЯТИХ у періоді
+    // (order.acceptedAt), а не за сирі залоговані. Співвиконавці мають власні settlement-рядки.
+    tx.orderExecutorSettlement.aggregate({
+      where: {
+        agencyId: args.agencyId,
+        profileId: args.executorId,
+        order: { is: { acceptedAt: { gte: bounds.start, lte: bounds.end }, deletedAt: null } },
+      },
+      _sum: { payableHours: true },
     }),
     tx.payment.aggregate({
       where: {
@@ -187,7 +205,8 @@ export async function generatePayout(
     }),
   ])
   const billableHours = hoursAgg._sum.hours ?? new Prisma.Decimal(0)
-  const hourlyEarned = new Prisma.Decimal(0)
+  const paidHours = paidAgg._sum.payableHours ?? new Prisma.Decimal(0)
+  const hourlyEarned = paidHours.times(payHourly).toDecimalPlaces(2)
   const commissionBase = commAgg._sum.amountUsd ?? new Prisma.Decimal(0)
   const commissionAmount = commissionBase.times(commissionPct).div(100).toDecimalPlaces(2)
   // Employee-referral bonus over the SAME period window (P-9b, §4.2).
@@ -213,6 +232,7 @@ export async function generatePayout(
       period: args.period,
       baseSalary,
       billableHours,
+      paidHours,
       hourlyEarned,
       commissionAmount,
       referralBonusAmount,
@@ -223,6 +243,7 @@ export async function generatePayout(
     update: {
       baseSalary,
       billableHours,
+      paidHours,
       hourlyEarned,
       commissionAmount,
       referralBonusAmount,
