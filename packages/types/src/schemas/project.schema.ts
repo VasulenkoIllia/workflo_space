@@ -50,6 +50,8 @@ const baseShape = {
   cycleWeekday: z.number().int().min(1).max(7).nullish(),
   paymentTermsDays: z.number().int().min(0).max(365).nullish(),
   legalEntityId: z.string().uuid().nullish(),
+  // 02-Б: номенклатура «згідно КВЕД» для рахунків/актів циклів проєкту
+  nomenclatureId: z.string().uuid().nullish(),
   contractRequired: z.boolean().optional(),
   contractDocumentId: z.string().uuid().nullish(), // П3 (P-7): link the signed contract → unblocks generation
   requiresApproval: z.boolean().nullish(),

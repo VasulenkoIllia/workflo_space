@@ -29,6 +29,7 @@ const PROJECT_SELECT = {
   name: true,
   type: true,
   billingModel: true,
+  nomenclatureId: true,
   currency: true,
   abonAmount: true,
   clientHourlyRate: true,
@@ -177,6 +178,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
             legalEntityId: input.legalEntityId ?? null,
             // §5: default by billing model unless explicitly set.
             contractRequired: input.contractRequired ?? defaultContractRequired(input.billingModel),
+            nomenclatureId: input.nomenclatureId ?? null,
             requiresApproval: input.requiresApproval ?? null,
             advanceGatePct: input.advanceGatePct ?? null,
             includedHoursCap: input.includedHoursCap ?? null,
@@ -262,6 +264,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
               ? { paymentTermsDays: input.paymentTermsDays }
               : {}),
             ...(input.legalEntityId !== undefined ? { legalEntityId: input.legalEntityId } : {}),
+            ...(input.nomenclatureId !== undefined ? { nomenclatureId: input.nomenclatureId } : {}),
             ...(input.contractRequired !== undefined
               ? { contractRequired: input.contractRequired }
               : {}),

@@ -277,6 +277,10 @@ model Order {
   // 05-ПРОЕКТИ (S5.6 P-1): опційна привʼязка до фін-проєкту (legacy-замовлення без проєкту валідні)
   projectId           String?
   project             Project?             @relation(fields: [projectId], references: [id])
+  // 02-Б НОМЕНКЛАТУРА (рішення власника 07.07): офіційна позиція «згідно КВЕД» — саме її
+  // назва друкується в рахунках/актах цього замовлення (вся сума одним рядком).
+  nomenclatureId      String?
+  nomenclature        Nomenclature?        @relation(fields: [nomenclatureId], references: [id], onDelete: SetNull)
   zeroBilled          Boolean              @default(false) // В12: задача в абонплаті — НЕ білиться, але час → собівартість
   // 18-В: відповідальний за тред (хто винен клієнту відповідь). Plain Profile id
   // (project convention); null = «авто» — UI трактує як першого assignee.
@@ -296,6 +300,7 @@ model Order {
   files              OrderFile[]
   internalTasks      InternalTask[]
   estimateLine       EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
+  orderEstimateLines OrderEstimateLine[] // 02-Б: кошторис разового замовлення (qty × ціна)
   activityLogs       ActivityLog[]
   chatReads          OrderChatRead[]
   payments           Payment[]
@@ -317,6 +322,7 @@ model Order {
   @@index([createdById])
   @@index([deletedAt])
   @@index([projectId])
+  @@index([nomenclatureId])
   @@map("orders")
 }
 
@@ -741,11 +747,59 @@ model Service {
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
 
-  agency        Agency?        @relation(fields: [agencyId], references: [id])
-  estimateLines EstimateLine[] // P-6: estimate positions referencing this catalog service
+  agency             Agency?             @relation(fields: [agencyId], references: [id])
+  estimateLines      EstimateLine[] // P-6: estimate positions referencing this catalog service
+  orderEstimateLines OrderEstimateLine[] // 02-Б: позиції кошторисів замовлень
 
   @@index([agencyId])
   @@map("services")
+}
+
+// 02-Б НОМЕНКЛАТУРА (рішення власника 07.07): довідник офіційних позицій «згідно КВЕД»
+// («Консультації з питань інформатизації»…). Обирається на замовленні/проекті — її назва
+// друкується в рахунках і актах. vatRate ЗАКЛАДЕНО на майбутнє (05-Ж): розрахунок ПДВ
+// свідомо не реалізований — поле поки що довідкове.
+model Nomenclature {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  code      String? // код КВЕД (довідково)
+  vatRate   Decimal? @db.Decimal(5, 2) // % ПДВ; ПОКИ НЕ РАХУЄТЬСЯ (05-Ж на потім)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  orders   Order[]
+  projects Project[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("nomenclature")
+}
+
+// 02-Б КОШТОРИС разового замовлення: позиція = послуга з каталогу АБО вільний рядок,
+// кількість × ціна за одиницю. Σ позицій автоматично стає fixedPrice замовлення
+// (одне джерело правди для погодження/авто-рахунку/PDF). Друкується ЛИШЕ у
+// специфікації (довільний формат); рахунок/акт друкують номенклатуру.
+model OrderEstimateLine {
+  id        String   @id @default(uuid())
+  agencyId  String
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceId String? // каталожна послуга; null = вільний рядок
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  name      String // денормалізована назва — стабільна в документах
+  qty       Decimal  @db.Decimal(8, 2)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([orderId, position])
+  @@index([serviceId])
+  @@map("order_estimate_lines")
 }
 
 /// Estimate line / project budget position (05-ПРОЕКТИ 02-Б, P-6). A service × hours
@@ -1347,6 +1401,7 @@ model Agency {
   autoInvoiceOneTime            Boolean   @default(true)
 
   members           AgencyMember[]
+  nomenclature      Nomenclature[]
   documentTemplates DocumentTemplate[]
   emailTemplates    EmailTemplate[]
   companies         Company[]
@@ -1869,6 +1924,10 @@ model Project {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
+  // 02-Б: номенклатура для рахунків/актів циклів цього проєкту (SetNull — довідник живе окремо)
+  nomenclatureId String?
+  nomenclature   Nomenclature? @relation(fields: [nomenclatureId], references: [id], onDelete: SetNull)
+
   executorRates ProjectExecutorRate[]
   orders        Order[]
   charges       ServiceCharge[] // нарахування циклів (05-ПРОЕКТИ, P-1 3b)
@@ -1879,6 +1938,7 @@ model Project {
   @@index([agencyId, active])
   @@index([companyId])
   @@index([legalEntityId])
+  @@index([nomenclatureId])
   @@map("projects")
 }
 

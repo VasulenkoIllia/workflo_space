@@ -128,8 +128,60 @@ export async function buildRenderData(
     },
   }
 
+  // 02-Б (рішення власника 07.07): рахунок/акт друкують ЛИШЕ офіційну номенклатуру
+  // «згідно КВЕД» (одна позиція на всю суму); специфікація — довільна розбивка
+  // (кошторис замовлення або проектні P-6 лінії). Без номенклатури — стара поведінка.
+  const isMoneyDoc = kind === 'invoice' || kind === 'advance_invoice' || kind === 'completion_act'
+  let nomenclatureName: string | null = null
+  if (isMoneyDoc && order) {
+    const o = await tx.order.findUnique({
+      where: { id: order.id },
+      select: {
+        nomenclature: { select: { name: true } },
+        project: { select: { nomenclature: { select: { name: true } } } },
+      },
+    })
+    nomenclatureName = o?.nomenclature?.name ?? o?.project?.nomenclature?.name ?? null
+    if (nomenclatureName) {
+      data.lines = [
+        {
+          name: nomenclatureName,
+          qty: '1',
+          unit: 'послуга',
+          price: data.amount,
+          sum: data.amount,
+        },
+      ]
+    }
+  }
+
+  // 02-Б: специфікація — кошторис замовлення (к-сть × ціна), якщо він є
+  if (kind === 'specification' && order) {
+    const estLines = await tx.orderEstimateLine.findMany({
+      where: { orderId: order.id },
+      orderBy: { position: 'asc' },
+      select: { name: true, qty: true, unitPrice: true },
+    })
+    if (estLines.length > 0) {
+      data.lines = estLines.map(
+        (l): DocumentLine => ({
+          name: l.name,
+          qty: fmtMoney(Number(l.qty)),
+          unit: 'шт',
+          price: fmtMoney(Number(l.unitPrice)),
+          sum: fmtMoney(Number(l.qty) * Number(l.unitPrice)),
+        })
+      )
+    }
+  }
+
   // ── позиції: estimate-лінії проєкту (P-6); нема → фолбек у рендерері ──
-  if (kind !== 'reconciliation_act' && kind !== 'contract' && order?.project) {
+  if (
+    data.lines === undefined &&
+    kind !== 'reconciliation_act' &&
+    kind !== 'contract' &&
+    order?.project
+  ) {
     const lines = await tx.estimateLine.findMany({
       where: { projectId: order.project.id },
       orderBy: { createdAt: 'asc' },
@@ -204,7 +256,8 @@ export async function buildRenderData(
     const terms = settings?.paymentTermsDays ?? 7
     data.dueDate = fmtDate(new Date(doc.generatedAt.getTime() + terms * 86_400_000))
     const advance = kind === 'advance_invoice' ? 'Авансова оплата' : 'Оплата'
-    data.paymentPurpose = `${advance} за рахунком № ${doc.number} від ${data.date} за послуги з розробки ПЗ (${data.orderTitle}). ${data.vatNote === 'без ПДВ (неплатник ПДВ)' ? 'Без ПДВ.' : 'З ПДВ.'}`
+    const subject = nomenclatureName ?? `послуги з розробки ПЗ (${data.orderTitle})`
+    data.paymentPurpose = `${advance} за рахунком № ${doc.number} від ${data.date} за ${subject}. ${data.vatNote === 'без ПДВ (неплатник ПДВ)' ? 'Без ПДВ.' : 'З ПДВ.'}`
   }
 
   if (kind === 'completion_act' && order) {

@@ -6,6 +6,7 @@ import { type WsCharge, useCompanyCharges } from '@/lib/billing'
 import { formatDate, formatMoney } from '@/lib/format'
 import { useClientMargin } from '@/lib/margin'
 import { useLegalEntities } from '@/lib/legalEntities'
+import { useNomenclature, useSetProjectNomenclature } from '@/lib/nomenclature'
 import {
   num,
   useCloseCycle,
@@ -98,6 +99,41 @@ function LegalEntityCard({ project }: { project: FinProject }) {
         </div>
       )}
       {setLE.isSuccess && (
+        <div style={{ color: 'var(--wf-accent)', fontSize: 12, marginTop: 8 }}>Збережено ✓</div>
+      )}
+    </Card>
+  )
+}
+
+/** 02-Б: номенклатура «згідно КВЕД» для рахунків/актів циклів проєкту. */
+function ProjectNomenclatureCard({ project }: { project: FinProject }) {
+  const { data } = useNomenclature()
+  const setNom = useSetProjectNomenclature(project.id)
+  const current = (project as { nomenclatureId?: string | null }).nomenclatureId ?? null
+  const items = (data?.items ?? []).filter((n) => n.isActive || n.id === current)
+  return (
+    <Card title="Номенклатура">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // офіційна позиція для рахунків/актів циклів · порожньо → назва проєкту
+      </div>
+      <select
+        value={current ?? ''}
+        onChange={(e) => setNom.mutate(e.target.value || null)}
+        disabled={setNom.isPending}
+        style={controlStyle}
+      >
+        <option value="">— не задано —</option>
+        {items.map((n) => (
+          <option key={n.id} value={n.id}>
+            {n.name}
+            {n.code ? ` · ${n.code}` : ''}
+          </option>
+        ))}
+      </select>
+      {setNom.isSuccess && (
         <div style={{ color: 'var(--wf-accent)', fontSize: 12, marginTop: 8 }}>Збережено ✓</div>
       )}
     </Card>
@@ -311,6 +347,7 @@ export function ProjectDetailPage() {
         </Card>
 
         <LegalEntityCard project={p} />
+        <ProjectNomenclatureCard project={p} />
         <MarginCard project={p} />
         {p.billingCycle === 'manual' && <CloseCycleCard id={p.id} />}
       </div>

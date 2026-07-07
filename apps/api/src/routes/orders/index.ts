@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import activityRoute from './activity.js'
+import orderEstimateRoute from './estimate.js'
 import assignOrderRoute from './assignOrder.js'
 import commentsRoute from './comments.js'
 import conversationRoute from './conversation.js'
@@ -48,6 +49,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(timeLogsRoute)
   await fastify.register(timerRoute)
   await fastify.register(activityRoute)
+  fastify.register(orderEstimateRoute)
 }
 
 export default orderRoutes

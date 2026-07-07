@@ -83,7 +83,8 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
           input.billingType !== undefined ||
           input.fixedPrice !== undefined ||
           input.hourlyRate !== undefined ||
-          input.estimatedHours !== undefined
+          input.estimatedHours !== undefined ||
+          input.nomenclatureId !== undefined
         ) {
           throw new AppError(ApiErrorCode.FORBIDDEN, 'Клієнт не може редагувати білінг', 403)
         }
@@ -96,6 +97,23 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
       if (input.dueDate !== undefined)
         data.deadline = input.dueDate ? new Date(input.dueDate) : null
       if (isInternal) {
+        // 02-Б: номенклатура для рахунків/актів — перевіряємо приналежність довіднику агенції
+        if (input.nomenclatureId !== undefined) {
+          if (input.nomenclatureId !== null) {
+            const nom = await withTenant((tx) =>
+              tx.nomenclature.findFirst({
+                where: { id: input.nomenclatureId ?? '', agencyId: order.agencyId },
+                select: { id: true },
+              })
+            )
+            if (!nom) {
+              throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Невідома номенклатура', 400)
+            }
+            data.nomenclature = { connect: { id: input.nomenclatureId } }
+          } else {
+            data.nomenclature = { disconnect: true }
+          }
+        }
         if (input.billingType !== undefined) data.billingType = input.billingType
         if (input.fixedPrice !== undefined) data.fixedPrice = input.fixedPrice
         if (input.hourlyRate !== undefined) data.hourlyRate = input.hourlyRate

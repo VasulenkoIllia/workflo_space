@@ -61,6 +61,7 @@ export interface WorkspaceOrderDetail {
   priority: OrderPriority
   type?: OrderType
   billingType?: BillingType
+  nomenclatureId?: string | null
   totalAmount: number | null
   fixedPrice?: number | null
   hourlyRate?: number | null
@@ -187,6 +188,7 @@ export function useSubmitApproval(id: string) {
  * once approval is pending/approved, so the editor only renders pre-approval (02-А). */
 export interface UpdateOrderInput {
   billingType?: BillingType
+  nomenclatureId?: string | null
   fixedPrice?: number | null
   hourlyRate?: number | null
   estimatedHours?: number | null

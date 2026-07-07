@@ -85,6 +85,8 @@ export const updateOrderSchema = z
     fixedPrice: z.number().nonnegative().nullable().optional(),
     hourlyRate: z.number().nonnegative().nullable().optional(),
     estimatedHours: z.number().nonnegative().nullable().optional(),
+    // 02-Б: номенклатура «згідно КВЕД» — друкується в рахунках/актах замовлення
+    nomenclatureId: z.string().uuid().nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
     message: 'Потрібно вказати хоча б одне поле для оновлення',

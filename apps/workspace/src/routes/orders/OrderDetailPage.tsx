@@ -4,6 +4,13 @@ import { toast } from 'sonner'
 import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  useNomenclature,
+  useOrderEstimate,
+  useSaveOrderEstimate,
+  type OrderEstimateLine,
+} from '@/lib/nomenclature'
+import { useServices } from '@/lib/services'
 import { INTERNAL_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
 import { useProjectEstimate } from '@/lib/projects'
 import {
@@ -116,7 +123,18 @@ export function OrderDetailPage() {
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
           {tab === 'time' && <TimeTab orderId={order.id} />}
-          {tab === 'spec' && <SpecTab project={order.project} />}
+          {tab === 'spec' && (
+            <SpecTab
+              project={order.project}
+              orderId={order.id}
+              estimateEditable={
+                order.internalStatus !== OrderInternalStatus.DONE &&
+                order.internalStatus !== OrderInternalStatus.CANCELLED &&
+                order.approvalStatus !== 'pending' &&
+                order.approvalStatus !== 'approved'
+              }
+            />
+          )}
           {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'docs' && <DocumentsTab orderId={order.id} />}
         </div>
@@ -212,17 +230,29 @@ export function OrderDetailPage() {
 
 /** Специфікація tab (02-Б, P-6): the order's project estimate — spec lines + reconciliation
  * vs the subscription hour cap. Estimate lives at the project level (internal-non-manager). */
-function SpecTab({ project }: { project?: WorkspaceOrderDetail['project'] }) {
+function SpecTab({
+  project,
+  orderId,
+  estimateEditable,
+}: {
+  project?: WorkspaceOrderDetail['project']
+  orderId: string
+  estimateEditable: boolean
+}) {
   const { isManager } = useAuth()
   const { data: est, isLoading, isError } = useProjectEstimate(project?.id, !isManager)
 
   if (!project) {
-    return (
-      <EmptyState
-        title="Без проєкту"
-        description="Замовлення не привʼязане до фін-проєкту — специфікація ведеться на рівні проєкту."
-      />
-    )
+    // 02-Б: разове замовлення — кошторис к-сть × ціна прямо тут (Σ → сума замовлення)
+    if (isManager) {
+      return (
+        <EmptyState
+          title="Немає доступу"
+          description="Специфікація доступна власнику та виконавцям."
+        />
+      )
+    }
+    return <OrderEstimateEditor orderId={orderId} editable={estimateEditable} />
   }
   if (isManager) {
     return (
@@ -475,7 +505,72 @@ function EstimateCard({ order }: { order: WorkspaceOrderDetail }) {
       >
         Зберегти оцінку
       </Button>
+
+      {/* 02-Б: номенклатура «згідно КВЕД» — саме її назва друкується в рахунках/актах */}
+      <NomenclaturePicker
+        value={order.nomenclatureId ?? null}
+        onChange={(nomenclatureId) =>
+          update.mutate({ nomenclatureId } as UpdateOrderInput, {
+            onSuccess: () => toast.success('Номенклатуру збережено'),
+          })
+        }
+        disabled={update.isPending}
+      />
     </Card>
+  )
+}
+
+/** 02-Б: селект офіційної позиції для рахунків/актів (довідник — /settings). */
+function NomenclaturePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string | null
+  onChange: (id: string | null) => void
+  disabled?: boolean
+}) {
+  const { data } = useNomenclature()
+  const items = (data?.items ?? []).filter((n) => n.isActive || n.id === value)
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+      >
+        НОМЕНКЛАТУРА (друкується в рахунках/актах)
+      </div>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+        disabled={disabled}
+        style={{
+          width: '100%',
+          background: 'var(--wf-surface)',
+          color: 'var(--wf-fg)',
+          border: '1px solid var(--wf-border)',
+          borderRadius: 'var(--wf-radius)',
+          padding: '8px 10px',
+          fontSize: 13,
+        }}
+      >
+        <option value="">— не задано (друкується назва замовлення) —</option>
+        {items.map((n) => (
+          <option key={n.id} value={n.id}>
+            {n.name}
+            {n.code ? ` · ${n.code}` : ''}
+          </option>
+        ))}
+      </select>
+      {items.length === 0 && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginTop: 4 }}
+        >
+          // довідник порожній — власник додає позиції в Налаштуваннях
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -847,6 +942,172 @@ function SlaCard({
             </div>
           </div>
         ))}
+      </div>
+    </Card>
+  )
+}
+
+/** 02-Б: редактор кошторису разового замовлення. Рядок = послуга з каталогу (префіл
+ * назви/ціни) або вільний текст; к-сть × ціна. Σ автоматично стає сумою замовлення
+ * (billingType=fixed); друкується у СПЕЦИФІКАЦІЇ (рахунок/акт — номенклатура). */
+function OrderEstimateEditor({ orderId, editable }: { orderId: string; editable: boolean }) {
+  const { data, isLoading } = useOrderEstimate(orderId)
+  const save = useSaveOrderEstimate(orderId)
+  const { data: servicesData } = useServices()
+  const [rows, setRows] = useState<OrderEstimateLine[] | null>(null)
+
+  if (isLoading) return <Skeleton style={{ height: 160 }} />
+
+  const services = servicesData?.services ?? []
+  const lines: OrderEstimateLine[] =
+    rows ??
+    (data?.lines ?? []).map((l) => ({
+      serviceId: l.serviceId,
+      name: l.name,
+      qty: Number(l.qty),
+      unitPrice: Number(l.unitPrice),
+    }))
+  const dirty = rows !== null
+  const total = lines.reduce((acc, l) => acc + l.qty * l.unitPrice, 0)
+  const valid = lines.every((l) => l.name.trim() && l.qty > 0 && l.unitPrice >= 0)
+
+  const set = (i: number, patch: Partial<OrderEstimateLine>) => {
+    const next = [...lines]
+    next[i] = { ...next[i], ...patch } as OrderEstimateLine
+    setRows(next)
+  }
+
+  return (
+    <Card title="Кошторис" aux={`${formatMoney(total)}`}>
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 12 }}
+      >
+        // довільна розбивка «що і як робили» — друкується у специфікації. Σ позицій стає сумою
+        замовлення. Рахунок/акт друкують номенклатуру (селект в «Оцінці»).
+      </div>
+      {lines.length === 0 && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 12, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+        >
+          // кошторис порожній — оцінка задається одним числом в «Оцінці» або додайте позиції
+        </div>
+      )}
+      <div style={{ display: 'grid', gap: 8 }}>
+        {lines.map((l, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 2.4fr 70px 100px auto',
+              gap: 8,
+              alignItems: 'end',
+            }}
+          >
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                ПОСЛУГА
+              </span>
+              <select
+                value={l.serviceId ?? ''}
+                disabled={!editable}
+                onChange={(e) => {
+                  const svc = services.find((x) => x.id === e.target.value)
+                  set(i, {
+                    serviceId: svc?.id ?? null,
+                    ...(svc
+                      ? {
+                          name: svc.name,
+                          unitPrice:
+                            svc.defaultPriceUsd != null ? Number(svc.defaultPriceUsd) : l.unitPrice,
+                        }
+                      : {}),
+                  })
+                }}
+                style={{
+                  background: 'var(--wf-surface)',
+                  color: 'var(--wf-fg)',
+                  border: '1px solid var(--wf-border)',
+                  borderRadius: 'var(--wf-radius)',
+                  padding: '8px 10px',
+                  fontSize: 13,
+                }}
+              >
+                <option value="">— вільний рядок —</option>
+                {services.map((svc) => (
+                  <option key={svc.id} value={svc.id}>
+                    {svc.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Input
+              label="Назва в документі"
+              value={l.name}
+              disabled={!editable}
+              onChange={(e) => set(i, { name: e.target.value })}
+            />
+            <Input
+              label="К-сть"
+              inputMode="decimal"
+              value={String(l.qty)}
+              disabled={!editable}
+              onChange={(e) => set(i, { qty: Number(e.target.value.replace(',', '.')) || 0 })}
+            />
+            <Input
+              label="Ціна"
+              inputMode="decimal"
+              value={String(l.unitPrice)}
+              disabled={!editable}
+              onChange={(e) => set(i, { unitPrice: Number(e.target.value.replace(',', '.')) || 0 })}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!editable}
+              onClick={() => setRows(lines.filter((_, j) => j !== i))}
+            >
+              ✕
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!editable}
+          onClick={() => setRows([...lines, { serviceId: null, name: '', qty: 1, unitPrice: 0 }])}
+        >
+          + Позиція
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!editable || !dirty || !valid}
+          loading={save.isPending}
+          onClick={() =>
+            save.mutate(lines, {
+              onSuccess: () => {
+                setRows(null)
+                toast.success(
+                  lines.length > 0
+                    ? `Кошторис збережено — сума замовлення ${formatMoney(total)}`
+                    : 'Кошторис прибрано'
+                )
+              },
+              onError: () => toast.error('Не вдалося зберегти кошторис'),
+            })
+          }
+        >
+          Зберегти кошторис
+        </Button>
+        {!editable && (
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // оцінка на погодженні або замовлення закрите — кошторис заблоковано
+          </span>
+        )}
       </div>
     </Card>
   )

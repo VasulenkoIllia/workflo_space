@@ -17,6 +17,7 @@ import {
 } from '@/routes/settings/DocumentTemplatesSection'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
+import { useCreateNomenclature, useDeleteNomenclature, useNomenclature } from '@/lib/nomenclature'
 import { formatDate } from '@/lib/format'
 import {
   useCreateOrderTag,
@@ -356,6 +357,122 @@ function DunningSection() {
           Кроки — цілі числа від -30 до 60
         </div>
       )}
+    </Card>
+  )
+}
+
+/** 02-Б НОМЕНКЛАТУРА (owner): довідник офіційних позицій «згідно КВЕД» — обирається на
+ * замовленні/проекті, її назва друкується в рахунках і актах. Ставка ПДВ — закладене
+ * поле на майбутнє (ПДВ поки не рахується). */
+function NomenclatureSection() {
+  const { data, isLoading } = useNomenclature()
+  const create = useCreateNomenclature()
+  const remove = useDeleteNomenclature()
+  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [vat, setVat] = useState('')
+
+  if (isLoading) return <Skeleton style={{ height: 120 }} />
+  const items = data?.items ?? []
+
+  return (
+    <Card title="Номенклатура (рахунки/акти)">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 12 }}
+      >
+        // офіційні позиції «згідно КВЕД» — саме ЦЯ назва друкується в рахунках і актах
+        замовлення/проєкту (специфікація лишається довільною). Ставка ПДВ — на майбутнє, поки не
+        рахується.
+      </div>
+      <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+        {items.length === 0 && (
+          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            // довідник порожній — додайте першу позицію
+          </div>
+        )}
+        {items.map((n) => (
+          <div key={n.id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
+            <span style={{ flex: 1, opacity: n.isActive ? 1 : 0.5 }}>
+              {n.name}
+              {!n.isActive && ' (неактивна)'}
+            </span>
+            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              {n.code ?? ''}
+              {n.vatRate != null ? ` · ПДВ ${Number(n.vatRate)}%` : ''}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                remove.mutate(n.id, {
+                  onSuccess: (r) =>
+                    toast.success(
+                      r.outcome === 'deleted'
+                        ? 'Позицію видалено'
+                        : 'Позиція використовується в документах — деактивовано'
+                    ),
+                })
+              }
+            >
+              ✕
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 2, minWidth: 220 }}>
+          <Input
+            label="Назва позиції"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Консультації з питань інформатизації"
+          />
+        </div>
+        <div style={{ width: 110 }}>
+          <Input
+            label="КВЕД"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="62.02"
+          />
+        </div>
+        <div style={{ width: 110 }}>
+          <Input
+            label="ПДВ, % (потім)"
+            inputMode="decimal"
+            value={vat}
+            onChange={(e) => setVat(e.target.value)}
+            placeholder="—"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="primary"
+          loading={create.isPending}
+          disabled={name.trim().length < 3}
+          onClick={() =>
+            create.mutate(
+              {
+                name: name.trim(),
+                code: code.trim() || null,
+                vatRate: vat.trim() === '' ? null : Number(vat.replace(',', '.')),
+              },
+              {
+                onSuccess: () => {
+                  setName('')
+                  setCode('')
+                  setVat('')
+                  toast.success('Позицію додано')
+                },
+                onError: () => toast.error('Не вдалося додати (можливо, дубль назви)'),
+              }
+            )
+          }
+        >
+          Додати
+        </Button>
+      </div>
     </Card>
   )
 }
@@ -857,6 +974,7 @@ export function SettingsPage() {
         {isOwner && <EmailReportsSection />}
         {isOwner && <WorkflowSection />}
         {isOwner && <DunningSection />}
+        {isOwner && <NomenclatureSection />}
         {isOwner && <DocumentTemplatesSection />}
         {isOwner && <PdfBrandingSection />}
         {isOwner && <EmailTemplatesSection />}
