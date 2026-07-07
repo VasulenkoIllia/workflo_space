@@ -1006,3 +1006,36 @@ Workspace, розрізи в Portal-білінгу).
 - Подія `billing.invoice_draft_ready` (без email-шаблону → лише in-app).
 - Тумблер: GET/PATCH `/workspace/agency/workflow-settings` += `autoInvoiceOneTime`;
   чекбокс у картці «Воркфлоу» /settings.
+
+---
+
+## UPDATE (07.07.2026) — 05-В сторнування / повернення / списання ✅
+
+> Рішення власника (вікторина 07.07): refund — **повний+частковий**; кредит-нота —
+> **внутрішнє коригування** (негативне нарахування, без PDF); реферальний бонус —
+> **авто-клавбек**; сповіщення — **клієнту** (refund + write-off; кредит-нота теж).
+> Закриває беклог **B-D2** («enum refunded мертвий»).
+
+- **Моделі** (міграція `20260707_reversals`, RLS): `PaymentRefund {agencyId, paymentId,
+amount, amountUsd?, reason?, method?, refundedById}`; `ServiceCharge` += `writeOffReason`,
+  `writtenOffAt`, `writtenOffById`. Кредит-нота = ServiceCharge з `kind='credit_note'` і
+  негативним totalAmount. Енуми `refunded`/`written_off` та `WalletTxnSource.REFUND` — уже були.
+- **`services/reversals.ts`** (tx-pure): `refundPayment` — валідація ≤ залишку, USD-знімок
+  пропорційно платежу, повне повернення → `status='refunded'`; **клавбек**: пропорційно
+  поверненню відкочує company-реферальний бонус з wallet референта (clamp до наявного
+  балансу — решта бізнес-втрата; employee-бонус рахується наживо при виплаті і
+  скоригується сам). `writeOffCharge` — `status='written_off'` + аудит. `createCreditNote` —
+  негативне нарахування.
+- **moneyBalance** (allocation.recomputeMoneyBalance): `paid = Σ(confirmed) − Σ(refund.amountUsd
+для confirmed-платежів)`. Повне повернення флипає status → воно випадає з обох сум (без
+  подвійного віднімання). Order-платіж: refund знімає `paidAt`, якщо замовлення знову
+  недоплачене.
+- **API (owner-only):** POST `/workspace/billing/payments/:id/refund`,
+  `/workspace/billing/charges/:id/write-off`, `/workspace/billing/credit-notes`. Події
+  `billing.payment_refunded` / `debt_written_off` / `credit_note_issued` (email+in-app
+  клієнту; перші дві — editable у 08-EMAIL).
+- **UI (BillingPage):** «Повернути» на confirmed-платежі (модалка сума+спосіб+причина,
+  дефолт=залишок) + бейдж «повернено X»/«повністю повернено»; «Списати» на відкритому
+  нарахуванні (причина); «+ Кредит-нота» (клієнт+сума+причина). Всі owner-only.
+- **Тести:** інтеграційні (real PG) — частковий/повний refund + баланс + status,
+  над-повернення 400, write-off + 409, кредит-нота, клавбек бонусу.

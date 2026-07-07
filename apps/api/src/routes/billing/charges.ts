@@ -13,6 +13,7 @@ import { writeAuditAsync } from '../../services/audit.js'
 import { applyChargeDiscount } from '../../services/chargeDiscount.js'
 
 interface ChargeRow {
+  writeOffReason?: string | null
   id: string
   companyId: string
   amount: Prisma.Decimal
@@ -52,6 +53,7 @@ const CHARGE_SELECT = {
   currency: true,
   month: true,
   status: true,
+  writeOffReason: true,
   approvalStatus: true,
   approvedAmount: true,
   approvalDecidedAt: true,
@@ -85,6 +87,7 @@ function toDto(c: ChargeRow) {
     // implicit Date→ISO serialization (a schema/serializer layer would break the contract).
     dueDate: c.dueDate ? c.dueDate.toISOString() : null,
     paidAt: c.paidAt ? c.paidAt.toISOString() : null,
+    writeOffReason: c.writeOffReason ?? null,
   }
 }
 

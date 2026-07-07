@@ -870,6 +870,11 @@ model ServiceCharge {
   approvalComment      String?
   approvedAmount       Decimal?             @db.Decimal(10, 2)
   notes                String?
+  // 05-В списання боргу (write-off): status='written_off' виключає з moneyBalance (AR-12);
+  // тут — аудит хто/коли/чому. kind='credit_note' + негативний totalAmount = кредит-нота.
+  writeOffReason       String?
+  writtenOffAt         DateTime?            @db.Timestamptz(3)
+  writtenOffById       String?
   createdAt            DateTime             @default(now()) @db.Timestamptz(3)
   agency               Agency               @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
@@ -925,6 +930,7 @@ model Payment {
   agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   allocations PaymentAllocation[]
+  refunds     PaymentRefund[] // 05-В: повернення (повне/часткове)
 
   // Webhook idempotency. Standard PG unique indexes treat each NULL as distinct, so
   // multiple manual rows (providerPaymentId=NULL) are INTENTIONALLY allowed. Do NOT
@@ -940,6 +946,26 @@ model Payment {
   @@index([confirmedAt])
   @@index([status])
   @@map("payments")
+}
+
+// 05-В ПОВЕРНЕННЯ (рішення власника 07.07): повне або часткове повернення підтвердженого
+// платежу. amountUsd — USD-знімок для moneyBalance (paid − Σ refunds для confirmed-платежів).
+// Повне повернення (Σ refunds == payment.amountUsd) → Payment.status='refunded'.
+model PaymentRefund {
+  id           String   @id @default(uuid())
+  agencyId     String
+  paymentId    String
+  payment      Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount       Decimal  @db.Decimal(10, 2) // повернена сума (валюта платежу)
+  amountUsd    Decimal? @db.Decimal(10, 2) // USD-знімок для балансу (курс платежу)
+  reason       String?
+  method       String? // як повернено (банк/готівка/…)
+  refundedById String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([paymentId])
+  @@map("payment_refunds")
 }
 
 model PaymentSettings {

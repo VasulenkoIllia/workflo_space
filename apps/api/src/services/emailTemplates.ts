@@ -51,6 +51,16 @@ export const EDITABLE_EMAIL_EVENTS: { event: string; label: string; vars: string
     vars: ['amount', 'method', 'portalUrl'],
   },
   {
+    event: 'billing.payment_refunded',
+    label: 'Повернення коштів',
+    vars: ['amount', 'method', 'portalUrl'],
+  },
+  {
+    event: 'billing.debt_written_off',
+    label: 'Списання боргу',
+    vars: ['amount', 'portalUrl'],
+  },
+  {
     event: 'documents.completion_act_ready',
     label: 'Документ готовий (акт/інше)',
     vars: ['documentLabel', 'documentNumber', 'documentUrl'],

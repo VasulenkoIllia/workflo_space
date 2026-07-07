@@ -23,6 +23,14 @@ export {
   type PaymentReminderPhase,
   type DunningEscalationEmailVars,
 } from './paymentReminder.js'
+export {
+  renderPaymentRefundedEmail,
+  renderDebtWrittenOffEmail,
+  renderCreditNoteEmail,
+  type PaymentRefundedEmailVars,
+  type DebtWrittenOffEmailVars,
+  type CreditNoteEmailVars,
+} from './paymentReversals.js'
 export { renderOrderCreatedEmail, type OrderCreatedEmailVars } from './orderCreated.js'
 export { renderOrderAssignedEmail, type OrderAssignedEmailVars } from './orderAssigned.js'
 export {

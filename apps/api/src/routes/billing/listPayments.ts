@@ -1,4 +1,4 @@
-import { type Prisma, withTenant } from '@workflo/db'
+import { Prisma as PrismaNS, type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, billingListQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
@@ -18,6 +18,7 @@ interface PaymentRow {
   paymentReference: string | null
   note: string | null
   confirmedAt: Date
+  refunds: { amount: Prisma.Decimal }[]
 }
 
 const PAYMENT_SELECT = {
@@ -33,6 +34,7 @@ const PAYMENT_SELECT = {
   paymentReference: true,
   note: true,
   confirmedAt: true,
+  refunds: { select: { amount: true } }, // 05-В: Σ повернень → залишок/бейдж
 } satisfies Prisma.PaymentSelect
 
 function toDto(p: PaymentRow) {
@@ -49,6 +51,9 @@ function toDto(p: PaymentRow) {
     paymentReference: p.paymentReference,
     note: p.note,
     confirmedAt: p.confirmedAt,
+    refundedAmount: p.refunds
+      .reduce((acc, r) => acc.plus(r.amount), new PrismaNS.Decimal(0))
+      .toFixed(2),
   }
 }
 

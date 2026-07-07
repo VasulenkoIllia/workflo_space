@@ -140,6 +140,23 @@ const uk: Dictionary = {
   'paymentReminder.cta': 'Переглянути нарахування',
   'paymentReminder.already_paid': 'Якщо ви вже оплатили — проігноруйте цей лист, дякуємо!',
 
+  // payment reversals (05-В)
+  'paymentRefunded.subject': 'Повернення коштів — {amount}',
+  'paymentRefunded.h1': 'Кошти повернуто',
+  'paymentRefunded.body':
+    'Ми повернули вам {amount}. Кошти надійдуть згідно з умовами вашого банку.',
+  'paymentRefunded.method': 'Спосіб повернення: {method}.',
+  'paymentRefunded.cta': 'Переглянути баланс',
+  'debtWrittenOff.subject': 'Заборгованість {amount} списано',
+  'debtWrittenOff.h1': 'Борг списано',
+  'debtWrittenOff.body': 'Ми списали вашу заборгованість на {amount}. Додаткових дій не потрібно.',
+  'debtWrittenOff.cta': 'Переглянути баланс',
+  'creditNote.subject': 'Кредит-нота — ваш борг зменшено на {amount}',
+  'creditNote.h1': 'Кредит-нота',
+  'creditNote.body':
+    'Ваш борг зменшено на {amount} (коригування). Це відображено у вашому балансі.',
+  'creditNote.cta': 'Переглянути баланс',
+
   // order created (team)
   'orderCreated.subject': 'Нове замовлення: {orderTitle}',
   'orderCreated.h1': 'Нове замовлення',
@@ -312,6 +329,23 @@ const en: Dictionary = {
   'paymentReminder.period': 'Period: {periodLabel}.',
   'paymentReminder.cta': 'View charge',
   'paymentReminder.already_paid': 'Already paid? Please disregard this email — thank you!',
+
+  // payment reversals (05-В)
+  'paymentRefunded.subject': 'Refund issued — {amount}',
+  'paymentRefunded.h1': 'Payment refunded',
+  'paymentRefunded.body': 'We have refunded {amount} to you. Funds arrive per your bank terms.',
+  'paymentRefunded.method': 'Refund method: {method}.',
+  'paymentRefunded.cta': 'View balance',
+  'debtWrittenOff.subject': 'Debt of {amount} written off',
+  'debtWrittenOff.h1': 'Debt written off',
+  'debtWrittenOff.body':
+    'We have written off your outstanding balance of {amount}. No action needed.',
+  'debtWrittenOff.cta': 'View balance',
+  'creditNote.subject': 'Credit note — your balance reduced by {amount}',
+  'creditNote.h1': 'Credit note',
+  'creditNote.body':
+    'Your balance has been reduced by {amount} (adjustment). It is reflected in your account.',
+  'creditNote.cta': 'View balance',
 
   'orderCreated.subject': 'New order: {orderTitle}',
   'orderCreated.h1': 'New order',

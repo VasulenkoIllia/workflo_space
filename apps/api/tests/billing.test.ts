@@ -426,6 +426,7 @@ describe('GET /workspace/billing/payments', () => {
         paymentReference: null,
         note: null,
         confirmedAt: new Date('2026-06-08T10:00:00Z'),
+        refunds: [], // 05-В: listPayments рахує Σ повернень
       },
     ])
     paymentCount.mockResolvedValue(1)

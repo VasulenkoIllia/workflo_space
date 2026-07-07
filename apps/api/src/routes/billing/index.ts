@@ -9,6 +9,7 @@ import overviewRoute from './overview.js'
 import paymentSettingsRoute from './paymentSettings.js'
 import portalSummaryRoute from './portalSummary.js'
 import projectsRoute from './projects.js'
+import reversalsRoute from './reversals.js'
 
 /**
  * Billing route group (S5-02). Each sub-route declares its full `/workspace/*` or
@@ -27,6 +28,7 @@ const billingRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(projectsRoute)
   await fastify.register(estimatesRoute)
   await fastify.register(chargeApprovalRoutes)
+  await fastify.register(reversalsRoute)
 }
 
 export default billingRoutes

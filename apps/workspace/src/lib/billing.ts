@@ -29,6 +29,7 @@ export interface WsCharge {
   approvalDecidedAt: string | null
   dueDate: string | null
   paidAt: string | null
+  writeOffReason?: string | null
 }
 
 /** Charges for one client (company) — backend filters by `companyId`. Internal-non-manager. */
@@ -126,6 +127,7 @@ export interface WsPayment {
   paymentMethod: string | null
   note: string | null
   confirmedAt: string
+  refundedAmount?: string | null
 }
 
 export function useWsPayments() {
@@ -173,4 +175,39 @@ export function useCreatePayment() {
 
 export function num(s: string | null | undefined): number | null {
   return s == null ? null : Number(s)
+}
+
+// 05-В: сторнування / повернення / списання (owner-only)
+export function useRefundPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string
+      amount: number
+      reason?: string
+      method?: string
+    }) => api.post(`/workspace/billing/payments/${id}/refund`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-billing'] }),
+  })
+}
+
+export function useWriteOffCharge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post(`/workspace/billing/charges/${id}/write-off`, { reason }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-billing'] }),
+  })
+}
+
+export function useCreateCreditNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { companyId: string; amount: number; reason: string; currency?: string }) =>
+      api.post('/workspace/billing/credit-notes', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ws-billing'] }),
+  })
 }

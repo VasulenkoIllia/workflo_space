@@ -52,7 +52,7 @@
 - [ci] **CI-D2 trivy-скан образів (fail on critical CVE) + GHCR retention** (delete-package-versions, last N). LOW-зусилля. (created: 2026-06-11)
 - [infra] **AR-50b true prod-prune образів api/landing/bot** (LOW поки): AR-50 виправив шарування (manifests→deps→src; verified docker build), але runtime досі несе devDeps+сорці — compose `migrate` ганяє prisma CLI (devDep @workflo/db) з api-образу. Потрібен dedicated migrate-stage/образ + `pnpm deploy --prod` з копією generated prisma client. Тригер: розмір/pull-time почне муляти. (created: 2026-06-11)
 - [ops] **OPS-D1 провіжининг моніторингу**: UptimeRobot/Netdata досі чекбокси; notify-on-failure крок у деплой-воркфлоу. <1 год кожне. (created: 2026-06-11)
-- [billing] **B-D1 overdue-маркування + dunning** (unpaid charge вічно pending) · **B-D2 refund/credit-note/clawback шлях** (enum `refunded` мертвий) · **B-D3 VAT-готовність**. Тригер: S14-03 payments go-live або перший конфліктний кейс. (created: 2026-06-11)
+- [billing] **B-D1 overdue-маркування + dunning** (unpaid charge вічно pending) · ~~**B-D2 refund/credit-note/clawback шлях**~~ ✅ ЗАКРИТО 2026-07-07 (05-В) · **B-D3 VAT-готовність**. Тригер: S14-03 payments go-live або перший конфліктний кейс. (created: 2026-06-11)
 - [arch] **P-D1 storage stream/presigned seam** (зараз Buffer-only, 100MB у памʼяті; S3-адаптер S10-06 його вимагатиме). (created: 2026-06-11)
 - [fe] **FE-D1 eslint react-hooks/jsx-a11y у трьох React-апках** · **FE-D2 Zod-помилки EN в UA-UI** (карта повідомлень або locale-aware errorMap). (created: 2026-06-11)
 

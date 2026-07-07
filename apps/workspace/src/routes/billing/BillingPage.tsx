@@ -7,12 +7,17 @@ import {
   useApplyDiscount,
   useBillingOverview,
   useCreatePayment,
+  useCreateCreditNote,
+  useRefundPayment,
   useReleaseCharge,
+  useWriteOffCharge,
   useWsCharges,
   useWsPayments,
   type WsCharge,
+  type WsPayment,
 } from '@/lib/billing'
 import { useCompanies } from '@/lib/projects'
+import { useAuth } from '@/contexts/AuthContext'
 
 const KIND_LABEL: Record<string, string> = {
   subscription: 'Абонплата',
@@ -21,6 +26,7 @@ const KIND_LABEL: Record<string, string> = {
   prepaid_advance: 'Аванс',
   prepaid_reconciliation: 'Звірка',
   prepaid_credit: 'Кредит',
+  credit_note: 'Кредит-нота',
 }
 
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
@@ -54,10 +60,14 @@ function ChargeRow({
   c,
   onRelease,
   onDiscount,
+  onWriteOff,
+  isOwner,
 }: {
   c: WsCharge
   onRelease: (c: WsCharge) => void
   onDiscount: (c: WsCharge) => void
+  onWriteOff: (c: WsCharge) => void
+  isOwner: boolean
 }) {
   const quote = num(c.amount)
   const final = num(c.totalAmount)
@@ -86,9 +96,11 @@ function ChargeRow({
             <span>
               {c.status === 'paid'
                 ? 'Сплачено'
-                : c.status === 'overdue'
-                  ? 'Прострочено'
-                  : 'До сплати'}
+                : c.status === 'written_off'
+                  ? 'Списано'
+                  : c.status === 'overdue'
+                    ? 'Прострочено'
+                    : 'До сплати'}
               {c.dueDate ? ` · до ${formatDate(c.dueDate)}` : ''}
             </span>
           )}
@@ -113,11 +125,21 @@ function ChargeRow({
           {formatMoney(final ?? quote)} {c.currency}
         </div>
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6 }}>
-          {c.status !== 'paid' && (
+          {c.status !== 'paid' && c.status !== 'written_off' && (
             <Button size="sm" variant="ghost" onClick={() => onDiscount(c)}>
               Знижка
             </Button>
           )}
+          {isOwner &&
+            c.status !== 'paid' &&
+            c.status !== 'written_off' &&
+            c.approvalStatus !== 'pending' &&
+            c.approvalStatus !== 'rejected' &&
+            Number(c.totalAmount ?? c.amount) > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => onWriteOff(c)}>
+                Списати
+              </Button>
+            )}
           {c.approvalStatus === 'pending' && (
             <Button size="sm" variant="primary" onClick={() => onRelease(c)}>
               Випустити
@@ -318,6 +340,195 @@ function DiscountModal({ charge, onClose }: { charge: WsCharge; onClose: () => v
   )
 }
 
+/** 05-В: повернення платежу (повне/часткове). Дефолт = залишок до повернення. */
+function RefundModal({ payment, onClose }: { payment: WsPayment; onClose: () => void }) {
+  const refund = useRefundPayment()
+  const remaining = num(payment.amount)! - Number(payment.refundedAmount ?? 0)
+  const [amount, setAmount] = useState(remaining.toFixed(2))
+  const [reason, setReason] = useState('')
+  const [method, setMethod] = useState('')
+  const val = Number(amount.replace(',', '.'))
+  const valid = Number.isFinite(val) && val > 0 && val <= remaining + 0.001
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Повернення коштів"
+      aux={`залишок ${formatMoney(remaining)} ${payment.currency}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={refund.isPending}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={refund.isPending}
+            disabled={!valid}
+            onClick={() =>
+              refund.mutate(
+                {
+                  id: payment.id,
+                  amount: val,
+                  reason: reason.trim() || undefined,
+                  method: method.trim() || undefined,
+                },
+                { onSuccess: onClose }
+              )
+            }
+          >
+            Повернути
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // клієнту піде лист про повернення; баланс скоригується. Реферальний бонус (якщо був)
+          відкотиться автоматично.
+        </div>
+        <Input
+          label={`Сума, ${payment.currency}`}
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          error={!valid ? `1–${formatMoney(remaining)}` : undefined}
+        />
+        <Input
+          label="Спосіб (необов'язково)"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          placeholder="банк / готівка"
+        />
+        <Input
+          label="Причина (необов'язково)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {refund.isError && (
+          <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
+            Не вдалося повернути — лише власник, платіж має бути підтверджений.
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/** 05-В: списання боргу (write-off) — потрібна причина; борг виключається з балансу. */
+function WriteOffModal({ charge, onClose }: { charge: WsCharge; onClose: () => void }) {
+  const writeOff = useWriteOffCharge()
+  const [reason, setReason] = useState('')
+  const valid = reason.trim().length >= 3
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Списати борг"
+      aux={`${formatMoney(num(charge.totalAmount) ?? num(charge.amount) ?? 0)} ${charge.currency}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={writeOff.isPending}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={writeOff.isPending}
+            disabled={!valid}
+            onClick={() =>
+              writeOff.mutate({ id: charge.id, reason: reason.trim() }, { onSuccess: onClose })
+            }
+          >
+            Списати
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // «мені можуть і не заплатити» — борг перестає висіти. Клієнту піде лист. Дію видно в
+          аудиті.
+        </div>
+        <Input
+          label="Причина списання"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="напр.: домовились закрити"
+        />
+      </div>
+    </Modal>
+  )
+}
+
+/** 05-В: кредит-нота — внутрішнє коригування боргу клієнта вниз (негативне нарахування). */
+function CreditNoteModal({ onClose }: { onClose: () => void }) {
+  const create = useCreateCreditNote()
+  const companies = useCompanies()
+  const [companyId, setCompanyId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const val = Number(amount.replace(',', '.'))
+  const valid = companyId !== '' && Number.isFinite(val) && val > 0 && reason.trim().length >= 3
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Кредит-нота"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            disabled={!valid}
+            onClick={() =>
+              create.mutate(
+                { companyId, amount: val, reason: reason.trim() },
+                { onSuccess: onClose }
+              )
+            }
+          >
+            Створити
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // зменшує борг клієнта на вказану суму (внутрішнє коригування, без PDF). Клієнту піде
+          лист.
+        </div>
+        <Select
+          label="Клієнт"
+          value={companyId}
+          onChange={setCompanyId}
+          options={[
+            { value: '', label: '— оберіть клієнта —' },
+            ...(companies.data?.companies ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+        <Input
+          label="Сума (USD)"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="напр. 100"
+        />
+        <Input
+          label="Причина"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="напр.: коригування за перерахунком"
+        />
+      </div>
+    </Modal>
+  )
+}
+
 const CREATE_TYPE: { value: 'advance' | 'final' | 'partial'; label: string }[] = [
   { value: 'final', label: 'Фінальний' },
   { value: 'advance', label: 'Аванс' },
@@ -447,7 +658,11 @@ export function BillingPage() {
   const payments = useWsPayments()
   const [releasing, setReleasing] = useState<WsCharge | null>(null)
   const [discounting, setDiscounting] = useState<WsCharge | null>(null)
+  const [writingOff, setWritingOff] = useState<WsCharge | null>(null)
+  const [refunding, setRefunding] = useState<WsPayment | null>(null)
+  const [creditNote, setCreditNote] = useState(false)
   const [paying, setPaying] = useState(false)
+  const { isOwner } = useAuth()
 
   // The pending count drives the queue badge — always query it.
   const pending = useWsCharges('pending')
@@ -497,9 +712,16 @@ export function BillingPage() {
             // рахунки, платежі, погодження та борг
           </div>
         </div>
-        <Button variant="primary" onClick={() => setPaying(true)}>
-          + Підтвердити оплату
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isOwner && (
+            <Button variant="secondary" onClick={() => setCreditNote(true)}>
+              + Кредит-нота
+            </Button>
+          )}
+          <Button variant="primary" onClick={() => setPaying(true)}>
+            + Підтвердити оплату
+          </Button>
+        </div>
       </div>
 
       <div className="wfp-stats" style={{ marginBottom: 18 }}>
@@ -568,6 +790,8 @@ export function BillingPage() {
                     c={c}
                     onRelease={setReleasing}
                     onDiscount={setDiscounting}
+                    onWriteOff={setWritingOff}
+                    isOwner={isOwner}
                   />
                 ))}
               </Card>
@@ -609,9 +833,26 @@ export function BillingPage() {
                     <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
                       {PAY_TYPE[p.type] ?? p.type}
                       {p.paymentMethod ? ` · ${p.paymentMethod}` : ''} · {formatDate(p.confirmedAt)}
+                      {Number(p.refundedAmount ?? 0) > 0 && (
+                        <span style={{ color: 'var(--wf-warning)' }}>
+                          {' · '}
+                          {p.status === 'refunded'
+                            ? 'повністю повернено'
+                            : `повернено ${formatMoney(Number(p.refundedAmount))}`}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <StatusDot tone="success" />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {isOwner &&
+                      p.status === 'confirmed' &&
+                      Number(p.amount) - Number(p.refundedAmount ?? 0) > 0 && (
+                        <Button size="sm" variant="ghost" onClick={() => setRefunding(p)}>
+                          Повернути
+                        </Button>
+                      )}
+                    <StatusDot tone={p.status === 'refunded' ? 'warning' : 'success'} />
+                  </div>
                 </div>
               ))}
             </Card>
@@ -653,6 +894,9 @@ export function BillingPage() {
 
       {releasing && <ReleaseModal charge={releasing} onClose={() => setReleasing(null)} />}
       {discounting && <DiscountModal charge={discounting} onClose={() => setDiscounting(null)} />}
+      {writingOff && <WriteOffModal charge={writingOff} onClose={() => setWritingOff(null)} />}
+      {refunding && <RefundModal payment={refunding} onClose={() => setRefunding(null)} />}
+      {creditNote && <CreditNoteModal onClose={() => setCreditNote(false)} />}
       {paying && <CreatePaymentModal onClose={() => setPaying(false)} />}
     </div>
   )

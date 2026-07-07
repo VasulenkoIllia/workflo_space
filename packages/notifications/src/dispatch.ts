@@ -15,6 +15,9 @@ import {
   renderInvoiceSentEmail,
   renderPaymentReminderEmail,
   renderDunningEscalationEmail,
+  renderPaymentRefundedEmail,
+  renderDebtWrittenOffEmail,
+  renderCreditNoteEmail,
   renderMentionedEmail,
   renderNewCommentEmail,
   renderOrderAssignedEmail,
@@ -124,6 +127,10 @@ export type EventPayloadMap = {
     daysOverdue: number
     clientUrl: string
   }
+  // 05-В реверси (клієнтські листи)
+  'billing.payment_refunded': { amount: string; method?: string | null; portalUrl: string }
+  'billing.debt_written_off': { amount: string; portalUrl: string }
+  'billing.credit_note_issued': { amount: string; portalUrl: string }
 }
 
 export type DispatchResult =
@@ -260,6 +267,23 @@ export function renderEmailForEvent(
         daysOverdue: v.daysOverdue,
         clientUrl: v.clientUrl,
       })
+    }
+    case 'billing.payment_refunded': {
+      const v = vars as EventPayloadMap['billing.payment_refunded']
+      return renderPaymentRefundedEmail({
+        amount: v.amount,
+        method: v.method,
+        portalUrl: v.portalUrl,
+        locale,
+      })
+    }
+    case 'billing.debt_written_off': {
+      const v = vars as EventPayloadMap['billing.debt_written_off']
+      return renderDebtWrittenOffEmail({ amount: v.amount, portalUrl: v.portalUrl, locale })
+    }
+    case 'billing.credit_note_issued': {
+      const v = vars as EventPayloadMap['billing.credit_note_issued']
+      return renderCreditNoteEmail({ amount: v.amount, portalUrl: v.portalUrl, locale })
     }
     case 'orders.created': {
       const v = vars as EventPayloadMap['orders.created']

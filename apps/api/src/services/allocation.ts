@@ -109,7 +109,7 @@ async function recomputeMoneyBalance(
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
   }
 
-  const [paidAgg, chargeAgg, bonusAgg] = await Promise.all([
+  const [paidAgg, chargeAgg, bonusAgg, refundAgg] = await Promise.all([
     tx.payment.aggregate({
       where: {
         agencyId: args.agencyId,
@@ -141,8 +141,20 @@ async function recomputeMoneyBalance(
       },
       _sum: { amount: true },
     }),
+    // 05-В: часткові повернення confirmed-платежів зменшують `paid`. Повне повернення
+    // флипає payment.status='refunded' → воно вже випадає з paidAgg (status='confirmed'),
+    // і цей JOIN (теж status='confirmed') його не рахує — жодного подвійного віднімання.
+    tx.$queryRaw<Array<{ refunded: Prisma.Decimal | null }>>`
+      SELECT COALESCE(SUM(r."amountUsd"), 0) AS "refunded"
+      FROM "payment_refunds" r
+      JOIN "payments" p ON p."id" = r."paymentId"
+      WHERE p."agencyId" = ${args.agencyId} AND p."companyId" = ${args.companyId}
+        AND p."status" = 'confirmed' AND p."orderId" IS NULL
+    `,
   ])
-  const paid = paidAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const paidGross = paidAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const refunded = new Prisma.Decimal(refundAgg[0]?.refunded ?? 0)
+  const paid = paidGross.minus(refunded)
   const charged = new Prisma.Decimal(chargeAgg[0]?.charged ?? 0)
   const bonusApplied = bonusAgg._sum.amount ?? new Prisma.Decimal(0)
   const balance = paid.minus(charged).plus(bonusApplied)
