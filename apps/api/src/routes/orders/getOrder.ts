@@ -84,6 +84,8 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         priority: order.priority,
         totalAmount: num(order.totalAmount),
         currency: order.currency,
+        // 05-А: клієнт бачить статус оплати замовлення (рахунок + «Як оплатити»)
+        paidAt: order.paidAt,
         dueDate: order.deadline,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
@@ -111,7 +113,6 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             fixedPrice: num(order.fixedPrice),
             hourlyRate: num(order.hourlyRate),
             estimatedHours: num(order.estimatedHours),
-            paidAt: order.paidAt,
             onHoldReason: order.onHoldReason,
             cancelledReason: order.cancelledReason,
             company: order.company,

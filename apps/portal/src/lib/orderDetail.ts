@@ -47,6 +47,7 @@ export interface OrderDetail {
   priority: OrderPriority
   totalAmount: number | null
   currency: string
+  paidAt: string | null // 05-А: статус оплати замовлення
   dueDate: string | null
   createdAt: string
   updatedAt: string

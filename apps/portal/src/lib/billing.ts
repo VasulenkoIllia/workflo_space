@@ -114,3 +114,20 @@ export function useDecideCharge() {
 export function num(s: string | null | undefined): number | null {
   return s == null ? null : Number(s)
 }
+
+// 05-Д: клієнт-власник гасить відкрите нарахування бонусами (роут+сервіс уже є S5-08).
+export function usePayWithBonus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chargeId, amount }: { chargeId: string; amount?: number }) =>
+      api.post<{ spent: string; bonusBalance: string }>(
+        `/portal/invoices/${chargeId}/pay-with-bonus`,
+        amount != null ? { amount } : {}
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['portal-billing'] })
+      void qc.invalidateQueries({ queryKey: ['portal-wallet'] })
+      void qc.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}

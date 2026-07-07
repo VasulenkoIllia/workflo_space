@@ -5,10 +5,13 @@ import {
   num,
   type PortalCharge,
   useDecideCharge,
+  usePayWithBonus,
   usePortalCharges,
   usePortalPayments,
   usePortalSummary,
 } from '@/lib/billing'
+import { num as walletNum, useWallet } from '@/lib/wallet'
+import { useAuth } from '@/contexts/AuthContext'
 
 const TIER_LABEL: Record<string, string> = {
   new: 'Новий',
@@ -60,11 +63,30 @@ function ApprovalBadge({ status }: { status: PortalCharge['approvalStatus'] }) {
   )
 }
 
-function ChargeRow({ c, onDecide }: { c: PortalCharge; onDecide: (c: PortalCharge) => void }) {
+function ChargeRow({
+  c,
+  onDecide,
+  onPayBonus,
+  bonusAvailable,
+}: {
+  c: PortalCharge
+  onDecide: (c: PortalCharge) => void
+  onPayBonus: (c: PortalCharge) => void
+  bonusAvailable: number
+}) {
   const quote = num(c.amount)
   const final = num(c.totalAmount)
   const discounted = c.approvedAmount != null && final != null && quote != null && final < quote
   const pending = c.approvalStatus === 'pending'
+  // 05-Д: гасити бонусами можна відкрите нарахування (не чернетку/сплачене/списане)
+  const owed = final ?? quote ?? 0
+  const canPayBonus =
+    !pending &&
+    (c.approvalStatus == null || c.approvalStatus === 'approved') &&
+    c.status !== 'paid' &&
+    c.status !== 'written_off' &&
+    owed > 0 &&
+    bonusAvailable > 0
   return (
     <div
       style={{
@@ -120,8 +142,71 @@ function ChargeRow({ c, onDecide }: { c: PortalCharge; onDecide: (c: PortalCharg
             Погодити
           </Button>
         )}
+        {canPayBonus && (
+          <Button size="sm" variant="ghost" onClick={() => onPayBonus(c)} style={{ marginTop: 6 }}>
+            Оплатити бонусом
+          </Button>
+        )}
       </div>
     </div>
+  )
+}
+
+/** 05-Д: погашення нарахування бонусами — спишеться min(борг, бонус). */
+function BonusSpendModal({
+  charge,
+  bonusAvailable,
+  onClose,
+}: {
+  charge: PortalCharge
+  bonusAvailable: number
+  onClose: () => void
+}) {
+  const pay = usePayWithBonus()
+  const owed = num(charge.totalAmount) ?? num(charge.amount) ?? 0
+  const willSpend = Math.min(owed, bonusAvailable)
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Оплатити бонусом"
+      aux={`${charge.month} · борг ${formatMoney(owed)} ${charge.currency}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={pay.isPending}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={pay.isPending}
+            onClick={() => pay.mutate({ chargeId: charge.id }, { onSuccess: onClose })}
+          >
+            Списати {formatMoney(willSpend)}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 10, fontSize: 14 }}>
+        <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+          // спишеться min(борг, доступний бонус); решта боргу лишиться до сплати грошима
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--wf-fg-secondary)' }}>Доступно бонусів</span>
+          <span style={{ fontWeight: 600 }}>{formatMoney(bonusAvailable)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--wf-fg-secondary)' }}>Спишеться</span>
+          <span style={{ fontWeight: 600, color: 'var(--wf-accent)' }}>
+            {formatMoney(willSpend)}
+          </span>
+        </div>
+        {pay.isError && (
+          <div style={{ color: 'var(--wf-destructive)', fontSize: 12 }}>
+            Не вдалося списати — лише власник компанії, нарахування має бути відкритим.
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -220,8 +305,14 @@ export function BillingPage() {
   const summary = usePortalSummary()
   const charges = usePortalCharges()
   const payments = usePortalPayments()
+  const wallet = useWallet()
+  const { user } = useAuth()
   const [tab, setTab] = useState<'charges' | 'payments'>('charges')
   const [deciding, setDeciding] = useState<PortalCharge | null>(null)
+  const [payingBonus, setPayingBonus] = useState<PortalCharge | null>(null)
+  const isCompanyOwner =
+    user?.companies.find((c) => c.id === user.activeCompanyId)?.role === 'owner'
+  const bonusAvailable = isCompanyOwner ? (walletNum(wallet.data?.bonusBalance) ?? 0) : 0
 
   if (summary.isLoading) {
     return (
@@ -303,7 +394,13 @@ export function BillingPage() {
             ) : (
               <Card>
                 {chargeList.map((c) => (
-                  <ChargeRow key={c.id} c={c} onDecide={setDeciding} />
+                  <ChargeRow
+                    key={c.id}
+                    c={c}
+                    onDecide={setDeciding}
+                    onPayBonus={setPayingBonus}
+                    bonusAvailable={bonusAvailable}
+                  />
                 ))}
               </Card>
             ))}
@@ -383,6 +480,13 @@ export function BillingPage() {
       </div>
 
       {deciding && <ApprovalModal charge={deciding} onClose={() => setDeciding(null)} />}
+      {payingBonus && (
+        <BonusSpendModal
+          charge={payingBonus}
+          bonusAvailable={bonusAvailable}
+          onClose={() => setPayingBonus(null)}
+        />
+      )}
     </div>
   )
 }
