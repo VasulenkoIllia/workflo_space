@@ -157,6 +157,9 @@ model Company {
   // 05-Г / В10 (P-4): default net payment terms (days) for this client's projects —
   // cascade tier 2 (Project.paymentTermsDays → THIS → agency PaymentSettings). null → next tier.
   paymentTermsDays     Int?
+  // 05-Б дунінг: «не надсилати цьому клієнту нагадування про оплату» (усна домовленість).
+  // Вимикає ЛИШЕ листи/сповіщення — overdue-статус нарахувань ставиться незалежно.
+  dunningOptOut        Boolean          @default(false)
   // P-11 (PROJECTS_SPEC §8): per-client cost-approval defaults — the knob the owner sets
   // once per client. null → inherit the agency floor. Project may override further.
   approvalMode         ApprovalMode?
@@ -800,6 +803,7 @@ model ServiceCharge {
   month                DateTime             @db.Date
   status               ChargeStatus         @default(pending)
   dueDate              DateTime?            @db.Timestamptz(3)
+  dunningLogs          DunningLog[]
   paidAt               DateTime?            @db.Timestamptz(3)
   // P-11 (PROJECTS_SPEC §8) — on_actuals invoice-approval gate. approvalStatus null = no gate
   // (counts as owed immediately, today's behavior); pending = draft, EXCLUDED from moneyBalance
@@ -822,6 +826,22 @@ model ServiceCharge {
   @@index([companyId, month])
   @@index([projectId])
   @@map("service_charges")
+}
+
+// 05-Б дунінг: журнал надісланих нагадувань — ідемпотентність cron (один лист на крок
+// на нарахування). escalatedAt = на цьому кроці пішла ескалація власнику.
+model DunningLog {
+  id          String        @id @default(uuid())
+  agencyId    String
+  chargeId    String
+  charge      ServiceCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  stepOffset  Int
+  escalatedAt DateTime?     @db.Timestamptz(3)
+  sentAt      DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([chargeId, stepOffset])
+  @@index([agencyId])
+  @@map("dunning_logs")
 }
 
 model Payment {
@@ -1319,6 +1339,9 @@ model Agency {
   // 06-А PDF-брендинг: лого (storage-key) + акцентний hex-колір на всіх PDF
   pdfLogoKey                    String?
   pdfAccentColor                String?
+  // 05-Б дунінг: офсети кроків нагадувань від dueDate у днях (відʼємні = до терміну).
+  // null → дефолтний ланцюжок [-3,0,3,7,14] (рішення власника 07.07); [] → дунінг вимкнено.
+  dunningSteps                  Json?
 
   members           AgencyMember[]
   documentTemplates DocumentTemplate[]

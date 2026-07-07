@@ -13,6 +13,8 @@ import {
   renderInviteCompanyMemberEmail,
   renderInviteExecutorEmail,
   renderInvoiceSentEmail,
+  renderPaymentReminderEmail,
+  renderDunningEscalationEmail,
   renderMentionedEmail,
   renderNewCommentEmail,
   renderOrderAssignedEmail,
@@ -106,6 +108,22 @@ export type EventPayloadMap = {
     documentUrl: string
   }
   'billing.invoice_paid': { amount: string; method?: string | null; portalUrl: string }
+  // 05-Б дунінг: нагадування клієнту (фаза задає тон листа)
+  'billing.payment_reminder': {
+    amountDue: string
+    dueDateLabel: string
+    phase: 'upcoming' | 'due' | 'overdue'
+    daysOverdue: number
+    periodLabel?: string | null
+    portalUrl: string
+  }
+  // 05-Б ескалація власнику: ланцюжок вичерпано, клієнт не платить
+  'billing.invoice_overdue': {
+    companyName: string
+    amountDue: string
+    daysOverdue: number
+    clientUrl: string
+  }
 }
 
 export type DispatchResult =
@@ -220,6 +238,27 @@ export function renderEmailForEvent(
         dueDate: v.dueDate,
         invoiceUrl: v.invoiceUrl,
         locale,
+      })
+    }
+    case 'billing.payment_reminder': {
+      const v = vars as EventPayloadMap['billing.payment_reminder']
+      return renderPaymentReminderEmail({
+        amountDue: v.amountDue,
+        dueDateLabel: v.dueDateLabel,
+        phase: v.phase,
+        daysOverdue: v.daysOverdue,
+        periodLabel: v.periodLabel,
+        portalUrl: v.portalUrl,
+        locale,
+      })
+    }
+    case 'billing.invoice_overdue': {
+      const v = vars as EventPayloadMap['billing.invoice_overdue']
+      return renderDunningEscalationEmail({
+        companyName: v.companyName,
+        amountDue: v.amountDue,
+        daysOverdue: v.daysOverdue,
+        clientUrl: v.clientUrl,
       })
     }
     case 'orders.created': {

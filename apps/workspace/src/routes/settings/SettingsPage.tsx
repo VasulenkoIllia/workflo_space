@@ -251,6 +251,82 @@ function WorkflowSection() {
   )
 }
 
+/** 05-Б дунінг: офсети кроків нагадувань від dueDate (відʼємні = до терміну).
+ * Порожньо = вимкнено; «Повернути дефолт» = системний ланцюжок. */
+function DunningSection() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['agency-dunning-settings'],
+    queryFn: () =>
+      api.get<{ steps: number[]; isDefault: boolean; defaultSteps: number[] }>(
+        '/workspace/agency/dunning-settings'
+      ),
+  })
+  const [raw, setRaw] = useState<string | null>(null)
+  const save = useMutation({
+    mutationFn: (steps: number[] | null) =>
+      api.put('/workspace/agency/dunning-settings', { steps }),
+    onSuccess: () => {
+      toast.success('Налаштування нагадувань збережено')
+      setRaw(null)
+      void qc.invalidateQueries({ queryKey: ['agency-dunning-settings'] })
+    },
+    onError: () => toast.error('Не вдалося зберегти'),
+  })
+
+  if (isLoading) return <Skeleton style={{ height: 90 }} />
+  if (!data) return null
+
+  const value = raw ?? data.steps.join(', ')
+  const parsed = value
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map(Number)
+  const valid = parsed.every((n) => Number.isInteger(n) && n >= -30 && n <= 60)
+
+  return (
+    <Card title="Нагадування про оплату">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // дні відносно терміну оплати: відʼємні = до, 0 = у день, додатні = після. На останньому
+        кроці — ескалація власнику. Порожньо = нагадування вимкнено. Текст листа редагується в
+        «Email-шаблони».
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 260 }}>
+          <Input
+            label="Кроки (через кому)"
+            value={value}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="-3, 0, 3, 7, 14"
+          />
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={raw === null || !valid}
+          loading={save.isPending}
+          onClick={() => save.mutate(parsed)}
+        >
+          Зберегти
+        </Button>
+        {!data.isDefault && (
+          <Button variant="ghost" size="sm" onClick={() => save.mutate(null)}>
+            Повернути дефолт ({data.defaultSteps.join(', ')})
+          </Button>
+        )}
+      </div>
+      {!valid && (
+        <div style={{ fontSize: 12, color: 'var(--wf-danger, #e5484d)', marginTop: 6 }}>
+          Кроки — цілі числа від -30 до 60
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
   const save = useSavePaymentSettings()
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
@@ -747,6 +823,7 @@ export function SettingsPage() {
         {isOwner && <AgencySecuritySection />}
         {isOwner && <EmailReportsSection />}
         {isOwner && <WorkflowSection />}
+        {isOwner && <DunningSection />}
         {isOwner && <DocumentTemplatesSection />}
         {isOwner && <PdfBrandingSection />}
         {isOwner && <EmailTemplatesSection />}

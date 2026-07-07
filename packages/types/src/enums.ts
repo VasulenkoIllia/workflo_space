@@ -350,6 +350,7 @@ export type NotificationEvent =
   | 'billing.invoice_sent'
   | 'billing.invoice_paid'
   | 'billing.invoice_overdue'
+  | 'billing.payment_reminder'
   | 'billing.payment_failed'
   | 'billing.refund_issued'
   | 'billing.subscription_charged'

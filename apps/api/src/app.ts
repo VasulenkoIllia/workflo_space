@@ -31,6 +31,7 @@ import agencyReportsRoute from './routes/tenant/agencyReports.js'
 import agencyWorkflowRoute from './routes/tenant/agencyWorkflow.js'
 import documentTemplatesRoute from './routes/tenant/documentTemplates.js'
 import emailTemplatesRoute from './routes/tenant/emailTemplates.js'
+import dunningRoute from './routes/tenant/dunning.js'
 import searchRoute from './routes/search.js'
 import walletRoutes from './routes/wallet/index.js'
 
@@ -104,6 +105,7 @@ export function buildApp() {
   app.register(agencyWorkflowRoute)
   app.register(documentTemplatesRoute)
   app.register(emailTemplatesRoute)
+  app.register(dunningRoute)
   app.register(searchRoute)
   app.register(authRoutes)
   app.register(profileRoutes)

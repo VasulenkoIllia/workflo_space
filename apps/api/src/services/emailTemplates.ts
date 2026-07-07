@@ -41,6 +41,11 @@ export const EDITABLE_EMAIL_EVENTS: { event: string; label: string; vars: string
     vars: ['invoiceNumber', 'amount', 'dueDate', 'invoiceUrl'],
   },
   {
+    event: 'billing.payment_reminder',
+    label: 'Нагадування про оплату (дунінг)',
+    vars: ['amountDue', 'dueDateLabel', 'phase', 'daysOverdue', 'periodLabel', 'portalUrl'],
+  },
+  {
     event: 'billing.invoice_paid',
     label: 'Оплату отримано',
     vars: ['amount', 'method', 'portalUrl'],

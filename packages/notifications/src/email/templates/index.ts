@@ -16,6 +16,13 @@ export {
 export { renderNewCommentEmail, type NewCommentEmailVars } from './newComment.js'
 export { renderMentionedEmail, type MentionedEmailVars } from './mentioned.js'
 export { renderInvoiceSentEmail, type InvoiceSentEmailVars } from './invoiceSent.js'
+export {
+  renderPaymentReminderEmail,
+  renderDunningEscalationEmail,
+  type PaymentReminderEmailVars,
+  type PaymentReminderPhase,
+  type DunningEscalationEmailVars,
+} from './paymentReminder.js'
 export { renderOrderCreatedEmail, type OrderCreatedEmailVars } from './orderCreated.js'
 export { renderOrderAssignedEmail, type OrderAssignedEmailVars } from './orderAssigned.js'
 export {

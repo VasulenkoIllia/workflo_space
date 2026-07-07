@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import {
   LoyaltyTier,
   OrderInternalStatus,
@@ -257,6 +257,7 @@ export function ClientDetailPage() {
         <>
           <LoyaltySection companyId={id} />
           <MarginSection companyId={id} />
+          <DunningToggleSection companyId={id} />
         </>
       )}
       {safeTab === 'docs' && <DocumentsSection companyId={id} />}
@@ -1096,6 +1097,55 @@ function PeopleSection({ companyId }: { companyId: string }) {
 
 /** Loyalty tier panel for a client (S5-09). Read for team (owner/executor), hidden for
  * managers (the backend 403s them). Owner can override the tier (audit-logged). */
+/** 05-Б дунінг: «не надсилати цьому клієнту нагадування про оплату» (owner-only).
+ * Глушить лише листи/сповіщення — overdue-статус нарахувань ставиться незалежно. */
+function DunningToggleSection({ companyId }: { companyId: string }) {
+  const { isOwner } = useAuth()
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['company-dunning', companyId],
+    queryFn: () => api.get<{ optOut: boolean }>(`/workspace/companies/${companyId}/dunning`),
+    enabled: isOwner,
+  })
+  const patch = useMutation({
+    mutationFn: (optOut: boolean) =>
+      api.patch(`/workspace/companies/${companyId}/dunning`, { optOut }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['company-dunning', companyId] }),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
+  })
+
+  if (!isOwner) return null
+  if (isLoading) return <Skeleton style={{ height: 60, marginBottom: 20 }} />
+  if (!data) return null
+
+  return (
+    <Card title="Нагадування про оплату" style={{ marginBottom: 20 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+        <input
+          type="checkbox"
+          checked={data.optOut}
+          disabled={patch.isPending}
+          onChange={(e) =>
+            patch.mutate(e.target.checked, {
+              onSuccess: () =>
+                toast.success(
+                  e.target.checked
+                    ? 'Нагадування цьому клієнту вимкнено'
+                    : 'Нагадування цьому клієнту увімкнено'
+                ),
+            })
+          }
+        />
+        Не надсилати нагадування про оплату цьому клієнту
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // для усних домовленостей. Прострочення в системі позначається незалежно — вимикаються лише
+        листи/сповіщення клієнту.
+      </div>
+    </Card>
+  )
+}
+
 function LoyaltySection({ companyId }: { companyId: string }) {
   const { isManager, isOwner } = useAuth()
   const { data, isLoading } = useCompanyLoyalty(companyId, !isManager)

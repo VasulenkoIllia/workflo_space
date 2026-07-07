@@ -5,6 +5,7 @@ import { startExchangeRateCron, stopExchangeRateCron } from './exchangeRate.js'
 import { startIdempotencyKeySweepCron, stopIdempotencyKeySweepCron } from './idempotencyKeySweep.js'
 import { startLoyaltyRecalcCron, stopLoyaltyRecalcCron } from './loyaltyRecalc.js'
 import { startClientMonthlyReportCron, stopClientMonthlyReportCron } from './clientMonthlyReport.js'
+import { startDunningCron, stopDunningCron } from './dunning.js'
 import { startMonthlyReportCron, stopMonthlyReportCron } from './monthlyReport.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 import { startRefreshTokenSweepCron, stopRefreshTokenSweepCron } from './refreshTokenSweep.js'
@@ -29,6 +30,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startSlaCheckCron(logger)
   startMonthlyReportCron(logger)
   startClientMonthlyReportCron(logger)
+  startDunningCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -42,4 +44,5 @@ export function stopCronJobs(): void {
   stopSlaCheckCron()
   stopMonthlyReportCron()
   stopClientMonthlyReportCron()
+  stopDunningCron()
 }

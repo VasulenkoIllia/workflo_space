@@ -123,6 +123,23 @@ const uk: Dictionary = {
     'Рахунок {invoiceNumber} на суму {amount}. Будь ласка, оплатіть до {dueDate}.',
   'invoiceSent.cta': 'Переглянути рахунок',
 
+  // payment reminder (05-Б дунінг)
+  'paymentReminder.subject_upcoming': 'Нагадування: оплата {amountDue} незабаром',
+  'paymentReminder.subject_due': 'Сьогодні термін оплати — {amountDue}',
+  'paymentReminder.subject_overdue': 'Прострочена оплата — {amountDue}',
+  'paymentReminder.h1_upcoming': 'Наближається термін оплати',
+  'paymentReminder.h1_due': 'Сьогодні термін оплати',
+  'paymentReminder.h1_overdue': 'Оплату прострочено',
+  'paymentReminder.body_upcoming':
+    'Нагадуємо: до {dueDateLabel} очікуємо оплату {amountDue}. Деталі нарахування — у вашому кабінеті.',
+  'paymentReminder.body_due':
+    'Сьогодні ({dueDateLabel}) — термін оплати {amountDue}. Деталі нарахування — у вашому кабінеті.',
+  'paymentReminder.body_overdue':
+    'Оплату {amountDue} прострочено на {daysOverdue} дн. (термін був {dueDateLabel}). Будь ласка, погасіть заборгованість.',
+  'paymentReminder.period': 'Період: {periodLabel}.',
+  'paymentReminder.cta': 'Переглянути нарахування',
+  'paymentReminder.already_paid': 'Якщо ви вже оплатили — проігноруйте цей лист, дякуємо!',
+
   // order created (team)
   'orderCreated.subject': 'Нове замовлення: {orderTitle}',
   'orderCreated.h1': 'Нове замовлення',
@@ -278,6 +295,23 @@ const en: Dictionary = {
   'invoiceSent.h1': 'Invoice issued',
   'invoiceSent.body': 'Invoice {invoiceNumber} for {amount}. Please pay by {dueDate}.',
   'invoiceSent.cta': 'View invoice',
+
+  // payment reminder (05-Б dunning)
+  'paymentReminder.subject_upcoming': 'Reminder: payment of {amountDue} due soon',
+  'paymentReminder.subject_due': 'Payment of {amountDue} is due today',
+  'paymentReminder.subject_overdue': 'Overdue payment — {amountDue}',
+  'paymentReminder.h1_upcoming': 'Payment due soon',
+  'paymentReminder.h1_due': 'Payment due today',
+  'paymentReminder.h1_overdue': 'Payment overdue',
+  'paymentReminder.body_upcoming':
+    'A friendly reminder: {amountDue} is due by {dueDateLabel}. See the charge details in your portal.',
+  'paymentReminder.body_due':
+    'Today ({dueDateLabel}) is the due date for {amountDue}. See the charge details in your portal.',
+  'paymentReminder.body_overdue':
+    'The payment of {amountDue} is {daysOverdue} day(s) overdue (was due {dueDateLabel}). Please settle the balance.',
+  'paymentReminder.period': 'Period: {periodLabel}.',
+  'paymentReminder.cta': 'View charge',
+  'paymentReminder.already_paid': 'Already paid? Please disregard this email — thank you!',
 
   'orderCreated.subject': 'New order: {orderTitle}',
   'orderCreated.h1': 'New order',

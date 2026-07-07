@@ -953,3 +953,34 @@ Workspace, розрізи в Portal-білінгу).
 **Для ТЗ дизайнеру:** кнопка «Оплатити» + стани платіжного лінка в Portal (А);
 бейджі overdue + таймлайн нагадувань (Б); дії сторно/повернення/списання в Workspace-білінгу (В);
 налаштування payment terms (Г); знижка на нарахування (З); БЛОК ЕКРАНІВ «Проєкти клієнта» (05-ПРОЕКТИ).
+
+---
+
+## UPDATE (07.07.2026) — 05-Б дунінг: overdue + ланцюжок нагадувань ✅
+
+> Рішення власника (вікторина 07.07): обʼєкт — **нарахування** (ServiceCharge.dueDate);
+> дефолтний ланцюжок **-3 / 0 / +3 / +7 / +14** (редагований per-agency); канали
+> **email + in-app** (telegram — якщо привʼязаний, через notify-пайплайн);
+> **per-company вимикач** «не надсилати нагадування» (глушить лише листи).
+
+- **Модель:** `DunningLog { agencyId, chargeId, stepOffset, escalatedAt?, sentAt }`,
+  `@@unique([chargeId, stepOffset])` (ідемпотентність), RLS. `Agency.dunningSteps Json?`
+  (null → дефолт, [] → вимкнено), `Company.dunningOptOut`. Міграція `20260707_dunning`.
+- **Cron `C-dunning`** (щогодини, boot 90с; `cron/dunning.ts`):
+  1. **B-D1 закрито:** pending/partial з минулим dueDate і додатним боргом →
+     `status=overdue` (та сама семантика, що deriveChargeState; кредитні рядки і
+     on_actuals-драфти approvalStatus=pending/rejected не чіпаються). Ставиться
+     незалежно від opt-out.
+  2. **Кроки:** надсилається лише ОСТАННІЙ насталий крок (catch-up без спаму по
+     пропущених); лог пишеться ДО відправки — конкурентний прогін упирається в unique.
+     Фази листа: upcoming (до терміну) / due (у день) / overdue (+N днів). Лист —
+     `billing.payment_reminder` (у CRITICAL_EVENTS; тема+вступ редагуються через
+     08-EMAIL), отримувачі — всі учасники компанії.
+  3. **Ескалація:** на фінальному додатному кроці власники агенції отримують
+     `billing.invoice_overdue` (лист + in-app «клієнт не платить», лінк на картку
+     клієнта); `escalatedAt` на лог-рядку.
+- **API (owner-only):** GET/PUT `/workspace/agency/dunning-settings` `{steps: number[]|null}`
+  (цілі -30..60, ≤10; null = повернути дефолт); GET/PATCH
+  `/workspace/companies/:companyId/dunning` `{optOut}`.
+- **UI:** /settings картка «Нагадування про оплату» (кроки через кому + «Повернути
+  дефолт»); картка клієнта → Фінанси → тумблер «Не надсилати нагадування про оплату».
