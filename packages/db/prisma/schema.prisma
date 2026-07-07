@@ -38,36 +38,39 @@ model Profile {
   updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
 
   companyMembership      CompanyMember[]
-  ordersAssigned         Order[]                @relation("OrderAssignee")
-  ordersCreated          Order[]                @relation("OrderCreatedBy")
-  ordersApprovalDecided  Order[]                @relation("OrderApprovalDecidedBy")
-  chargesApprovalDecided ServiceCharge[]        @relation("ChargeApprovalDecidedBy")
-  internalTasksAssigned  InternalTask[]         @relation("InternalTaskAssignee")
+  ordersAssigned         Order[]                   @relation("OrderAssignee")
+  ordersCreated          Order[]                   @relation("OrderCreatedBy")
+  ordersApprovalDecided  Order[]                   @relation("OrderApprovalDecidedBy")
+  chargesApprovalDecided ServiceCharge[]           @relation("ChargeApprovalDecidedBy")
+  internalTasksAssigned  InternalTask[]            @relation("InternalTaskAssignee")
   comments               OrderComment[]
   ticketMessages         TicketMessage[]
-  calendarEventsCreated  CalendarEvent[]        @relation("CalendarEventCreatedBy")
-  calendarAttendee       CalendarAttendee[]     @relation("CalendarAttendee")
-  orderCoAssignments     OrderAssignee[]        @relation("OrderCoAssignee")
-  taskCoAssignments      InternalTaskAssignee[] @relation("TaskCoAssignee")
+  calendarEventsCreated  CalendarEvent[]           @relation("CalendarEventCreatedBy")
+  calendarAttendee       CalendarAttendee[]        @relation("CalendarAttendee")
+  orderCoAssignments     OrderAssignee[]           @relation("OrderCoAssignee")
+  taskCoAssignments      InternalTaskAssignee[]    @relation("TaskCoAssignee")
+  ordersSubmitted        Order[]                   @relation("OrderSubmittedBy")
+  ordersAccepted         Order[]                   @relation("OrderAcceptedBy")
+  orderSettlements       OrderExecutorSettlement[] @relation("OrderSettlementExecutor")
   timeLogs               TimeLog[]
   notificationSettings   NotificationSettings?
   refreshTokens          RefreshToken[]
-  invitesSent            Invite[]               @relation("InvitedBy")
+  invitesSent            Invite[]                  @relation("InvitedBy")
   executorRates          ExecutorRate[]
   blogPosts              BlogPost[]
   uploadedFiles          OrderFile[]
   notifications          Notification[]
   activityLogsAsActor    ActivityLog[]
-  paymentsConfirmed      Payment[]              @relation("PaymentConfirmedBy")
+  paymentsConfirmed      Payment[]                 @relation("PaymentConfirmedBy")
   otpTokens              OtpToken[]
-  documentsCreated       Document[]             @relation("DocumentCreatedBy")
-  documentsForExecutor   Document[]             @relation("DocumentExecutor")
+  documentsCreated       Document[]                @relation("DocumentCreatedBy")
+  documentsForExecutor   Document[]                @relation("DocumentExecutor")
   auditLogsAsActor       AuditLog[]
-  agenciesOwned          Agency[]               @relation("AgencyOwner")
+  agenciesOwned          Agency[]                  @relation("AgencyOwner")
   agencyMemberships      AgencyMember[]
   orderChatReads         OrderChatRead[]
   projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
-  credentialsCreated     CredentialVault[]      @relation("CredentialCreatedBy") // 17
+  credentialsCreated     CredentialVault[]         @relation("CredentialCreatedBy") // 17
   twoFactor              TwoFactorAuth? // S9-01
   oauthAccounts          OAuthAccount[] // S9 §E
   commentReactions       CommentReaction[] // S10
@@ -298,6 +301,17 @@ model Order {
   resolutionDueAt     DateTime?            @db.Timestamptz(3)
   firstRespondedAt    DateTime?            @db.Timestamptz(3)
   slaBreachedAt       DateTime?            @db.Timestamptz(3)
+  // ПРИЙМАННЯ РОБОТИ (07.07): виконавець здає (in_progress→review), owner/manager приймає
+  // (review→done, гейт ролей). submittedBy/acceptedBy — audit-хто. billableHours — год ДО
+  // ВИСТАВЛЕННЯ клієнту (погодинне; null = факт Σ TimeLog). Пооб'єктна оплата виконавцям —
+  // OrderExecutorSettlement. Факт (Σ TimeLog) ніколи не редагується — це правда/статистика.
+  submittedAt         DateTime?            @db.Timestamptz(3)
+  submittedById       String?
+  submittedBy         Profile?             @relation("OrderSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  acceptedAt          DateTime?            @db.Timestamptz(3)
+  acceptedById        String?
+  acceptedBy          Profile?             @relation("OrderAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  billableHours       Decimal?             @db.Decimal(8, 2)
   createdAt           DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -307,6 +321,7 @@ model Order {
   files              OrderFile[]
   internalTasks      InternalTask[]
   coAssignees        OrderAssignee[]
+  settlements        OrderExecutorSettlement[] // ПРИЙМАННЯ: по-виконавцева звірка оплатних годин
   estimateLine       EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
   orderEstimateLines OrderEstimateLine[] // 02-Б: кошторис разового замовлення (qty × ціна)
   activityLogs       ActivityLog[]
@@ -315,7 +330,7 @@ model Order {
   documents          Document[]
   conversationStates ConversationState[]
   tags               OrderTagAssignment[]
-  agency             Agency               @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  agency             Agency                    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
   @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
@@ -578,6 +593,28 @@ model OrderAssignee {
   @@index([agencyId])
   @@index([profileId])
   @@map("order_assignees")
+}
+
+// ПРИЙМАННЯ (07.07): по-виконавцева звірка годин при прийманні замовлення. trackedHours —
+// знімок Σ TimeLog виконавця на момент приймання; payableHours — скільки год фіксуємо ДО
+// ОПЛАТИ виконавцю (owner/manager коригує; за замовч. = tracked). Джерело істини «оплатних
+// годин» для майбутнього погодинного payroll + звітів; факт (Σ TimeLog) лишається окремо.
+model OrderExecutorSettlement {
+  id           String   @id @default(uuid())
+  agencyId     String
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile  @relation("OrderSettlementExecutor", fields: [profileId], references: [id], onDelete: Cascade)
+  trackedHours Decimal  @default(0) @db.Decimal(8, 2)
+  payableHours Decimal  @default(0) @db.Decimal(8, 2)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([orderId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("order_executor_settlements")
 }
 
 // Співвиконавці задачі (InternalTask) — аналогічно замовленню.

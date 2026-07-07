@@ -81,6 +81,25 @@ export interface WorkspaceOrderDetail {
   coAssignees?: { id: string; name: string }[]
   project?: { id: string; name: string; billingModel: string } | null
   stages: OrderStage[]
+  /** ПРИЙМАННЯ РОБОТИ (internal-only): план/факт/білабельно/до-оплати. */
+  acceptance?: OrderAcceptance
+}
+
+export interface AcceptanceExecutor {
+  profileId: string
+  name: string
+  trackedHours: number
+  payableHours: number
+}
+export interface OrderAcceptance {
+  submittedAt: string | null
+  submittedBy: { id: string; name: string } | null
+  acceptedAt: string | null
+  acceptedBy: { id: string; name: string } | null
+  plannedHours: number | null
+  trackedHours: number
+  billableHours: number | null
+  executors: AcceptanceExecutor[]
 }
 
 export interface ActivityItem {
@@ -246,6 +265,18 @@ export function useAssignOrder(id: string) {
       void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
       void qc.invalidateQueries({ queryKey: ['ws-orders'] })
     },
+  })
+}
+
+/** ПРИЙМАННЯ: звірка годин (owner/manager) — білабельні клієнту + оплатні по-виконавцях. */
+export function useReconcileOrder(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      billableHours?: number | null
+      settlements?: { profileId: string; payableHours: number }[]
+    }) => api.put<{ id: string }>(`/orders/${id}/reconciliation`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.detail(id) }),
   })
 }
 

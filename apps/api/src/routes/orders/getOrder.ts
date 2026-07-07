@@ -59,6 +59,19 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
               select: { profile: { select: { id: true, name: true } } },
               orderBy: { createdAt: 'asc' },
             },
+            // ПРИЙМАННЯ: хто/коли здав і прийняв + білабельні год + звірка оплати по-виконавцях
+            submittedAt: true,
+            acceptedAt: true,
+            billableHours: true,
+            submittedBy: { select: { id: true, name: true } },
+            acceptedBy: { select: { id: true, name: true } },
+            settlements: {
+              select: {
+                profileId: true,
+                payableHours: true,
+                profile: { select: { id: true, name: true } },
+              },
+            },
             project: { select: { id: true, name: true, billingModel: true } },
             tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
             firstResponseDueAt: true,
@@ -106,6 +119,46 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         return reply.send({ success: true, data: { order: clientView } })
       }
 
+      // ПРИЙМАННЯ: збірка блоку звірки годин (internal-only). Факт — живий Σ TimeLog
+      // по-виконавцях; payable — з settlement (або дефолт = факт, якщо ще не звіряли).
+      const groups = await withTenant((tx) =>
+        tx.timeLog.groupBy({
+          by: ['executorId'],
+          where: { orderId: order.id },
+          _sum: { hours: true },
+        })
+      )
+      const trackedMap = new Map(groups.map((g) => [g.executorId, Number(g._sum.hours ?? 0)]))
+      const settleMap = new Map(order.settlements.map((s) => [s.profileId, Number(s.payableHours)]))
+      const execIds = [...new Set([...trackedMap.keys(), ...settleMap.keys()])]
+      const nameById = new Map<string, string>()
+      if (order.assignee) nameById.set(order.assignee.id, order.assignee.name)
+      for (const c of order.coAssignees) nameById.set(c.profile.id, c.profile.name)
+      for (const s of order.settlements) nameById.set(s.profileId, s.profile.name)
+      const missing = execIds.filter((id) => !nameById.has(id))
+      if (missing.length > 0) {
+        const ps = await withTenant((tx) =>
+          tx.profile.findMany({ where: { id: { in: missing } }, select: { id: true, name: true } })
+        )
+        for (const p of ps) nameById.set(p.id, p.name)
+      }
+      const executors = execIds.map((id) => ({
+        profileId: id,
+        name: nameById.get(id) ?? '—',
+        trackedHours: trackedMap.get(id) ?? 0,
+        payableHours: settleMap.has(id) ? (settleMap.get(id) as number) : (trackedMap.get(id) ?? 0),
+      }))
+      const acceptance = {
+        submittedAt: order.submittedAt,
+        submittedBy: order.submittedBy,
+        acceptedAt: order.acceptedAt,
+        acceptedBy: order.acceptedBy,
+        plannedHours: num(order.estimatedHours),
+        trackedHours: [...trackedMap.values()].reduce((a, b) => a + b, 0),
+        billableHours: num(order.billableHours),
+        executors,
+      }
+
       return reply.send({
         success: true,
         data: {
@@ -129,6 +182,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             resolutionDueAt: order.resolutionDueAt,
             firstRespondedAt: order.firstRespondedAt,
             slaBreachedAt: order.slaBreachedAt,
+            acceptance,
           },
         },
       })

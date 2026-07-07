@@ -139,6 +139,9 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'orders.specification_ready': NotificationCategory.ORDERS,
   'orders.approval_requested': NotificationCategory.ORDERS,
   'orders.approval_decided': NotificationCategory.ORDERS,
+  'orders.submitted_for_acceptance': NotificationCategory.ORDERS,
+  'orders.accepted': NotificationCategory.ORDERS,
+  'orders.sent_back': NotificationCategory.ORDERS,
   // chat
   'chat.new_comment': NotificationCategory.CHAT,
   'chat.mentioned': NotificationCategory.CHAT,

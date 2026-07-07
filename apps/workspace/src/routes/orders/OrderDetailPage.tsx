@@ -17,6 +17,7 @@ import {
   useActivity,
   useCommentStream,
   useOrder,
+  useReconcileOrder,
   useSetOrderCoAssignees,
   useSubmitApproval,
   useTimeLogs,
@@ -143,6 +144,7 @@ export function OrderDetailPage() {
 
         <aside>
           <SlaCard order={order} />
+          <AcceptanceCard order={order} />
           <OrderExecutorsCard
             orderId={order.id}
             primary={order.assignee ?? null}
@@ -806,6 +808,270 @@ function DetailSkeleton() {
 }
 
 /** S10-01: теги замовлення — чіпи + чек-пікер з каталогу агенції (replace-set). */
+const HRS = (n: number | null | undefined): string =>
+  n == null ? '—' : `${Number.isInteger(n) ? n : n.toFixed(1)} год`
+
+/**
+ * ПРИЙМАННЯ РОБОТИ (07.07): виконавець здає (in_progress→review), owner/manager приймає
+ * (review→done). Показує 4 числа — План / Факт (Σ TimeLog, не редагується) / Білабельно
+ * (клієнту) / До-оплати (виконавцям). Owner/manager у статусі review коригує білабельні +
+ * оплатні години й приймає або повертає на доопрацювання.
+ */
+function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
+  const a = order.acceptance
+  const { isOwner, isManager, isExecutor } = useAuth()
+  const isAcceptor = isOwner || isManager
+  const transition = useTransitionStatus(order.id)
+  const reconcile = useReconcileOrder(order.id)
+  const [editing, setEditing] = useState(false)
+  const [billable, setBillable] = useState('')
+  const [payable, setPayable] = useState<Record<string, string>>({})
+  const [sendBack, setSendBack] = useState<string | null>(null)
+  if (!a) return null
+
+  const status = order.internalStatus
+  const hourly = order.billingType === BillingType.HOURLY
+  const inReview = status === OrderInternalStatus.REVIEW
+  const accepted = status === OrderInternalStatus.DONE
+  const payableTotal = a.executors.reduce((s, e) => s + e.payableHours, 0)
+
+  const startEdit = () => {
+    setBillable(a.billableHours != null ? String(a.billableHours) : '')
+    setPayable(Object.fromEntries(a.executors.map((e) => [e.profileId, String(e.payableHours)])))
+    setEditing(true)
+  }
+  const saveReconcile = (then?: () => void) => {
+    reconcile.mutate(
+      {
+        billableHours: hourly ? (billable.trim() === '' ? null : Number(billable)) : undefined,
+        settlements: a.executors.map((e) => ({
+          profileId: e.profileId,
+          payableHours: Number(payable[e.profileId] ?? e.payableHours),
+        })),
+      },
+      {
+        onSuccess: () => {
+          setEditing(false)
+          toast.success('Звірку збережено')
+          then?.()
+        },
+        onError: () => toast.error('Не вдалося зберегти звірку'),
+      }
+    )
+  }
+
+  const statusChip = accepted
+    ? { label: 'прийнято', tone: 'var(--wf-success, var(--wf-accent))' }
+    : inReview
+      ? { label: 'на прийманні', tone: 'var(--wf-warning)' }
+      : { label: 'в роботі', tone: 'var(--wf-fg-muted)' }
+
+  return (
+    <Card
+      title="Приймання роботи"
+      aux={
+        <span className="wfp-mono" style={{ fontSize: 11, color: statusChip.tone }}>
+          {statusChip.label}
+        </span>
+      }
+      style={{ marginBottom: 16 }}
+    >
+      {/* 4 числа */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
+        <NumCell k="план" v={HRS(a.plannedHours)} />
+        <NumCell k="факт" v={HRS(a.trackedHours)} accent />
+        {hourly && <NumCell k="білабельно" v={HRS(a.billableHours ?? a.trackedHours)} />}
+        <NumCell k="до оплати" v={HRS(payableTotal)} />
+      </div>
+
+      {/* Розбивка по виконавцях */}
+      {a.executors.length > 0 && (
+        <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // факт → до оплати
+          </div>
+          {a.executors.map((e) => (
+            <div
+              key={e.profileId}
+              style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {e.name}
+              </span>
+              {editing ? (
+                <input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  value={payable[e.profileId] ?? ''}
+                  onChange={(ev) => setPayable((p) => ({ ...p, [e.profileId]: ev.target.value }))}
+                  style={{ width: 70, textAlign: 'right' }}
+                  aria-label={`Оплатні години ${e.name}`}
+                />
+              ) : (
+                <span
+                  className="wfp-mono"
+                  style={{ flexShrink: 0, color: 'var(--wf-fg-secondary)' }}
+                >
+                  {HRS(e.trackedHours)} → {HRS(e.payableHours)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Редагування білабельних (погодинне) */}
+      {editing && hourly && (
+        <div style={{ marginTop: 10 }}>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 4 }}
+          >
+            білабельні години клієнту (пусто = факт)
+          </div>
+          <Input
+            type="number"
+            value={billable}
+            onChange={(e) => setBillable(e.target.value)}
+            placeholder={String(a.trackedHours)}
+          />
+        </div>
+      )}
+
+      {/* Хто здав / прийняв */}
+      {(a.submittedBy || a.acceptedBy) && (
+        <div
+          className="wfp-mono"
+          style={{
+            marginTop: 12,
+            fontSize: 11,
+            color: 'var(--wf-fg-muted)',
+            display: 'grid',
+            gap: 2,
+          }}
+        >
+          {a.submittedBy && <div>здав: {a.submittedBy.name}</div>}
+          {a.acceptedBy && <div>прийняв: {a.acceptedBy.name}</div>}
+        </div>
+      )}
+
+      {/* Дії */}
+      <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {status === OrderInternalStatus.IN_PROGRESS && (isExecutor || isAcceptor) && (
+          <Button
+            size="sm"
+            variant="primary"
+            loading={transition.isPending}
+            onClick={() =>
+              transition.mutate(
+                { status: OrderInternalStatus.REVIEW },
+                { onSuccess: () => toast.success('Здано на приймання') }
+              )
+            }
+          >
+            Здати на приймання
+          </Button>
+        )}
+        {inReview && isExecutor && (
+          <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            очікує приймання від керівника
+          </span>
+        )}
+        {inReview && isAcceptor && !editing && sendBack == null && (
+          <>
+            <Button size="sm" variant="ghost" onClick={startEdit}>
+              Скоригувати години
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSendBack('')}>
+              Повернути
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={transition.isPending}
+              onClick={() =>
+                transition.mutate(
+                  { status: OrderInternalStatus.DONE },
+                  { onSuccess: () => toast.success('Роботу прийнято') }
+                )
+              }
+            >
+              Прийняти
+            </Button>
+          </>
+        )}
+        {inReview && isAcceptor && editing && (
+          <>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Скасувати
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={reconcile.isPending}
+              onClick={() => saveReconcile()}
+            >
+              Зберегти звірку
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Повернення на доопрацювання з коментарем */}
+      {inReview && isAcceptor && sendBack != null && (
+        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+          <textarea
+            value={sendBack}
+            onChange={(e) => setSendBack(e.target.value)}
+            placeholder="Що доопрацювати?"
+            rows={2}
+            style={{ width: '100%', fontSize: 13, resize: 'vertical' }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button size="sm" variant="ghost" onClick={() => setSendBack(null)}>
+              Скасувати
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={transition.isPending}
+              onClick={() =>
+                transition.mutate(
+                  { status: OrderInternalStatus.REVISION, comment: sendBack || undefined },
+                  {
+                    onSuccess: () => {
+                      setSendBack(null)
+                      toast.success('Повернено на доопрацювання')
+                    },
+                  }
+                )
+              }
+            >
+              Повернути на доопрацювання
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function NumCell({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
+  return (
+    <div>
+      <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+        {k}
+      </div>
+      <div
+        style={{ fontSize: 15, fontWeight: 600, color: accent ? 'var(--wf-accent)' : undefined }}
+      >
+        {v}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Мультивиконавці: головний виконавець (assignee) + співвиконавці. Головний керується
  * окремо (SLA/комісія тримаються на ньому); тут редагується лише список співвиконавців —

@@ -19,6 +19,7 @@ import orderTemplatesRoute from './templates.js'
 import getOrderRoute from './getOrder.js'
 import internalTasksRoute from './internalTasks.js'
 import listOrdersRoute from './listOrders.js'
+import reconciliationRoute from './reconciliation.js'
 import submitOrderApprovalRoute from './submitOrderApproval.js'
 import timeLogsRoute from './timeLogs.js'
 import timerRoute from './timer.js'
@@ -42,6 +43,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(orderTemplatesRoute)
   await fastify.register(assignOrderRoute)
   fastify.register(coAssigneesRoute)
+  fastify.register(reconciliationRoute)
   await fastify.register(internalTasksRoute)
   await fastify.register(commentsRoute)
   await fastify.register(conversationRoute)

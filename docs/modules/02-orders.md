@@ -7,7 +7,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
-> Оновлено: 7 липня 2026 (мультивиконавці: головний + співвиконавці)
+> Оновлено: 7 липня 2026 (приймання роботи + звірка годин план/факт/білабельно/до-оплати)
 
 ---
 
@@ -75,6 +75,34 @@
 - Відкладено: розподіл payout між співвиконавцями (лишається на головному); UI-керування
   співвиконавцями задач (бекенд готовий, task-edit-поверхні в UI поки нема); фільтр за співвиконавцем.
 
+### Приймання роботи + звірка годин (план/факт/білабельно/до-оплати, 2026-07-07)
+
+Здача задачі виконавцем іде на **погодження керівнику** перед виставленням. Реалізовано на
+наявному статусі `review` (= «здано, чекає приймання», мапиться на клієнтський `pending_approval`):
+
+- **`in_progress → review`** — виконавець **здає** (будь-хто з команди). Штампує `submittedAt`/
+  `submittedById`; нотиф `orders.submitted_for_acceptance` власникам+тімлідам.
+- **`review → done`** — **приймає лише owner/manager** (виконавця блокує 403). Штампує
+  `acceptedAt`/`acceptedById`; матеріалізує дефолтні settlements (payable = факт) для виконавців
+  без ручної звірки; нотиф `orders.accepted` здавачу+виконавцям; далі авто-рахунок (білабельні год).
+- **`review → revision`** — owner/manager **повертає на доопрацювання** з коментарем; нотиф
+  `orders.sent_back` здавачу.
+
+**Чотири числа (розділення план/факт від оплат):**
+
+- **План** — `Order.estimatedHours`.
+- **Факт (tracked)** — `Σ TimeLog.hours` по-виконавцях. **Ніколи не редагується** — правда/статистика.
+- **Білабельно клієнту** — `Order.billableHours` (owner/manager; null = факт). Погодинне: саме воно
+  × `hourlyRate` → авто-рахунок і акт (10 год працювали, виставили 5 → рахунок за 5).
+- **До оплати виконавцю** — `OrderExecutorSettlement.payableHours` per-executor (owner/manager; за
+  замовч. = факт). Для «на ставці» — інформація/статистика. Погодинний payroll поки застаблений —
+  коли увімкнуть, читатиме прийняті `payableHours`, а не сирий факт.
+
+`PUT /orders/:id/reconciliation` (owner/manager, поки `in_progress`/`review`) — задає `billableHours`
+
+- per-executor `payableHours` (з знімком `trackedHours`). Маржа лишається чесною: **дохід за
+  білабельними, собівартість за фактом** → одразу видно ефективність виконання.
+
 ### Дедлайн і нагадування
 
 - `deadline` — опціональний дедлайн (поле `deadline`, не `dueDate`).
@@ -95,20 +123,21 @@
 
 ### Workspace (команда)
 
-| Метод    | URL                                        | Опис                                               |
-| -------- | ------------------------------------------ | -------------------------------------------------- |
-| `GET`    | `/orders`                                  | Список всіх замовлень з фільтрами                  |
-| `GET`    | `/orders/:id`                              | Деталі замовлення (internal view)                  |
-| `PATCH`  | `/orders/:id/status`                       | Змінити статус                                     |
-| `PATCH`  | `/orders/:id`                              | Редагувати будь-яке поле                           |
-| `DELETE` | `/orders/:id`                              | Soft delete                                        |
-| `PATCH`  | `/orders/:id/assign`                       | Призначити / зняти головного executor (triage)     |
-| `PUT`    | `/orders/:id/assignees`                    | Замінити список співвиконавців замовлення          |
-| `GET`    | `/orders/:orderId/tasks`                   | Внутрішні підзадачі (workspace-only)               |
-| `POST`   | `/orders/:orderId/tasks`                   | Створити підзадачу                                 |
-| `PATCH`  | `/orders/:orderId/tasks/:taskId`           | Оновити підзадачу (status/assignee/position/title) |
-| `PUT`    | `/orders/:orderId/tasks/:taskId/assignees` | Замінити список співвиконавців підзадачі           |
-| `DELETE` | `/orders/:orderId/tasks/:taskId`           | Видалити підзадачу                                 |
+| Метод    | URL                                        | Опис                                                                     |
+| -------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| `GET`    | `/orders`                                  | Список всіх замовлень з фільтрами                                        |
+| `GET`    | `/orders/:id`                              | Деталі замовлення (internal view)                                        |
+| `PATCH`  | `/orders/:id/status`                       | Змінити статус (приймання: →done/review→revision — owner/manager)        |
+| `PUT`    | `/orders/:id/reconciliation`               | Звірка годин: білабельні клієнту + оплатні по-виконавцях (owner/manager) |
+| `PATCH`  | `/orders/:id`                              | Редагувати будь-яке поле                                                 |
+| `DELETE` | `/orders/:id`                              | Soft delete                                                              |
+| `PATCH`  | `/orders/:id/assign`                       | Призначити / зняти головного executor (triage)                           |
+| `PUT`    | `/orders/:id/assignees`                    | Замінити список співвиконавців замовлення                                |
+| `GET`    | `/orders/:orderId/tasks`                   | Внутрішні підзадачі (workspace-only)                                     |
+| `POST`   | `/orders/:orderId/tasks`                   | Створити підзадачу                                                       |
+| `PATCH`  | `/orders/:orderId/tasks/:taskId`           | Оновити підзадачу (status/assignee/position/title)                       |
+| `PUT`    | `/orders/:orderId/tasks/:taskId/assignees` | Замінити список співвиконавців підзадачі                                 |
+| `DELETE` | `/orders/:orderId/tasks/:taskId`           | Видалити підзадачу                                                       |
 
 ### Query параметри для `GET /orders` (workspace)
 

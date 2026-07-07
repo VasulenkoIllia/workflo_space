@@ -37,6 +37,8 @@ export async function maybeAutoInvoiceOnDone(
       approvedAmount: true,
       totalAmount: true,
       hourlyRate: true,
+      // ПРИЙМАННЯ: год до виставлення клієнту, задані на прийманні (null = факт Σ TimeLog)
+      billableHours: true,
       internalStatus: true,
       deletedAt: true,
       project: { select: { legalEntityId: true } },
@@ -69,11 +71,17 @@ export async function maybeAutoInvoiceOnDone(
   let amount: Prisma.Decimal | null = null
   if (order.billingType === 'hourly') {
     if (order.hourlyRate != null) {
-      const agg = await prisma.timeLog.aggregate({
-        where: { orderId: order.id },
-        _sum: { hours: true },
-      })
-      const hours = agg._sum.hours
+      // ПРИЙМАННЯ: виставляємо БІЛАБЕЛЬНІ години (задані owner/manager при прийманні),
+      // а не сирий факт — власник міг скоротити/розширити (10 год працювали, 5 виставили).
+      // Немає override → падаємо на факт Σ TimeLog (стара поведінка).
+      let hours = order.billableHours
+      if (hours == null) {
+        const agg = await prisma.timeLog.aggregate({
+          where: { orderId: order.id },
+          _sum: { hours: true },
+        })
+        hours = agg._sum.hours
+      }
       if (hours != null && hours.greaterThan(0)) amount = hours.mul(order.hourlyRate)
     }
   } else {

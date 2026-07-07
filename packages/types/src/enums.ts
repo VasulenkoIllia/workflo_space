@@ -371,6 +371,9 @@ export type NotificationEvent =
   | 'orders.specification_ready'
   | 'orders.approval_requested'
   | 'orders.approval_decided'
+  | 'orders.submitted_for_acceptance'
+  | 'orders.accepted'
+  | 'orders.sent_back'
   // chat
   | 'chat.new_comment'
   | 'chat.mentioned'

@@ -10,8 +10,9 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { dispatchNotification } from '../../services/notifications.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 
 /**
@@ -35,10 +36,15 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             id: true,
             agencyId: true,
             companyId: true,
+            title: true,
             internalStatus: true,
             requiresApproval: true,
             approvalStatus: true,
             deletedAt: true,
+            // ПРИЙМАННЯ: для нотифікацій submit/accept/send-back
+            assigneeId: true,
+            submittedById: true,
+            coAssignees: { select: { profileId: true } },
             // 02-В advance gate (hourly_prepaid only): needs the project's model + the
             // client's money-account balance. contractRequired — 06-ДОГОВІР-2 каскад.
             project: { select: { billingModel: true, contractRequired: true } },
@@ -141,7 +147,22 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для зміни статусу', 403)
       }
 
-      const data: Prisma.OrderUpdateManyMutationInput = {
+      // ПРИЙМАННЯ РОБОТИ (07.07): приймати (→done) і повертати на доопрацювання (review→revision)
+      // може лише owner або manager(тімлід). Виконавець тільки здає (in_progress→review).
+      const role = agencyRole(user, order.agencyId)
+      const isAcceptor = role === 'owner' || role === 'manager'
+      const enteringDone = to === OrderInternalStatus.DONE
+      const sendingBack = from === OrderInternalStatus.REVIEW && to === OrderInternalStatus.REVISION
+      if ((enteringDone || sendingBack) && !isAcceptor) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Приймання роботи доступне лише власнику або тімліду',
+          403
+        )
+      }
+
+      // Unchecked-варіант: дозволяє FK-скаляри submittedById/acceptedById (ПРИЙМАННЯ).
+      const data: Prisma.OrderUncheckedUpdateManyInput = {
         internalStatus: to,
         clientStatus: INTERNAL_TO_CLIENT_STATUS[to],
       }
@@ -157,6 +178,16 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       }
       if (to === OrderInternalStatus.ON_HOLD) data.onHoldReason = input.comment ?? null
       if (to === OrderInternalStatus.CANCELLED) data.cancelledReason = input.comment ?? null
+      // ПРИЙМАННЯ: штампуємо хто/коли здав і хто/коли прийняв (audit + нотифікації).
+      const now = new Date()
+      if (to === OrderInternalStatus.REVIEW) {
+        data.submittedAt = now
+        data.submittedById = user.sub
+      }
+      if (to === OrderInternalStatus.DONE) {
+        data.acceptedAt = now
+        data.acceptedById = user.sub
+      }
 
       // Atomic: status update + activity-feed row + outbox notify all commit
       // together, so a delivered notification always reflects a persisted change
@@ -207,6 +238,33 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
           },
           agencyId: order.agencyId,
         })
+        // ПРИЙМАННЯ: при закритті фіксуємо оплатні години дефолтом = факт для тих виконавців,
+        // кого owner/manager ще не звірив вручну (payableHours=trackedHours). Наявні звірки
+        // (виставлені через /reconciliation) не чіпаємо.
+        if (to === OrderInternalStatus.DONE) {
+          const existing = await tx.orderExecutorSettlement.findMany({
+            where: { orderId: order.id },
+            select: { profileId: true },
+          })
+          const have = new Set(existing.map((e) => e.profileId))
+          const groups = await tx.timeLog.groupBy({
+            by: ['executorId'],
+            where: { orderId: order.id },
+            _sum: { hours: true },
+          })
+          const toCreate = groups.filter((g) => !have.has(g.executorId) && g._sum.hours != null)
+          if (toCreate.length > 0) {
+            await tx.orderExecutorSettlement.createMany({
+              data: toCreate.map((g) => ({
+                agencyId: order.agencyId,
+                orderId: order.id,
+                profileId: g.executorId,
+                trackedHours: g._sum.hours ?? 0,
+                payableHours: g._sum.hours ?? 0,
+              })),
+            })
+          }
+        }
         return u
       })
 
@@ -219,6 +277,53 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         result: 'allowed',
         metadata: { from, to, comment: input.comment ?? null },
       })
+
+      // ПРИЙМАННЯ: адресні in-app нотифікації навколо приймання (окремо від клієнтських,
+      // що йдуть через outbox-worker за зміною clientStatus).
+      const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
+      const orderUrl = `${workspaceUrl}/orders/${order.id}`
+      const notifyOnce = (
+        ids: (string | null | undefined)[],
+        event: 'orders.submitted_for_acceptance' | 'orders.accepted' | 'orders.sent_back',
+        inApp: { title: string; body: string }
+      ) => {
+        const seen = new Set<string>()
+        for (const id of ids) {
+          if (!id || id === user.sub || seen.has(id)) continue
+          seen.add(id)
+          dispatchNotification(request.log, {
+            profileId: id,
+            event,
+            vars: { orderTitle: order.title, orderUrl },
+            inApp,
+          })
+        }
+      }
+      const coIds = (order.coAssignees ?? []).map((c) => c.profileId)
+      if (to === OrderInternalStatus.REVIEW) {
+        // здано на приймання → власники + тімліди агенції
+        const acceptors = await withTenant((tx) =>
+          tx.agencyMember.findMany({
+            where: { agencyId: order.agencyId, role: { in: ['owner', 'manager'] } },
+            select: { profileId: true },
+          })
+        )
+        notifyOnce(
+          acceptors.map((a) => a.profileId),
+          'orders.submitted_for_acceptance',
+          { title: 'Замовлення на прийманні', body: order.title }
+        )
+      } else if (enteringDone && from === OrderInternalStatus.REVIEW) {
+        notifyOnce([order.submittedById, order.assigneeId, ...coIds], 'orders.accepted', {
+          title: 'Роботу прийнято',
+          body: order.title,
+        })
+      } else if (sendingBack) {
+        notifyOnce([order.submittedById, order.assigneeId, ...coIds], 'orders.sent_back', {
+          title: 'Повернено на доопрацювання',
+          body: input.comment ? `${order.title} — ${input.comment}` : order.title,
+        })
+      }
 
       return reply.send({ success: true, data: { order: updated } })
     }

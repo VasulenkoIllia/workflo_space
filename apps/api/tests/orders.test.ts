@@ -80,6 +80,13 @@ vi.mock('@workflo/db', async (importOriginal) => {
       findUnique: timeLogFindUnique,
       update: timeLogUpdate,
       delete: timeLogDelete,
+      // ПРИЙМАННЯ: getOrder агрегує факт по-виконавцях
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
+    orderExecutorSettlement: {
+      findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      upsert: vi.fn(),
     },
     activityLog: { create: activityCreate, findMany: activityFindMany },
     // P-5 rate snapshot on time-log create — default to «no rate set» (tier 5).
@@ -90,7 +97,11 @@ vi.mock('@workflo/db', async (importOriginal) => {
     // S5-04 time-log lock: defaults to null (unlocked); overridden per-test.
     executorPayout: { findUnique: payoutFindUnique },
     outboxEvent: { create: outboxCreate },
-    agencyMember: { findUnique: agencyMemberFindUnique },
+    agencyMember: {
+      findUnique: agencyMemberFindUnique,
+      // ПРИЙМАННЯ: submit-нотифікація шле власникам/тімлідам
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     auditLog: { create: auditLogCreate },
     $transaction: transaction,
   }
@@ -117,6 +128,12 @@ function txImpl(arg: unknown) {
       },
       activityLog: { create: activityCreate },
       outboxEvent: { create: outboxCreate },
+      // ПРИЙМАННЯ: матеріалізація дефолтних settlements на done
+      orderExecutorSettlement: {
+        findMany: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      timeLog: { groupBy: vi.fn().mockResolvedValue([]) },
     })
   }
   return Promise.all(arg as Promise<unknown>[])
@@ -316,6 +333,17 @@ describe('GET /orders/:id', () => {
     tags: [] as { tag: { id: string; name: string; color: string | null } }[],
     // мультивиконавці: getOrder-select тягне співвиконавців
     coAssignees: [] as { profile: { id: string; name: string } }[],
+    // ПРИЙМАННЯ: acceptance-поля
+    submittedAt: null,
+    acceptedAt: null,
+    billableHours: null,
+    submittedBy: null,
+    acceptedBy: null,
+    settlements: [] as {
+      profileId: string
+      payableHours: unknown
+      profile: { id: string; name: string }
+    }[],
     id: 'order-1',
     agencyId: 'agency-1',
     companyId: 'company-1',
@@ -426,8 +454,13 @@ describe('PATCH /orders/:id/status', () => {
     id: 'order-1',
     agencyId: 'agency-1',
     companyId: 'company-1',
+    title: 'Order',
     internalStatus: 'in_progress',
     deletedAt: null,
+    // ПРИЙМАННЯ: нотифікації читають виконавців + submittedBy
+    assigneeId: null,
+    submittedById: null,
+    coAssignees: [] as { profileId: string }[],
   }
 
   it('executor runs a valid transition + mirrors clientStatus', async () => {
@@ -536,6 +569,45 @@ describe('PATCH /orders/:id/status', () => {
       payload: { status: 'revision' },
     })
     expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
+  // ПРИЙМАННЯ РОБОТИ: гейт ролей — приймати (→done) може лише owner/manager.
+  it('executor CANNOT accept (review → done) — 403', async () => {
+    orderFindUnique.mockResolvedValue({ ...base, internalStatus: 'review' })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(orderUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('owner accepts (review → done) → 200 + materializes default settlements', async () => {
+    orderFindUnique.mockResolvedValue({ ...base, internalStatus: 'review' })
+    orderUpdateMany.mockResolvedValue({ count: 1 })
+    orderFindUniqueOrThrow.mockResolvedValue({
+      id: 'order-1',
+      internalStatus: 'done',
+      clientStatus: 'completed',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(res.statusCode).toBe(200)
+    // штампуємо acceptedById у data
+    expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBe('owner-1')
     await app.close()
   })
 })

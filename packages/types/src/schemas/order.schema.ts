@@ -71,6 +71,28 @@ export const transitionOrderStatusSchema = z.object({
 })
 
 /**
+ * PUT /orders/:id/reconciliation (ПРИЙМАННЯ, owner/manager) — звірка годин перед прийманням:
+ * billableHours = год до виставлення клієнту (null = факт Σ TimeLog); settlements = per-executor
+ * оплатні години. Факт (tracked) не редагується. Погодинне billableHours ігнорується для fixed.
+ */
+export const reconcileOrderSchema = z
+  .object({
+    billableHours: z.number().nonnegative().max(100000).nullable().optional(),
+    settlements: z
+      .array(
+        z.object({
+          profileId: z.string().uuid(),
+          payableHours: z.number().nonnegative().max(100000),
+        })
+      )
+      .max(50)
+      .optional(),
+  })
+  .strict()
+
+export type ReconcileOrderInput = z.infer<typeof reconcileOrderSchema>
+
+/**
  * PATCH /orders/:id — edit fields. Clients may set only title/description/
  * priority/dueDate (and only while the order is `new`); the billing fields are
  * internal-team only. Enforced in the handler.

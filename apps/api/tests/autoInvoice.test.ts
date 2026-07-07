@@ -56,6 +56,7 @@ function order(over: Record<string, unknown> = {}) {
     approvedAmount: null,
     totalAmount: null,
     hourlyRate: null,
+    billableHours: null,
     internalStatus: 'done',
     deletedAt: null,
     project: null,
@@ -121,6 +122,19 @@ describe('maybeAutoInvoiceOnDone', () => {
     expect(res2).toBe('no_amount')
     expect(db.document.create).not.toHaveBeenCalled()
     expect(notifyMock.mock.calls[0][1].inApp.title).toBe('Авто-рахунок не створено')
+  })
+
+  it('ПРИЙМАННЯ: hourly bills BILLABLE hours (override), not tracked Σ TimeLog', async () => {
+    // Приймання: працювали 10 год (aggregate), але власник виставив 5 → рахунок за 5×40=200.
+    db.order.findUnique.mockResolvedValue(
+      order({ billingType: 'hourly', fixedPrice: null, hourlyRate: dec(40), billableHours: dec(5) })
+    )
+    db.timeLog.aggregate.mockResolvedValue({ _sum: { hours: dec(10) } })
+    const res = await maybeAutoInvoiceOnDone(logger, 'ord-1', 'actor-1')
+    expect(res).toBe('created')
+    // не чіпали факт-агрегат — узяли override
+    expect(db.timeLog.aggregate).not.toHaveBeenCalled()
+    expect(notifyMock.mock.calls[0][1].inApp.body).toContain('200.00')
   })
 
   it('skips: toggle off / project order / existing invoice / not done', async () => {
