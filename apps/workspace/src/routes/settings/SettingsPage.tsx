@@ -214,11 +214,13 @@ function WorkflowSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['agency-workflow-settings'],
     queryFn: () =>
-      api.get<{ requireSignedContract: boolean }>('/workspace/agency/workflow-settings'),
+      api.get<{ requireSignedContract: boolean; autoInvoiceOneTime: boolean }>(
+        '/workspace/agency/workflow-settings'
+      ),
   })
   const patch = useMutation({
-    mutationFn: (requireSignedContract: boolean) =>
-      api.patch('/workspace/agency/workflow-settings', { requireSignedContract }),
+    mutationFn: (body: { requireSignedContract?: boolean; autoInvoiceOneTime?: boolean }) =>
+      api.patch('/workspace/agency/workflow-settings', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-workflow-settings'] }),
   })
 
@@ -233,12 +235,15 @@ function WorkflowSection() {
           checked={data.requireSignedContract}
           disabled={patch.isPending}
           onChange={(e) =>
-            patch.mutate(e.target.checked, {
-              onSuccess: () =>
-                toast.success(
-                  e.target.checked ? 'Договір-гейт увімкнено' : 'Договір-гейт вимкнено'
-                ),
-            })
+            patch.mutate(
+              { requireSignedContract: e.target.checked },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    e.target.checked ? 'Договір-гейт увімкнено' : 'Договір-гейт вимкнено'
+                  ),
+              }
+            )
           }
         />
         Вимагати прийнятий договір до старту роботи
@@ -246,6 +251,34 @@ function WorkflowSection() {
       <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
         // замовлення клієнта не перейде «в роботу», поки компанія не прийняла договір у порталі
         (клік + ПІБ). Внутрішніх замовлень не стосується.
+      </div>
+
+      {/* АВТО-РАХУНОК (07.07): разове замовлення done → чернетка рахунку + in-app */}
+      <label
+        style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, marginTop: 14 }}
+      >
+        <input
+          type="checkbox"
+          checked={data.autoInvoiceOneTime}
+          disabled={patch.isPending}
+          onChange={(e) =>
+            patch.mutate(
+              { autoInvoiceOneTime: e.target.checked },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    e.target.checked ? 'Авто-рахунок увімкнено' : 'Авто-рахунок вимкнено'
+                  ),
+              }
+            )
+          }
+        />
+        Авто-рахунок при завершенні разового замовлення
+      </label>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // замовлення без проекту перейшло у «виконано» → чернетка рахунку (фікс = погоджена сума;
+        погодинка = факт годин × ставка) + сповіщення «перевір і надішли». Клієнту нічого не летить
+        автоматично.
       </div>
     </Card>
   )

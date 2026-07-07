@@ -148,6 +148,7 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'billing.invoice_paid': NotificationCategory.BILLING,
   'billing.invoice_overdue': NotificationCategory.BILLING,
   'billing.payment_reminder': NotificationCategory.BILLING,
+  'billing.invoice_draft_ready': NotificationCategory.BILLING,
   'billing.payment_failed': NotificationCategory.BILLING,
   'billing.refund_issued': NotificationCategory.BILLING,
   'billing.subscription_charged': NotificationCategory.BILLING,

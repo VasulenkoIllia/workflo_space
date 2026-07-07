@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { captureException } from '../observability/sentry.js'
 import { renderDocumentAttachmentById } from './documentRender.js'
 import { resolveEmailOverrides } from './emailTemplates.js'
+import { maybeAutoInvoiceOnDone } from './autoInvoice.js'
 import { buildNotifyDeps } from './notifications.js'
 import { type OutboxEventView, type OutboxHandler, processOutboxBatch } from './outbox.js'
 
@@ -41,6 +42,15 @@ async function handleOrderStatusChanged(
   event: OutboxEventView
 ): Promise<void> {
   const p = statusChangedPayload.parse(event.payload)
+
+  // АВТО-РАХУНОК (07.07): разове замовлення завершено → чернетка рахунку + in-app
+  // власнику. Збій ковтаємо — ретрай події не має дублювати клієнтські сповіщення
+  // (сам авто-рахунок ідемпотентний через guard «invoice вже існує»).
+  if (p.to === 'done') {
+    await maybeAutoInvoiceOnDone(logger, p.orderId, p.actorId).catch((err: unknown) => {
+      logger.error({ err, orderId: p.orderId }, 'auto-invoice failed (not retried)')
+    })
+  }
 
   // Only notify when the CLIENT-facing status actually changed — internal churn
   // (clarification↔estimating) maps to the same client status, so stays silent.

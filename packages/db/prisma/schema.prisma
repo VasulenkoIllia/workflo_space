@@ -1342,6 +1342,9 @@ model Agency {
   // 05-Б дунінг: офсети кроків нагадувань від dueDate у днях (відʼємні = до терміну).
   // null → дефолтний ланцюжок [-3,0,3,7,14] (рішення власника 07.07); [] → дунінг вимкнено.
   dunningSteps                  Json?
+  // АВТО-РАХУНОК (рішення власника 07.07): разове замовлення (без проекту) перейшло в
+  // done → draft-invoice + in-app власнику. Увімкнено за замовчуванням.
+  autoInvoiceOneTime            Boolean   @default(true)
 
   members           AgencyMember[]
   documentTemplates DocumentTemplate[]

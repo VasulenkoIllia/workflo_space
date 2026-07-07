@@ -984,3 +984,25 @@ Workspace, розрізи в Portal-білінгу).
   `/workspace/companies/:companyId/dunning` `{optOut}`.
 - **UI:** /settings картка «Нагадування про оплату» (кроки через кому + «Повернути
   дефолт»); картка клієнта → Фінанси → тумблер «Не надсилати нагадування про оплату».
+
+---
+
+## UPDATE (07.07.2026) — АВТО-РАХУНОК разових замовлень ✅
+
+> Рішення власника (вікторина 07.07): тригер — **перехід замовлення в done**; результат —
+> **чернетка + in-app власнику** («перевір і надішли», клієнту нічого не летить);
+> hourly = **факт TimeLog-годин × ставка** (не оцінка); per-agency тумблер,
+> **увімкнено за замовчуванням**.
+
+- `Agency.autoInvoiceOneTime @default(true)`, міграція `20260707_auto_invoice`.
+- `services/autoInvoice.ts` → `maybeAutoInvoiceOnDone`: викликається з outbox-воркера
+  на `order.status_changed` з to=done (durable; збій ковтається — ретрай події не дублює
+  клієнтські сповіщення, сам сервіс ідемпотентний через guard «invoice по замовленню
+  вже існує»). Скоуп: замовлення БЕЗ проекту (проектні білляться recurringCharges) і з
+  компанією. Сума: fixed → approvedAmount ?? fixedPrice ?? totalAmount; hourly →
+  Σ TimeLog.hours × hourlyRate. Немає суми/годин → рахунок не створюється, власник
+  отримує in-app з причиною. `order.totalAmount` доштамповується (PDF рахунку читає
+  суму з замовлення). Нумерація — той самий race-safe DocumentCounter.
+- Подія `billing.invoice_draft_ready` (без email-шаблону → лише in-app).
+- Тумблер: GET/PATCH `/workspace/agency/workflow-settings` += `autoInvoiceOneTime`;
+  чекбокс у картці «Воркфлоу» /settings.
