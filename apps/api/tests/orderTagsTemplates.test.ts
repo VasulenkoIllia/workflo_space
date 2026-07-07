@@ -212,6 +212,8 @@ describe('GET /orders?tags= filter (S10-01)', () => {
         updatedAt: new Date(),
         _count: { stages: 0 },
         tags: [{ tag: { id: 't-1', name: 'терміново', color: null } }],
+        assignee: null,
+        coAssignees: [],
       },
     ])
     const { app, token } = await authed(OWNER)

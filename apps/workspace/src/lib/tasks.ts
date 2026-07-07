@@ -10,6 +10,9 @@ export interface OrderTask {
   status: TaskStatus
   assigneeId: string | null
   position: number
+  /** Мультивиконавці: головний (assignee) + співвиконавці. */
+  assignee?: { id: string; name: string } | null
+  coAssignees?: { id: string; name: string }[]
 }
 
 const key = (orderId: string) => ['order-tasks', orderId] as const
@@ -33,6 +36,8 @@ export interface BoardTask {
   position: number
   order: { id: string; title: string; estimatedHours: number | null; loggedHours: number }
   assignee: { id: string; name: string } | null
+  /** Мультивиконавці: співвиконавці ДОДАТКОВО до головного assignee. */
+  coAssignees?: { id: string; name: string }[]
 }
 
 /** GET /workspace/tasks — all agency tasks across orders. Internal team. */

@@ -77,6 +77,8 @@ export interface WorkspaceOrderDetail {
   updatedAt: string
   company?: { id: string; name: string } | null
   assignee?: { id: string; name: string } | null
+  /** Мультивиконавці: співвиконавці ДОДАТКОВО до головного assignee. */
+  coAssignees?: { id: string; name: string }[]
   project?: { id: string; name: string; billingModel: string } | null
   stages: OrderStage[]
 }
@@ -240,6 +242,19 @@ export function useAssignOrder(id: string) {
       api.patch<{ order: { id: string; assigneeId: string | null } }>(`/orders/${id}/assign`, {
         assigneeId,
       }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
+      void qc.invalidateQueries({ queryKey: ['ws-orders'] })
+    },
+  })
+}
+
+/** Мультивиконавці: PUT повного списку співвиконавців замовлення (без головного). */
+export function useSetOrderCoAssignees(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (profileIds: string[]) =>
+      api.put<{ coAssigneeIds: string[] }>(`/orders/${id}/assignees`, { profileIds }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
       void qc.invalidateQueries({ queryKey: ['ws-orders'] })

@@ -17,6 +17,7 @@ import {
   useActivity,
   useCommentStream,
   useOrder,
+  useSetOrderCoAssignees,
   useSubmitApproval,
   useTimeLogs,
   useTransitionStatus,
@@ -24,6 +25,7 @@ import {
   type UpdateOrderInput,
   type WorkspaceOrderDetail,
 } from '@/lib/orderDetail'
+import { useTeam } from '@/lib/payouts'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
 import { useOrderTags, useSetOrderTags, type OrderTag } from '@/lib/orders'
@@ -141,6 +143,11 @@ export function OrderDetailPage() {
 
         <aside>
           <SlaCard order={order} />
+          <OrderExecutorsCard
+            orderId={order.id}
+            primary={order.assignee ?? null}
+            coAssignees={order.coAssignees ?? []}
+          />
           <OrderTagsCard orderId={order.id} current={order.tags ?? []} />
           {order.company && (
             <Card title="Клієнт" style={{ marginBottom: 16 }}>
@@ -194,10 +201,6 @@ export function OrderDetailPage() {
 
           <Card title="Деталі" style={{ marginBottom: 16 }}>
             <div className="wfp-side">
-              <div className="wfp-side-row">
-                <div className="wfp-side-k">виконавець</div>
-                <div className="wfp-side-v">{order.assignee?.name ?? '—'}</div>
-              </div>
               <div className="wfp-side-row">
                 <div className="wfp-side-k">пріоритет</div>
                 <div className="wfp-side-v">{PRIORITY_LABEL[order.priority]}</div>
@@ -803,6 +806,106 @@ function DetailSkeleton() {
 }
 
 /** S10-01: теги замовлення — чіпи + чек-пікер з каталогу агенції (replace-set). */
+/**
+ * Мультивиконавці: головний виконавець (assignee) + співвиконавці. Головний керується
+ * окремо (SLA/комісія тримаються на ньому); тут редагується лише список співвиконавців —
+ * PUT замінює повний набір. Джерело кандидатів — команда агенції (useTeam).
+ */
+function OrderExecutorsCard({
+  orderId,
+  primary,
+  coAssignees,
+}: {
+  orderId: string
+  primary: { id: string; name: string } | null
+  coAssignees: { id: string; name: string }[]
+}) {
+  const { data: team } = useTeam()
+  const setCo = useSetOrderCoAssignees(orderId)
+  const [editing, setEditing] = useState(false)
+  const coIds = new Set(coAssignees.map((c) => c.id))
+  // головного не пропонуємо як співвиконавця — він уже виконавець за замовчуванням
+  const candidates = (team?.members ?? []).filter((m) => m.profileId !== primary?.id)
+  return (
+    <Card
+      title="Виконавці"
+      aux={
+        <button
+          type="button"
+          className="wfp-link"
+          style={{ fontSize: 11 }}
+          onClick={() => setEditing((v) => !v)}
+        >
+          {editing ? 'готово' : 'змінити'}
+        </button>
+      }
+      style={{ marginBottom: 16 }}
+    >
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div className="wfp-side-row">
+          <div className="wfp-side-k">головний</div>
+          <div className="wfp-side-v">{primary?.name ?? '—'}</div>
+        </div>
+        {editing ? (
+          <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+            <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              // співвиконавці
+            </div>
+            {candidates.length === 0 ? (
+              <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                // немає інших членів команди
+              </div>
+            ) : (
+              candidates.map((m) => (
+                <label
+                  key={m.profileId}
+                  style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={coIds.has(m.profileId)}
+                    disabled={setCo.isPending}
+                    onChange={(e) => {
+                      const next = new Set(coIds)
+                      if (e.target.checked) next.add(m.profileId)
+                      else next.delete(m.profileId)
+                      setCo.mutate([...next], {
+                        onError: () => toast.error('Не вдалося зберегти виконавців'),
+                      })
+                    }}
+                  />
+                  {m.name}
+                </label>
+              ))
+            )}
+          </div>
+        ) : coAssignees.length === 0 ? (
+          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // без співвиконавців
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {coAssignees.map((c) => (
+              <span
+                key={c.id}
+                className="wfp-mono"
+                style={{
+                  fontSize: 11,
+                  border: '1px solid var(--wf-border)',
+                  borderRadius: 999,
+                  padding: '2px 10px',
+                }}
+              >
+                {c.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 function OrderTagsCard({ orderId, current }: { orderId: string; current: OrderTag[] }) {
   const { data } = useOrderTags()
   const setTags = useSetOrderTags(orderId)

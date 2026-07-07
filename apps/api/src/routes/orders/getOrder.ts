@@ -54,6 +54,11 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             updatedAt: true,
             company: { select: { id: true, name: true } },
             assignee: { select: { id: true, name: true } },
+            // мультивиконавці: співвиконавці ДОДАТКОВО до головного assignee
+            coAssignees: {
+              select: { profile: { select: { id: true, name: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
             project: { select: { id: true, name: true, billingModel: true } },
             tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
             firstResponseDueAt: true,
@@ -117,6 +122,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             cancelledReason: order.cancelledReason,
             company: order.company,
             assignee: order.assignee,
+            coAssignees: order.coAssignees.map((c) => c.profile),
             project: order.project,
             tags: order.tags.map((t) => t.tag),
             firstResponseDueAt: order.firstResponseDueAt,

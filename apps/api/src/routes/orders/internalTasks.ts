@@ -20,7 +20,21 @@ const TASK_SELECT = {
   position: true,
   createdAt: true,
   updatedAt: true,
+  assignee: { select: { id: true, name: true } },
+  // мультивиконавці задачі: співвиконавці ДОДАТКОВО до головного assigneeId
+  coAssignees: {
+    select: { profile: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
 } as const
+
+/** Flatten the coAssignees join rows to plain profiles for the client DTO. */
+function serializeTask<T extends { coAssignees: Array<{ profile: { id: string; name: string } }> }>(
+  task: T
+): Omit<T, 'coAssignees'> & { coAssignees: Array<{ id: string; name: string }> } {
+  const { coAssignees, ...rest } = task
+  return { ...rest, coAssignees: coAssignees.map((c) => c.profile) }
+}
 
 async function assertAgencyMember(agencyId: string, profileId: string): Promise<void> {
   const m = await prisma.agencyMember.findUnique({
@@ -55,6 +69,10 @@ const BOARD_SELECT = {
   updatedAt: true,
   order: { select: { id: true, title: true, estimatedHours: true } },
   assignee: { select: { id: true, name: true } },
+  coAssignees: {
+    select: { profile: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
 } as const
 
 const boardQuerySchema = z.object({
@@ -104,7 +122,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           : []
         const loggedByOrder = new Map(sums.map((s) => [s.orderId, Number(s._sum.hours ?? 0)]))
         return rows.map((t) => ({
-          ...t,
+          ...serializeTask(t),
           order: {
             id: t.order.id,
             title: t.order.title,
@@ -129,7 +147,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           select: TASK_SELECT,
         })
       )
-      return reply.send({ success: true, data: { tasks } })
+      return reply.send({ success: true, data: { tasks: tasks.map(serializeTask) } })
     }
   )
 
@@ -164,7 +182,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
         metadata: { taskId: task.id },
       })
 
-      return reply.status(201).send({ success: true, data: { task } })
+      return reply.status(201).send({ success: true, data: { task: serializeTask(task) } })
     }
   )
 
@@ -194,7 +212,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           select: TASK_SELECT,
         })
       )
-      return reply.send({ success: true, data: { task } })
+      return reply.send({ success: true, data: { task: serializeTask(task) } })
     }
   )
 

@@ -38,34 +38,36 @@ model Profile {
   updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
 
   companyMembership      CompanyMember[]
-  ordersAssigned         Order[]               @relation("OrderAssignee")
-  ordersCreated          Order[]               @relation("OrderCreatedBy")
-  ordersApprovalDecided  Order[]               @relation("OrderApprovalDecidedBy")
-  chargesApprovalDecided ServiceCharge[]       @relation("ChargeApprovalDecidedBy")
-  internalTasksAssigned  InternalTask[]        @relation("InternalTaskAssignee")
+  ordersAssigned         Order[]                @relation("OrderAssignee")
+  ordersCreated          Order[]                @relation("OrderCreatedBy")
+  ordersApprovalDecided  Order[]                @relation("OrderApprovalDecidedBy")
+  chargesApprovalDecided ServiceCharge[]        @relation("ChargeApprovalDecidedBy")
+  internalTasksAssigned  InternalTask[]         @relation("InternalTaskAssignee")
   comments               OrderComment[]
   ticketMessages         TicketMessage[]
-  calendarEventsCreated  CalendarEvent[]       @relation("CalendarEventCreatedBy")
-  calendarAttendee       CalendarAttendee[]    @relation("CalendarAttendee")
+  calendarEventsCreated  CalendarEvent[]        @relation("CalendarEventCreatedBy")
+  calendarAttendee       CalendarAttendee[]     @relation("CalendarAttendee")
+  orderCoAssignments     OrderAssignee[]        @relation("OrderCoAssignee")
+  taskCoAssignments      InternalTaskAssignee[] @relation("TaskCoAssignee")
   timeLogs               TimeLog[]
   notificationSettings   NotificationSettings?
   refreshTokens          RefreshToken[]
-  invitesSent            Invite[]              @relation("InvitedBy")
+  invitesSent            Invite[]               @relation("InvitedBy")
   executorRates          ExecutorRate[]
   blogPosts              BlogPost[]
   uploadedFiles          OrderFile[]
   notifications          Notification[]
   activityLogsAsActor    ActivityLog[]
-  paymentsConfirmed      Payment[]             @relation("PaymentConfirmedBy")
+  paymentsConfirmed      Payment[]              @relation("PaymentConfirmedBy")
   otpTokens              OtpToken[]
-  documentsCreated       Document[]            @relation("DocumentCreatedBy")
-  documentsForExecutor   Document[]            @relation("DocumentExecutor")
+  documentsCreated       Document[]             @relation("DocumentCreatedBy")
+  documentsForExecutor   Document[]             @relation("DocumentExecutor")
   auditLogsAsActor       AuditLog[]
-  agenciesOwned          Agency[]              @relation("AgencyOwner")
+  agenciesOwned          Agency[]               @relation("AgencyOwner")
   agencyMemberships      AgencyMember[]
   orderChatReads         OrderChatRead[]
   projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
-  credentialsCreated     CredentialVault[]     @relation("CredentialCreatedBy") // 17
+  credentialsCreated     CredentialVault[]      @relation("CredentialCreatedBy") // 17
   twoFactor              TwoFactorAuth? // S9-01
   oauthAccounts          OAuthAccount[] // S9 §E
   commentReactions       CommentReaction[] // S10
@@ -304,6 +306,7 @@ model Order {
   timeLogs           TimeLog[]
   files              OrderFile[]
   internalTasks      InternalTask[]
+  coAssignees        OrderAssignee[]
   estimateLine       EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
   orderEstimateLines OrderEstimateLine[] // 02-Б: кошторис разового замовлення (qty × ціна)
   activityLogs       ActivityLog[]
@@ -539,23 +542,58 @@ model OrderFile {
 }
 
 model InternalTask {
-  id         String             @id @default(uuid())
-  agencyId   String
-  orderId    String
-  order      Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  title      String
-  assigneeId String?
-  assignee   Profile?           @relation("InternalTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  status     InternalTaskStatus @default(todo)
-  position   Int                @default(0)
-  createdAt  DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime           @updatedAt @db.Timestamptz(3)
-  agency     Agency             @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  id          String                 @id @default(uuid())
+  agencyId    String
+  orderId     String
+  order       Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title       String
+  assigneeId  String?
+  assignee    Profile?               @relation("InternalTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  status      InternalTaskStatus     @default(todo)
+  position    Int                    @default(0)
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
+  agency      Agency                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  coAssignees InternalTaskAssignee[]
 
   @@index([agencyId])
   @@index([orderId])
   @@index([assigneeId])
   @@map("internal_tasks")
+}
+
+// МУЛЬТИВИКОНАВЦІ (рішення власника 07.07): співвиконавці замовлення ДОДАТКОВО до
+// головного (Order.assigneeId — «відповідальний», драйвить SLA/комісію/chat-owner/«мої»).
+// Час засікає будь-який член команди (TimeLog.executorId per-рядок) — маржа/години вже multi.
+model OrderAssignee {
+  id        String   @id @default(uuid())
+  agencyId  String
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile  @relation("OrderCoAssignee", fields: [profileId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([orderId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("order_assignees")
+}
+
+// Співвиконавці задачі (InternalTask) — аналогічно замовленню.
+model InternalTaskAssignee {
+  id        String       @id @default(uuid())
+  agencyId  String
+  taskId    String
+  task      InternalTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile      @relation("TaskCoAssignee", fields: [profileId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([taskId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("internal_task_assignees")
 }
 
 model TimeLog {

@@ -183,9 +183,18 @@ export function TaskBoardPage() {
                       </Link>
                       <span
                         className="wfp-mono"
+                        title={[t.assignee?.name, ...(t.coAssignees ?? []).map((c) => c.name)]
+                          .filter(Boolean)
+                          .join(', ')}
                         style={{ fontSize: 11, color: 'var(--wf-fg-subtle)', flexShrink: 0 }}
                       >
                         {t.assignee?.name ?? '—'}
+                        {(t.coAssignees?.length ?? 0) > 0 && (
+                          <span style={{ color: 'var(--wf-accent)' }}>
+                            {' '}
+                            +{t.coAssignees?.length}
+                          </span>
+                        )}
                       </span>
                     </div>
                     <OrderHoursBar order={t.order} />

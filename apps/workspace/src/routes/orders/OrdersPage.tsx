@@ -713,6 +713,7 @@ function OrdersTable({
             <th>Назва</th>
             <th>Статус</th>
             <th>Пріоритет</th>
+            <th>Виконавці</th>
             <th>Дедлайн</th>
             <th className="wfp-num">Сума</th>
           </tr>
@@ -759,6 +760,9 @@ function OrdersTable({
                   )}
                 </td>
                 <td>{PRIORITY_LABEL[o.priority]}</td>
+                <td>
+                  <ExecutorAvatars primary={o.assignee ?? null} co={o.coAssignees ?? []} />
+                </td>
                 <td
                   className="wfp-mono"
                   style={{ color: dl.tone === 'over' ? 'var(--wf-destructive)' : undefined }}
@@ -776,6 +780,72 @@ function OrdersTable({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** Ініціали з імені для аватара («Іван Петренко» → «ІП»). */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?'
+}
+
+/**
+ * Мультивиконавці у списку: головний (акцент) + співвиконавці як стек аватарів-ініціалів.
+ * Понад 3 згортаються у «+N». Прочерк, якщо виконавців немає.
+ */
+function ExecutorAvatars({
+  primary,
+  co,
+}: {
+  primary: { id: string; name: string } | null
+  co: { id: string; name: string }[]
+}) {
+  const all = [
+    ...(primary ? [{ ...primary, lead: true }] : []),
+    ...co.map((c) => ({ ...c, lead: false })),
+  ]
+  if (all.length === 0) {
+    return (
+      <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        —
+      </span>
+    )
+  }
+  const shown = all.slice(0, 3)
+  const extra = all.length - shown.length
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {shown.map((m, i) => (
+        <span
+          key={m.id}
+          title={`${m.name}${m.lead ? ' · головний' : ''}`}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 999,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            fontWeight: 600,
+            marginLeft: i === 0 ? 0 : -6,
+            border: '1px solid var(--wf-bg)',
+            background: m.lead ? 'var(--wf-accent)' : 'var(--wf-surface-2, var(--wf-border))',
+            color: m.lead ? 'var(--wf-accent-fg, #fff)' : 'var(--wf-fg-secondary)',
+          }}
+        >
+          {initials(m.name)}
+        </span>
+      ))}
+      {extra > 0 && (
+        <span
+          className="wfp-mono"
+          style={{ marginLeft: 4, fontSize: 11, color: 'var(--wf-fg-muted)' }}
+        >
+          +{extra}
+        </span>
+      )}
     </div>
   )
 }

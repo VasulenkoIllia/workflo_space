@@ -262,6 +262,9 @@ describe('GET /orders', () => {
     _count: { stages: 2 },
     // S10-01: list-select тепер тягне теги
     tags: [] as { tag: { id: string; name: string; color: string | null } }[],
+    // мультивиконавці: list-select тягне головного + співвиконавців
+    assignee: null as { id: string; name: string } | null,
+    coAssignees: [] as { profile: { id: string; name: string } }[],
   }
 
   it('client list is scoped to their companies + hides internalStatus', async () => {
@@ -311,6 +314,8 @@ describe('GET /orders/:id', () => {
   const fullOrder = {
     // S10-01: getOrder-select тепер тягне теги
     tags: [] as { tag: { id: string; name: string; color: string | null } }[],
+    // мультивиконавці: getOrder-select тягне співвиконавців
+    coAssignees: [] as { profile: { id: string; name: string } }[],
     id: 'order-1',
     agencyId: 'agency-1',
     companyId: 'company-1',
@@ -723,7 +728,7 @@ describe('internal tasks (workspace-only)', () => {
     it('executor lists tasks ordered by position', async () => {
       orderFindUnique.mockResolvedValue(order)
       taskFindMany.mockResolvedValue([
-        { id: 't1', title: 'A', status: 'todo', assigneeId: null, position: 0 },
+        { id: 't1', title: 'A', status: 'todo', assigneeId: null, position: 0, coAssignees: [] },
       ])
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
@@ -791,7 +796,13 @@ describe('internal tasks (workspace-only)', () => {
     it('executor creates a task with a valid assignee (201)', async () => {
       orderFindUnique.mockResolvedValue(order)
       agencyMemberFindUnique.mockResolvedValue({ profileId: ASSIGNEE })
-      taskCreate.mockResolvedValue({ id: 't1', title: 'Build', status: 'todo', position: 1 })
+      taskCreate.mockResolvedValue({
+        id: 't1',
+        title: 'Build',
+        status: 'todo',
+        position: 1,
+        coAssignees: [],
+      })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
         method: 'POST',
@@ -806,7 +817,13 @@ describe('internal tasks (workspace-only)', () => {
 
     it('executor creates an unassigned task (201, position defaults to 0)', async () => {
       orderFindUnique.mockResolvedValue(order)
-      taskCreate.mockResolvedValue({ id: 't1', title: 'Build', status: 'todo', position: 0 })
+      taskCreate.mockResolvedValue({
+        id: 't1',
+        title: 'Build',
+        status: 'todo',
+        position: 0,
+        coAssignees: [],
+      })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
         method: 'POST',
@@ -865,7 +882,13 @@ describe('internal tasks (workspace-only)', () => {
     it('executor updates status (200)', async () => {
       orderFindUnique.mockResolvedValue(order)
       taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
-      taskUpdate.mockResolvedValue({ id: 't1', title: 'A', status: 'done', position: 0 })
+      taskUpdate.mockResolvedValue({
+        id: 't1',
+        title: 'A',
+        status: 'done',
+        position: 0,
+        coAssignees: [],
+      })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
         method: 'PATCH',
@@ -881,7 +904,13 @@ describe('internal tasks (workspace-only)', () => {
     it('unassign via assigneeId:null → disconnect', async () => {
       orderFindUnique.mockResolvedValue(order)
       taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
-      taskUpdate.mockResolvedValue({ id: 't1', title: 'A', status: 'todo', position: 0 })
+      taskUpdate.mockResolvedValue({
+        id: 't1',
+        title: 'A',
+        status: 'todo',
+        position: 0,
+        coAssignees: [],
+      })
       const { app, token } = await authed(EXECUTOR)
       const res = await app.inject({
         method: 'PATCH',

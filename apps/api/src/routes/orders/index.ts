@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import activityRoute from './activity.js'
 import orderEstimateRoute from './estimate.js'
 import assignOrderRoute from './assignOrder.js'
+import coAssigneesRoute from './coAssignees.js'
 import commentsRoute from './comments.js'
 import conversationRoute from './conversation.js'
 import commentActionsRoute from './commentActions.js'
@@ -40,6 +41,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(slaRoute)
   await fastify.register(orderTemplatesRoute)
   await fastify.register(assignOrderRoute)
+  fastify.register(coAssigneesRoute)
   await fastify.register(internalTasksRoute)
   await fastify.register(commentsRoute)
   await fastify.register(conversationRoute)

@@ -43,6 +43,7 @@ const TASK = {
   updatedAt: new Date('2026-06-29T00:00:00Z'),
   order: { id: 'o1', title: 'Замовлення A', estimatedHours: '40' },
   assignee: { id: 'exec-1', name: 'Іван' },
+  coAssignees: [],
 }
 
 async function authed(claims: unknown) {

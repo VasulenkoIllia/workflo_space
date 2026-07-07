@@ -94,6 +94,11 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           updatedAt: true,
           _count: { select: { stages: true } },
           tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+          assignee: { select: { id: true, name: true } },
+          coAssignees: {
+            select: { profile: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       }),
     }))
@@ -107,6 +112,8 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           clientStatus: o.clientStatus,
           ...(isInternal ? { internalStatus: o.internalStatus } : {}),
           ...(isInternal ? { tags: o.tags.map((t) => t.tag) } : {}),
+          ...(isInternal ? { assignee: o.assignee } : {}),
+          ...(isInternal ? { coAssignees: o.coAssignees.map((c) => c.profile) } : {}),
           priority: o.priority,
           dueDate: o.deadline,
           totalAmount: o.totalAmount == null ? null : Number(o.totalAmount),

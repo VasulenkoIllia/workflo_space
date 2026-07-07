@@ -7,7 +7,7 @@
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`, `packages/storage`
-> Оновлено: 1 червня 2026 (doc-sync)
+> Оновлено: 7 липня 2026 (мультивиконавці: головний + співвиконавці)
 
 ---
 
@@ -58,11 +58,22 @@
 - Всі запити автоматично фільтрують `WHERE deletedAt IS NULL`
 - Видалені замовлення доступні тільки через `GET /orders?includeDeleted=true` (тільки owner)
 
-### Виконавці (Executors)
+### Виконавці (Executors) — головний + співвиконавці (мультивиконавці, 2026-07-07)
 
-- **Один виконавець на замовлення** — `Order.assigneeId String?` (НЕ many-to-many `order_executors`, якого в схемі немає).
-- Виконавець бачить лише замовлення, де `assigneeId = me`; owner призначає через triage (variant B, див. S1-alignment).
-- Зміна призначення → `ActivityLog(action='executor_assigned')`.
+- **Головний виконавець** — `Order.assigneeId String?`. Лишається «відповідальним»: тримає SLA,
+  комісію (payout), власника чату, вибірку «мої замовлення». Owner призначає через triage
+  (`PATCH /orders/:id/assign`, variant B). Зміна → `ActivityLog(action='executor_assigned')`.
+- **Співвиконавці (додаткові)** — join-таблиця `order_assignees` (модель `OrderAssignee`,
+  `unique(orderId, profileId)`, RLS). ДОДАТКОВІ до головного; головного в списку не дублюємо.
+  `PUT /orders/:id/assignees {profileIds[]}` замінює повний набір: валідація «член агенції»,
+  notify `orders.assigned` новододаним, аудит `order.coassignees_updated`.
+- Аналогічно для підзадач: `internal_task_assignees` (`InternalTaskAssignee`) +
+  `PUT /orders/:orderId/tasks/:taskId/assignees`.
+- **Засікання часу — незалежне від призначення:** будь-який член команди (`requireTeamOrder`,
+  не лише assignee) логує час; `TimeLog.executorId` per-row → маржа/години вже мультивиконавцеві.
+- DTO getOrder/listOrders/internalTasks(+board) віддають `coAssignees[] {id,name}`.
+- Відкладено: розподіл payout між співвиконавцями (лишається на головному); UI-керування
+  співвиконавцями задач (бекенд готовий, task-edit-поверхні в UI поки нема); фільтр за співвиконавцем.
 
 ### Дедлайн і нагадування
 
@@ -84,18 +95,20 @@
 
 ### Workspace (команда)
 
-| Метод    | URL                              | Опис                                               |
-| -------- | -------------------------------- | -------------------------------------------------- |
-| `GET`    | `/orders`                        | Список всіх замовлень з фільтрами                  |
-| `GET`    | `/orders/:id`                    | Деталі замовлення (internal view)                  |
-| `PATCH`  | `/orders/:id/status`             | Змінити статус                                     |
-| `PATCH`  | `/orders/:id`                    | Редагувати будь-яке поле                           |
-| `DELETE` | `/orders/:id`                    | Soft delete                                        |
-| `PATCH`  | `/orders/:id/assign`             | Призначити / зняти executor (triage)               |
-| `GET`    | `/orders/:orderId/tasks`         | Внутрішні підзадачі (workspace-only)               |
-| `POST`   | `/orders/:orderId/tasks`         | Створити підзадачу                                 |
-| `PATCH`  | `/orders/:orderId/tasks/:taskId` | Оновити підзадачу (status/assignee/position/title) |
-| `DELETE` | `/orders/:orderId/tasks/:taskId` | Видалити підзадачу                                 |
+| Метод    | URL                                        | Опис                                               |
+| -------- | ------------------------------------------ | -------------------------------------------------- |
+| `GET`    | `/orders`                                  | Список всіх замовлень з фільтрами                  |
+| `GET`    | `/orders/:id`                              | Деталі замовлення (internal view)                  |
+| `PATCH`  | `/orders/:id/status`                       | Змінити статус                                     |
+| `PATCH`  | `/orders/:id`                              | Редагувати будь-яке поле                           |
+| `DELETE` | `/orders/:id`                              | Soft delete                                        |
+| `PATCH`  | `/orders/:id/assign`                       | Призначити / зняти головного executor (triage)     |
+| `PUT`    | `/orders/:id/assignees`                    | Замінити список співвиконавців замовлення          |
+| `GET`    | `/orders/:orderId/tasks`                   | Внутрішні підзадачі (workspace-only)               |
+| `POST`   | `/orders/:orderId/tasks`                   | Створити підзадачу                                 |
+| `PATCH`  | `/orders/:orderId/tasks/:taskId`           | Оновити підзадачу (status/assignee/position/title) |
+| `PUT`    | `/orders/:orderId/tasks/:taskId/assignees` | Замінити список співвиконавців підзадачі           |
+| `DELETE` | `/orders/:orderId/tasks/:taskId`           | Видалити підзадачу                                 |
 
 ### Query параметри для `GET /orders` (workspace)
 

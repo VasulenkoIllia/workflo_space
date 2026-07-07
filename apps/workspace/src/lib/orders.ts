@@ -22,6 +22,9 @@ export interface WorkspaceOrder {
   stageCount: number
   createdAt: string
   updatedAt: string
+  /** Мультивиконавці (internal-only): головний + співвиконавці. */
+  assignee?: { id: string; name: string } | null
+  coAssignees?: { id: string; name: string }[]
 }
 
 export interface OrdersPage {
