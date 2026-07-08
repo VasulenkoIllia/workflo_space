@@ -137,6 +137,9 @@ export async function buildRenderData(
     const o = await tx.order.findUnique({
       where: { id: order.id },
       select: {
+        billingType: true,
+        hourlyRate: true,
+        billableHours: true,
         nomenclature: { select: { name: true } },
         project: { select: { nomenclature: { select: { name: true } } } },
       },
@@ -149,6 +152,24 @@ export async function buildRenderData(
           qty: '1',
           unit: 'послуга',
           price: data.amount,
+          sum: data.amount,
+        },
+      ]
+    } else if (
+      o?.billingType === 'hourly' &&
+      o.billableHours != null &&
+      Number(o.billableHours) > 0
+    ) {
+      // ПРИЙМАННЯ→АКТ: погодинне разове замовлення (без номенклатури/проєкту) друкує
+      // рядок з БІЛАБЕЛЬНИМИ годинами (прийнятими власником) × ставка — а не «послуга».
+      const billHours = Number(o.billableHours)
+      const rate = o.hourlyRate != null ? Number(o.hourlyRate) : amountNum / billHours
+      data.lines = [
+        {
+          name: order.title,
+          qty: fmtMoney(billHours),
+          unit: 'год',
+          price: fmtMoney(rate),
           sum: data.amount,
         },
       ]

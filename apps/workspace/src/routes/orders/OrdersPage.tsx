@@ -87,6 +87,9 @@ export function OrdersPage() {
     OrderInternalStatus.REVISION,
   ])
   const overdueCount = orders.filter(isOverdue).length
+  const reviewCount = countByStatus(orders, [OrderInternalStatus.REVIEW])
+  // статус-фільтр — plain string (useState('')); порівнюємо зі string-значенням enum
+  const REVIEW_F: string = OrderInternalStatus.REVIEW
   const unassignedCount = unassigned.data?.orders.length ?? 0
 
   const members = team.data?.members ?? []
@@ -150,6 +153,13 @@ export function OrdersPage() {
       <div className="wfp-stats" style={{ marginBottom: 16 }}>
         <Stat k="всього" v={String(data?.pagination.total ?? orders.length)} />
         <Stat k="в роботі" v={String(inProgress)} tone="accent" />
+        <Stat
+          k="на прийманні"
+          v={String(reviewCount)}
+          tone={reviewCount ? 'accent' : undefined}
+          active={statusF === REVIEW_F}
+          onClick={() => setStatusF((s) => (s === REVIEW_F ? '' : REVIEW_F))}
+        />
         <Stat k="прострочено" v={String(overdueCount)} tone={overdueCount ? 'warn' : undefined} />
         <Stat
           k="не призначені"
@@ -560,11 +570,47 @@ function TimelineView({
   )
 }
 
-function Stat({ k, v, tone }: { k: string; v: string; tone?: 'accent' | 'warn' }) {
+function Stat({
+  k,
+  v,
+  tone,
+  onClick,
+  active,
+}: {
+  k: string
+  v: string
+  tone?: 'accent' | 'warn'
+  onClick?: () => void
+  active?: boolean
+}) {
   const color =
     tone === 'warn' ? 'var(--wf-warning)' : tone === 'accent' ? 'var(--wf-accent)' : 'var(--wf-fg)'
   return (
-    <div className="wfp-stat">
+    <div
+      className="wfp-stat"
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick()
+              }
+            }
+          : undefined
+      }
+      style={
+        onClick
+          ? {
+              cursor: 'pointer',
+              outline: active ? '1px solid var(--wf-accent)' : undefined,
+              outlineOffset: active ? -1 : undefined,
+            }
+          : undefined
+      }
+    >
       <div style={{ fontSize: 22, fontWeight: 600, color }}>{v}</div>
       <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
         {k}
