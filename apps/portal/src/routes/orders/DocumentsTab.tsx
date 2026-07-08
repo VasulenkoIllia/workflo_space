@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
@@ -19,6 +20,9 @@ const ACCEPTABLE_TYPES = new Set(['contract', 'completion_act'])
 
 /** Client-side: list of documents the team issued on this order + accept-флоу. */
 export function DocumentsTab({ orderId }: { orderId: string }) {
+  const { user } = useAuth()
+  // LOW-2 (рішення власника 08.07): приймати договір/акт може лише власник компанії.
+  const isOwner = user?.companies.find((c) => c.id === user.activeCompanyId)?.role === 'owner'
   const { data: documents = [], isLoading } = useOrderDocuments(orderId)
   const accept = useAcceptDocument(orderId)
   const [accepting, setAccepting] = useState<OrderDocument | null>(null)
@@ -110,11 +114,21 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
           >
             {formatDate(d.generatedAt)}
           </span>
-          {/* 06-ПІДПИС: надіслані договір/акт клієнт приймає (клік + ПІБ) */}
+          {/* 06-ПІДПИС: надіслані договір/акт приймає ВЛАСНИК компанії (клік + ПІБ) — LOW-2 */}
           {ACCEPTABLE_TYPES.has(d.type) && d.status === 'sent' ? (
-            <Button size="sm" variant="primary" onClick={() => setAccepting(d)}>
-              Прийняти
-            </Button>
+            isOwner ? (
+              <Button size="sm" variant="primary" onClick={() => setAccepting(d)}>
+                Прийняти
+              </Button>
+            ) : (
+              <span
+                className="wfp-mono"
+                style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}
+                title="Юридичне прийняття доступне лише власнику компанії"
+              >
+                приймає власник
+              </span>
+            )
           ) : d.status === 'accepted' && d.acceptedByName ? (
             <span
               className="wfp-mono"

@@ -9,6 +9,7 @@ import {
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { randomUUID } from 'node:crypto'
@@ -447,8 +448,16 @@ const documentsRoute: FastifyPluginAsync = (fastify) => {
         })
       )
       if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
-      if (!user.memberships.some((m) => m.companyId === doc.companyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)
+      // LOW-2 (рішення власника 08.07): юридично приймати договір/акт (клік + ПІБ = підпис) може
+      // ЛИШЕ власник компанії-клієнта, як реквізити/секрети — не будь-який рядовий учасник.
+      // Гейт по companyId (owner-роль); тенант уже забезпечений скоупленим doc-запитом вище —
+      // portal-клієнт має activeAgencyId=null, тож agencyId у can тут не передаємо.
+      if (!can(user, 'company.update_settings', { companyId: doc.companyId })) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Приймати документ може лише власник компанії',
+          403
+        )
       }
 
       const now = new Date()

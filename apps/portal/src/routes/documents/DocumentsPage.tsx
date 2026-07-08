@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
@@ -23,6 +24,9 @@ import {
 const ACCEPTABLE_TYPES = new Set(['contract', 'completion_act'])
 
 export function DocumentsPage() {
+  const { user } = useAuth()
+  // LOW-2 (рішення власника 08.07): приймати договір/акт (юр. підпис) може лише власник компанії.
+  const isOwner = user?.companies.find((c) => c.id === user.activeCompanyId)?.role === 'owner'
   const { data: documents = [], isLoading } = usePortalDocuments()
   const accept = useAcceptDocument('') // інвалідовує portal-documents
   const [accepting, setAccepting] = useState<PortalDocument | null>(null)
@@ -125,9 +129,19 @@ export function DocumentsPage() {
                 {DOC_STATUS_LABEL[d.status]}
               </span>
               {ACCEPTABLE_TYPES.has(d.type) && d.status === 'sent' ? (
-                <Button size="sm" variant="primary" onClick={() => setAccepting(d)}>
-                  Прийняти
-                </Button>
+                isOwner ? (
+                  <Button size="sm" variant="primary" onClick={() => setAccepting(d)}>
+                    Прийняти
+                  </Button>
+                ) : (
+                  <span
+                    className="wfp-mono"
+                    style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}
+                    title="Юридичне прийняття доступне лише власнику компанії"
+                  >
+                    приймає власник
+                  </span>
+                )
               ) : d.status === 'accepted' && d.acceptedByName ? (
                 <span
                   className="wfp-mono"

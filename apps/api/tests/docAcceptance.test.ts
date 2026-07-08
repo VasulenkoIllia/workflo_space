@@ -46,6 +46,16 @@ const OWNER = {
   agencyMemberships: [{ agencyId: 'agency-1', role: 'owner' }],
   memberships: [],
 }
+// LOW-2: рядовий учасник компанії (НЕ власник) — приймати договір не може.
+const CLIENT_MEMBER = {
+  sub: 'client-2',
+  email: 'm@e.com',
+  role: 'client',
+  activeAgencyId: null,
+  activeCompanyId: 'company-1',
+  agencyMemberships: [],
+  memberships: [{ companyId: 'company-1', role: 'member' }],
+}
 
 const CONTRACT_DOC = {
   id: 'doc-1',
@@ -102,6 +112,20 @@ describe('POST /portal/documents/:docId/accept (06-ПІДПИС)', () => {
       profileId: 'owner-1',
       event: 'documents.accepted',
     })
+    await app.close()
+  })
+
+  it('LOW-2: рядовий член компанії (не власник) НЕ може прийняти → 403', async () => {
+    db.document.findFirst.mockResolvedValue(CONTRACT_DOC)
+    const { app, token } = await authed(CLIENT_MEMBER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/portal/documents/doc-1/accept',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { fullName: 'Петренко Петро' },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(db.document.updateMany).not.toHaveBeenCalled()
     await app.close()
   })
 
