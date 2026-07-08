@@ -3,66 +3,66 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { useAuth } from '@/contexts/AuthContext'
 import { useCompanies } from '@/lib/projects'
 import {
   type Lead,
-  type LeadStatus,
+  type LeadStage,
   useConvertLead,
   useCreateLead,
+  useCreateLeadStage,
   useDeleteLead,
+  useDeleteLeadStage,
+  useLeadStages,
   useLeads,
   useUpdateLead,
+  useUpdateLeadStage,
 } from '@/lib/leads'
 
-const COLUMNS: { id: LeadStatus; label: string }[] = [
-  { id: 'new', label: 'Нові' },
-  { id: 'contacted', label: 'Контакт' },
-  { id: 'qualified', label: 'Кваліфіковані' },
-  { id: 'proposal', label: 'Пропозиція' },
-  { id: 'won', label: 'Виграні' },
-  { id: 'lost', label: 'Втрачені' },
-]
-
-/** Leads board (module 26) — pipeline kanban. Drag cards between stages; create new leads;
- * convert a lead into a client order. Internal team. */
+/** Leads board (module 26) — pipeline kanban з КАСТОМНИМИ стадіями (ХВІСТ-4). Drag карток
+ * між стадіями; owner редагує стадії; convert ліда в замовлення. Internal team. */
 export function LeadBoardPage() {
   const { data, isLoading } = useLeads()
+  const { data: stagesData } = useLeadStages()
   const update = useUpdateLead()
   const del = useDeleteLead()
-  const [over, setOver] = useState<LeadStatus | null>(null)
+  const [over, setOver] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [editingStages, setEditingStages] = useState(false)
   const [converting, setConverting] = useState<Lead | null>(null)
 
   const leads = data?.leads ?? []
-  const byCol = (s: LeadStatus) => leads.filter((l) => l.status === s)
+  const stages = stagesData ?? []
+  const byCol = (stageId: string) => leads.filter((l) => l.stageId === stageId)
 
-  const drop = (status: LeadStatus, lead: Lead) => {
+  const drop = (stage: LeadStage, lead: Lead) => {
     setOver(null)
-    if (lead.status === status) return
-    // «Виграно» means converting to an order (creates the linked Order) — route the drop through
-    // the convert modal instead of a bare status PATCH (which the backend rejects anyway).
-    if (status === 'won') {
+    if (lead.stageId === stage.id) return
+    // «Виграно» (won-стадія) = конвертація в замовлення — через модалку, не bare PATCH.
+    if (stage.kind === 'won') {
       if (!lead.convertedOrderId) setConverting(lead)
       return
     }
-    // «Втрачено» — capture the reason (CRM lost-reason tracking); Cancel aborts the move.
-    if (status === 'lost') {
+    // «Втрачено» (lost-стадія) — фіксуємо причину; Cancel скасовує рух.
+    if (stage.kind === 'lost') {
       const reason = window.prompt(`Причина втрати ліда «${lead.name}»?`, lead.lostReason ?? '')
       if (reason === null) return
-      update.mutate({ id: lead.id, status, lostReason: reason.trim() || null })
+      update.mutate({ id: lead.id, stageId: stage.id, lostReason: reason.trim() || null })
       return
     }
-    update.mutate({ id: lead.id, status })
+    update.mutate({ id: lead.id, stageId: stage.id })
   }
 
-  // Pipeline stats from the current set (design: active count + conversion %).
+  // Pipeline stats (status мірориться kind — won/lost надійні).
   const activeCount = leads.filter((l) => l.status !== 'won' && l.status !== 'lost').length
   const wonCount = leads.filter((l) => l.status === 'won').length
   const lostCount = leads.filter((l) => l.status === 'lost').length
   const conversionPct =
     wonCount + lostCount > 0 ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null
-  const colSum = (s: LeadStatus) =>
-    byCol(s).reduce((acc, l) => acc + (l.estimatedValue ? Number(l.estimatedValue) : 0), 0)
+  const colSum = (stageId: string) =>
+    byCol(stageId).reduce((acc, l) => acc + (l.estimatedValue ? Number(l.estimatedValue) : 0), 0)
+
+  const { isOwner } = useAuth()
 
   const remove = (lead: Lead) => {
     if (!window.confirm(`Видалити лід «${lead.name}»?`)) return
@@ -81,7 +81,12 @@ export function LeadBoardPage() {
           </div>
           <h1 className="wfp-ph-h1">Ліди</h1>
         </div>
-        <div className="wfp-ph-r">
+        <div className="wfp-ph-r" style={{ display: 'flex', gap: 8 }}>
+          {isOwner && (
+            <Button variant="ghost" onClick={() => setEditingStages(true)}>
+              ⚙ Стадії
+            </Button>
+          )}
           <Button variant="primary" onClick={() => setCreating(true)}>
             + Лід
           </Button>
@@ -94,13 +99,13 @@ export function LeadBoardPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${COLUMNS.length}, minmax(180px, 1fr))`,
+            gridTemplateColumns: `repeat(${Math.max(stages.length, 1)}, minmax(180px, 1fr))`,
             gap: 10,
             alignItems: 'start',
             overflowX: 'auto',
           }}
         >
-          {COLUMNS.map((col) => (
+          {stages.map((col) => (
             <div
               key={col.id}
               onDragOver={(e: DragEvent) => {
@@ -111,7 +116,7 @@ export function LeadBoardPage() {
               onDrop={(e: DragEvent) => {
                 const id = e.dataTransfer.getData('text/plain')
                 const lead = leads.find((l) => l.id === id)
-                if (lead) drop(col.id, lead)
+                if (lead) drop(col, lead)
               }}
               style={{
                 background: 'var(--wf-surface)',
@@ -126,13 +131,18 @@ export function LeadBoardPage() {
                 className="wfp-mono"
                 style={{
                   fontSize: 11,
-                  color: 'var(--wf-fg-muted)',
+                  color:
+                    col.kind === 'won'
+                      ? 'var(--wf-accent)'
+                      : col.kind === 'lost'
+                        ? 'var(--wf-destructive)'
+                        : 'var(--wf-fg-muted)',
                   marginBottom: 8,
                   display: 'flex',
                   justifyContent: 'space-between',
                 }}
               >
-                <span>{col.label}</span>
+                <span>{col.name}</span>
                 <span>
                   {byCol(col.id).length}
                   {colSum(col.id) > 0 ? ` · $${colSum(col.id).toLocaleString('uk-UA')}` : ''}
@@ -169,7 +179,7 @@ export function LeadBoardPage() {
                         {l.estimatedValue ? `${Number(l.estimatedValue)} ${l.currency}` : ''}
                       </div>
                     )}
-                    {l.status === 'lost' && l.lostReason && (
+                    {l.stage?.kind === 'lost' && l.lostReason && (
                       <div
                         className="wfp-mono"
                         style={{ fontSize: 11, color: 'var(--wf-destructive)', marginTop: 2 }}
@@ -214,7 +224,146 @@ export function LeadBoardPage() {
 
       {creating && <CreateLeadModal onClose={() => setCreating(false)} />}
       {converting && <ConvertLeadModal lead={converting} onClose={() => setConverting(null)} />}
+      {editingStages && (
+        <StageEditorModal stages={stages} onClose={() => setEditingStages(false)} />
+      )}
     </div>
+  )
+}
+
+/** ХВІСТ-4: owner-редактор стадій воронки. Додати/переймен/сорт/видалити open-стадії;
+ * won/lost можна лише перейменувати. */
+function StageEditorModal({ stages, onClose }: { stages: LeadStage[]; onClose: () => void }) {
+  const create = useCreateLeadStage()
+  const rename = useUpdateLeadStage()
+  const move = useUpdateLeadStage()
+  const del = useDeleteLeadStage()
+  const [newName, setNewName] = useState('')
+
+  const openStages = stages.filter((s) => s.kind === 'open')
+  const addStage = () => {
+    const name = newName.trim()
+    if (name === '') return
+    create.mutate(name, {
+      onSuccess: () => {
+        setNewName('')
+        toast.success('Стадію додано')
+      },
+      onError: () => toast.error('Не вдалося (можливо, назва зайнята)'),
+    })
+  }
+  const renameStage = (s: LeadStage) => {
+    const name = window.prompt('Нова назва стадії', s.name)
+    if (name === null || name.trim() === '' || name.trim() === s.name) return
+    rename.mutate({ id: s.id, name: name.trim() }, { onError: () => toast.error('Не вдалося') })
+  }
+  const swap = (i: number, j: number) => {
+    const a = openStages[i]
+    const b = openStages[j]
+    if (!a || !b) return
+    move.mutate({ id: a.id, position: b.position })
+    move.mutate({ id: b.id, position: a.position })
+  }
+  const removeStage = (s: LeadStage) => {
+    if (!window.confirm(`Видалити стадію «${s.name}»? Ліди перейдуть на першу відкриту.`)) return
+    del.mutate(s.id, {
+      onSuccess: () => toast.success('Стадію видалено'),
+      onError: () => toast.error('Не вдалося видалити'),
+    })
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Стадії воронки">
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // відкриті стадії — редаговані; «Виграно/Втрачено» — термінальні (лише перейменувати)
+        </div>
+        {stages.map((s) => {
+          const openIdx = openStages.findIndex((o) => o.id === s.id)
+          return (
+            <div
+              key={s.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                border: '1px solid var(--wf-border)',
+                borderRadius: 'var(--wf-radius)',
+              }}
+            >
+              <span
+                className="wfp-mono"
+                style={{
+                  fontSize: 10,
+                  width: 44,
+                  color:
+                    s.kind === 'won'
+                      ? 'var(--wf-accent)'
+                      : s.kind === 'lost'
+                        ? 'var(--wf-destructive)'
+                        : 'var(--wf-fg-muted)',
+                }}
+              >
+                {s.kind === 'open' ? 'open' : s.kind === 'won' ? 'won' : 'lost'}
+              </span>
+              <span style={{ flex: 1, fontSize: 13 }}>{s.name}</span>
+              {s.kind === 'open' && openIdx > 0 && (
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 12 }}
+                  onClick={() => swap(openIdx, openIdx - 1)}
+                >
+                  ↑
+                </button>
+              )}
+              {s.kind === 'open' && openIdx < openStages.length - 1 && (
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 12 }}
+                  onClick={() => swap(openIdx, openIdx + 1)}
+                >
+                  ↓
+                </button>
+              )}
+              <button
+                type="button"
+                className="wfp-link"
+                style={{ fontSize: 11 }}
+                onClick={() => renameStage(s)}
+              >
+                переймен.
+              </button>
+              {s.kind === 'open' && (
+                <button
+                  type="button"
+                  className="wfp-link"
+                  style={{ fontSize: 11, color: 'var(--wf-destructive)' }}
+                  onClick={() => removeStage(s)}
+                >
+                  видалити
+                </button>
+              )}
+            </div>
+          )
+        })}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 4 }}>
+          <div style={{ flex: 1 }}>
+            <Input
+              label="Нова стадія"
+              value={newName}
+              placeholder="напр. Демо / Переговори"
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          </div>
+          <Button variant="primary" loading={create.isPending} onClick={addStage}>
+            Додати
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

@@ -17,6 +17,12 @@ const db = {
   agency: { findUnique: agencyFindUnique },
   lead: { create: leadCreate },
   leadActivity: { create: leadActivityCreate },
+  // ХВІСТ-4: інтейк сідить дефолтні стадії + ставить першу open
+  leadStage: {
+    count: vi.fn().mockResolvedValue(6),
+    createMany: vi.fn(),
+    findFirst: vi.fn().mockResolvedValue({ id: 'stage-open-1' }),
+  },
 }
 
 vi.mock('@workflo/db', () => ({

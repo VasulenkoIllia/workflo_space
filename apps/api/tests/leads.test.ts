@@ -11,6 +11,17 @@ const db = {
     deleteMany: vi.fn(),
   },
   leadActivity: { create: vi.fn(), findMany: vi.fn() },
+  // ХВІСТ-4: кастомні стадії воронки
+  leadStage: {
+    findFirst: vi.fn().mockResolvedValue(null),
+    findMany: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(6),
+    create: vi.fn(),
+    createMany: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    aggregate: vi.fn().mockResolvedValue({ _max: { position: 3 } }),
+  },
   company: { findFirst: vi.fn() },
   order: { create: vi.fn() },
   $executeRaw: vi.fn().mockResolvedValue(1),

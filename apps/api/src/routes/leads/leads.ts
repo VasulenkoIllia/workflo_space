@@ -5,6 +5,21 @@ import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { ensureStages } from './leadStages.js'
+
+/** ХВІСТ-4: перша відкрита стадія воронки агенції (сідить дефолти, якщо порожньо). */
+async function firstOpenStageId(
+  tx: Prisma.TransactionClient,
+  agencyId: string
+): Promise<string | null> {
+  await ensureStages(tx, agencyId)
+  const s = await tx.leadStage.findFirst({
+    where: { agencyId, kind: 'open' },
+    orderBy: { position: 'asc' },
+    select: { id: true },
+  })
+  return s?.id ?? null
+}
 
 /**
  * Leads / CRM pipeline (module 26). Tenant-scoped (RLS via agencyId), internal-team only
@@ -28,6 +43,9 @@ const LEAD_SELECT = {
   convertedOrderId: true,
   lostReason: true,
   position: true,
+  // ХВІСТ-4: кастомна стадія воронки
+  stageId: true,
+  stage: { select: { id: true, name: true, kind: true, position: true } },
   utmSource: true,
   utmMedium: true,
   utmCampaign: true,
@@ -68,6 +86,8 @@ const updateSchema = z
     phone: z.string().trim().max(50).nullish(),
     source: z.string().trim().max(60).nullish(),
     status: z.nativeEnum(LeadStatus).optional(),
+    // ХВІСТ-4: переміщення воронкою — цільова кастомна стадія
+    stageId: z.string().uuid().optional(),
     estimatedValue: z.number().nonnegative().max(1_000_000_000).nullish(),
     notes: z.string().trim().max(2000).nullish(),
     assigneeId: z.string().min(1).nullish(),
@@ -113,7 +133,12 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
       const rows = await withTenant((tx) =>
         tx.lead.findMany({
           where: { agencyId, ...(q.status ? { status: q.status } : {}) },
-          orderBy: [{ status: 'asc' }, { position: 'asc' }, { createdAt: 'desc' }],
+          orderBy: [
+            { stage: { position: 'asc' } },
+            { status: 'asc' },
+            { position: 'asc' },
+            { createdAt: 'desc' },
+          ],
           select: LEAD_SELECT,
         })
       )
@@ -143,6 +168,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
       const agencyId = assertTeam(request.user)
       const input = createSchema.parse(request.body)
       const lead = await withTenant(async (tx) => {
+        const stageId = await firstOpenStageId(tx, agencyId)
         const created = await tx.lead.create({
           data: {
             agency: { connect: { id: agencyId } },
@@ -155,6 +181,8 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
             currency: input.currency ?? 'USD',
             notes: input.notes ?? null,
             assigneeId: input.assigneeId ?? null,
+            // ХВІСТ-4: нові ліди стартують у першій відкритій стадії
+            ...(stageId ? { stage: { connect: { id: stageId } } } : {}),
           },
           select: LEAD_SELECT,
         })
@@ -209,12 +237,36 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
             phone: true,
             source: true,
             status: true,
+            stageId: true,
+            stage: { select: { name: true } },
             estimatedValue: true,
             notes: true,
             assigneeId: true,
           },
         })
         if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Лід не знайдено', 404)
+
+        // ХВІСТ-4: переміщення воронкою — резолвимо цільову стадію; won-стадія лише через
+        // конвертацію; status мірориться kind (lost→lost, open→new) для звітів/гейтів.
+        let targetStageName: string | null = null
+        let statusMirror: LeadStatus | undefined
+        if (input.stageId !== undefined) {
+          const target = await tx.leadStage.findFirst({
+            where: { id: input.stageId, agencyId },
+            select: { id: true, name: true, kind: true },
+          })
+          if (!target) throw new AppError(ApiErrorCode.NOT_FOUND, 'Стадію не знайдено', 404)
+          if (target.kind === 'won') {
+            throw new AppError(
+              ApiErrorCode.VALIDATION_ERROR,
+              'Лід стає «виграно» лише через конвертацію в замовлення',
+              400
+            )
+          }
+          targetStageName = target.name
+          statusMirror = target.kind === 'lost' ? LeadStatus.LOST : LeadStatus.NEW
+        }
+
         const updated = await tx.lead.update({
           where: { id: existing.id },
           data: {
@@ -224,6 +276,9 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
             ...(input.phone !== undefined ? { phone: input.phone } : {}),
             ...(input.source !== undefined ? { source: input.source } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(input.stageId !== undefined
+              ? { stageId: input.stageId, status: statusMirror }
+              : {}),
             ...(input.estimatedValue !== undefined ? { estimatedValue: input.estimatedValue } : {}),
             ...(input.notes !== undefined ? { notes: input.notes } : {}),
             ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
@@ -235,8 +290,23 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
         // 26-ТАЙМЛАЙН: journal only real changes (the detail form re-sends every field
         // on save, so compare against the previous values, not mere key presence).
         const actor = { agencyId, leadId: existing.id, actorId: request.user.sub }
-        // TS-enum vs Prisma-enum — same string values (drift-guarded), compare as strings
-        if (input.status !== undefined && (input.status as string) !== existing.status) {
+        const stageMoved = input.stageId !== undefined && input.stageId !== existing.stageId
+        if (stageMoved) {
+          await tx.leadActivity.create({
+            data: {
+              ...actor,
+              type: 'stage_changed',
+              metadata: {
+                from: existing.stage?.name ?? existing.status,
+                to: targetStageName,
+                ...(statusMirror === LeadStatus.LOST && input.lostReason
+                  ? { lostReason: input.lostReason }
+                  : {}),
+              },
+            },
+          })
+        } else if (input.status !== undefined && (input.status as string) !== existing.status) {
+          // legacy status-only зміна (без stageId)
           await tx.leadActivity.create({
             data: {
               ...actor,
@@ -315,9 +385,20 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
           },
           select: { id: true },
         })
+        // ХВІСТ-4: переносимо лід у won-стадію воронки (kind='won') разом зі status.
+        const wonStage = await tx.leadStage.findFirst({
+          where: { agencyId, kind: 'won' },
+          orderBy: { position: 'asc' },
+          select: { id: true },
+        })
         const updated = await tx.lead.update({
           where: { id: lead.id },
-          data: { status: LeadStatus.WON, companyId: company.id, convertedOrderId: order.id },
+          data: {
+            status: LeadStatus.WON,
+            ...(wonStage ? { stageId: wonStage.id } : {}),
+            companyId: company.id,
+            convertedOrderId: order.id,
+          },
           select: LEAD_SELECT,
         })
         await tx.leadActivity.create({

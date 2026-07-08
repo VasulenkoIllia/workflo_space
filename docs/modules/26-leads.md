@@ -20,6 +20,14 @@ Tenant: усе per-agency (`agencyId`) + `isInternalTeam` + audit. Це **CRM-in
 
 ## 1. Моделі
 
+> ✅ **РЕАЛІЗОВАНО (ХВІСТ-4, 07.07):** кастомні стадії воронки — модель `LeadStage`
+> (`agencyId, name, kind: open|won|lost, position`) + `Lead.stageId` FK. Спрощення проти цього
+> дизайну: **одна воронка на агенцію** (без окремого `LeadPipeline` — `LeadStage` привʼязана прямо
+> до agencyId), а `Lead.status` лишається coarse-прапорцем результату (`new`=open / `won` / `lost`),
+> **синхронізованим зі `stage.kind`** при кожному русі. Дошка = стадії за (kind→position). `won`
+> досяжна лише через конвертацію; won/lost захищені від видалення. Owner редагує open-стадії
+> (`GET/POST/PATCH/DELETE /workspace/lead-stages`). Дефолти сідяться lazy + міграцією-бекфілом.
+
 ```prisma
 model Lead {
   id                 String     @id @default(uuid())

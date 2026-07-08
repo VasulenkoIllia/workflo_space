@@ -2,6 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost'
+export type LeadStageKind = 'open' | 'won' | 'lost'
+
+/** ХВІСТ-4: кастомна стадія воронки (per-agency). */
+export interface LeadStage {
+  id: string
+  name: string
+  kind: LeadStageKind
+  position: number
+}
 
 /** A CRM lead (module 26). */
 export interface Lead {
@@ -12,6 +21,8 @@ export interface Lead {
   phone: string | null
   source: string | null
   status: LeadStatus
+  stageId: string | null
+  stage: LeadStage | null
   estimatedValue: string | null
   currency: string
   notes: string | null
@@ -99,6 +110,7 @@ export interface LeadUpdateInput {
   phone?: string | null
   source?: string | null
   status?: Exclude<LeadStatus, 'won'>
+  stageId?: string
   estimatedValue?: number | null
   notes?: string | null
   assigneeId?: string | null
@@ -131,5 +143,44 @@ export function useDeleteLead() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/workspace/leads/${id}`),
     onSuccess: () => invalidateLeads(qc),
+  })
+}
+
+// ── ХВІСТ-4: кастомні стадії воронки ──────────────────────────────────────────
+export function useLeadStages() {
+  return useQuery({
+    queryKey: ['ws-lead-stages'],
+    queryFn: () => api.get<{ stages: LeadStage[] }>('/workspace/lead-stages').then((r) => r.stages),
+  })
+}
+
+function invalidateStages(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['ws-lead-stages'] })
+  void qc.invalidateQueries({ queryKey: ['ws-leads'] })
+}
+
+export function useCreateLeadStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) =>
+      api.post<{ stage: LeadStage }>('/workspace/lead-stages', { name }),
+    onSuccess: () => invalidateStages(qc),
+  })
+}
+
+export function useUpdateLeadStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; position?: number }) =>
+      api.patch<{ stage: LeadStage }>(`/workspace/lead-stages/${id}`, body),
+    onSuccess: () => invalidateStages(qc),
+  })
+}
+
+export function useDeleteLeadStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/workspace/lead-stages/${id}`),
+    onSuccess: () => invalidateStages(qc),
   })
 }

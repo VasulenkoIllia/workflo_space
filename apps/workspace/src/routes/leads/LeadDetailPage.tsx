@@ -44,7 +44,9 @@ const FIELD_LABELS: Record<string, string> = {
   notes: 'нотатки',
 }
 
-const UTM_LABELS: [keyof Lead, string][] = [
+// Лише UTM-ключі (string|null-поля) — вузько, щоб String() не бачив об'єктні поля (stage).
+type UtmKey = 'utmSource' | 'utmMedium' | 'utmCampaign' | 'utmTerm' | 'utmContent'
+const UTM_LABELS: [UtmKey, string][] = [
   ['utmSource', 'utm_source'],
   ['utmMedium', 'utm_medium'],
   ['utmCampaign', 'utm_campaign'],

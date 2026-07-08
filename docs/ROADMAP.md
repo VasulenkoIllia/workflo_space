@@ -131,6 +131,19 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **ЛІД-ПАЙПЛАЙН-РЕДАКТОР — кастомні стадії воронки (ХВІСТ-4) — ЗАКРИТО (2026-07-07).**
+  Було: `Lead.status` фікс-enum, «custom per-agency pipelines = later». Стало: модель
+  **LeadStage** (per-agency, `kind: open|won|lost`, position) + `Lead.stageId`. Owner додає/
+  перейменовує/сортує/видаляє **open**-стадії (`/workspace/lead-stages` CRUD); won/lost —
+  термінальні (по одній, захищені; won лише через конвертацію). Дошка — динамічні колонки зі
+  стадій (kind→position), DnD-move через stageId; редактор стадій ⚙ на дошці (owner). `Lead.status`
+  лишився coarse-прапорцем (new/won/lost), синхронізованим зі stage.kind → конверсія/звіти без
+  рефактору. Видалення open-стадії переносить її ліди на першу відкриту (не втрачаємо). Нові ліди
+  (workspace + веб-інтейк) стартують у першій open-стадії; дефолти — lazy-seed + міграція-бекфіл
+  (20260707_lead_stages, RLS). Міграція LeadStageKind (drift). Гейт: +5 unit stage-CRUD (api 934),
+  turbo 56/56. Вживу: list→create «Демо»→lead-start(Новий)→move→won-guard(400)→lost+reason→
+  delete-reassign→won-delete-guard(400). **Усі 4 хвости флоу закрито.**
+
 - **ХВОСТИ ФЛОУ + hourly-cost у P&L — ЗАКРИТО (2026-07-07).** Три downstream-хвости:
   **(1)** OrdersPage — клікабельна стат-плитка «на прийманні» (лічильник review) тумблить
   фільтр status=review (швидкий доступ до черги приймання). **(2)** documentRender — акт

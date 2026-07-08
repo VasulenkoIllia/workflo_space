@@ -668,7 +668,8 @@ model TimeLog {
 
 // Lead/CRM (module 26). Tenant-scoped (RLS via agencyId). Plain-String FKs (assignee/company/
 // convertedOrder) per project convention (no back-relations); set companyId+convertedOrderId on
-// convert→order. Pipeline stage = LeadStatus enum (fixed-stage MVP).
+// convert→order. Стадія воронки — LeadStage (custom per-agency, ХВІСТ-4). status лишається
+// coarse-прапорцем результату (open→new / won / lost) для конверсії/звітів; stageId = істина колонки.
 model Lead {
   id               String     @id @default(uuid())
   agencyId         String
@@ -678,6 +679,9 @@ model Lead {
   phone            String?
   source           String? // free: 'website'|'referral'|'telegram'|... (like Project.type)
   status           LeadStatus @default(new)
+  // ХВІСТ-4: кастомна стадія воронки (per-agency). null у legacy-даних до бекфілу.
+  stageId          String?
+  stage            LeadStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
   estimatedValue   Decimal?   @db.Decimal(12, 2)
   currency         String     @default("USD")
   notes            String?
@@ -700,7 +704,27 @@ model Lead {
 
   @@index([agencyId])
   @@index([agencyId, status])
+  @@index([stageId])
   @@map("leads")
+}
+
+// ХВІСТ-4 (07.07): кастомні стадії воронки лідів per-agency. kind фіксує семантику:
+// open — редаговані проміжні стадії; won/lost — термінальні (по одній, не видаляються;
+// won досяжна лише через конвертацію в замовлення). Дошка = ці стадії за position.
+model LeadStage {
+  id        String        @id @default(uuid())
+  agencyId  String
+  name      String
+  kind      LeadStageKind @default(open)
+  position  Int           @default(0)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+  agency    Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("lead_stages")
 }
 
 // 26-ТАЙМЛАЙН: append-only journal of lead lifecycle events (created / stage_changed /
@@ -1545,6 +1569,7 @@ model Agency {
   estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
   leads                Lead[] // 26 (CRM)
+  leadStages           LeadStage[] // ХВІСТ-4: кастомні стадії воронки
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
@@ -1726,12 +1751,20 @@ enum InternalTaskStatus {
   done
 }
 
-// Leads/CRM pipeline (module 26). Fixed stages MVP; custom per-agency pipelines = later.
+// Leads/CRM pipeline (module 26). status — coarse-результат (open→new/won/lost); стадії
+// воронки тепер кастомні (LeadStage, ХВІСТ-4).
 enum LeadStatus {
   new
   contacted
   qualified
   proposal
+  won
+  lost
+}
+
+// ХВІСТ-4: семантика кастомної стадії воронки.
+enum LeadStageKind {
+  open
   won
   lost
 }

@@ -2,6 +2,7 @@ import { prisma, runWithAgency, withTenant } from '@workflo/db'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { resolvePlatformAgencyId } from '../../auth/agency.js'
+import { ensureStages } from '../leads/leadStages.js'
 
 /** Public contact / lead capture (S7-04). No auth — the landing posts here cross-origin
  * (CORS allowlist in config/origins.ts already covers the landing origins). ContactForm is
@@ -52,6 +53,12 @@ async function intakeLead(input: ContactInput): Promise<string | null> {
   }
   return runWithAgency(agencyId, () =>
     withTenant(async (tx) => {
+      await ensureStages(tx, agencyId) // ХВІСТ-4: гарантуємо дефолтні стадії
+      const openStage = await tx.leadStage.findFirst({
+        where: { agencyId, kind: 'open' },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      })
       const lead = await tx.lead.create({
         data: {
           agency: { connect: { id: agencyId } },
@@ -60,6 +67,7 @@ async function intakeLead(input: ContactInput): Promise<string | null> {
           email: emailLike ? input.email : null,
           source: input.source ?? 'website',
           notes: (emailLike ? '' : `Контакт: ${input.email}\n\n`) + input.message,
+          ...(openStage ? { stage: { connect: { id: openStage.id } } } : {}),
           ...utm,
         },
         select: { id: true },

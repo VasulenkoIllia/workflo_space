@@ -125,6 +125,13 @@ export enum LeadStatus {
   LOST = 'lost',
 }
 
+// ХВІСТ-4: семантика кастомної стадії воронки лідів.
+export enum LeadStageKind {
+  OPEN = 'open',
+  WON = 'won',
+  LOST = 'lost',
+}
+
 // ─── Billing ────────────────────────────────────────────────────────────────
 export enum BillingType {
   FIXED = 'fixed',
