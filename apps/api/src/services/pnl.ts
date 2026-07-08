@@ -71,6 +71,7 @@ export interface Pnl {
   revenueUsd: string
   expensesUsd: string
   salaryUsd: string
+  laborHourlyUsd: string
   netProfitUsd: string
   marginPct: string
   byCategory: PnlLine[]
@@ -86,7 +87,7 @@ export async function computePnl(args: {
   const months = monthsInRange(from, to)
 
   const data = await withTenant(async (tx) => {
-    const [revenueAgg, expenses, rates, rate] = await Promise.all([
+    const [revenueAgg, expenses, rates, rate, laborRows] = await Promise.all([
       tx.payment.aggregate({
         where: {
           agencyId: args.agencyId,
@@ -109,14 +110,31 @@ export async function computePnl(args: {
       }),
       tx.executorRate.findMany({
         where: { agencyId: args.agencyId, monthlySalary: { not: null } },
-        select: { monthlySalary: true, currency: true, effectiveFrom: true, effectiveUntil: true },
+        select: {
+          executorId: true,
+          monthlySalary: true,
+          currency: true,
+          effectiveFrom: true,
+          effectiveUntil: true,
+        },
       }),
       tx.exchangeRate.findUnique({
         where: { agencyId: args.agencyId },
         select: { usdToUah: true, eurToUah: true },
       }),
+      // ХВІСТ-3: собівартість погодинної праці — Σ(hours × costRateUsd) по виконавцях за період.
+      // Тільки для несалярних (salaried час покритий окладом) — фільтр нижче.
+      tx.$queryRaw<Array<{ executorId: string; cost: string | null }>>`
+        SELECT t."executorId" AS "executorId",
+               COALESCE(SUM(t."hours" * COALESCE(t."costRateUsd", 0)), 0) AS cost
+        FROM "time_logs" t
+        WHERE t."agencyId" = ${args.agencyId}
+          AND t."date" >= ${from}
+          AND t."date" <= ${to}
+        GROUP BY t."executorId"
+      `,
     ])
-    return { revenueAgg, expenses, rates, rate }
+    return { revenueAgg, expenses, rates, rate, laborRows }
   })
 
   const rates: FxRates = {
@@ -157,6 +175,24 @@ export async function computePnl(args: {
   }
   if (salaryUsd.greaterThan(0)) add('salary', salaryUsd)
 
+  // ХВІСТ-3: собівартість погодинної праці. Виконавці з активним окладом у періоді
+  // вже враховані через salary → їхній час НЕ додаємо (без подвійного рахунку). Решта
+  // (погодинники/контрактори) → Σ(hours × costRateUsd) стає окремою статтею витрат.
+  const salariedIds = new Set<string>()
+  for (const r of data.rates) {
+    if (!r.monthlySalary) continue
+    if (months.some((ym) => activeIn(r.effectiveFrom, r.effectiveUntil, ym))) {
+      salariedIds.add(r.executorId)
+    }
+  }
+  let laborHourlyUsd = new Prisma.Decimal(0)
+  for (const row of data.laborRows) {
+    if (salariedIds.has(row.executorId)) continue
+    laborHourlyUsd = laborHourlyUsd.plus(new Prisma.Decimal(row.cost ?? 0))
+  }
+  laborHourlyUsd = laborHourlyUsd.toDecimalPlaces(2)
+  if (laborHourlyUsd.greaterThan(0)) add('labor_hourly', laborHourlyUsd)
+
   let expensesUsd = new Prisma.Decimal(0)
   for (const v of byCategory.values()) expensesUsd = expensesUsd.plus(v)
 
@@ -171,6 +207,7 @@ export async function computePnl(args: {
     revenueUsd: revenueUsd.toFixed(2),
     expensesUsd: expensesUsd.toFixed(2),
     salaryUsd: salaryUsd.toFixed(2),
+    laborHourlyUsd: laborHourlyUsd.toFixed(2),
     netProfitUsd: netProfit.toFixed(2),
     marginPct: marginPct.toFixed(2),
     byCategory: [...byCategory.entries()].map(([category, amountUsd]) => ({

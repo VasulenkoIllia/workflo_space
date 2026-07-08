@@ -341,6 +341,9 @@ export function FinancePage() {
               <Stat k="дохід / місяць" v={formatMoney(num(p?.revenueUsd))} tone="accent" />
               <Stat k="витрати / місяць" v={formatMoney(num(p?.expensesUsd))} />
               <Stat k="зарплата" v={formatMoney(num(p?.salaryUsd))} />
+              {num(p?.laborHourlyUsd) ? (
+                <Stat k="погодинна праця" v={formatMoney(num(p?.laborHourlyUsd))} />
+              ) : null}
               <Stat
                 k={`чистий · ${p?.marginPct ?? '—'}%`}
                 v={formatMoney(num(p?.netProfitUsd))}

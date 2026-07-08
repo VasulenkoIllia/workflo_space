@@ -37,6 +37,7 @@ export interface Pnl {
   revenueUsd: string
   expensesUsd: string
   salaryUsd: string
+  laborHourlyUsd: string
   netProfitUsd: string
   marginPct: string
   byCategory: { category: string; amountUsd: string }[]

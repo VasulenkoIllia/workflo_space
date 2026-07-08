@@ -9,6 +9,7 @@ const expenseCreate = vi.fn()
 const expenseUpdate = vi.fn()
 const expenseDelete = vi.fn()
 const rateFindMany = vi.fn()
+const laborRawMock = vi.fn() // ХВІСТ-3: $queryRaw погодинної собівартості
 const exchangeRateFindUnique = vi.fn()
 const auditLogCreate = vi.fn()
 
@@ -32,6 +33,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     executorRate: { findMany: rateFindMany },
     exchangeRate: { findUnique: exchangeRateFindUnique },
     auditLog: { create: auditLogCreate },
+    // ХВІСТ-3: погодинна собівартість праці (Σ hours×costRateUsd по виконавцях)
+    $queryRaw: laborRawMock,
   }
   return {
     prisma,
@@ -84,12 +87,14 @@ describe('computePnl (service)', () => {
       expenses?: unknown[]
       rates?: unknown[]
       rate?: { usdToUah: unknown } | null
+      labor?: Array<{ executorId: string; cost: string }>
     } = {}
   ) {
     paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec(over.revenue ?? '0') } })
     expenseFindMany.mockResolvedValue(over.expenses ?? [])
     rateFindMany.mockResolvedValue(over.rates ?? [])
     exchangeRateFindUnique.mockResolvedValue(over.rate ?? null)
+    laborRawMock.mockResolvedValue(over.labor ?? [])
   }
 
   it('netProfit = revenue − (normalized expenses + ExecutorRate salary); margin computed', async () => {
@@ -121,6 +126,32 @@ describe('computePnl (service)', () => {
     expect(pnl.expensesUsd).toBe('3000.00') // 1000 software + 2000 salary
     expect(pnl.netProfitUsd).toBe('7000.00')
     expect(pnl.marginPct).toBe('70.00')
+  })
+
+  it('ХВІСТ-3: hourly labor cost — тільки для несалярних (salaried час не подвоюємо)', async () => {
+    setup({
+      revenue: '10000.00',
+      rates: [
+        {
+          executorId: 'salaried-1',
+          monthlySalary: Dec('2000.00'),
+          currency: 'USD',
+          effectiveFrom: new Date('2026-01-01T00:00:00Z'),
+          effectiveUntil: null,
+        },
+      ],
+      // salaried-1 наробив час (не рахуємо — покрито окладом); hourly-1 → у витрати
+      labor: [
+        { executorId: 'salaried-1', cost: '900.00' },
+        { executorId: 'hourly-1', cost: '600.00' },
+      ],
+    })
+    const pnl = await computePnl({ agencyId: 'agency-1', from: '2026-06-01', to: '2026-06-30' })
+    expect(pnl.salaryUsd).toBe('2000.00')
+    expect(pnl.laborHourlyUsd).toBe('600.00') // лише hourly-1, salaried-1 виключено
+    expect(pnl.expensesUsd).toBe('2600.00') // 2000 оклад + 600 погодинна праця
+    expect(pnl.byCategory.find((c) => c.category === 'labor_hourly')?.amountUsd).toBe('600.00')
+    expect(pnl.netProfitUsd).toBe('7400.00')
   })
 
   it('normalizes a quarterly expense to a monthly run-rate', async () => {

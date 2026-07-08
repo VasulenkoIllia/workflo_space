@@ -13,9 +13,14 @@ export const EXPENSE_CAT: Record<ExpenseCategory, { label: string; color: string
   other: { label: 'Інше', color: '#94A3B8' },
 }
 
+// Синтетичні P&L-статті (не користувацькі expense-категорії): собівартість погодинної праці.
+const PNL_SYNTHETIC: Record<string, { label: string; color: string }> = {
+  labor_hourly: { label: 'Погодинна праця', color: '#FBBF24' },
+}
+
 export function catLabel(c: string): string {
-  return EXPENSE_CAT[c as ExpenseCategory]?.label ?? c
+  return EXPENSE_CAT[c as ExpenseCategory]?.label ?? PNL_SYNTHETIC[c]?.label ?? c
 }
 export function catColor(c: string): string {
-  return EXPENSE_CAT[c as ExpenseCategory]?.color ?? '#94A3B8'
+  return EXPENSE_CAT[c as ExpenseCategory]?.color ?? PNL_SYNTHETIC[c]?.color ?? '#94A3B8'
 }
