@@ -178,6 +178,11 @@ export async function refundPayment(
       await tx.order.update({ where: { id: payment.orderId }, data: { paidAt: null } })
     }
   } else {
+    // KNOWN-LIMITATION (LOW-5, аудит 08.07): refund платежу БЕЗ orderId лише перераховує
+    // moneyBalance (агрегатний баланс коректний). Якщо цей платіж був FIFO-розподілений на
+    // ServiceCharge, статус нарахування (paid) і paymentAllocation НЕ відкочуються тут → окреме
+    // нарахування може лишитись 'paid' попри повернення (дунінг його пропустить). Баланс правдивий,
+    // стан конкретного charge — застарілий. Точний фікс — реверс alloc + перерахунок charge-стану.
     moneyBalance = (
       await refreshMoneyBalance(tx, { agencyId: args.agencyId, companyId: payment.companyId })
     ).toFixed(2)

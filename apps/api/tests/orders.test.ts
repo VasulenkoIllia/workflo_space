@@ -645,6 +645,38 @@ describe('PATCH /orders/:id/status', () => {
     expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBe('owner-1')
     await app.close()
   })
+
+  // CRIT-1 (аудит 08.07): повторне приймання (reopen→знову done) НЕ перештамповує acceptedAt —
+  // інакше payout-якір переповз би у новий місяць і ті самі години нарахувались би вдруге.
+  it('re-accept keeps original acceptedAt (set-once, no double-pay)', async () => {
+    const firstAccept = new Date('2026-01-15T10:00:00Z')
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      internalStatus: 'review',
+      acceptedAt: firstAccept, // вже приймали раніше
+    })
+    orderUpdateMany.mockResolvedValue({ count: 1 })
+    orderFindUniqueOrThrow.mockResolvedValue({
+      id: 'order-1',
+      internalStatus: 'done',
+      clientStatus: 'completed',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(res.statusCode).toBe(200)
+    // acceptedAt/acceptedById НЕ у data (не перезаписуємо перше приймання)
+    expect(orderUpdateMany.mock.calls[0][0].data.acceptedAt).toBeUndefined()
+    expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBeUndefined()
+    await app.close()
+  })
 })
 
 describe('PATCH /orders/:id (edit)', () => {

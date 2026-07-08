@@ -10,9 +10,15 @@ const NOW = new Date('2026-07-06T12:00:00Z')
 
 describe('computeRevenueReport (19-А)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (payments: unknown[], companies: unknown[] = [], debt: unknown[] = []) =>
+  const db = (
+    payments: unknown[],
+    companies: unknown[] = [],
+    debt: unknown[] = [],
+    refunds: unknown[] = []
+  ) =>
     ({
       payment: { findMany: vi.fn().mockResolvedValue(payments) },
+      paymentRefund: { findMany: vi.fn().mockResolvedValue(refunds) },
       company: { findMany: vi.fn().mockResolvedValue(companies) },
       $queryRaw: vi.fn().mockResolvedValue(debt),
     }) as any
@@ -55,6 +61,38 @@ describe('computeRevenueReport (19-А)', () => {
     ])
     expect(r.byClient[0]).toMatchObject({ name: 'Acme', revenueUsd: 800, payments: 2 })
     expect(r.byClient[1]).toMatchObject({ name: 'Beta', revenueUsd: 0, payments: 1 })
+  })
+
+  it('HIGH-2: часткові повернення віднімаються НЕТТО (місяць/клієнт/тотал)', async () => {
+    const r = await computeRevenueReport(
+      db(
+        [
+          {
+            amountUsd: 1000,
+            confirmedAt: new Date('2026-05-10T00:00:00Z'),
+            companyId: 'co-1',
+            company: { name: 'Acme' },
+          },
+        ],
+        [],
+        [],
+        [
+          {
+            amountUsd: 400,
+            createdAt: new Date('2026-06-05T00:00:00Z'),
+            payment: { companyId: 'co-1', company: { name: 'Acme' } },
+          },
+        ]
+      ),
+      OPTS
+    )
+    // 1000 confirmed − 400 повернення = 600 нетто; повернення падає у свій місяць (червень)
+    expect(r.totalRevenueUsd).toBe(600)
+    expect(r.byMonth).toEqual([
+      { month: '2026-05', revenueUsd: 1000, payments: 1, newClients: 0 },
+      { month: '2026-06', revenueUsd: -400, payments: 0, newClients: 0 },
+    ])
+    expect(r.byClient[0]).toMatchObject({ name: 'Acme', revenueUsd: 600 })
   })
 
   it('merges per-currency debtor rows and computes the oldest-unpaid age', async () => {

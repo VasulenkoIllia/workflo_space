@@ -2,10 +2,10 @@ import { Prisma } from '@workflo/db'
 
 /**
  * 19-А: звіт «Виручка» — по місяцях і по клієнтах + нові клієнти + дебіторка з віком.
- * База виручки = Payment.amountUsd (confirmed) — та сама консистентна USD-база, що в
- * P&L/overview (bonus-backed платежі несуть amountUsd=0 і виручку не роздувають).
- * Дебіторка — формула billing/overview (Σ totalAmount − confirmed payments по
- * неоплачених), але per-currency + вік найстарішого неоплаченого замовлення.
+ * База виручки = Payment.amountUsd (confirmed) − PaymentRefund.amountUsd — НЕТТО, консистентно
+ * з P&L (bonus-backed платежі несуть amountUsd=0 і виручку не роздувають; часткові повернення
+ * лишають Payment 'confirmed', тож віднімаються окремо — HIGH-2, аудит 08.07). Дебіторка —
+ * Σ(totalAmount − confirmed + refunded) по неоплачених, per-currency + вік найстарішого.
  */
 
 export interface RevenueMonthRow {
@@ -43,7 +43,7 @@ export interface RevenueReport {
   debtors: DebtorRow[]
 }
 
-type Db = Pick<Prisma.TransactionClient, 'payment' | 'company' | '$queryRaw'>
+type Db = Pick<Prisma.TransactionClient, 'payment' | 'paymentRefund' | 'company' | '$queryRaw'>
 
 const round2 = (n: number): number => Math.round(n * 100) / 100
 const monthKey = (d: Date): string => d.toISOString().slice(0, 7)
@@ -56,7 +56,7 @@ export async function computeRevenueReport(
   const windowEnd = new Date(new Date(opts.to).getTime() + 86_400_000) // inclusive `to`
   const window = { gte: new Date(opts.from), lt: windowEnd }
 
-  const [payments, newCompanies, debtRows] = await Promise.all([
+  const [payments, refunds, newCompanies, debtRows] = await Promise.all([
     db.payment.findMany({
       where: { agencyId: opts.agencyId, status: 'confirmed', confirmedAt: window },
       select: {
@@ -67,17 +67,29 @@ export async function computeRevenueReport(
       },
       take: 5000,
     }),
+    // HIGH-2 (аудит 08.07): часткові повернення лишають Payment 'confirmed' з повною сумою —
+    // тож виручка (місяць/клієнт/тотал) НЕТТО: мінус PaymentRefund у вікні (за датою повернення).
+    db.paymentRefund.findMany({
+      where: { agencyId: opts.agencyId, createdAt: window },
+      select: {
+        amountUsd: true,
+        createdAt: true,
+        payment: { select: { companyId: true, company: { select: { name: true } } } },
+      },
+      take: 5000,
+    }),
     db.company.findMany({
       where: { agencyId: opts.agencyId, createdAt: window },
       select: { createdAt: true },
       take: 1000,
     }),
-    // Дебіторка per-currency + вік найстарішого неоплаченого замовлення (поточний стан)
+    // Дебіторка per-currency + вік найстарішого неоплаченого замовлення (поточний стан).
+    // Нетто-оплата = confirmed − refunds, тож борг = total − paid + refunded (HIGH-2).
     db.$queryRaw<
       { companyId: string; name: string; currency: string; debt: unknown; oldest: Date }[]
     >(Prisma.sql`
       SELECT o."companyId" AS "companyId", c."name" AS name, o."currency" AS currency,
-             SUM(o."totalAmount" - COALESCE(p.paid, 0)) AS debt,
+             SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) AS debt,
              MIN(o."createdAt") AS oldest
       FROM "orders" o
       JOIN "companies" c ON c."id" = o."companyId"
@@ -86,13 +98,20 @@ export async function computeRevenueReport(
         FROM "payments" WHERE "status" = 'confirmed'
         GROUP BY "orderId"
       ) p ON p."orderId" = o."id"
+      LEFT JOIN (
+        SELECT pay."orderId", SUM(r."amount") AS refunded
+        FROM "payment_refunds" r
+        JOIN "payments" pay ON pay."id" = r."paymentId"
+        WHERE pay."status" = 'confirmed'
+        GROUP BY pay."orderId"
+      ) pr ON pr."orderId" = o."id"
       WHERE o."agencyId" = ${opts.agencyId}
         AND o."paidAt" IS NULL
         AND o."totalAmount" IS NOT NULL
         AND o."deletedAt" IS NULL
         AND o."companyId" IS NOT NULL
       GROUP BY o."companyId", c."name", o."currency"
-      HAVING SUM(o."totalAmount" - COALESCE(p.paid, 0)) > 0
+      HAVING SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) > 0
     `),
   ])
 
@@ -127,6 +146,25 @@ export async function computeRevenueReport(
     c.revenueUsd = round2(c.revenueUsd + usd)
     c.payments += 1
     clients.set(p.companyId, c)
+  }
+  // HIGH-2: віднімаємо повернення НЕТТО (місяць за датою повернення, клієнт за платежем, тотал).
+  for (const r of refunds) {
+    const usd = Number(r.amountUsd ?? 0)
+    if (usd === 0) continue
+    totalRevenueUsd -= usd
+    const m = ensureMonth(monthKey(r.createdAt))
+    m.revenueUsd = round2(m.revenueUsd - usd)
+    const cid = r.payment.companyId
+    if (cid) {
+      const c = clients.get(cid) ?? {
+        companyId: cid,
+        name: r.payment.company?.name ?? '—',
+        revenueUsd: 0,
+        payments: 0,
+      }
+      c.revenueUsd = round2(c.revenueUsd - usd)
+      clients.set(cid, c)
+    }
   }
   for (const co of newCompanies) {
     ensureMonth(monthKey(co.createdAt)).newClients += 1

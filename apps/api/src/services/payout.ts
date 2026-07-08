@@ -173,7 +173,11 @@ export async function generatePayout(
   const baseSalary = new Prisma.Decimal(rate?.monthlySalary ?? 0)
   const currency = rate?.currency ?? 'USD'
   const commissionPct = new Prisma.Decimal(rate?.commissionPercent ?? 0)
-  const payHourly = new Prisma.Decimal(rate?.hourlyRate ?? 0)
+  // Оклад XOR погодинна: якщо є місячний оклад — hourlyRate тут лише cost-basis для маржі
+  // (rateResolution/P&L), а НЕ ставка виплати. Інакше окладник отримав би оклад + погодинну
+  // зверху за ті самі години (MED-3, аудит 08.07). Погодинну платимо лише безокладним.
+  const payHourly =
+    rate?.monthlySalary != null ? new Prisma.Decimal(0) : new Prisma.Decimal(rate?.hourlyRate ?? 0)
 
   const [hoursAgg, paidAgg, commAgg] = await Promise.all([
     tx.timeLog.aggregate({
@@ -204,6 +208,10 @@ export async function generatePayout(
       _sum: { amountUsd: true },
     }),
   ])
+  // FOLLOW-UP (аудит 08.07, HIGH-2): commissionBase — БРУТТО confirmed (без відніму
+  // PaymentRefund). Свідомо не віднімаємо тут: клавбек комісії за частковим поверненням у
+  // вже виплаченому періоді → потребує окремої політики (негативний рядок/утримання), інакше
+  // виникали б від'ємні payout-и. P&L/виручка вже НЕТТО; комісія-клавбек — окремий зріз.
   const billableHours = hoursAgg._sum.hours ?? new Prisma.Decimal(0)
   const paidHours = paidAgg._sum.payableHours ?? new Prisma.Decimal(0)
   const hourlyEarned = paidHours.times(payHourly).toDecimalPlaces(2)

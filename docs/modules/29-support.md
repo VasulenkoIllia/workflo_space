@@ -5,12 +5,13 @@
 > ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
 
 > App: Portal (клієнт) + Workspace (команда) / API · Залежить від: **01-auth**, **03-chat** (thread-патерн), **07-notifications**, **18-chat-hub** (inbox).
-> Статус: **Спец** · Створено: 1.06.2026 · Модуль **29** (рішення власника 1.06: окрема тікет-система).
+> Статус: **MVP реалізовано (SUP-MVP, 2026-07-07)** — Ticket/TicketMessage, portal+workspace роути,
+> SSE, leak-guard внутрішніх нотаток, черга/призначення. Canned replies + KB + CSAT — post-MVP. Модуль **29**.
 > Закриває прогалину аудиту #2: чат привʼязаний до замовлення; загальні звернення/підтримка (без order) ніде не жили.
 
 ---
 
-> 🔄 **design-v2 (2026-06-20):** доставлено **support-plus** — 7 екранів (canned replies з {{variables}}, KB-статті + статистика, portal help, CSAT-рейтинг): [`workspace-support-plus.jsx`](../../design-v2/project/workspace-support-plus.jsx). 🔴 **бекенд greenfield** (звірено): тікет/KB моделі/route нема. W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+> 🔄 **design-v2 (2026-06-20):** доставлено **support-plus** — 7 екранів (canned replies з {{variables}}, KB-статті + статистика, portal help, CSAT-рейтинг): [`workspace-support-plus.jsx`](../../design-v2/project/workspace-support-plus.jsx). ✅ **бекенд MVP збудовано (SUP-MVP 2026-07-07):** тікет-ядро+тред+SSE є; canned replies / KB / CSAT — post-MVP. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
 
 ## 0. Навіщо
 

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const paymentAggregate = vi.fn()
+const paymentRefundAggregate = vi.fn() // HIGH-2: нетто-виручка (мінус повернення)
 const expenseFindMany = vi.fn()
 const expenseFindUnique = vi.fn()
 const expenseCreate = vi.fn()
@@ -23,6 +24,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
   Dec = (v: string | number) => new Prisma.Decimal(v)
   const prisma = {
     payment: { aggregate: paymentAggregate },
+    paymentRefund: { aggregate: paymentRefundAggregate },
     expense: {
       findMany: expenseFindMany,
       findUnique: expenseFindUnique,
@@ -88,9 +90,11 @@ describe('computePnl (service)', () => {
       rates?: unknown[]
       rate?: { usdToUah: unknown } | null
       labor?: Array<{ executorId: string; cost: string }>
+      refunds?: string
     } = {}
   ) {
     paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec(over.revenue ?? '0') } })
+    paymentRefundAggregate.mockResolvedValue({ _sum: { amountUsd: Dec(over.refunds ?? '0') } })
     expenseFindMany.mockResolvedValue(over.expenses ?? [])
     rateFindMany.mockResolvedValue(over.rates ?? [])
     exchangeRateFindUnique.mockResolvedValue(over.rate ?? null)
@@ -152,6 +156,15 @@ describe('computePnl (service)', () => {
     expect(pnl.expensesUsd).toBe('2600.00') // 2000 оклад + 600 погодинна праця
     expect(pnl.byCategory.find((c) => c.category === 'labor_hourly')?.amountUsd).toBe('600.00')
     expect(pnl.netProfitUsd).toBe('7400.00')
+  })
+
+  it('HIGH-2: виручка НЕТТО — часткові повернення віднімаються (маржа не завищена)', async () => {
+    setup({ revenue: '10000.00', refunds: '2500.00' })
+    const pnl = await computePnl({ agencyId: 'agency-1', from: '2026-06-01', to: '2026-06-30' })
+    // 10000 confirmed − 2500 повернень = 7500 нетто-виручки (без витрат → = netProfit)
+    expect(pnl.revenueUsd).toBe('7500.00')
+    expect(pnl.netProfitUsd).toBe('7500.00')
+    expect(pnl.marginPct).toBe('100.00')
   })
 
   it('normalizes a quarterly expense to a monthly run-rate', async () => {
@@ -333,9 +346,11 @@ describe('expenses CRUD', () => {
 describe('GET /workspace/reports/pnl', () => {
   it('owner gets the P&L; CSV variant sets text/csv', async () => {
     paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('0') } })
+    paymentRefundAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('0') } })
     expenseFindMany.mockResolvedValue([])
     rateFindMany.mockResolvedValue([])
     exchangeRateFindUnique.mockResolvedValue(null)
+    laborRawMock.mockResolvedValue([])
     const { app, token } = await authed(OWNER)
     const json = await app.inject({
       method: 'GET',

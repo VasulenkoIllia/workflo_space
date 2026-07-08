@@ -5,8 +5,9 @@ import { type FxRates, toUsd } from './currency.js'
  * Profit & Loss (S5-10, module 22). `netProfit = revenue − expenses` over a date
  * window, everything normalized to USD.
  *
- *  - revenue = Σ Payment.amountUsd (confirmed) in the window. Bonus-backed payments
- *    carry amountUsd=0, so they never inflate revenue.
+ *  - revenue = Σ Payment.amountUsd (confirmed) − Σ PaymentRefund.amountUsd, both in the
+ *    window (НЕТТО: часткові повернення лишають Payment 'confirmed', тож віднімаємо їх окремо;
+ *    HIGH-2, аудит 08.07). Bonus-backed payments carry amountUsd=0, so they never inflate revenue.
  *  - expenses = operator expenses + salary. Recurring expenses are normalized to a
  *    monthly run-rate (monthly=×1, quarterly÷3, annual÷12) and counted for each month
  *    of the window they are active; one-time expenses land fully in their start month.
@@ -87,13 +88,19 @@ export async function computePnl(args: {
   const months = monthsInRange(from, to)
 
   const data = await withTenant(async (tx) => {
-    const [revenueAgg, expenses, rates, rate, laborRows] = await Promise.all([
+    const [revenueAgg, refundAgg, expenses, rates, rate, laborRows] = await Promise.all([
       tx.payment.aggregate({
         where: {
           agencyId: args.agencyId,
           status: 'confirmed',
           confirmedAt: { gte: from, lte: to },
         },
+        _sum: { amountUsd: true },
+      }),
+      // HIGH-2 (аудит 08.07): часткові повернення лишають Payment 'confirmed' з повною сумою —
+      // тож виручку треба брати НЕТТО (мінус PaymentRefund у вікні), інакше маржа завищена.
+      tx.paymentRefund.aggregate({
+        where: { agencyId: args.agencyId, createdAt: { gte: from, lte: to } },
         _sum: { amountUsd: true },
       }),
       tx.expense.findMany({
@@ -134,14 +141,15 @@ export async function computePnl(args: {
         GROUP BY t."executorId"
       `,
     ])
-    return { revenueAgg, expenses, rates, rate, laborRows }
+    return { revenueAgg, refundAgg, expenses, rates, rate, laborRows }
   })
 
   const rates: FxRates = {
     usdToUah: data.rate?.usdToUah ?? null,
     eurToUah: data.rate?.eurToUah ?? null,
   }
-  const revenueUsd = data.revenueAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const refundsUsd = data.refundAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const revenueUsd = (data.revenueAgg._sum.amountUsd ?? new Prisma.Decimal(0)).minus(refundsUsd)
 
   const byCategory = new Map<string, Prisma.Decimal>()
   const add = (category: string, amount: Prisma.Decimal) => {
@@ -178,6 +186,10 @@ export async function computePnl(args: {
   // ХВІСТ-3: собівартість погодинної праці. Виконавці з активним окладом у періоді
   // вже враховані через salary → їхній час НЕ додаємо (без подвійного рахунку). Решта
   // (погодинники/контрактори) → Σ(hours × costRateUsd) стає окремою статтею витрат.
+  // KNOWN-LIMITATION (MED-4, аудит 08.07): виключення — по ВСЬОМУ вікну, не помісячно. Якщо
+  // виконавець салярний лише частину багатомісячного вікна (потім перейшов на погодинну), його
+  // погодинні години теж викидаються → собівартість трохи занижена на межі зміни ставки.
+  // Рідкісний край; точний фікс — помісячна сегментація salariedIds (окремий зріз).
   const salariedIds = new Set<string>()
   for (const r of data.rates) {
     if (!r.monthlySalary) continue

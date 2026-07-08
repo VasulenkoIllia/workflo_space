@@ -186,6 +186,41 @@ describe('generatePayout (service)', () => {
     expect(res.total).toBe('200.00')
   })
 
+  // MED-3 (аудит 08.07): окладник із заданим hourlyRate (як cost-basis для маржі) НЕ отримує
+  // погодинну ЗВЕРХУ окладу. hourlyRate тут лише собівартість; виплата — оклад XOR погодинна.
+  it('MED-3: salaried + hourlyRate → hourlyEarned 0 (не подвоюємо оклад погодинною)', async () => {
+    payoutFindUnique.mockResolvedValue(null)
+    rateFindFirst.mockResolvedValue({
+      monthlySalary: Dec('2000.00'),
+      hourlyRate: Dec('40.00'), // cost-basis для P&L/маржі, НЕ ставка виплати
+      commissionPercent: Dec('0.00'),
+      currency: 'USD',
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('10.00') } })
+    settlementAggregate.mockResolvedValue({ _sum: { payableHours: Dec('8.00') } }) // прийнято 8
+    paymentAggregate.mockResolvedValue({ _sum: { amountUsd: null } })
+    payoutUpsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: PAYOUT_ID,
+        executorId: EXEC_ID,
+        period: '2026-06',
+        ...create,
+        status: 'draft',
+        approvedBy: null,
+        paidAt: null,
+      })
+    )
+    const res = await generatePayout(mockTx as never, {
+      agencyId: 'agency-1',
+      executorId: EXEC_ID,
+      period: '2026-06',
+    })
+    expect(res.baseSalary).toBe('2000.00')
+    expect(res.paidHours).toBe('8.00') // прийняті години фіксуються (інфо/статистика)
+    expect(res.hourlyEarned).toBe('0.00') // але НЕ платимо їх зверху окладу
+    expect(res.total).toBe('2000.00') // лише оклад
+  })
+
   it('does not recompute an approved payout (idempotent / no clobber)', async () => {
     payoutFindUnique.mockResolvedValue({
       id: PAYOUT_ID,

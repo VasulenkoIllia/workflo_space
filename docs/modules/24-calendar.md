@@ -5,13 +5,14 @@
 > ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
 
 > App: Workspace + Portal (clients see meetings they're invited to)
-> Статус: Проєктування (post-MVP, complexity: L — large)
+> Статус: **MVP реалізовано (CAL-MVP, 2026-07-07)** — модель CalendarEvent/CalendarAttendee, роути
+> `/calendar/*`, місячна сітка, respond/RSVP, reminder-cron. Booking-типи/відпустки — post-MVP. Див. UPDATE нижче.
 > Залежить від: `07-notifications` (з розширенням recipient), `01-auth`, `23-leave`
-> Оновлено: 29 травня 2026
+> Оновлено: 8 липня 2026 (drift-звірка r5)
 
 ---
 
-> 🔄 **design-v2 (2026-06-20):** доставлено **calendar-plus** — налаштування календаря, типи бронювань (video/phone/inperson + провайдери), відпустки: [`workspace-calendar-plus.jsx`](../../design-v2/project/workspace-calendar-plus.jsx). 🔴 **бекенд greenfield** (звірено): calendar/booking моделі/route нема (відпустки — частково модуль 23). W2 за планом. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+> 🔄 **design-v2 (2026-06-20):** доставлено **calendar-plus** — налаштування календаря, типи бронювань (video/phone/inperson + провайдери), відпустки: [`workspace-calendar-plus.jsx`](../../design-v2/project/workspace-calendar-plus.jsx). ✅ **бекенд MVP збудовано (CAL-MVP 2026-07-07):** зустрічі/RSVP/reminder-cron є; booking-типи (video/phone/inperson) + відпустки (модуль 23) — post-MVP. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
 
 ## Огляд
 

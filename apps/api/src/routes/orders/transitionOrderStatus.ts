@@ -44,6 +44,9 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             // ПРИЙМАННЯ: для нотифікацій submit/accept/send-back
             assigneeId: true,
             submittedById: true,
+            // acceptedAt — payroll-якір: штампуємо ОДИН раз (перше приймання), щоб reopen→
+            // повторне приймання в іншому місяці не зсувало settlements у новий payout-період.
+            acceptedAt: true,
             coAssignees: { select: { profileId: true } },
             // 02-В advance gate (hourly_prepaid only): needs the project's model + the
             // client's money-account balance. contractRequired — 06-ДОГОВІР-2 каскад.
@@ -184,7 +187,10 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         data.submittedAt = now
         data.submittedById = user.sub
       }
-      if (to === OrderInternalStatus.DONE) {
+      // acceptedAt/acceptedById — set-once: якщо замовлення вже приймали (reopen→revision→
+      // знову done), НЕ перезаписуємо. Інакше payout-якір (order.acceptedAt) переповз би у
+      // новий місяць і ті самі payableHours нарахувалися б удруге (CRIT-1, аудит 08.07).
+      if (to === OrderInternalStatus.DONE && !order.acceptedAt) {
         data.acceptedAt = now
         data.acceptedById = user.sub
       }

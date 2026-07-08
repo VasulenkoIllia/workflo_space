@@ -281,12 +281,10 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
         }
       }
 
-      return reply
-        .status(201)
-        .send({
-          success: true,
-          data: { message: serializeTicketMessage(message, access.agencyId) },
-        })
+      return reply.status(201).send({
+        success: true,
+        data: { message: serializeTicketMessage(message, access.agencyId) },
+      })
     }
   )
 
@@ -349,7 +347,23 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
         if (body.status === 'resolved') data.resolvedAt = new Date()
       }
       if (body.priority !== undefined) data.priority = body.priority
-      if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId
+      if (body.assignedToId !== undefined) {
+        // Призначати можна лише члена ЦІЄЇ агенції — інакше чужий profileId отримав би
+        // нотифікацію з темою+id тікета, а черга б зіпсувалась (LOW-1, аудит 08.07).
+        const assignee = body.assignedToId
+        if (assignee !== null) {
+          const member = await withTenant((tx) =>
+            tx.agencyMember.findFirst({
+              where: { agencyId, profileId: assignee },
+              select: { profileId: true },
+            })
+          )
+          if (!member) {
+            throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Виконавець не є членом агенції', 400)
+          }
+        }
+        data.assignedToId = assignee
+      }
       if (body.category !== undefined) data.category = body.category
 
       const updated = await withTenant((tx) =>

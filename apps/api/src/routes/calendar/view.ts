@@ -22,7 +22,7 @@ interface CalendarViewItem {
 const calendarViewRoute: FastifyPluginAsync = (fastify) => {
   fastify.get('/calendar/view', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const user = request.user
-    requireActiveAgency(user)
+    const agencyId = requireActiveAgency(user)
     const q = request.query as { from?: string; to?: string }
     const from = q.from ? new Date(q.from) : new Date()
     const to = q.to ? new Date(q.to) : new Date(from.getTime() + 31 * 86_400_000)
@@ -46,9 +46,11 @@ const calendarViewRoute: FastifyPluginAsync = (fastify) => {
             company: { select: { name: true } },
           },
         }),
-        // Дедлайни: команда — усі; клієнт — лише своїх компаній
+        // Дедлайни: команда — усі; клієнт — лише своїх компаній. Явний agencyId — app-рівнева
+        // межа тенанта симетрично з рештою роутів (не покладаємось лише на RLS-GUC; INFO, аудит 08.07).
         tx.order.findMany({
           where: {
+            agencyId,
             deletedAt: null,
             deadline: { not: null, gte: from, lte: to },
             ...(isTeam ? {} : { companyId: { in: companyIds } }),
