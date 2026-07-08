@@ -814,8 +814,10 @@ const HRS = (n: number | null | undefined): string =>
 /**
  * ПРИЙМАННЯ РОБОТИ (07.07): виконавець здає (in_progress→review), owner/manager приймає
  * (review→done). Показує 4 числа — План / Факт (Σ TimeLog, не редагується) / Білабельно
- * (клієнту) / До-оплати (виконавцям). Owner/manager у статусі review коригує білабельні +
- * оплатні години й приймає або повертає на доопрацювання.
+ * (клієнту) / До-оплати (виконавцям) + per-executor розбивку. Ростер звірки = ВСІ причетні
+ * (співвиконавці замовлення + виконавці задач замовлення), тож owner може розподілити оплату
+ * на будь-кого залученого, а не лише на тих, хто залогував час. Owner/manager у статусі review
+ * коригує білабельні + оплатні години й приймає або повертає на доопрацювання.
  */
 function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
   const a = order.acceptance
@@ -834,6 +836,11 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
   const inReview = status === OrderInternalStatus.REVIEW
   const accepted = status === OrderInternalStatus.DONE
   const payableTotal = a.executors.reduce((s, e) => s + e.payableHours, 0)
+  // Ростер тепер = всі причетні (співвиконавці замовлення + виконавці задач), навіть без факту.
+  // У перегляді ховаємо «0 → 0» (не засмічуємо), у редагуванні показуємо всіх для розподілу.
+  const rosterView = editing
+    ? a.executors
+    : a.executors.filter((e) => e.trackedHours > 0 || e.payableHours > 0)
 
   const startEdit = () => {
     setBillable(a.billableHours != null ? String(a.billableHours) : '')
@@ -885,12 +892,12 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
       </div>
 
       {/* Розбивка по виконавцях */}
-      {a.executors.length > 0 && (
+      {rosterView.length > 0 && (
         <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
           <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-            // факт → до оплати
+            {editing ? '// усі причетні — розподіли оплату' : '// факт → до оплати'}
           </div>
-          {a.executors.map((e) => (
+          {rosterView.map((e) => (
             <div
               key={e.profileId}
               style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}

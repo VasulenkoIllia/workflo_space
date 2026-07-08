@@ -72,6 +72,14 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
                 profile: { select: { id: true, name: true } },
               },
             },
+            // ПРИЙМАННЯ money-loop: причетні через ЗАДАЧІ замовлення (не лише order-level
+            // assignee/co-assignees) — щоб ростер звірки бачив і виконавців окремих задач.
+            internalTasks: {
+              select: {
+                assigneeId: true,
+                coAssignees: { select: { profileId: true } },
+              },
+            },
             project: { select: { id: true, name: true, billingModel: true } },
             tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
             firstResponseDueAt: true,
@@ -130,7 +138,26 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
       )
       const trackedMap = new Map(groups.map((g) => [g.executorId, Number(g._sum.hours ?? 0)]))
       const settleMap = new Map(order.settlements.map((s) => [s.profileId, Number(s.payableHours)]))
-      const execIds = [...new Set([...trackedMap.keys(), ...settleMap.keys()])]
+      // Ростер звірки = ВСІ причетні, а не лише ті, хто залогував час: головний виконавець +
+      // співвиконавці замовлення + виконавці задач (assignee/co-assignees задач) + автори
+      // TimeLog + наявні звірки. Так owner може розподілити оплату на будь-кого залученого
+      // (напр. співвиконавець рев'юїв, але часу не бив), а не лише на тих, хто має факт.
+      const execIds: string[] = []
+      const seenExec = new Set<string>()
+      const addExec = (id: string | null | undefined) => {
+        if (id && !seenExec.has(id)) {
+          seenExec.add(id)
+          execIds.push(id)
+        }
+      }
+      addExec(order.assignee?.id)
+      for (const c of order.coAssignees ?? []) addExec(c.profile.id)
+      for (const t of order.internalTasks ?? []) {
+        addExec(t.assigneeId)
+        for (const ca of t.coAssignees ?? []) addExec(ca.profileId)
+      }
+      for (const id of trackedMap.keys()) addExec(id)
+      for (const id of settleMap.keys()) addExec(id)
       const nameById = new Map<string, string>()
       if (order.assignee) nameById.set(order.assignee.id, order.assignee.name)
       for (const c of order.coAssignees) nameById.set(c.profile.id, c.profile.name)

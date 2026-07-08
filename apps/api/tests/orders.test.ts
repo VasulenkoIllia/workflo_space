@@ -73,7 +73,11 @@ vi.mock('@workflo/db', async (importOriginal) => {
       findMany: vi.fn().mockResolvedValue([]),
     },
     // S10: mark-read publishes the reader's name to the live bus.
-    profile: { findUnique: vi.fn().mockResolvedValue({ name: 'Тест' }) },
+    // ПРИЙМАННЯ money-loop: getOrder резолвить імена причетних задачами (findMany).
+    profile: {
+      findUnique: vi.fn().mockResolvedValue({ name: 'Тест' }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     timeLog: {
       findMany: timeLogFindMany,
       create: timeLogCreate,
@@ -344,6 +348,8 @@ describe('GET /orders/:id', () => {
       payableHours: unknown
       profile: { id: string; name: string }
     }[],
+    // ПРИЙМАННЯ money-loop: ростер звірки тягне і причетних задачами
+    internalTasks: [] as { assigneeId: string | null; coAssignees: { profileId: string }[] }[],
     id: 'order-1',
     agencyId: 'agency-1',
     companyId: 'company-1',
@@ -400,6 +406,35 @@ describe('GET /orders/:id', () => {
     const o = res.json().data.order
     expect(o.internalStatus).toBe('in_progress')
     expect(o.assignee).toEqual({ id: 'exec-1', name: 'Olena' })
+    await app.close()
+  })
+
+  it('acceptance roster includes co-executors + task performers with no logged time', async () => {
+    // Money-loop: owner має бачити у звірці ВСІХ причетних — співвиконавця замовлення (без факту)
+    // + виконавців задач замовлення — щоб розподілити оплату, а не лише тих, хто бив час.
+    orderFindUnique.mockResolvedValue({
+      ...fullOrder,
+      assignee: { id: 'exec-1', name: 'Olena' },
+      coAssignees: [{ profile: { id: 'exec-2', name: 'Bohdan' } }],
+      internalTasks: [{ assigneeId: 'exec-3', coAssignees: [{ profileId: 'exec-4' }] }],
+    })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const execs = res.json().data.order.acceptance.executors as {
+      profileId: string
+      trackedHours: number
+      payableHours: number
+    }[]
+    expect(execs.map((e) => e.profileId)).toEqual(
+      expect.arrayContaining(['exec-1', 'exec-2', 'exec-3', 'exec-4'])
+    )
+    // ніхто не бив час → факт 0 у всіх (але вони в ростері для розподілу)
+    expect(execs.every((e) => e.trackedHours === 0 && e.payableHours === 0)).toBe(true)
     await app.close()
   })
 
