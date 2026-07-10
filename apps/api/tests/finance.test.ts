@@ -165,6 +165,11 @@ describe('computePnl (service)', () => {
     expect(pnl.revenueUsd).toBe('7500.00')
     expect(pnl.netProfitUsd).toBe('7500.00')
     expect(pnl.marginPct).toBe('100.00')
+    // М-1 (мета-аудит): рахуються ЛИШЕ refund-и confirmed-платежів — повний refund флипає
+    // платіж у 'refunded' (він уже випав з revenueAgg), його рядки віднімати не можна.
+    expect(paymentRefundAggregate.mock.calls[0][0].where.payment).toEqual({
+      is: { status: 'confirmed' },
+    })
   })
 
   it('normalizes a quarterly expense to a monthly run-rate', async () => {

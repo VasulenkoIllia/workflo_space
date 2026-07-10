@@ -190,6 +190,11 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       // acceptedAt/acceptedById — set-once: якщо замовлення вже приймали (reopen→revision→
       // знову done), НЕ перезаписуємо. Інакше payout-якір (order.acceptedAt) переповз би у
       // новий місяць і ті самі payableHours нарахувалися б удруге (CRIT-1, аудит 08.07).
+      // TRADE-OFF (мета-аудит М-3, свідомо): якщо після reopen у НОВОМУ місяці додали роботу
+      // і підняли payableHours — дельта якориться на старий (можливо вже approved) період і
+      // авто-виплатою НЕ підхопиться → недоплату видно у звірці, owner коригує вручну.
+      // Обрано менше зло: тиха переплата двічі гірша за видиму недоплату. Точний фікс —
+      // period-aware settlements (окремий зріз, якщо reopen-через-місяць стане частим).
       if (to === OrderInternalStatus.DONE && !order.acceptedAt) {
         data.acceptedAt = now
         data.acceptedById = user.sub

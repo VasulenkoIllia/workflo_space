@@ -69,8 +69,14 @@ export async function computeRevenueReport(
     }),
     // HIGH-2 (аудит 08.07): часткові повернення лишають Payment 'confirmed' з повною сумою —
     // тож виручка (місяць/клієнт/тотал) НЕТТО: мінус PaymentRefund у вікні (за датою повернення).
+    // Лише refund-и confirmed-платежів (мета-аудит М-1): повний refund флипає платіж у
+    // 'refunded' → він уже випав із payments вище; віднімати його refund-рядки = подвійний мінус.
     db.paymentRefund.findMany({
-      where: { agencyId: opts.agencyId, createdAt: window },
+      where: {
+        agencyId: opts.agencyId,
+        createdAt: window,
+        payment: { is: { status: 'confirmed' } },
+      },
       select: {
         amountUsd: true,
         createdAt: true,

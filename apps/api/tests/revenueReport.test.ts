@@ -64,30 +64,33 @@ describe('computeRevenueReport (19-А)', () => {
   })
 
   it('HIGH-2: часткові повернення віднімаються НЕТТО (місяць/клієнт/тотал)', async () => {
-    const r = await computeRevenueReport(
-      db(
-        [
-          {
-            amountUsd: 1000,
-            confirmedAt: new Date('2026-05-10T00:00:00Z'),
-            companyId: 'co-1',
-            company: { name: 'Acme' },
-          },
-        ],
-        [],
-        [],
-        [
-          {
-            amountUsd: 400,
-            createdAt: new Date('2026-06-05T00:00:00Z'),
-            payment: { companyId: 'co-1', company: { name: 'Acme' } },
-          },
-        ]
-      ),
-      OPTS
+    const d = db(
+      [
+        {
+          amountUsd: 1000,
+          confirmedAt: new Date('2026-05-10T00:00:00Z'),
+          companyId: 'co-1',
+          company: { name: 'Acme' },
+        },
+      ],
+      [],
+      [],
+      [
+        {
+          amountUsd: 400,
+          createdAt: new Date('2026-06-05T00:00:00Z'),
+          payment: { companyId: 'co-1', company: { name: 'Acme' } },
+        },
+      ]
     )
+    const r = await computeRevenueReport(d, OPTS)
     // 1000 confirmed − 400 повернення = 600 нетто; повернення падає у свій місяць (червень)
     expect(r.totalRevenueUsd).toBe(600)
+    // М-1: запит рефандів фільтрує payment.status='confirmed' (повний refund → платіж
+    // 'refunded' вже випав із payments; його refund-рядки = подвійний мінус, не рахуємо)
+    expect(d.paymentRefund.findMany.mock.calls[0][0].where.payment).toEqual({
+      is: { status: 'confirmed' },
+    })
     expect(r.byMonth).toEqual([
       { month: '2026-05', revenueUsd: 1000, payments: 1, newClients: 0 },
       { month: '2026-06', revenueUsd: -400, payments: 0, newClients: 0 },

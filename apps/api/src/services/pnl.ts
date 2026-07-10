@@ -99,8 +99,15 @@ export async function computePnl(args: {
       }),
       // HIGH-2 (аудит 08.07): часткові повернення лишають Payment 'confirmed' з повною сумою —
       // тож виручку треба брати НЕТТО (мінус PaymentRefund у вікні), інакше маржа завищена.
+      // Рахуємо ЛИШЕ refund-и confirmed-платежів (мета-аудит М-1): повний refund флипає платіж
+      // у 'refunded' → він уже випав з revenueAgg, і його refund-рядки віднімати НЕ можна
+      // (було б подвійне віднімання). Той самий патерн, що refund-JOIN у recomputeMoneyBalance.
       tx.paymentRefund.aggregate({
-        where: { agencyId: args.agencyId, createdAt: { gte: from, lte: to } },
+        where: {
+          agencyId: args.agencyId,
+          createdAt: { gte: from, lte: to },
+          payment: { is: { status: 'confirmed' } },
+        },
         _sum: { amountUsd: true },
       }),
       tx.expense.findMany({

@@ -221,6 +221,40 @@ describe('generatePayout (service)', () => {
     expect(res.total).toBe('2000.00') // лише оклад
   })
 
+  // М-2 (мета-аудит 08.07): схема дозволяє monthlySalary=0 — такий виконавець фактично
+  // погодинник, гейт «оклад XOR погодинна» має дивитись на ФАКТИЧНИЙ оклад >0, не на not-null.
+  it('М-2: monthlySalary=0 + hourlyRate → погодинна ПЛАТИТЬСЯ (0-оклад ≠ окладник)', async () => {
+    payoutFindUnique.mockResolvedValue(null)
+    rateFindFirst.mockResolvedValue({
+      monthlySalary: Dec('0'),
+      hourlyRate: Dec('40.00'),
+      commissionPercent: Dec('0.00'),
+      currency: 'USD',
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('10.00') } })
+    settlementAggregate.mockResolvedValue({ _sum: { payableHours: Dec('5.00') } })
+    paymentAggregate.mockResolvedValue({ _sum: { amountUsd: null } })
+    payoutUpsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: PAYOUT_ID,
+        executorId: EXEC_ID,
+        period: '2026-06',
+        ...create,
+        status: 'draft',
+        approvedBy: null,
+        paidAt: null,
+      })
+    )
+    const res = await generatePayout(mockTx as never, {
+      agencyId: 'agency-1',
+      executorId: EXEC_ID,
+      period: '2026-06',
+    })
+    expect(res.baseSalary).toBe('0.00')
+    expect(res.hourlyEarned).toBe('200.00') // 5 × 40 — платимо, бо фактичного окладу нема
+    expect(res.total).toBe('200.00')
+  })
+
   it('does not recompute an approved payout (idempotent / no clobber)', async () => {
     payoutFindUnique.mockResolvedValue({
       id: PAYOUT_ID,

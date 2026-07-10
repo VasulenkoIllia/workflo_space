@@ -176,8 +176,11 @@ export async function generatePayout(
   // Оклад XOR погодинна: якщо є місячний оклад — hourlyRate тут лише cost-basis для маржі
   // (rateResolution/P&L), а НЕ ставка виплати. Інакше окладник отримав би оклад + погодинну
   // зверху за ті самі години (MED-3, аудит 08.07). Погодинну платимо лише безокладним.
-  const payHourly =
-    rate?.monthlySalary != null ? new Prisma.Decimal(0) : new Prisma.Decimal(rate?.hourlyRate ?? 0)
+  // Гейт по ФАКТИЧНОМУ окладу >0, не по not-null (мета-аудит М-2): схема дозволяє
+  // monthlySalary=0 — такий виконавець фактично погодинник і має отримати hourlyEarned.
+  const payHourly = baseSalary.greaterThan(0)
+    ? new Prisma.Decimal(0)
+    : new Prisma.Decimal(rate?.hourlyRate ?? 0)
 
   const [hoursAgg, paidAgg, commAgg] = await Promise.all([
     tx.timeLog.aggregate({
