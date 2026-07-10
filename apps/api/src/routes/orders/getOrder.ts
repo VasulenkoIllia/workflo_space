@@ -77,6 +77,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             internalTasks: {
               select: {
                 assigneeId: true,
+                status: true,
                 coAssignees: { select: { profileId: true } },
               },
             },
@@ -175,7 +176,12 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         trackedHours: trackedMap.get(id) ?? 0,
         payableHours: settleMap.has(id) ? (settleMap.get(id) as number) : (trackedMap.get(id) ?? 0),
       }))
+      // TASK-COLUMNS: підказка «всі задачі виконані — час здавати на приймання» (рішення
+      // власника 10.07: задачі НЕ рухають статус замовлення автоматично, лише підказують).
+      const boardTasks = order.internalTasks ?? []
+      const allTasksDone = boardTasks.length > 0 && boardTasks.every((t) => t.status === 'done')
       const acceptance = {
+        allTasksDone,
         submittedAt: order.submittedAt,
         submittedBy: order.submittedBy,
         acceptedAt: order.acceptedAt,

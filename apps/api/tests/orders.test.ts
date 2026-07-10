@@ -14,6 +14,7 @@ const taskFindMany = vi.fn()
 const taskCreate = vi.fn()
 const taskFindUnique = vi.fn()
 const taskUpdate = vi.fn()
+const teamColumnFindFirst = vi.fn() // TASK-COLUMNS: мірор колонка→статус
 const taskDelete = vi.fn()
 const commentFindMany = vi.fn()
 const commentCount = vi.fn()
@@ -51,6 +52,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     },
     // S10-02: штампування SLA-дедлайнів при створенні (null = політики нема)
     slaPolicy: { findFirst: vi.fn().mockResolvedValue(null) },
+    teamColumn: { findFirst: teamColumnFindFirst },
     internalTask: {
       findMany: taskFindMany,
       create: taskCreate,
@@ -1037,6 +1039,68 @@ describe('internal tasks (workspace-only)', () => {
       })
       expect(res.statusCode).toBe(200)
       expect(taskUpdate.mock.calls[0][0].data.status).toBe('done')
+      await app.close()
+    })
+
+    // TASK-COLUMNS МАПІНГ: drag у кастомну колонку дзеркалить status=kind + team
+    it('columnId → сервер дзеркалить status=column.kind і team=column.team', async () => {
+      orderFindUnique.mockResolvedValue({ id: 'order-1', agencyId: 'agency-1', deletedAt: null })
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
+      teamColumnFindFirst.mockResolvedValue({
+        id: '55555555-5555-4555-8555-555555555555',
+        kind: 'in_progress',
+        teamId: 'team-1',
+      })
+      taskUpdate.mockResolvedValue({
+        id: 't1',
+        title: 'A',
+        status: 'in_progress',
+        assigneeId: null,
+        position: 0,
+        coAssignees: [],
+      })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { columnId: '55555555-5555-4555-8555-555555555555' },
+      })
+      expect(res.statusCode).toBe(200)
+      const data = taskUpdate.mock.calls[0][0].data
+      expect(data.status).toBe('in_progress') // дзеркало kind
+      expect(data.team).toEqual({ connect: { id: 'team-1' } }) // колонка тягне команду
+      expect(data.column).toEqual({ connect: { id: '55555555-5555-4555-8555-555555555555' } })
+      await app.close()
+    })
+
+    it('прямий рух статусу знімає задачу з колонки ІНШОГО kind (без брехні колонки)', async () => {
+      orderFindUnique.mockResolvedValue({ id: 'order-1', agencyId: 'agency-1', deletedAt: null })
+      // 1-й виклик: loadTaskOfOrder; 2-й: перевірка kind поточної колонки
+      taskFindUnique.mockResolvedValue({
+        id: 't1',
+        orderId: 'order-1',
+        column: { kind: 'in_progress' },
+      })
+      taskUpdate.mockResolvedValue({
+        id: 't1',
+        title: 'A',
+        status: 'done',
+        assigneeId: null,
+        position: 0,
+        coAssignees: [],
+      })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: 'done' },
+      })
+      expect(res.statusCode).toBe(200)
+      const data = taskUpdate.mock.calls[0][0].data
+      expect(data.status).toBe('done')
+      expect(data.column).toEqual({ disconnect: true }) // колонка in_progress ≠ done → зняли
       await app.close()
     })
 

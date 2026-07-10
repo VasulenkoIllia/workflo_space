@@ -965,6 +965,14 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
 
       {/* Дії */}
       <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {status === OrderInternalStatus.IN_PROGRESS && a.allTasksDone && (
+          <span
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-success, var(--wf-accent))', width: '100%' }}
+          >
+            // всі задачі виконані — можна здавати на приймання
+          </span>
+        )}
         {status === OrderInternalStatus.IN_PROGRESS && (isExecutor || isAcceptor) && (
           <Button
             size="sm"

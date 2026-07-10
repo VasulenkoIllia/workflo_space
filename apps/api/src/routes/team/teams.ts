@@ -1,9 +1,9 @@
-import { prisma, tenantTransaction, withTenant } from '@workflo/db'
+import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -42,13 +42,50 @@ const TEAM_SELECT = {
   color: true,
   position: true,
   _count: { select: { members: true, tasks: true } },
+  // TASK-COLUMNS: кастомні колонки дошки команди (kind = мапінг на канонічний статус)
+  columns: {
+    select: { id: true, name: true, kind: true, position: true },
+    orderBy: { position: 'asc' as const },
+  },
 } as const
+
+// Дефолтні колонки нової/порожньої команди — дзеркало 3 канонічних статусів.
+const DEFAULT_COLUMNS = [
+  { name: 'До роботи', kind: 'todo', position: 0 },
+  { name: 'В роботі', kind: 'in_progress', position: 1 },
+  { name: 'Готово', kind: 'done', position: 2 },
+] as const
+
+const columnCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    kind: z.enum(['todo', 'in_progress', 'done']),
+  })
+  .strict()
+const columnUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40).optional(),
+    kind: z.enum(['todo', 'in_progress', 'done']).optional(),
+    position: z.number().int().min(0).max(10_000).optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: 'Порожній запит' })
 
 const teamsRoute: FastifyPluginAsync = (fastify) => {
   function assertOwner(request: { user: Parameters<typeof requireActiveAgency>[0] }): string {
     const agencyId = requireActiveAgency(request.user)
     if (!isAgencyOwner(request.user, agencyId)) {
       throw new AppError(ApiErrorCode.FORBIDDEN, 'Команди редагує лише власник', 403)
+    }
+    return agencyId
+  }
+
+  // Колонки дошки налаштовує owner АБО manager (тімлід своєї дошки; дизайн canConfig=!exec)
+  function assertBoardConfig(request: { user: Parameters<typeof requireActiveAgency>[0] }): string {
+    const agencyId = requireActiveAgency(request.user)
+    const role = agencyRole(request.user as Parameters<typeof agencyRole>[0], agencyId)
+    if (role !== 'owner' && role !== 'manager') {
+      throw new AppError(ApiErrorCode.FORBIDDEN, 'Дошку налаштовує власник або тімлід', 403)
     }
     return agencyId
   }
@@ -62,9 +99,31 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(request.user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
       }
-      const teams = await withTenant((tx) =>
-        tx.team.findMany({ where: { agencyId }, orderBy: { position: 'asc' }, select: TEAM_SELECT })
-      )
+      const teams = await tenantTransaction(prisma, async (tx) => {
+        // TASK-COLUMNS lazy-seed: команда без жодної колонки отримує 3 дефолтні (канонічні)
+        const empty = await tx.team.findMany({
+          where: { agencyId, columns: { none: {} } },
+          select: { id: true },
+        })
+        if (empty.length > 0) {
+          await tx.teamColumn.createMany({
+            data: empty.flatMap((t) =>
+              DEFAULT_COLUMNS.map((c) => ({
+                agencyId,
+                teamId: t.id,
+                name: c.name,
+                kind: c.kind,
+                position: c.position,
+              }))
+            ),
+          })
+        }
+        return tx.team.findMany({
+          where: { agencyId },
+          orderBy: { position: 'asc' },
+          select: TEAM_SELECT,
+        })
+      })
       return reply.send({ success: true, data: { teams } })
     }
   )
@@ -166,6 +225,97 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
         result: 'allowed',
       })
       return reply.send({ success: true, data: { id: request.params.id } })
+    }
+  )
+
+  // ── TASK-COLUMNS: колонки дошки команди (owner/manager) ───────────────────────
+  fastify.post<{ Params: { teamId: string } }>(
+    '/workspace/teams/:teamId/columns',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = assertBoardConfig(request)
+      const body = columnCreateSchema.parse(request.body)
+      const column = await tenantTransaction(prisma, async (tx) => {
+        const team = await tx.team.findFirst({
+          where: { id: request.params.teamId, agencyId },
+          select: { id: true },
+        })
+        if (!team) throw new AppError(ApiErrorCode.NOT_FOUND, 'Команду не знайдено', 404)
+        const dup = await tx.teamColumn.findFirst({
+          where: { teamId: team.id, name: body.name },
+          select: { id: true },
+        })
+        if (dup)
+          throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Колонка з такою назвою вже є', 400)
+        const max = await tx.teamColumn.aggregate({
+          where: { teamId: team.id },
+          _max: { position: true },
+        })
+        return tx.teamColumn.create({
+          data: {
+            agencyId,
+            teamId: team.id,
+            name: body.name,
+            kind: body.kind,
+            position: (max._max.position ?? -1) + 1,
+          },
+          select: { id: true, name: true, kind: true, position: true },
+        })
+      })
+      return reply.status(201).send({ success: true, data: { column } })
+    }
+  )
+
+  fastify.patch<{ Params: { teamId: string; columnId: string } }>(
+    '/workspace/teams/:teamId/columns/:columnId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = assertBoardConfig(request)
+      const body = columnUpdateSchema.parse(request.body)
+      const column = await tenantTransaction(prisma, async (tx) => {
+        const existing = await tx.teamColumn.findFirst({
+          where: { id: request.params.columnId, teamId: request.params.teamId, agencyId },
+          select: { id: true, kind: true },
+        })
+        if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Колонку не знайдено', 404)
+        const updated = await tx.teamColumn.update({
+          where: { id: existing.id },
+          data: {
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.kind !== undefined ? { kind: body.kind } : {}),
+            ...(body.position !== undefined ? { position: body.position } : {}),
+          },
+          select: { id: true, name: true, kind: true, position: true },
+        })
+        // МАПІНГ: зміна kind колонки пере-дзеркалює статуси її задач — головна дошка
+        // («Усі», канонічні статуси) лишається консистентною автоматично.
+        if (body.kind !== undefined && body.kind !== String(existing.kind)) {
+          await tx.internalTask.updateMany({
+            where: { columnId: existing.id },
+            data: { status: body.kind },
+          })
+        }
+        return updated
+      })
+      return reply.send({ success: true, data: { column } })
+    }
+  )
+
+  fastify.delete<{ Params: { teamId: string; columnId: string } }>(
+    '/workspace/teams/:teamId/columns/:columnId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = assertBoardConfig(request)
+      await tenantTransaction(prisma, async (tx) => {
+        const existing = await tx.teamColumn.findFirst({
+          where: { id: request.params.columnId, teamId: request.params.teamId, agencyId },
+          select: { id: true },
+        })
+        if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Колонку не знайдено', 404)
+        // Задачі колонки лишаються (FK SetNull) — рендеряться у fallback-колонці свого kind.
+        await tx.teamColumn.delete({ where: { id: existing.id } })
+      })
+      return reply.send({ success: true, data: { id: request.params.columnId } })
     }
   )
 

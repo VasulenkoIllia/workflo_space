@@ -569,6 +569,9 @@ model InternalTask {
   // TEAM-BOARDS: команда задачі (таби дошки; null = видно лише в «Усі»)
   teamId      String?
   team        Team?                  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  // TASK-COLUMNS: кастомна колонка командної дошки; null = fallback-колонка свого kind
+  columnId    String?
+  column      TeamColumn?            @relation(fields: [columnId], references: [id], onDelete: SetNull)
   createdAt   DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
   agency      Agency                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
@@ -578,6 +581,7 @@ model InternalTask {
   @@index([orderId])
   @@index([assigneeId])
   @@index([teamId])
+  @@index([columnId])
   @@map("internal_tasks")
 }
 
@@ -1575,6 +1579,7 @@ model Agency {
   leads                Lead[] // 26 (CRM)
   leadStages           LeadStage[] // ХВІСТ-4: кастомні стадії воронки
   teams                Team[] // TEAM-BOARDS (Фаза B, 10.07)
+  teamColumns          TeamColumn[] // TASK-COLUMNS (10.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
@@ -1624,10 +1629,34 @@ model Team {
   updatedAt DateTime       @updatedAt @db.Timestamptz(3)
   members   AgencyMember[]
   tasks     InternalTask[]
+  columns   TeamColumn[]
 
   @@unique([agencyId, name])
   @@index([agencyId])
   @@map("teams")
+}
+
+// TASK-COLUMNS (рішення власника 10.07): кастомні колонки командної дошки з МАПІНГОМ на
+// канонічний статус (kind = InternalTaskStatus) — рівно патерн LeadStage.kind. Колонок
+// скільки завгодно; drag у колонку дзеркалить status=kind → головна дошка («Усі», 3 канонічні
+// колонки-якорі) і клієнтський рівень (статус ЗАМОВЛЕННЯ) завжди консистентні.
+model TeamColumn {
+  id        String             @id @default(uuid())
+  agencyId  String
+  agency    Agency             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String
+  kind      InternalTaskStatus @default(todo)
+  position  Int                @default(0)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @db.Timestamptz(3)
+  tasks     InternalTask[]
+
+  @@unique([teamId, name])
+  @@index([agencyId])
+  @@index([teamId])
+  @@map("team_columns")
 }
 
 enum AgencyMemberRole {

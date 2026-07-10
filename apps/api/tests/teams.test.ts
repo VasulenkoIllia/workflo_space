@@ -11,6 +11,14 @@ const teamDelete = vi.fn()
 const teamAggregate = vi.fn()
 const memberFindFirst = vi.fn()
 const memberUpdate = vi.fn()
+const colFindFirst = vi.fn()
+const colFindMany = vi.fn()
+const colCreate = vi.fn()
+const colCreateMany = vi.fn()
+const colUpdate = vi.fn()
+const colDelete = vi.fn()
+const colAggregate = vi.fn()
+const taskUpdateMany = vi.fn()
 
 const db = {
   team: {
@@ -22,6 +30,16 @@ const db = {
     aggregate: teamAggregate,
   },
   agencyMember: { findFirst: memberFindFirst, update: memberUpdate },
+  teamColumn: {
+    findFirst: colFindFirst,
+    findMany: colFindMany,
+    create: colCreate,
+    createMany: colCreateMany,
+    update: colUpdate,
+    delete: colDelete,
+    aggregate: colAggregate,
+  },
+  internalTask: { updateMany: taskUpdateMany },
   twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
 }
 
@@ -64,6 +82,8 @@ async function authed(claims: object) {
 beforeEach(() => {
   vi.clearAllMocks()
   teamAggregate.mockResolvedValue({ _max: { position: null } })
+  colAggregate.mockResolvedValue({ _max: { position: null } })
+  colCreateMany.mockResolvedValue({ count: 0 })
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -171,6 +191,65 @@ describe('TEAM-BOARDS /workspace/teams', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(memberUpdate.mock.calls[0][0].data.teamId).toBeNull()
+    await app.close()
+  })
+
+  // TASK-COLUMNS: колонки дошки команди
+  it('owner/manager створює колонку з kind-мапінгом; дубль назви → 400', async () => {
+    teamFindFirst.mockResolvedValue({ id: TEAM_ID })
+    colFindFirst.mockResolvedValue(null)
+    colCreate.mockResolvedValue({ id: 'col-1', name: "Рев'ю", kind: 'in_progress', position: 3 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/teams/${TEAM_ID}/columns`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "Рев'ю", kind: 'in_progress' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(colCreate.mock.calls[0][0].data.kind).toBe('in_progress')
+
+    vi.clearAllMocks()
+    teamFindFirst.mockResolvedValue({ id: TEAM_ID })
+    colFindFirst.mockResolvedValue({ id: 'col-x' }) // дубль
+    const dup = await app.inject({
+      method: 'POST',
+      url: `/workspace/teams/${TEAM_ID}/columns`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "Рев'ю", kind: 'in_progress' },
+    })
+    expect(dup.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('зміна kind колонки ПЕРЕ-ДЗЕРКАЛЮЄ статуси її задач (консистентність з головною)', async () => {
+    colFindFirst.mockResolvedValue({ id: 'col-1', kind: 'in_progress' })
+    colUpdate.mockResolvedValue({ id: 'col-1', name: "Рев'ю", kind: 'done', position: 3 })
+    taskUpdateMany.mockResolvedValue({ count: 2 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/teams/${TEAM_ID}/columns/col-1`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { kind: 'done' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(taskUpdateMany).toHaveBeenCalledWith({
+      where: { columnId: 'col-1' },
+      data: { status: 'done' },
+    })
+    await app.close()
+  })
+
+  it('executor НЕ налаштовує дошку (403), owner/manager — так', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/teams/${TEAM_ID}/columns`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'X', kind: 'todo' },
+    })
+    expect(res.statusCode).toBe(403)
     await app.close()
   })
 

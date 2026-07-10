@@ -41,6 +41,8 @@ export interface BoardTask {
   /** TEAM-BOARDS: команда задачі (таби дошки; null = лише в «Усі»). */
   teamId?: string | null
   team?: { id: string; name: string; color: string | null } | null
+  /** TASK-COLUMNS: кастомна колонка (null = fallback свого kind). */
+  columnId?: string | null
 }
 
 /** GET /workspace/tasks — all agency tasks across orders. Internal team. */
@@ -62,6 +64,19 @@ export function useMoveBoardTask() {
   return useMutation({
     mutationFn: ({ orderId, id, status }: { orderId: string; id: string; status: TaskStatus }) =>
       api.patch<{ task: OrderTask }>(`/orders/${orderId}/tasks/${id}`, { status }),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
+      void qc.invalidateQueries({ queryKey: key(vars.orderId) })
+    },
+  })
+}
+
+/** TASK-COLUMNS: drag у кастомну колонку — сервер дзеркалить status=kind + team. */
+export function useMoveTaskToColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, id, columnId }: { orderId: string; id: string; columnId: string }) =>
+      api.patch<{ task: OrderTask }>(`/orders/${orderId}/tasks/${id}`, { columnId }),
     onSuccess: (_d, vars) => {
       void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
       void qc.invalidateQueries({ queryKey: key(vars.orderId) })

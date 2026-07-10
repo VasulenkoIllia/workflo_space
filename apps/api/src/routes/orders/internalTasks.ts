@@ -23,6 +23,7 @@ const TASK_SELECT = {
   // TEAM-BOARDS: команда задачі (таби дошки)
   teamId: true,
   team: { select: { id: true, name: true, color: true } },
+  columnId: true,
   assignee: { select: { id: true, name: true } },
   // мультивиконавці задачі: співвиконавці ДОДАТКОВО до головного assigneeId
   coAssignees: {
@@ -73,6 +74,8 @@ const BOARD_SELECT = {
   // TEAM-BOARDS: таби дошки за командами
   teamId: true,
   team: { select: { id: true, name: true, color: true } },
+  // TASK-COLUMNS: кастомна колонка (null = fallback-колонка свого kind)
+  columnId: true,
   order: { select: { id: true, title: true, estimatedHours: true } },
   assignee: { select: { id: true, name: true } },
   coAssignees: {
@@ -214,6 +217,21 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
           throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Команду не знайдено', 400)
         }
       }
+      // TASK-COLUMNS МАПІНГ: drag у кастомну колонку дзеркалить status=column.kind і
+      // team=column.team — командна дошка, головна («Усі») і рівень замовлення консистентні.
+      let mirrorColumn: { id: string; kind: string; teamId: string } | null = null
+      if (input.columnId) {
+        const columnId = input.columnId
+        mirrorColumn = await withTenant((tx) =>
+          tx.teamColumn.findFirst({
+            where: { id: columnId, agencyId },
+            select: { id: true, kind: true, teamId: true },
+          })
+        )
+        if (!mirrorColumn) {
+          throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Колонку не знайдено', 400)
+        }
+      }
 
       const data: Prisma.InternalTaskUpdateInput = {}
       if (input.title !== undefined) data.title = input.title
@@ -226,6 +244,28 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       }
       if (input.teamId !== undefined) {
         data.team = input.teamId ? { connect: { id: input.teamId } } : { disconnect: true }
+      }
+      if (input.columnId !== undefined) {
+        if (mirrorColumn) {
+          data.column = { connect: { id: mirrorColumn.id } }
+          data.status = mirrorColumn.kind as Prisma.InternalTaskUpdateInput['status']
+          data.team = { connect: { id: mirrorColumn.teamId } }
+        } else {
+          data.column = { disconnect: true }
+        }
+      } else if (input.status !== undefined) {
+        // Прямий рух статусу (канонічна дошка/таб замовлення): якщо задача сидить у
+        // кастомній колонці ІНШОГО kind — знімаємо з колонки (fallback свого kind на
+        // командній дошці), щоб колонка не брехала проти статусу.
+        const current = await withTenant((tx) =>
+          tx.internalTask.findUnique({
+            where: { id: request.params.taskId },
+            select: { column: { select: { kind: true } } },
+          })
+        )
+        if (current?.column && String(current.column.kind) !== String(input.status)) {
+          data.column = { disconnect: true }
+        }
       }
 
       const task = await withTenant((tx) =>

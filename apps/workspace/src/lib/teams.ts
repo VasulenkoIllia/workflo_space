@@ -2,12 +2,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 /** TEAM-BOARDS (Фаза B): команди агенції — таби глобальної дошки задач. */
+export type ColumnKind = 'todo' | 'in_progress' | 'done'
+
+/** TASK-COLUMNS: кастомна колонка дошки команди; kind = мапінг на канонічний статус. */
+export interface TeamColumn {
+  id: string
+  name: string
+  kind: ColumnKind
+  position: number
+}
+
 export interface Team {
   id: string
   name: string
   color: string | null
   position: number
   _count: { members: number; tasks: number }
+  columns: TeamColumn[]
 }
 
 export function useTeams() {
@@ -44,6 +55,43 @@ export function useDeleteTeam() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.delete(`/workspace/teams/${id}`),
+    onSuccess: () => invalidate(qc),
+  })
+}
+
+// ── TASK-COLUMNS: CRUD колонок дошки команди (owner/manager) ────────────────────
+export function useCreateColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ teamId, name, kind }: { teamId: string; name: string; kind: ColumnKind }) =>
+      api.post(`/workspace/teams/${teamId}/columns`, { name, kind }),
+    onSuccess: () => invalidate(qc),
+  })
+}
+
+export function useUpdateColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      teamId,
+      columnId,
+      ...body
+    }: {
+      teamId: string
+      columnId: string
+      name?: string
+      kind?: ColumnKind
+      position?: number
+    }) => api.patch(`/workspace/teams/${teamId}/columns/${columnId}`, body),
+    onSuccess: () => invalidate(qc),
+  })
+}
+
+export function useDeleteColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ teamId, columnId }: { teamId: string; columnId: string }) =>
+      api.delete(`/workspace/teams/${teamId}/columns/${columnId}`),
     onSuccess: () => invalidate(qc),
   })
 }

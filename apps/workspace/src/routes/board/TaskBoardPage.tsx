@@ -8,9 +8,18 @@ import {
   type TaskStatus,
   useAllTasks,
   useMoveBoardTask,
+  useMoveTaskToColumn,
   useSetTaskTeam,
 } from '@/lib/tasks'
-import { type Team, useCreateTeam, useDeleteTeam, useTeams } from '@/lib/teams'
+import {
+  type ColumnKind,
+  type Team,
+  useCreateColumn,
+  useCreateTeam,
+  useDeleteColumn,
+  useDeleteTeam,
+  useTeams,
+} from '@/lib/teams'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'todo', label: 'До роботи' },
@@ -68,27 +77,67 @@ function OrderHoursBar({ order }: { order: BoardTask['order'] }) {
  * agency's orders, grouped by status. Drag a card between columns to move it (reuses the
  * per-order PATCH). Filter to «мої». */
 export function TaskBoardPage() {
-  const { user, isOwner } = useAuth()
+  const { user, isOwner, isManager } = useAuth()
   const myId = user?.profile.id
   const [mine, setMine] = useState(false)
   const { data, isLoading } = useAllTasks(mine && myId ? { assigneeId: myId } : {})
   const move = useMoveBoardTask()
   const setTaskTeam = useSetTaskTeam()
-  const [overCol, setOverCol] = useState<TaskStatus | null>(null)
+  const moveToColumn = useMoveTaskToColumn()
+  const [overCol, setOverCol] = useState<string | null>(null)
   // TEAM-BOARDS: таби команд ('all' = агрегатна «Усі», як у дизайні workspace-board.jsx)
   const { data: teams = [] } = useTeams()
   const [teamTab, setTeamTab] = useState<string>('all')
   const [teamsEditor, setTeamsEditor] = useState(false)
+  const [columnsEditor, setColumnsEditor] = useState(false)
+  const canConfig = isOwner || isManager
 
   const all = data?.tasks ?? []
+  const activeTeam = teamTab === 'all' ? null : (teams.find((tm) => tm.id === teamTab) ?? null)
   const tasks = teamTab === 'all' ? all : all.filter((t) => (t.teamId ?? null) === teamTab)
-  const byCol = (status: TaskStatus) => tasks.filter((t) => t.status === status)
   const countFor = (teamId: string) => all.filter((t) => t.teamId === teamId).length
 
-  const drop = (status: TaskStatus, t: BoardTask) => {
+  // TASK-COLUMNS view-model: «Усі» = 3 канонічні статуси-якорі; таб команди = її кастомні
+  // колонки (drag дзеркалить status=kind на сервері). Задача без колонки (або з видаленою)
+  // падає у ПЕРШУ колонку свого kind (fallback — нічого не губиться).
+  interface ViewCol {
+    key: string
+    label: string
+    tasks: BoardTask[]
+    onDropTask: (t: BoardTask) => void
+  }
+  let viewCols: ViewCol[]
+  if (!activeTeam) {
+    viewCols = COLUMNS.map((col) => ({
+      key: col.id,
+      label: col.label,
+      tasks: tasks.filter((t) => t.status === col.id),
+      onDropTask: (t) => {
+        if (t.status !== col.id) move.mutate({ orderId: t.order.id, id: t.id, status: col.id })
+      },
+    }))
+  } else {
+    const cols = activeTeam.columns
+    const colIds = new Set(cols.map((c) => c.id))
+    const firstOfKind = new Map<string, string>()
+    for (const c of cols) if (!firstOfKind.has(c.kind)) firstOfKind.set(c.kind, c.id)
+    viewCols = cols.map((col) => ({
+      key: col.id,
+      label: col.name,
+      tasks: tasks.filter((t) => {
+        const cid = t.columnId && colIds.has(t.columnId) ? t.columnId : null
+        return cid ? cid === col.id : firstOfKind.get(t.status) === col.id
+      }),
+      onDropTask: (t) => {
+        if (t.columnId !== col.id)
+          moveToColumn.mutate({ orderId: t.order.id, id: t.id, columnId: col.id })
+      },
+    }))
+  }
+
+  const drop = (colKey: string, t: BoardTask) => {
     setOverCol(null)
-    if (t.status === status) return
-    move.mutate({ orderId: t.order.id, id: t.id, status })
+    viewCols.find((c) => c.key === colKey)?.onDropTask(t)
   }
 
   return (
@@ -153,6 +202,17 @@ export function TaskBoardPage() {
             ⚙ команди
           </button>
         )}
+        {canConfig && activeTeam && (
+          <button
+            type="button"
+            className="wfp-mono"
+            onClick={() => setColumnsEditor(true)}
+            style={{ ...tabStyle(false), opacity: 0.7 }}
+            title="Кастомні колонки цієї дошки (мапляться на канонічні статуси)"
+          >
+            ⚙ налаштувати дошку
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -166,23 +226,24 @@ export function TaskBoardPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: `repeat(${viewCols.length}, minmax(240px, 1fr))`,
             gap: 12,
             alignItems: 'start',
+            overflowX: 'auto',
           }}
         >
-          {COLUMNS.map((col) => (
+          {viewCols.map((col) => (
             <div
-              key={col.id}
+              key={col.key}
               onDragOver={(e: DragEvent) => {
                 e.preventDefault()
-                setOverCol(col.id)
+                setOverCol(col.key)
               }}
-              onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
+              onDragLeave={() => setOverCol((c) => (c === col.key ? null : c))}
               onDrop={(e: DragEvent) => {
                 const id = e.dataTransfer.getData('text/plain')
                 const t = tasks.find((x) => x.id === id)
-                if (t) drop(col.id, t)
+                if (t) drop(col.key, t)
               }}
               style={{
                 background: 'var(--wf-surface)',
@@ -190,7 +251,7 @@ export function TaskBoardPage() {
                 borderRadius: 'var(--wf-radius)',
                 padding: 10,
                 minHeight: 120,
-                ...(overCol === col.id ? { outline: '2px dashed var(--wf-accent)' } : {}),
+                ...(overCol === col.key ? { outline: '2px dashed var(--wf-accent)' } : {}),
               }}
             >
               <div
@@ -204,10 +265,10 @@ export function TaskBoardPage() {
                 }}
               >
                 <span>{col.label}</span>
-                <span>{byCol(col.id).length}</span>
+                <span>{col.tasks.length}</span>
               </div>
               <div style={{ display: 'grid', gap: 8 }}>
-                {byCol(col.id).map((t) => (
+                {col.tasks.map((t) => (
                   <div
                     key={t.id}
                     draggable
@@ -298,6 +359,9 @@ export function TaskBoardPage() {
       )}
 
       {teamsEditor && <TeamsEditorModal teams={teams} onClose={() => setTeamsEditor(false)} />}
+      {columnsEditor && activeTeam && (
+        <ColumnsEditorModal team={activeTeam} onClose={() => setColumnsEditor(false)} />
+      )}
     </div>
   )
 }
@@ -374,6 +438,90 @@ function TeamsEditorModal({ teams, onClose }: { teams: Team[]; onClose: () => vo
                   toast.success('Команду створено')
                 },
               })
+            }
+          >
+            + Додати
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+const KIND_LABEL: Record<ColumnKind, string> = {
+  todo: 'До роботи',
+  in_progress: 'В роботі',
+  done: 'Готово',
+}
+
+/** TASK-COLUMNS: редактор колонок дошки команди (owner/manager). Кожна колонка мапиться
+ * на канонічний статус (kind) — головна дошка і клієнтський рівень консистентні завжди. */
+function ColumnsEditorModal({ team, onClose }: { team: Team; onClose: () => void }) {
+  const create = useCreateColumn()
+  const del = useDeleteColumn()
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<ColumnKind>('in_progress')
+
+  return (
+    <Modal open title={`Дошка «${team.name}» — колонки`} onClose={onClose}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // кожна колонка мапиться на канонічний статус головної дошки
+        </div>
+        {team.columns.map((c) => (
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <span style={{ flex: 1 }}>{c.name}</span>
+            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+              → {KIND_LABEL[c.kind]}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                if (!window.confirm(`Видалити колонку «${c.name}»? Задачі не загубляться.`)) return
+                del.mutate(
+                  { teamId: team.id, columnId: c.id },
+                  { onSuccess: () => toast.success('Колонку видалено') }
+                )
+              }}
+            >
+              ✕
+            </Button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Назва, напр. «Рев'ю»"
+          />
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as ColumnKind)}
+            className="wfp-mono"
+            style={{ fontSize: 12, padding: 8 }}
+            title="На який канонічний статус мапиться"
+          >
+            {(Object.keys(KIND_LABEL) as ColumnKind[]).map((k) => (
+              <option key={k} value={k}>
+                → {KIND_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            disabled={name.trim().length === 0}
+            onClick={() =>
+              create.mutate(
+                { teamId: team.id, name: name.trim(), kind },
+                {
+                  onSuccess: () => {
+                    setName('')
+                    toast.success('Колонку додано')
+                  },
+                }
+              )
             }
           >
             + Додати

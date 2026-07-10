@@ -92,6 +92,8 @@ export interface AcceptanceExecutor {
   payableHours: number
 }
 export interface OrderAcceptance {
+  /** Всі задачі замовлення done → підказка «здай на приймання» (без автопереходу). */
+  allTasksDone?: boolean
   submittedAt: string | null
   submittedBy: { id: string; name: string } | null
   acceptedAt: string | null
