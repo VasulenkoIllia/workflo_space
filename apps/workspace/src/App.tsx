@@ -21,6 +21,7 @@ import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { ContentPage } from '@/routes/content/ContentPage'
+import { ExecutorCardPage } from '@/routes/team/ExecutorCardPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { SupportPage } from '@/routes/support/SupportPage'
@@ -198,6 +199,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <ContentPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/team/:profileId"
+          element={
+            <RoleRoute allow={['owner', 'manager']}>
+              <ExecutorCardPage />
             </RoleRoute>
           }
         />

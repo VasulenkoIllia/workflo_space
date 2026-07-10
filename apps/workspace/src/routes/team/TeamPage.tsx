@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
@@ -125,7 +126,14 @@ function MemberRow({
         <Avatar name={member.name} size={28} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {member.name}
+            <Link
+              to={`/team/${member.profileId}`}
+              className="wfp-link"
+              style={{ color: 'inherit' }}
+              title="KPI-картка виконавця"
+            >
+              {member.name}
+            </Link>
           </div>
           <div
             className="wfp-mono"

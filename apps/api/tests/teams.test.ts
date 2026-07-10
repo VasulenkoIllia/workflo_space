@@ -39,16 +39,32 @@ const db = {
     delete: colDelete,
     aggregate: colAggregate,
   },
-  internalTask: { updateMany: taskUpdateMany },
+  internalTask: { updateMany: taskUpdateMany, count: vi.fn().mockResolvedValue(3) },
+  // 12-В KPI-картка виконавця
+  timeLog: { aggregate: vi.fn().mockResolvedValue({ _sum: { hours: 42 } }) },
+  orderExecutorSettlement: { aggregate: vi.fn().mockResolvedValue({ _sum: { payableHours: 30 } }) },
+  payment: { aggregate: vi.fn().mockResolvedValue({ _sum: { amountUsd: null } }) },
+  paymentRefund: { aggregate: vi.fn().mockResolvedValue({ _sum: { amountUsd: null } }) },
+  order: {
+    count: vi.fn().mockResolvedValue(2),
+    findMany: vi.fn().mockResolvedValue([
+      { acceptedAt: new Date('2026-07-01'), deadline: new Date('2026-07-05') }, // вчасно
+      { acceptedAt: new Date('2026-07-09'), deadline: new Date('2026-07-05') }, // прострочено
+    ]),
+  },
   twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
 }
 
-vi.mock('@workflo/db', () => ({
-  prisma: db,
-  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
-  withTenant: (fn: (tx: unknown) => unknown) => fn(db),
-  tenantTransaction: (_p: unknown, fn: (tx: unknown) => unknown) => fn(db),
-}))
+vi.mock('@workflo/db', async (importOriginal) => {
+  // Prisma.Decimal потрібен KPI-роуту (нетто-виручка) — беремо справжній конструктор
+  const actual = (await importOriginal()) as { Prisma: unknown }
+  return {
+    prisma: db,
+    Prisma: actual.Prisma,
+    withTenant: (fn: (tx: unknown) => unknown) => fn(db),
+    tenantTransaction: (_p: unknown, fn: (tx: unknown) => unknown) => fn(db),
+  }
+})
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
 
@@ -251,6 +267,46 @@ describe('TEAM-BOARDS /workspace/teams', () => {
     })
     expect(res.statusCode).toBe(403)
     await app.close()
+  })
+
+  // 12-В KPI-картка виконавця
+  it('KPI: owner отримує метрики; вчасність = вчасні/усі з дедлайном', async () => {
+    memberFindFirst.mockResolvedValue({ profileId: PROFILE })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/workspace/executors/${PROFILE}/kpi`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const kpi = res.json().data.kpi
+    expect(kpi.hoursLogged).toBe(42)
+    expect(kpi.hoursAccepted).toBe(30)
+    expect(kpi.activeOrders).toBe(2)
+    expect(kpi.tasksDone).toBe(3)
+    expect(kpi.onTimePct).toBe(50) // 1 з 2 вчасно
+    await app.close()
+  })
+
+  it('KPI: executor 403; не-член агенції 404', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const forb = await app.inject({
+      method: 'GET',
+      url: `/workspace/executors/${PROFILE}/kpi`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(forb.statusCode).toBe(403)
+
+    memberFindFirst.mockResolvedValue(null)
+    const { app: app2, token: t2 } = await authed(OWNER)
+    const nf = await app2.inject({
+      method: 'GET',
+      url: `/workspace/executors/${PROFILE}/kpi`,
+      headers: { authorization: `Bearer ${t2}` },
+    })
+    expect(nf.statusCode).toBe(404)
+    await app.close()
+    await app2.close()
   })
 
   it('delete: команда зникає, люди/задачі лишаються (FK SetNull — без каскаду в роуті)', async () => {

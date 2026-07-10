@@ -105,3 +105,25 @@ export function useSetMemberTeam() {
     onSuccess: () => invalidate(qc),
   })
 }
+
+/** 12-В KPI-картка виконавця (owner/manager). Вікно дефолт = поточний місяць. */
+export interface ExecutorKpi {
+  from: string
+  to: string
+  hoursLogged: number
+  hoursAccepted: number
+  revenueUsd: string
+  activeOrders: number
+  tasksDone: number
+  onTimePct: number | null
+  onTimeBase: number
+}
+
+export function useExecutorKpi(profileId: string) {
+  return useQuery({
+    queryKey: ['executor-kpi', profileId],
+    queryFn: () =>
+      api.get<{ kpi: ExecutorKpi }>(`/workspace/executors/${profileId}/kpi`).then((r) => r.kpi),
+    enabled: profileId !== '',
+  })
+}
