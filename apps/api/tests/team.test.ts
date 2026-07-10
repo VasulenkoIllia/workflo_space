@@ -15,6 +15,7 @@ const payoutUpdate = vi.fn()
 const timeLogAggregate = vi.fn()
 const settlementAggregate = vi.fn() // PAYROLL: Σ прийнятих payableHours
 const paymentAggregate = vi.fn()
+const paymentRefundAggregate = vi.fn() // КОМІСІЯ-КЛАВБЕК: refund зменшує базу комісії
 const auditLogCreate = vi.fn()
 const referralSettingsFindUnique = vi.fn() // P-9b: employee-referral % lookup in generatePayout
 const companyFindMany = vi.fn() // P-9b: an employee's referred clients
@@ -44,6 +45,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
     timeLog: { aggregate: timeLogAggregate },
     orderExecutorSettlement: { aggregate: settlementAggregate },
     payment: { aggregate: paymentAggregate },
+    paymentRefund: { aggregate: paymentRefundAggregate },
     auditLog: { create: auditLogCreate },
     referralSettings: { findUnique: referralSettingsFindUnique },
     company: { findMany: companyFindMany },
@@ -67,6 +69,7 @@ const mockTx = {
   timeLog: { aggregate: timeLogAggregate },
   orderExecutorSettlement: { aggregate: settlementAggregate },
   payment: { aggregate: paymentAggregate },
+  paymentRefund: { aggregate: paymentRefundAggregate },
   referralSettings: { findUnique: referralSettingsFindUnique },
   company: { findMany: companyFindMany },
 }
@@ -113,6 +116,7 @@ beforeEach(() => {
   referralSettingsFindUnique.mockResolvedValue(null) // P-9b: no settings → 0% → no bonus
   companyFindMany.mockResolvedValue([])
   settlementAggregate.mockResolvedValue({ _sum: { payableHours: null } }) // PAYROLL: no accepted hours
+  paymentRefundAggregate.mockResolvedValue({ _sum: { amountUsd: null } }) // без клавбеку за замовч.
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -253,6 +257,74 @@ describe('generatePayout (service)', () => {
     expect(res.baseSalary).toBe('0.00')
     expect(res.hourlyEarned).toBe('200.00') // 5 × 40 — платимо, бо фактичного окладу нема
     expect(res.total).toBe('200.00')
+  })
+
+  // КОМІСІЯ-КЛАВБЕК (закрито 10.07): повернення клієнту зменшують базу комісії.
+  it('клавбек: refund у періоді зменшує commissionBase → комісія з нетто', async () => {
+    payoutFindUnique.mockResolvedValue(null)
+    rateFindFirst.mockResolvedValue({
+      monthlySalary: Dec('1000.00'),
+      commissionPercent: Dec('10.00'),
+      currency: 'USD',
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('0') } })
+    paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('5000.00') } }) // confirmed
+    paymentRefundAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('1000.00') } }) // клавбек
+    payoutUpsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: PAYOUT_ID,
+        executorId: EXEC_ID,
+        period: '2026-06',
+        ...create,
+        status: 'draft',
+        approvedBy: null,
+        paidAt: null,
+      })
+    )
+    const res = await generatePayout(mockTx as never, {
+      agencyId: 'agency-1',
+      executorId: EXEC_ID,
+      period: '2026-06',
+    })
+    expect(res.commissionAmount).toBe('400.00') // 10% × (5000 − 1000)
+    expect(res.total).toBe('1400.00')
+    // period-семантика клавбеку: refund рахується, якщо платіж confirmed у ПОПЕРЕДНЬОМУ
+    // періоді (комісію вже платили) АБО досі confirmed (частковий цього періоду)
+    const refundWhere = paymentRefundAggregate.mock.calls[0][0].where
+    expect(refundWhere.payment.is.OR).toEqual([
+      { confirmedAt: { lt: new Date('2026-06-01T00:00:00.000Z') } },
+      { status: 'confirmed' },
+    ])
+  })
+
+  it('клавбек > нової бази → ВИДИМА відʼємна комісія (не тихий кламп)', async () => {
+    payoutFindUnique.mockResolvedValue(null)
+    rateFindFirst.mockResolvedValue({
+      monthlySalary: Dec('1000.00'),
+      commissionPercent: Dec('10.00'),
+      currency: 'USD',
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('0') } })
+    paymentAggregate.mockResolvedValue({ _sum: { amountUsd: null } }) // нових платежів нема
+    paymentRefundAggregate.mockResolvedValue({ _sum: { amountUsd: Dec('2000.00') } })
+    payoutUpsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: PAYOUT_ID,
+        executorId: EXEC_ID,
+        period: '2026-06',
+        ...create,
+        status: 'draft',
+        approvedBy: null,
+        paidAt: null,
+      })
+    )
+    const res = await generatePayout(mockTx as never, {
+      agencyId: 'agency-1',
+      executorId: EXEC_ID,
+      period: '2026-06',
+    })
+    expect(res.commissionAmount).toBe('-200.00') // клавбек з минулого періоду
+    expect(res.total).toBe('800.00') // 1000 оклад − 200 клавбек
   })
 
   it('does not recompute an approved payout (idempotent / no clobber)', async () => {

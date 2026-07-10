@@ -57,8 +57,9 @@ export function deriveChargeState(
   return 'awaiting'
 }
 
-/** Persist the nearest stored `ChargeStatus` for a derived state (enum has no overpaid/awaiting). */
-function toStoredStatus(state: ChargeDerivedState): ChargeStatus {
+/** Persist the nearest stored `ChargeStatus` for a derived state (enum has no overpaid/awaiting).
+ * Exported for reversals (LOW-5): реверс алокацій при refund перераховує статус charge. */
+export function toStoredStatus(state: ChargeDerivedState): ChargeStatus {
   switch (state) {
     case 'paid':
     case 'overpaid':

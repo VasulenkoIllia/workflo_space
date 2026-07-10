@@ -136,16 +136,18 @@ export async function computePnl(args: {
         where: { agencyId: args.agencyId },
         select: { usdToUah: true, eurToUah: true },
       }),
-      // ХВІСТ-3: собівартість погодинної праці — Σ(hours × costRateUsd) по виконавцях за період.
-      // Тільки для несалярних (salaried час покритий окладом) — фільтр нижче.
-      tx.$queryRaw<Array<{ executorId: string; cost: string | null }>>`
+      // ХВІСТ-3: собівартість погодинної праці — Σ(hours × costRateUsd) ПОМІСЯЧНО по виконавцях
+      // (MED-4: групуємо по місяцю, щоб виключати оклад-покриті години лише за ті місяці, де
+      // виконавець фактично салярний — а не викидати його по всьому вікну).
+      tx.$queryRaw<Array<{ executorId: string; ym: string; cost: string | null }>>`
         SELECT t."executorId" AS "executorId",
+               to_char(date_trunc('month', t."date"), 'YYYY-MM') AS ym,
                COALESCE(SUM(t."hours" * COALESCE(t."costRateUsd", 0)), 0) AS cost
         FROM "time_logs" t
         WHERE t."agencyId" = ${args.agencyId}
           AND t."date" >= ${from}
           AND t."date" <= ${to}
-        GROUP BY t."executorId"
+        GROUP BY t."executorId", date_trunc('month', t."date")
       `,
     ])
     return { revenueAgg, refundAgg, expenses, rates, rate, laborRows }
@@ -190,23 +192,23 @@ export async function computePnl(args: {
   }
   if (salaryUsd.greaterThan(0)) add('salary', salaryUsd)
 
-  // ХВІСТ-3: собівартість погодинної праці. Виконавці з активним окладом у періоді
-  // вже враховані через salary → їхній час НЕ додаємо (без подвійного рахунку). Решта
-  // (погодинники/контрактори) → Σ(hours × costRateUsd) стає окремою статтею витрат.
-  // KNOWN-LIMITATION (MED-4, аудит 08.07): виключення — по ВСЬОМУ вікну, не помісячно. Якщо
-  // виконавець салярний лише частину багатомісячного вікна (потім перейшов на погодинну), його
-  // погодинні години теж викидаються → собівартість трохи занижена на межі зміни ставки.
-  // Рідкісний край; точний фікс — помісячна сегментація salariedIds (окремий зріз).
-  const salariedIds = new Set<string>()
-  for (const r of data.rates) {
-    if (!r.monthlySalary) continue
-    if (months.some((ym) => activeIn(r.effectiveFrom, r.effectiveUntil, ym))) {
-      salariedIds.add(r.executorId)
-    }
-  }
+  // ХВІСТ-3: собівартість погодинної праці. Години місяців, де виконавець мав активний
+  // оклад, уже покриті статтею salary → їх НЕ додаємо (без подвійного рахунку). Решта
+  // (погодинні місяці / контрактори) → Σ(hours × costRateUsd) — окрема стаття витрат.
+  // MED-4 (закрито 10.07): виключення ПОМІСЯЧНЕ — виконавець «салярний у січні, погодинний
+  // у лютому» дає лютневу собівартість у витрати (раніше викидався по всьому вікну).
+  const salariedInMonth = (executorId: string, ym: YearMonth): boolean =>
+    data.rates.some(
+      (r) =>
+        r.executorId === executorId &&
+        r.monthlySalary != null &&
+        activeIn(r.effectiveFrom, r.effectiveUntil, ym)
+    )
   let laborHourlyUsd = new Prisma.Decimal(0)
   for (const row of data.laborRows) {
-    if (salariedIds.has(row.executorId)) continue
+    const [yStr, mStr] = row.ym.split('-')
+    const ym: YearMonth = { y: Number(yStr), m: Number(mStr) - 1 }
+    if (salariedInMonth(row.executorId, ym)) continue
     laborHourlyUsd = laborHourlyUsd.plus(new Prisma.Decimal(row.cost ?? 0))
   }
   laborHourlyUsd = laborHourlyUsd.toDecimalPlaces(2)

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { prisma, tenantTransaction } from '@workflo/db'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { allocatePayment } from '../../src/services/allocation.js'
 import { confirmManualPayment } from '../../src/services/payments.js'
 import { createCreditNote, refundPayment, writeOffCharge } from '../../src/services/reversals.js'
 
@@ -65,6 +66,7 @@ run('05-В reversals (real PG)', () => {
   })
 
   afterAll(async () => {
+    await prisma.paymentAllocation.deleteMany({ where: { agencyId } })
     await prisma.paymentRefund.deleteMany({ where: { agencyId } })
     await prisma.walletTransaction.deleteMany({ where: { agencyId } })
     await prisma.referralBonus.deleteMany({ where: { referral: { referrerId } } })
@@ -80,6 +82,7 @@ run('05-В reversals (real PG)', () => {
   })
 
   beforeEach(async () => {
+    await prisma.paymentAllocation.deleteMany({ where: { agencyId } })
     await prisma.paymentRefund.deleteMany({ where: { agencyId } })
     await prisma.walletTransaction.deleteMany({ where: { agencyId } })
     await prisma.referralBonus.deleteMany({ where: { referral: { referrerId } } })
@@ -119,6 +122,52 @@ run('05-В reversals (real PG)', () => {
     expect(await balance(companyId)).toBe('0.00')
     const full = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })
     expect(full.status).toBe('refunded')
+  })
+
+  // LOW-5 (закрито 10.07): refund платежу, розподіленого на нарахування, відкочує алокації
+  // LIFO і воскрешає борг charge (paid → partial → pending) — дунінг знову його бачить.
+  it('LOW-5: refund відкочує алокації і воскрешає борг нарахування', async () => {
+    await prisma.serviceCharge.create({
+      data: {
+        agencyId,
+        companyId,
+        kind: 'subscription',
+        amount: 100,
+        totalAmount: 100,
+        currency: 'USD',
+        month: new Date('2026-07-01'),
+        status: 'pending',
+      },
+    })
+    const charge = await prisma.serviceCharge.findFirstOrThrow({ where: { companyId } })
+    const p = await pay(100)
+    await tenantTransaction(prisma, (tx) =>
+      allocatePayment(tx, {
+        agencyId,
+        paymentId: p.id,
+        allocations: [{ chargeId: charge.id, amount: 100 }],
+      })
+    )
+    const paid = await prisma.serviceCharge.findUniqueOrThrow({ where: { id: charge.id } })
+    expect(paid.status).toBe('paid')
+
+    // частковий refund 60 → алокація зменшена до 40, charge → partial, paidAt знято
+    await tenantTransaction(prisma, (tx) =>
+      refundPayment(tx, { agencyId, paymentId: p.id, amount: 60, actorId: creatorId })
+    )
+    const partial = await prisma.serviceCharge.findUniqueOrThrow({ where: { id: charge.id } })
+    expect(partial.status).toBe('partial')
+    expect(partial.paidAt).toBeNull()
+    const alloc = await prisma.paymentAllocation.findFirstOrThrow({ where: { paymentId: p.id } })
+    expect(alloc.amount.toFixed(2)).toBe('40.00')
+
+    // добиваємо refund 40 → алокацію видалено, charge знову pending (борг видимий дунінгу)
+    await tenantTransaction(prisma, (tx) =>
+      refundPayment(tx, { agencyId, paymentId: p.id, amount: 40, actorId: creatorId })
+    )
+    const reopened = await prisma.serviceCharge.findUniqueOrThrow({ where: { id: charge.id } })
+    expect(reopened.status).toBe('pending')
+    expect(await prisma.paymentAllocation.count({ where: { paymentId: p.id } })).toBe(0)
   })
 
   it('write-off forgives an open charge; second write-off 409', async () => {

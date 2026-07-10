@@ -14,8 +14,10 @@ import { computeEmployeeReferralBonus } from './referral.js'
  *    (`acceptedAt`) in the period — the reconciled hours we actually pay for (ПРИЙМАННЯ);
  *  - hourlyEarned = paidHours × ExecutorRate.hourlyRate (погодинники; окладні → hourlyRate
  *    null → 0). Замикає money-loop приймання: платимо за прийняті, а не сирі залоговані години;
- *  - commissionAmount = commissionPercent × Σ confirmed revenue (amountUsd) on orders
- *    assigned to the executor in the period.
+ *  - commissionAmount = commissionPercent × НЕТТО-база: Σ confirmed revenue (amountUsd) on
+ *    orders assigned to the executor in the period МІНУС клавбек повернень (refund у періоді
+ *    по платежах виконавця, підтверджених раніше або досі confirmed). База може бути
+ *    від'ємною → видимий клавбек у виплаті (закрито 10.07).
  *  - referralBonusAmount = employee-referral % × Σ net income of clients this executor
  *    brought (P-9b, §4.2) — recomputed with the draft, like every other component.
  */
@@ -182,7 +184,7 @@ export async function generatePayout(
     ? new Prisma.Decimal(0)
     : new Prisma.Decimal(rate?.hourlyRate ?? 0)
 
-  const [hoursAgg, paidAgg, commAgg] = await Promise.all([
+  const [hoursAgg, paidAgg, commAgg, commRefundAgg] = await Promise.all([
     tx.timeLog.aggregate({
       where: {
         agencyId: args.agencyId,
@@ -210,15 +212,33 @@ export async function generatePayout(
       },
       _sum: { amountUsd: true },
     }),
+    // КОМІСІЯ-КЛАВБЕК (закрито 10.07): повернення клієнту зменшують базу комісії. Refund у
+    // ЦЬОМУ періоді рахується, якщо платіж (по замовленню виконавця) або підтверджений у
+    // ПОПЕРЕДНЬОМУ періоді (комісія на нього вже нарахована → клавбек), або досі confirmed
+    // (частковий refund платежу цього ж періоду — база включає повну суму, віднімаємо).
+    // Платіж confirmed І ПОВНІСТЮ повернутий у цьому Ж періоді не рахується ніде (нуль-нетто).
+    // База може стати від'ємною → видимий клавбек у виплаті (не тихе клампування).
+    tx.paymentRefund.aggregate({
+      where: {
+        agencyId: args.agencyId,
+        createdAt: { gte: bounds.start, lte: bounds.end },
+        payment: {
+          is: {
+            order: { is: { assigneeId: args.executorId } },
+            OR: [{ confirmedAt: { lt: bounds.start } }, { status: 'confirmed' }],
+          },
+        },
+      },
+      _sum: { amountUsd: true },
+    }),
   ])
-  // FOLLOW-UP (аудит 08.07, HIGH-2): commissionBase — БРУТТО confirmed (без відніму
-  // PaymentRefund). Свідомо не віднімаємо тут: клавбек комісії за частковим поверненням у
-  // вже виплаченому періоді → потребує окремої політики (негативний рядок/утримання), інакше
-  // виникали б від'ємні payout-и. P&L/виручка вже НЕТТО; комісія-клавбек — окремий зріз.
   const billableHours = hoursAgg._sum.hours ?? new Prisma.Decimal(0)
   const paidHours = paidAgg._sum.payableHours ?? new Prisma.Decimal(0)
   const hourlyEarned = paidHours.times(payHourly).toDecimalPlaces(2)
-  const commissionBase = commAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  // НЕТТО-база комісії: confirmed цього періоду мінус клавбек повернень (див. запит вище).
+  const commissionGross = commAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const commissionClawback = commRefundAgg._sum.amountUsd ?? new Prisma.Decimal(0)
+  const commissionBase = commissionGross.minus(commissionClawback)
   const commissionAmount = commissionBase.times(commissionPct).div(100).toDecimalPlaces(2)
   // Employee-referral bonus over the SAME period window (P-9b, §4.2).
   const referralBonusAmount = await computeEmployeeReferralBonus(tx, {

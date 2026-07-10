@@ -89,7 +89,7 @@ describe('computePnl (service)', () => {
       expenses?: unknown[]
       rates?: unknown[]
       rate?: { usdToUah: unknown } | null
-      labor?: Array<{ executorId: string; cost: string }>
+      labor?: Array<{ executorId: string; ym: string; cost: string }>
       refunds?: string
     } = {}
   ) {
@@ -146,8 +146,8 @@ describe('computePnl (service)', () => {
       ],
       // salaried-1 наробив час (не рахуємо — покрито окладом); hourly-1 → у витрати
       labor: [
-        { executorId: 'salaried-1', cost: '900.00' },
-        { executorId: 'hourly-1', cost: '600.00' },
+        { executorId: 'salaried-1', ym: '2026-06', cost: '900.00' },
+        { executorId: 'hourly-1', ym: '2026-06', cost: '600.00' },
       ],
     })
     const pnl = await computePnl({ agencyId: 'agency-1', from: '2026-06-01', to: '2026-06-30' })
@@ -156,6 +156,30 @@ describe('computePnl (service)', () => {
     expect(pnl.expensesUsd).toBe('2600.00') // 2000 оклад + 600 погодинна праця
     expect(pnl.byCategory.find((c) => c.category === 'labor_hourly')?.amountUsd).toBe('600.00')
     expect(pnl.netProfitUsd).toBe('7400.00')
+  })
+
+  it('MED-4: салярний лише червень → липневі погодинні години РАХУЮТЬСЯ (помісячно)', async () => {
+    setup({
+      revenue: '10000.00',
+      rates: [
+        {
+          executorId: 'exec-1',
+          monthlySalary: Dec('2000.00'),
+          currency: 'USD',
+          effectiveFrom: new Date('2026-06-01T00:00:00Z'),
+          effectiveUntil: new Date('2026-06-30T23:59:59Z'), // оклад закінчився в червні
+        },
+      ],
+      // той САМИЙ виконавець: червень (салярний → покрито окладом) + липень (погодинний)
+      labor: [
+        { executorId: 'exec-1', ym: '2026-06', cost: '300.00' },
+        { executorId: 'exec-1', ym: '2026-07', cost: '400.00' },
+      ],
+    })
+    const pnl = await computePnl({ agencyId: 'agency-1', from: '2026-06-01', to: '2026-07-31' })
+    expect(pnl.salaryUsd).toBe('2000.00') // оклад лише за червень
+    expect(pnl.laborHourlyUsd).toBe('400.00') // липневі години в витратах (раніше — 0)
+    expect(pnl.expensesUsd).toBe('2400.00')
   })
 
   it('HIGH-2: виручка НЕТТО — часткові повернення віднімаються (маржа не завищена)', async () => {

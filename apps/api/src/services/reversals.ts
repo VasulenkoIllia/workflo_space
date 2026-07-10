@@ -1,6 +1,6 @@
 import { Prisma } from '@workflo/db'
 import { ApiErrorCode, AppError, WalletTxnSource } from '@workflo/types'
-import { refreshMoneyBalance } from './allocation.js'
+import { deriveChargeState, refreshMoneyBalance, toStoredStatus } from './allocation.js'
 import { walletDebit } from './wallet.js'
 
 /**
@@ -178,11 +178,60 @@ export async function refundPayment(
       await tx.order.update({ where: { id: payment.orderId }, data: { paidAt: null } })
     }
   } else {
-    // KNOWN-LIMITATION (LOW-5, аудит 08.07): refund платежу БЕЗ orderId лише перераховує
-    // moneyBalance (агрегатний баланс коректний). Якщо цей платіж був FIFO-розподілений на
-    // ServiceCharge, статус нарахування (paid) і paymentAllocation НЕ відкочуються тут → окреме
-    // нарахування може лишитись 'paid' попри повернення (дунінг його пропустить). Баланс правдивий,
-    // стан конкретного charge — застарілий. Точний фікс — реверс alloc + перерахунок charge-стану.
+    // LOW-5 (закрито 10.07): якщо платіж без orderId був FIFO-розподілений на нарахування —
+    // відкочуємо алокації LIFO на суму повернення (останні розподіли знімаємо першими) і
+    // перераховуємо статуси зачеплених charge (paid → partial/awaiting/overdue), щоб борг
+    // знову став видимим і дунінг його підхопив. written_off не воскрешаємо (прощений борг).
+    const allocs = await tx.paymentAllocation.findMany({
+      where: { paymentId: payment.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, chargeId: true, amount: true },
+    })
+    let toRelease = amount
+    const touched = new Set<string>()
+    for (const a of allocs) {
+      if (!toRelease.greaterThan(0)) break
+      const allocAmt = new Prisma.Decimal(a.amount)
+      const release = toRelease.greaterThanOrEqualTo(allocAmt) ? allocAmt : toRelease
+      if (release.greaterThanOrEqualTo(allocAmt)) {
+        await tx.paymentAllocation.delete({ where: { id: a.id } })
+      } else {
+        await tx.paymentAllocation.update({
+          where: { id: a.id },
+          data: { amount: allocAmt.minus(release) },
+        })
+      }
+      touched.add(a.chargeId)
+      toRelease = toRelease.minus(release)
+    }
+    for (const chargeId of touched) {
+      const charge = await tx.serviceCharge.findUnique({
+        where: { id: chargeId },
+        select: {
+          id: true,
+          amount: true,
+          totalAmount: true,
+          dueDate: true,
+          paidAt: true,
+          status: true,
+        },
+      })
+      if (!charge || charge.status === 'written_off') continue
+      const agg = await tx.paymentAllocation.aggregate({
+        where: { chargeId },
+        _sum: { amount: true },
+      })
+      const allocated = agg._sum.amount ?? new Prisma.Decimal(0)
+      const total = new Prisma.Decimal(charge.totalAmount ?? charge.amount)
+      const state = deriveChargeState(allocated, total, charge.dueDate, new Date())
+      await tx.serviceCharge.update({
+        where: { id: chargeId },
+        data: {
+          status: toStoredStatus(state),
+          paidAt: state === 'paid' || state === 'overpaid' ? charge.paidAt : null,
+        },
+      })
+    }
     moneyBalance = (
       await refreshMoneyBalance(tx, { agencyId: args.agencyId, companyId: payment.companyId })
     ).toFixed(2)
