@@ -20,6 +20,7 @@ import { ProjectDetailPage } from '@/routes/projects/ProjectDetailPage'
 import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
+import { ContentPage } from '@/routes/content/ContentPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { SupportPage } from '@/routes/support/SupportPage'
@@ -189,6 +190,14 @@ export default function App() {
           element={
             <RoleRoute allow={['owner']}>
               <ReportsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/content"
+          element={
+            <RoleRoute allow={['owner']}>
+              <ContentPage />
             </RoleRoute>
           }
         />

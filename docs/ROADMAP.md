@@ -91,9 +91,9 @@ webhooks + ApiKey беремо **лише коли система цілісна
 продукту, а не до рухомого контракту. Заглушка `/settings/integrations` лишається by-design. До того —
 доводимо ядро до цілісності (гроші/приймання/payroll/картки), а не нові зовнішні поверхні.
 
-**🧭 ПЛАН (рішення власника 2026-07-10):** черга — ✅ **agency_members RLS** (закрито 10.07) →
-**S7-05 міні-CMS** (блог+кейси з `/content`; кейс-едітор Фази B вливається сюди) → **дизайн-хвости
-Фази B** (team-boards → team-картка → testimonials → announcement-feed → documents-eu) → далі
+**🧭 ПЛАН (рішення власника 2026-07-10):** черга — ✅ **agency_members RLS** (10.07) →
+✅ **S7-05 міні-CMS** (10.07; кейс-едітор Фази B влився сюди) → **дизайн-хвости Фази B**
+(team-boards → team-картка → testimonials → announcement-feed → documents-eu) → далі
 **S9–S13 Enhancement** («повноцінний продукт» поверх MVP). **SaaS (S14) — лише коли все повністю
 працює і зафіксовано.**
 
@@ -112,7 +112,7 @@ webhooks + ApiKey беремо **лише коли система цілісна
 - **S6 ✅ ядро закрито** (Documents + Notifications + Bot, на staging). Власник — **легкий sanity-тач** незворотних флоу (документ → надіслати → клієнт отримав + нотифікація; Telegram-лінк), НЕ вичерпний поштучний тест.
 - **🧭 Режим тестування (рішення власника 2026-06-26):** per-slice безпека = **автогейт (type-check+lint+test) + Playwright-smoke у фоні** на кожен пуш. **Комплексний наскрізний тест + точкові правки логіки/фронту — на milestone S8** (QA + перший клієнт), коли вертикалі цілісні (багато фіч backend-blocked → розблокуються потім). Презентацію/UX відкладаємо туди; **гроші · документи · нотифікації · схему/контракти доводимо рано** (дорого ретрофітити). На S8-проході вести [`DESIGN_COVERAGE.md`](DESIGN_COVERAGE.md), щоб відрізняти «заглушка by design» від багу.
 - **➡️ S7 у роботі** (публічний сайт; [`TRACKER.md`](TRACKER.md) S7-01…04 — без CMS/chat-hub за scope-рішенням). **✅ Homepage ПОВНА (9/9 секцій):** Hero · Partners · Cases · Scale · Services · Process · Spotlight · About · Contact (термінал-shell, ported `wf-tm-*`, UA, light/dark, typewriter; гімікі-boot/sound/accent/CRT відкладено в polish). **✅ Contact API** (`POST /content/contact`, honeypot+rate-limit, ContactForm). **✅ Вторинні сторінки** (/services /about /contact /blog /cases через TermPageShell) + blog-read API + seed. **✅ SEO (S7-03 частина):** sitemap (static+services+blog-posts+/cases) · robots · metadataBase · per-page **canonical** · брендований динамічний **OG-образ** (`opengraph-image.tsx`, ASCII-only → network-free build) + twitter-карта · OG для blog/service detail. **Далі:** UA/EN i18n (+ hreflang, доносить решту S7-03) → Lighthouse≥90.
-- **🧭 CMS-scope (рішення власника 2026-06-27):** «міні-CMS» = керування **блогом + кейсами** з workspace `/content` (+AI-генерація) — це **S7-05** (відкладено, наш scope «без CMS»). **Homepage-копірайт лишається в коді** (статика `content.ts`; рідкі зміни через деплой), НЕ редагується з адмінки. Повний landing-CMS (кожна секція з адмінки) = **S14 SaaS «лендінг-пресети+міні-CMS»** (11-ПРЕСЕТИ), не зараз. Поточна статика+seed сумісна: блог/кейси пізніше переїдуть у БД (`BlogPost`), homepage лишиться кодом.
+- **🧭 CMS-scope (рішення власника 2026-06-27; ✅ S7-05 ЗБУДОВАНО 10.07):** «міні-CMS» = керування **блогом + кейсами** з workspace `/content` (+AI-генерація) — **зроблено** (див. «Готово нещодавно»). **Homepage-копірайт лишається в коді** (статика `content.ts`; рідкі зміни через деплой), НЕ редагується з адмінки. Повний landing-CMS (кожна секція з адмінки) = **S14 SaaS «лендінг-пресети+міні-CMS»** (11-ПРЕСЕТИ), не зараз.
 
 ### 🔍 Наскрізний design→build аудит (2026-06-24) — ДЖЕРЕЛО БЕКЛОГУ
 
@@ -137,6 +137,20 @@ webhooks + ApiKey беремо **лише коли система цілісна
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **S7-05 МІНІ-CMS — блог + кейси з workspace `/content` (+AI) — ЗБУДОВАНО (2026-07-10).**
+  Кейс-едітор Фази B влився сюди (BlogPostType=case*study). Бек `routes/content/cms.ts`
+  (owner-only, platform-рівень без tenant-шва): list-з-чернетками · full-read обидві мови ·
+  create (published=false, slug kebab-гард, 409 на дубль) · update · **publish/unpublish**
+  (publishedAt штампується ОДИН раз — стабільна дата) · delete · **POST generate** — AI-чернетка
+  через Anthropic Messages API (`services/blogAi.ts`, fetch без SDK; env `ANTHROPIC_API_KEY`,
+  модель `BLOG_AI_MODEL`∥claude-sonnet-5; без ключа → 503 з підказкою). UI: nav «Контент» (owner)
+  → `/content` — список (тип·slug·статус·featured★) + publish/unpublish/delete + редактор-модалка:
+  двомовні title/excerpt, контент **міні-markdown-ом** (`##`·`-`·`>`·`!`·код-фенси ↔ конвертери
+  `blocksToText`/`textToBlocks` у `lib/content.ts`) рівно в block-shape лендінг-рендера, теги,
+  AI-кнопка префілить форму. 6 route-тестів. Гейт: turbo **56/56**, api **950**. Live-verify:
+  чернетка невидима публічно → publish → `/content/blog` list+detail (3 блоки) → generate 503
+  без ключа → delete → зникла. \_Homepage-копірайт лишається кодом (рішення 27.06).*
 
 - **RLS: agency_members tenant_isolation — ОСТАННІЙ security-борг ЗАКРИТО (2026-07-10).**
   Передіснуючий гап (відкладався r4→r5): єдина agencyId-таблиця без політики. Міграція
