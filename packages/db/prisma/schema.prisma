@@ -566,6 +566,9 @@ model InternalTask {
   assignee    Profile?               @relation("InternalTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   status      InternalTaskStatus     @default(todo)
   position    Int                    @default(0)
+  // TEAM-BOARDS: команда задачі (таби дошки; null = видно лише в «Усі»)
+  teamId      String?
+  team        Team?                  @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdAt   DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
   agency      Agency                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
@@ -574,6 +577,7 @@ model InternalTask {
   @@index([agencyId])
   @@index([orderId])
   @@index([assigneeId])
+  @@index([teamId])
   @@map("internal_tasks")
 }
 
@@ -1570,6 +1574,7 @@ model Agency {
   projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
   leads                Lead[] // 26 (CRM)
   leadStages           LeadStage[] // ХВІСТ-4: кастомні стадії воронки
+  teams                Team[] // TEAM-BOARDS (Фаза B, 10.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
@@ -1593,12 +1598,36 @@ model AgencyMember {
   // 12-ПЛАН-ФАКТ (capacity norm): planned billable hours per week for this member.
   // null → the agency default (DEFAULT_WEEKLY_CAPACITY) is used in the hours report.
   weeklyCapacityHours Int?
+  // TEAM-BOARDS: команда члена (null = поза командами; SetNull при видаленні команди)
+  teamId              String?
+  team                Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
 
   @@unique([agencyId, profileId])
   @@index([agencyId])
   @@index([profileId])
+  @@index([teamId])
   @@map("agency_members")
+}
+
+// TEAM-BOARDS (Фаза B, 10.07): команди агенції — таби глобальної дошки задач
+// (workspace-board.jsx: dev/design/marketing + агрегатна «Усі»). Кастомні колонки
+// per-team — follow-up (патерн LeadStage); поки колонки = 3 фіксовані статуси.
+model Team {
+  id        String         @id @default(uuid())
+  agencyId  String
+  agency    Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  color     String? // hex-акцент таба (крапка wfb-board-dot)
+  position  Int            @default(0)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+  members   AgencyMember[]
+  tasks     InternalTask[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("teams")
 }
 
 enum AgencyMemberRole {

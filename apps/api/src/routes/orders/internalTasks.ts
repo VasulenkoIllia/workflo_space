@@ -20,6 +20,9 @@ const TASK_SELECT = {
   position: true,
   createdAt: true,
   updatedAt: true,
+  // TEAM-BOARDS: команда задачі (таби дошки)
+  teamId: true,
+  team: { select: { id: true, name: true, color: true } },
   assignee: { select: { id: true, name: true } },
   // мультивиконавці задачі: співвиконавці ДОДАТКОВО до головного assigneeId
   coAssignees: {
@@ -67,6 +70,9 @@ const BOARD_SELECT = {
   assigneeId: true,
   position: true,
   updatedAt: true,
+  // TEAM-BOARDS: таби дошки за командами
+  teamId: true,
+  team: { select: { id: true, name: true, color: true } },
   order: { select: { id: true, title: true, estimatedHours: true } },
   assignee: { select: { id: true, name: true } },
   coAssignees: {
@@ -78,6 +84,8 @@ const BOARD_SELECT = {
 const boardQuerySchema = z.object({
   assigneeId: z.string().min(1).optional(),
   status: z.enum(['todo', 'in_progress', 'done']).optional(),
+  // TEAM-BOARDS: фільтр таба команди ('none' = без команди)
+  teamId: z.string().min(1).optional(),
 })
 
 const internalTasksRoute: FastifyPluginAsync = (fastify) => {
@@ -100,6 +108,8 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
             agencyId,
             ...(q.assigneeId ? { assigneeId: q.assigneeId } : {}),
             ...(q.status ? { status: q.status } : {}),
+            // TEAM-BOARDS: 'none' → задачі поза командами; інакше — конкретна команда
+            ...(q.teamId ? { teamId: q.teamId === 'none' ? null : q.teamId } : {}),
           },
           orderBy: [{ status: 'asc' }, { position: 'asc' }, { updatedAt: 'desc' }],
           select: BOARD_SELECT,
@@ -194,6 +204,16 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       const input = updateInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
+      // TEAM-BOARDS: команда задачі — лише команда ЦІЄЇ агенції (cross-tenant → 400)
+      if (input.teamId) {
+        const teamId = input.teamId
+        const team = await withTenant((tx) =>
+          tx.team.findFirst({ where: { id: teamId, agencyId }, select: { id: true } })
+        )
+        if (!team) {
+          throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Команду не знайдено', 400)
+        }
+      }
 
       const data: Prisma.InternalTaskUpdateInput = {}
       if (input.title !== undefined) data.title = input.title
@@ -203,6 +223,9 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
         data.assignee = input.assigneeId
           ? { connect: { id: input.assigneeId } }
           : { disconnect: true }
+      }
+      if (input.teamId !== undefined) {
+        data.team = input.teamId ? { connect: { id: input.teamId } } : { disconnect: true }
       }
 
       const task = await withTenant((tx) =>

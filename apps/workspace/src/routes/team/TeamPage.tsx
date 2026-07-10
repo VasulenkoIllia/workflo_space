@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSetMemberTeam, useTeams } from '@/lib/teams'
 import { api } from '@/lib/api'
 import {
   num,
@@ -141,6 +142,7 @@ function MemberRow({
       </div>
       <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
         {ROLE_LABEL[member.role] ?? member.role}
+        <MemberTeamCell member={member} canEdit={canEdit} />
       </span>
       <span className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-subtle)' }}>
         з {formatDate(member.joinedAt)} ·{' '}
@@ -385,5 +387,45 @@ function EditMemberModal({ member, onClose }: { member: TeamMember; onClose: () 
         </label>
       </div>
     </Modal>
+  )
+}
+
+/** TEAM-BOARDS: команда члена — owner редагує селектом, решта бачить назву. */
+function MemberTeamCell({ member, canEdit }: { member: TeamMember; canEdit: boolean }) {
+  const { data: teams = [] } = useTeams()
+  const setTeam = useSetMemberTeam()
+  if (teams.length === 0) return null
+  if (!canEdit) {
+    return member.team ? (
+      <span style={{ marginLeft: 8, color: member.team.color ?? 'var(--wf-fg-subtle)' }}>
+        · {member.team.name}
+      </span>
+    ) : null
+  }
+  return (
+    <select
+      value={member.teamId ?? ''}
+      onChange={(e) =>
+        setTeam.mutate({ profileId: member.profileId, teamId: e.target.value || null })
+      }
+      className="wfp-mono"
+      title="Команда"
+      style={{
+        marginLeft: 8,
+        fontSize: 11,
+        padding: '1px 4px',
+        background: 'transparent',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 4,
+        color: member.team?.color ?? 'var(--wf-fg-muted)',
+      }}
+    >
+      <option value="">без команди</option>
+      {teams.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
   )
 }

@@ -195,6 +195,8 @@ export const updateInternalTaskSchema = z
     status: z.nativeEnum(InternalTaskStatus).optional(),
     assigneeId: z.string().uuid().nullable().optional(),
     position: z.number().int().min(0).optional(),
+    // TEAM-BOARDS: команда задачі (null = прибрати з команди → видно лише в «Усі»)
+    teamId: z.string().uuid().nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
     message: 'Потрібно вказати хоча б одне поле для оновлення',

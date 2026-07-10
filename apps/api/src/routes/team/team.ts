@@ -33,6 +33,9 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             role: true,
             createdAt: true,
             weeklyCapacityHours: true,
+            // TEAM-BOARDS: команда члена
+            teamId: true,
+            team: { select: { id: true, name: true, color: true } },
             profile: { select: { name: true, email: true } },
           },
           orderBy: { createdAt: 'asc' },
@@ -66,6 +69,8 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             email: m.profile.email,
             joinedAt: m.createdAt,
             weeklyCapacityHours: m.weeklyCapacityHours,
+            teamId: m.teamId,
+            team: m.team,
             rate: rate
               ? {
                   monthlySalary: rate.monthlySalary ? rate.monthlySalary.toFixed(2) : null,

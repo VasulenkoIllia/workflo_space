@@ -38,6 +38,9 @@ export interface BoardTask {
   assignee: { id: string; name: string } | null
   /** Мультивиконавці: співвиконавці ДОДАТКОВО до головного assignee. */
   coAssignees?: { id: string; name: string }[]
+  /** TEAM-BOARDS: команда задачі (таби дошки; null = лише в «Усі»). */
+  teamId?: string | null
+  team?: { id: string; name: string; color: string | null } | null
 }
 
 /** GET /workspace/tasks — all agency tasks across orders. Internal team. */
@@ -59,6 +62,19 @@ export function useMoveBoardTask() {
   return useMutation({
     mutationFn: ({ orderId, id, status }: { orderId: string; id: string; status: TaskStatus }) =>
       api.patch<{ task: OrderTask }>(`/orders/${orderId}/tasks/${id}`, { status }),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
+      void qc.invalidateQueries({ queryKey: key(vars.orderId) })
+    },
+  })
+}
+
+/** TEAM-BOARDS: перекинути задачу в команду (reuse per-order PATCH). */
+export function useSetTaskTeam() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, id, teamId }: { orderId: string; id: string; teamId: string | null }) =>
+      api.patch<{ task: OrderTask }>(`/orders/${orderId}/tasks/${id}`, { teamId }),
     onSuccess: (_d, vars) => {
       void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
       void qc.invalidateQueries({ queryKey: key(vars.orderId) })

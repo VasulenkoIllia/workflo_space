@@ -40,6 +40,9 @@ export interface TeamMember {
   joinedAt: string
   /** weekly capacity norm (12-ПЛАН-ФАКТ); null → agency default in the hours report. */
   weeklyCapacityHours: number | null
+  /** TEAM-BOARDS: команда члена (null = поза командами). */
+  teamId?: string | null
+  team?: { id: string; name: string; color: string | null } | null
   rate: TeamRate | null
 }
 
