@@ -1,4 +1,4 @@
-import { prisma, tenantTransaction } from '@workflo/db'
+import { prisma, runWithAgency, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -112,22 +112,27 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
         // Should never happen post-migration (every invite carries agencyId).
         throw gone()
       }
-      await tenantTransaction(prisma, async (tx) => {
-        const claimed = await tx.invite.updateMany({
-          where: { id: invite.id, usedAt: null },
-          data: { usedAt: new Date() },
+      // RLS (agency_members tenant_isolation, 10.07): біндимо tx на агенцію ІНВАЙТА, а не на
+      // activeAgencyId юзера — інакше при RLS_ENFORCED=true наявний член агенції A, приймаючи
+      // інвайт у B, впирався б у WITH CHECK (GUC=A, рядок B). Інвайт сам авторизує вступ у B.
+      await runWithAgency(agencyId, () =>
+        tenantTransaction(prisma, async (tx) => {
+          const claimed = await tx.invite.updateMany({
+            where: { id: invite.id, usedAt: null },
+            data: { usedAt: new Date() },
+          })
+          if (claimed.count === 0) {
+            throw gone()
+          }
+          await tx.agencyMember.upsert({
+            where: { agencyId_profileId: { agencyId, profileId } },
+            update: {}, // already a member → idempotent
+            create: { agencyId, profileId, role: 'executor' },
+          })
+          // Profile.role is a denormalized UI hint; the authoritative signal is the membership.
+          await tx.profile.update({ where: { id: profileId }, data: { role: 'executor' } })
         })
-        if (claimed.count === 0) {
-          throw gone()
-        }
-        await tx.agencyMember.upsert({
-          where: { agencyId_profileId: { agencyId, profileId } },
-          update: {}, // already a member → idempotent
-          create: { agencyId, profileId, role: 'executor' },
-        })
-        // Profile.role is a denormalized UI hint; the authoritative signal is the membership.
-        await tx.profile.update({ where: { id: profileId }, data: { role: 'executor' } })
-      })
+      )
 
       writeAuditAsync(request.log, {
         actorId: profileId,

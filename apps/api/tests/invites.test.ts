@@ -43,6 +43,8 @@ vi.mock('@workflo/db', () => ({
   },
   tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
     client.$transaction(fn),
+  // RLS-фікс acceptInvite: membership-upsert біндиться на агенцію інвайта
+  runWithAgency: (_agencyId: string, fn: () => unknown) => fn(),
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }))
 
