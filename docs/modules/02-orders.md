@@ -412,7 +412,12 @@ Partial unique index: `time_logs_one_active_per_executor ON (executor_id) WHERE 
   на `/reports` (owner): met/late/pending по обох сторонах SLA, розріз по виконавцях,
   список порушень; done-момент з ActivityLog. Деталі: `19-reports.md` UPDATE-нотатка.
 
-### D. Залежності між замовленнями ✅
+### D. Залежності між замовленнями ✅ — ЗБУДОВАНО 11.07.2026 (S10-03)
+
+> Реалізація: `OrderDependency` (без колонки type — один вид 'blocks', YAGNI),
+> `routes/orders/dependencies.ts` (batch-DFS cycle-guard), гейт у transitionOrderStatus
+> (після 02-А, перед 02-В), подія `orders.unblocked`, картка на детальці + gantt-бари
+> у TimelineView /orders. Оригінальна спека нижче.
 
 - `OrderDependency { id, orderId, dependsOnOrderId, type('blocks'), createdAt, @@unique([orderId, dependsOnOrderId]) }`.
 - Валідація циклів при створенні (DFS) → 409 `dependency_cycle`.

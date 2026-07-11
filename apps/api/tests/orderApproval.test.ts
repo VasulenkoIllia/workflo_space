@@ -32,6 +32,8 @@ const transaction = vi.fn(txImpl)
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as { Prisma: unknown }
   const prisma = {
+    // S10-03: гейт блокерів у transition читає залежності (порожньо = не заблоковано)
+    orderDependency: { findMany: vi.fn().mockResolvedValue([]) },
     order: {
       findFirst: orderFindFirst,
       findUnique: orderFindUnique,

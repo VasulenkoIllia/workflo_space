@@ -23,13 +23,15 @@ import {
   useTimeLogs,
   useTransitionStatus,
   useUpdateOrder,
+  useAddDependency,
+  useRemoveDependency,
   type UpdateOrderInput,
   type WorkspaceOrderDetail,
 } from '@/lib/orderDetail'
 import { useTeam } from '@/lib/payouts'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
-import { useOrderTags, useSetOrderTags, type OrderTag } from '@/lib/orders'
+import { useOrders, useOrderTags, useSetOrderTags, type OrderTag } from '@/lib/orders'
 import { DocumentsTab } from './DocumentsTab'
 import { FilesTab } from './FilesTab'
 import { TimeTab } from './TimeTab'
@@ -151,6 +153,7 @@ export function OrderDetailPage() {
             coAssignees={order.coAssignees ?? []}
           />
           <OrderTagsCard orderId={order.id} current={order.tags ?? []} />
+          <DependenciesCard order={order} />
           {order.company && (
             <Card title="Клієнт" style={{ marginBottom: 16 }}>
               <div className="wfp-side">
@@ -819,6 +822,129 @@ const HRS = (n: number | null | undefined): string =>
  * на будь-кого залученого, а не лише на тих, хто залогував час. Owner/manager у статусі review
  * коригує білабельні + оплатні години й приймає або повертає на доопрацювання.
  */
+/** S10-03: залежності — блокери цього замовлення (гейт старту) + кого блокує воно. */
+function DependenciesCard({ order }: { order: WorkspaceOrderDetail }) {
+  const add = useAddDependency(order.id)
+  const remove = useRemoveDependency(order.id)
+  const [picking, setPicking] = useState(false)
+  const [pick, setPick] = useState('')
+  // Пікер: живі замовлення агенції (без себе і вже доданих)
+  const { data: all } = useOrders({})
+  const taken = new Set((order.blockedBy ?? []).map((b) => b.id))
+  const options = (all?.orders ?? []).filter(
+    (o) =>
+      o.id !== order.id &&
+      !taken.has(o.id) &&
+      o.internalStatus !== OrderInternalStatus.DONE &&
+      o.internalStatus !== OrderInternalStatus.CANCELLED
+  )
+  const isLive = (st: string) => st !== 'done' && st !== 'cancelled'
+
+  return (
+    <Card title="Залежності" style={{ marginBottom: 16 }}>
+      {order.isBlocked && (
+        <div
+          className="wfp-mono"
+          style={{
+            fontSize: 11,
+            color: 'var(--wf-warning)',
+            border: '1px dashed var(--wf-warning)',
+            borderRadius: 'var(--wf-radius)',
+            padding: '6px 10px',
+            marginBottom: 10,
+          }}
+        >
+          // заблоковано — старт роботи неможливий, поки блокери не завершені
+        </div>
+      )}
+      {(order.blockedBy ?? []).length > 0 && (
+        <div style={{ display: 'grid', gap: 4, marginBottom: 10 }}>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            // чекає на:
+          </div>
+          {(order.blockedBy ?? []).map((b) => (
+            <div key={b.dependencyId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <StatusDot tone={isLive(b.internalStatus) ? 'warning' : 'success'} />
+              <Link to={`/orders/${b.id}`} style={{ fontSize: 13, minWidth: 0, flex: 1 }}>
+                {b.title}
+              </Link>
+              <button
+                type="button"
+                title="Прибрати залежність"
+                onClick={() => remove.mutate(b.dependencyId)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--wf-fg-muted)',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {(order.blocks ?? []).length > 0 && (
+        <div style={{ display: 'grid', gap: 4, marginBottom: 10 }}>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            // блокує:
+          </div>
+          {(order.blocks ?? []).map((b) => (
+            <Link key={b.dependencyId} to={`/orders/${b.id}`} style={{ fontSize: 13 }}>
+              {b.title}
+            </Link>
+          ))}
+        </div>
+      )}
+      {picking ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <select
+            value={pick}
+            onChange={(e) => setPick(e.target.value)}
+            style={{ padding: 8, fontSize: 13 }}
+          >
+            <option value="">— оберіть замовлення-блокер —</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.title}
+              </option>
+            ))}
+          </select>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={!pick}
+              loading={add.isPending}
+              onClick={() =>
+                add.mutate(pick, {
+                  onSuccess: () => {
+                    toast.success('Залежність додано')
+                    setPick('')
+                    setPicking(false)
+                  },
+                  onError: (err) =>
+                    toast.error(err instanceof Error ? err.message : 'Не вдалося (цикл?)'),
+                })
+              }
+            >
+              Додати
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPicking(false)}>
+              Скасувати
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={() => setPicking(true)}>
+          + залежить від…
+        </Button>
+      )}
+    </Card>
+  )
+}
+
 function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
   const a = order.acceptance
   const { isOwner, isManager, isExecutor } = useAuth()

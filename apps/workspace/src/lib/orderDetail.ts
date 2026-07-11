@@ -83,6 +83,18 @@ export interface WorkspaceOrderDetail {
   stages: OrderStage[]
   /** ПРИЙМАННЯ РОБОТИ (internal-only): план/факт/білабельно/до-оплати. */
   acceptance?: OrderAcceptance
+  // S10-03: залежності — блокери цього замовлення / кого блокує воно
+  blockedBy?: OrderDependencyRef[]
+  blocks?: OrderDependencyRef[]
+  isBlocked?: boolean
+}
+
+/** S10-03: посилання залежності (dependencyId — для видалення звʼязку). */
+export interface OrderDependencyRef {
+  dependencyId: string
+  id: string
+  title: string
+  internalStatus: OrderInternalStatus
 }
 
 export interface AcceptanceExecutor {
@@ -312,5 +324,24 @@ export function useDeleteFile(id: string) {
   return useMutation({
     mutationFn: (fileId: string) => api.delete<{ id: string }>(`/files/${fileId}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.files(id) }),
+  })
+}
+
+// ── S10-03: залежності між замовленнями ──────────────────────────────────────
+export function useAddDependency(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (dependsOnId: string) =>
+      api.post<{ dependency: { id: string } }>(`/orders/${id}/dependencies`, { dependsOnId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.detail(id) }),
+  })
+}
+
+export function useRemoveDependency(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (dependencyId: string) =>
+      api.delete<{ removed: true }>(`/orders/${id}/dependencies/${dependencyId}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.detail(id) }),
   })
 }

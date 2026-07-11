@@ -83,6 +83,19 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             },
             project: { select: { id: true, name: true, billingModel: true } },
             tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+            // S10-03: залежності — блокери цього замовлення + кого блокує воно
+            blockedBy: {
+              select: {
+                id: true,
+                dependsOn: { select: { id: true, title: true, internalStatus: true } },
+              },
+            },
+            dependents: {
+              select: {
+                id: true,
+                order: { select: { id: true, title: true, internalStatus: true } },
+              },
+            },
             firstResponseDueAt: true,
             resolutionDueAt: true,
             firstRespondedAt: true,
@@ -216,6 +229,13 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             firstRespondedAt: order.firstRespondedAt,
             slaBreachedAt: order.slaBreachedAt,
             acceptance,
+            // S10-03: блокери/залежні + агрегатний прапорець для банера і гейта UI
+            blockedBy: (order.blockedBy ?? []).map((d) => ({ dependencyId: d.id, ...d.dependsOn })),
+            blocks: (order.dependents ?? []).map((d) => ({ dependencyId: d.id, ...d.order })),
+            isBlocked: (order.blockedBy ?? []).some(
+              (d) =>
+                d.dependsOn.internalStatus !== 'done' && d.dependsOn.internalStatus !== 'cancelled'
+            ),
           },
         },
       })

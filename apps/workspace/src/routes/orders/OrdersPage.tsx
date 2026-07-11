@@ -445,6 +445,8 @@ function CreateOrderModal({
 const DAY_MS = 86_400_000
 
 /** Deadline-oriented view: orders bucketed by due date (overdue/this week/later/none). */
+/** S10-03 gantt-view (дизайн wfb-ktime, спрощено інлайн): бар = createdAt → dueDate
+ * у 28-денному вікні навколо сьогодні; колір за станом (done/overdue/soon/wip). */
 function TimelineView({
   orders,
   companies,
@@ -454,118 +456,193 @@ function TimelineView({
 }) {
   const navigate = useNavigate()
   const nameOf = (id: string) => companies.find((c) => c.id === id)?.name ?? '—'
-  const now = Date.now()
-  const stillOpen = (o: WorkspaceOrder) =>
-    o.internalStatus !== OrderInternalStatus.DONE &&
-    o.internalStatus !== OrderInternalStatus.CANCELLED
+  const DAYS = 28
+  const todayStart = new Date(new Date().toISOString().slice(0, 10)).getTime()
+  const windowStart = todayStart - 7 * DAY_MS // тиждень назад + 3 тижні вперед
+  const dayIndex = (t: number) =>
+    Math.max(0, Math.min(DAYS - 1, Math.floor((t - windowStart) / DAY_MS)))
+  const todayIdx = dayIndex(todayStart)
 
-  const overdue: WorkspaceOrder[] = []
-  const week: WorkspaceOrder[] = []
-  const later: WorkspaceOrder[] = []
-  const noDate: WorkspaceOrder[] = []
-  for (const o of orders) {
-    if (o.dueDate == null) noDate.push(o)
-    else {
-      const t = new Date(o.dueDate).getTime()
-      if (t < now && stillOpen(o)) overdue.push(o)
-      else if (t < now + 7 * DAY_MS) week.push(o)
-      else later.push(o)
+  const isClosed = (o: WorkspaceOrder) =>
+    o.internalStatus === OrderInternalStatus.DONE ||
+    o.internalStatus === OrderInternalStatus.CANCELLED
+  const barState = (o: WorkspaceOrder): 'done' | 'overdue' | 'soon' | 'wip' => {
+    if (isClosed(o)) return 'done'
+    if (o.dueDate) {
+      const due = new Date(o.dueDate).getTime()
+      if (due < todayStart) return 'overdue'
+      if (due <= todayStart + 3 * DAY_MS) return 'soon'
     }
+    return 'wip'
   }
-  const byDue = (a: WorkspaceOrder, b: WorkspaceOrder) =>
-    (a.dueDate ? new Date(a.dueDate).getTime() : Infinity) -
-    (b.dueDate ? new Date(b.dueDate).getTime() : Infinity)
-  const buckets: { key: string; label: string; warn?: boolean; rows: WorkspaceOrder[] }[] = [
-    { key: 'overdue', label: 'Прострочено', warn: true, rows: overdue.sort(byDue) },
-    { key: 'week', label: 'Цей тиждень', rows: week.sort(byDue) },
-    { key: 'later', label: 'Пізніше', rows: later.sort(byDue) },
-    { key: 'none', label: 'Без дедлайну', rows: noDate.sort(byDue) },
-  ]
+  const STATE_BG: Record<string, string> = {
+    done: 'color-mix(in srgb, var(--wf-success) 55%, transparent)',
+    overdue: 'color-mix(in srgb, var(--wf-destructive) 70%, transparent)',
+    soon: 'color-mix(in srgb, var(--wf-warning) 70%, transparent)',
+    wip: 'color-mix(in srgb, var(--wf-accent) 60%, transparent)',
+  }
+
+  const bars = orders
+    .map((o) => {
+      const start = dayIndex(new Date(o.createdAt).getTime())
+      const end = o.dueDate
+        ? dayIndex(new Date(o.dueDate).getTime())
+        : Math.min(DAYS - 1, todayIdx + 4)
+      return { o, s: Math.min(start, end), e: Math.max(start, end), state: barState(o) }
+    })
+    .sort((a, b) => a.s - b.s || a.e - b.e)
+  const days = Array.from({ length: DAYS }, (_, i) => i)
+  const dayLabel = (i: number) => new Date(windowStart + i * DAY_MS).getUTCDate()
+  const isWeekend = (i: number) => {
+    const dow = new Date(windowStart + i * DAY_MS).getUTCDay()
+    return dow === 0 || dow === 6
+  }
+  const grid = { display: 'grid', gridTemplateColumns: `repeat(${DAYS}, 1fr)` } as const
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      {buckets
-        .filter((b) => b.rows.length > 0)
-        .map((b) => (
-          <div key={b.key}>
+    <div style={{ border: '1px solid var(--wf-border)', borderRadius: 8, overflow: 'hidden' }}>
+      {/* шапка днів */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '260px 1fr',
+          borderBottom: '1px solid var(--wf-border)',
+        }}
+      >
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 10, color: 'var(--wf-fg-muted)', padding: '6px 10px' }}
+        >
+          замовлення · клієнт
+        </div>
+        <div style={grid}>
+          {days.map((d) => (
             <div
+              key={d}
               className="wfp-mono"
               style={{
-                fontSize: 11,
-                color: b.warn ? 'var(--wf-warning)' : 'var(--wf-fg-muted)',
-                textTransform: 'uppercase',
-                marginBottom: 8,
+                fontSize: 9,
+                textAlign: 'center',
+                padding: '6px 0',
+                color: d === todayIdx ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
+                background: isWeekend(d)
+                  ? 'color-mix(in srgb, var(--wf-border) 35%, transparent)'
+                  : undefined,
+                fontWeight: d === todayIdx ? 700 : 400,
               }}
             >
-              // {b.label} · {b.rows.length}
+              {dayLabel(d)}
             </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {b.rows.map((o) => {
-                const meta = o.internalStatus ? INTERNAL_STATUS_META[o.internalStatus] : undefined
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => navigate(`/orders/${o.id}`)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '10px 12px',
-                      border: '1px solid var(--wf-border)',
-                      borderRadius: 8,
-                      background: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span
-                      className="wfp-mono"
-                      style={{
-                        flexShrink: 0,
-                        width: 86,
-                        fontSize: 12,
-                        color: b.warn ? 'var(--wf-warning)' : 'var(--wf-fg-secondary)',
-                      }}
-                    >
-                      {o.dueDate ? formatDate(o.dueDate) : '—'}
-                    </span>
-                    <span
-                      style={{
-                        flex: 1,
-                        fontWeight: 500,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {o.title}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--wf-fg-muted)', flexShrink: 0 }}>
-                      {nameOf(o.companyId)}
-                    </span>
-                    {meta && (
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          fontSize: 12,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <StatusDot tone={meta.tone} />
-                        {meta.label}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
+          ))}
+        </div>
+      </div>
+      {/* рядки-бари */}
+      {bars.length === 0 ? (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 12, color: 'var(--wf-fg-muted)', padding: 16 }}
+        >
+          // немає замовлень у вибірці
+        </div>
+      ) : (
+        bars.map(({ o, s, e, state }) => (
+          <div
+            key={o.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '260px 1fr',
+              borderBottom: '1px solid var(--wf-border)',
+              alignItems: 'center',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => navigate(`/orders/${o.id}`)}
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'baseline',
+                padding: '8px 10px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {o.title}
+              </span>
+              <span
+                className="wfp-mono"
+                style={{ fontSize: 10, color: 'var(--wf-fg-muted)', flexShrink: 0 }}
+              >
+                {nameOf(o.companyId)}
+              </span>
+            </button>
+            <div style={{ ...grid, position: 'relative', height: 30 }}>
+              {days.map((d) => (
+                <div
+                  key={d}
+                  style={{
+                    borderLeft: d === todayIdx ? '1px solid var(--wf-accent)' : undefined,
+                    background: isWeekend(d)
+                      ? 'color-mix(in srgb, var(--wf-border) 25%, transparent)'
+                      : undefined,
+                  }}
+                />
+              ))}
+              <div
+                title={`${o.title}${o.dueDate ? ` · до ${formatDate(o.dueDate)}` : ' · без дедлайну'}`}
+                style={{
+                  position: 'absolute',
+                  top: 6,
+                  bottom: 6,
+                  left: `${(s / DAYS) * 100}%`,
+                  width: `${(Math.max(1, e - s + 1) / DAYS) * 100}%`,
+                  background: STATE_BG[state],
+                  borderRadius: 4,
+                  border: o.dueDate ? undefined : '1px dashed var(--wf-fg-muted)',
+                }}
+              />
             </div>
           </div>
+        ))
+      )}
+      {/* легенда */}
+      <div
+        className="wfp-mono"
+        style={{
+          display: 'flex',
+          gap: 16,
+          fontSize: 10,
+          color: 'var(--wf-fg-muted)',
+          padding: '8px 10px',
+        }}
+      >
+        {(
+          [
+            ['wip', 'в роботі'],
+            ['soon', 'скоро дедлайн'],
+            ['overdue', 'прострочено'],
+            ['done', 'закрито'],
+          ] as const
+        ).map(([k, label]) => (
+          <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <i style={{ width: 14, height: 7, borderRadius: 2, background: STATE_BG[k] }} />
+            {label}
+          </span>
         ))}
+        <span style={{ marginLeft: 'auto', color: 'var(--wf-accent)' }}>│ сьогодні</span>
+      </div>
     </div>
   )
 }

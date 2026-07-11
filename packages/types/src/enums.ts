@@ -460,6 +460,8 @@ export type NotificationEvent =
   | 'team.leave_status_changed'
   // S12-06: ранковий email-дайджест непрочитаних сповіщень (opt-in digestDaily)
   | 'system.digest'
+  // S10-03: блокер виконано — залежне замовлення розблоковано (in-app виконавцям)
+  | 'orders.unblocked'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

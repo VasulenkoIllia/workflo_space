@@ -351,6 +351,9 @@ model Order {
   documents          Document[]
   conversationStates ConversationState[]
   tags               OrderTagAssignment[]
+  // S10-03: залежності — це замовлення заблоковане blockedBy, і саме блокує dependents
+  blockedBy          OrderDependency[]         @relation("DepOrder")
+  dependents         OrderDependency[]         @relation("DepBlocker")
   agency             Agency                    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
   @@index([agencyId])
@@ -479,6 +482,26 @@ model OrderStage {
 
   @@index([orderId, position])
   @@map("order_stages")
+}
+
+/// S10-03 (спека 02-D): «orderId не стартує, поки dependsOnId не done». Один тип
+/// звʼязку — blocks (колонки type нема свідомо, YAGNI). Гейт на перехід у
+/// in_progress + DFS cycle-guard при створенні; при done блокера — notify
+/// виконавцям повністю розблокованих замовлень.
+model OrderDependency {
+  id          String   @id @default(uuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order    @relation("DepOrder", fields: [orderId], references: [id], onDelete: Cascade)
+  dependsOnId String
+  dependsOn   Order    @relation("DepBlocker", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([orderId, dependsOnId])
+  @@index([agencyId])
+  @@index([dependsOnId])
+  @@map("order_dependencies")
 }
 
 /// Per-(order, profile) read marker for unread counts in chat-hub (modules 03/18).
@@ -1718,6 +1741,7 @@ model Agency {
   announcements        Announcement[] // 07-В (11.07)
   announcementReads    AnnouncementRead[]
   leaveRequests        LeaveRequest[] // S13-04 (11.07)
+  orderDependencies    OrderDependency[] // S10-03 (11.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE

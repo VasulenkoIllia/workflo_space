@@ -190,6 +190,8 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'team.leave_status_changed': NotificationCategory.SYSTEM,
   // S12-06: дайджест — системна розсилка, opt-in тумблером digestDaily
   'system.digest': NotificationCategory.SYSTEM,
+  // S10-03: розблокування залежного замовлення
+  'orders.unblocked': NotificationCategory.ORDERS,
 }
 
 /**

@@ -87,6 +87,29 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
+      // S10-03 (02-D): заблоковане замовлення не стартує, поки ВСІ блокери не
+      // done (cancelled-блокер вважаємо знятим — він уже нічого не завершить).
+      if (to === OrderInternalStatus.IN_PROGRESS) {
+        const liveBlockers = await withTenant((tx) =>
+          tx.orderDependency.findMany({
+            where: {
+              orderId: order.id,
+              dependsOn: { internalStatus: { notIn: ['done', 'cancelled'] } },
+            },
+            select: { dependsOn: { select: { title: true } } },
+            take: 5,
+          })
+        )
+        if (liveBlockers.length > 0) {
+          const names = liveBlockers.map((b) => `«${b.dependsOn.title}»`).join(', ')
+          throw new AppError(
+            ApiErrorCode.CONFLICT,
+            `Заблоковано залежностями: ${names} — спершу заверши їх`,
+            409
+          )
+        }
+      }
+
       // 02-В advance gate (owner decision: hourly_prepaid only, moneyBalance discipline):
       // a prepaid project bills the advance at cycle start, which drives moneyBalance
       // negative; work on its orders can't start while the client still owes (balance < 0),
@@ -334,6 +357,51 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
           title: 'Повернено на доопрацювання',
           body: input.comment ? `${order.title} — ${input.comment}` : order.title,
         })
+      }
+
+      // S10-03: блокер завершено → залежні, у яких це був ОСТАННІЙ живий блокер,
+      // розблоковано — повідом виконавцям (in-app), щоб робота не висіла.
+      if (enteringDone) {
+        const dependents = await withTenant((tx) =>
+          tx.orderDependency.findMany({
+            where: { dependsOnId: order.id },
+            select: {
+              order: {
+                select: {
+                  id: true,
+                  title: true,
+                  assigneeId: true,
+                  coAssignees: { select: { profileId: true } },
+                  blockedBy: {
+                    select: { dependsOn: { select: { internalStatus: true } } },
+                  },
+                },
+              },
+            },
+          })
+        )
+        for (const d of dependents) {
+          const stillBlocked = d.order.blockedBy.some(
+            (b) =>
+              b.dependsOn.internalStatus !== 'done' && b.dependsOn.internalStatus !== 'cancelled'
+          )
+          if (stillBlocked) continue
+          const ids = [d.order.assigneeId, ...d.order.coAssignees.map((c) => c.profileId)]
+          const seen = new Set<string>()
+          for (const id of ids) {
+            if (!id || seen.has(id)) continue
+            seen.add(id)
+            dispatchNotification(request.log, {
+              profileId: id,
+              event: 'orders.unblocked',
+              vars: { orderTitle: d.order.title },
+              inApp: {
+                title: 'Замовлення розблоковано',
+                body: `${d.order.title} — блокер «${order.title}» завершено, можна стартувати.`,
+              },
+            })
+          }
+        }
       }
 
       return reply.send({ success: true, data: { order: updated } })

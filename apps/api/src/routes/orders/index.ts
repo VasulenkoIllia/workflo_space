@@ -9,6 +9,7 @@ import commentActionsRoute from './commentActions.js'
 import commentsStreamRoute from './commentsStream.js'
 import participantsRoute from './participants.js'
 import createOrderRoute from './createOrder.js'
+import dependenciesRoute from './dependencies.js'
 import createWorkspaceOrderRoute from './createWorkspaceOrder.js'
 import decideOrderApprovalRoute from './decideOrderApproval.js'
 import deleteOrderRoute from './deleteOrder.js'
@@ -29,6 +30,7 @@ import updateOrderRoute from './updateOrder.js'
 /** Orders route group (`/orders/*`). Each sub-route declares its own full path. */
 const orderRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(createOrderRoute)
+  await fastify.register(dependenciesRoute)
   await fastify.register(createWorkspaceOrderRoute)
   await fastify.register(listOrdersRoute)
   await fastify.register(getOrderRoute)
