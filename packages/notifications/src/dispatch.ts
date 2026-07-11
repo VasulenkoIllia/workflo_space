@@ -33,6 +33,7 @@ import {
   renderEmailChangeRequestedEmail,
   renderMonthlyReportEmail,
   renderDigestEmail,
+  renderBroadcastEmail,
 } from './email/templates/index.js'
 import {
   renderApprovalDecidedTelegram,
@@ -130,6 +131,8 @@ export type EventPayloadMap = {
   }
   // S12-06: дайджест — rows = [заголовок сповіщення, текст]
   'system.digest': { count: number; rows: [string, string][] }
+  // S12-07: owner-розсилка (subject/body від власника)
+  'system.broadcast': { subject: string; body: string }
   // 05-В реверси (клієнтські листи)
   'billing.payment_refunded': { amount: string; method?: string | null; portalUrl: string }
   'billing.debt_written_off': { amount: string; portalUrl: string }
@@ -193,6 +196,10 @@ export function renderEmailForEvent(
     case 'system.digest': {
       const v = vars as EventPayloadMap['system.digest']
       return renderDigestEmail({ count: v.count, rows: v.rows, locale })
+    }
+    case 'system.broadcast': {
+      const v = vars as EventPayloadMap['system.broadcast']
+      return renderBroadcastEmail({ subject: v.subject, body: v.body, locale })
     }
     case 'system.invite_sent': {
       // One event, two templates — disambiguated by presence of companyName.

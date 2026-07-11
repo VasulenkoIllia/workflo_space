@@ -98,3 +98,26 @@ export function renderDigestEmail(vars: DigestEmailVars): RenderedEmail {
     html: renderLayout({ locale, title: subject, preheader: subject, bodyHtml }),
   }
 }
+
+/**
+ * S12-07: owner-розсилка сегменту клієнтів. subject/body від власника (plain text,
+ * подвійний перенос → абзац); увесь текст екранується.
+ */
+export interface BroadcastEmailVars {
+  subject: string
+  body: string
+  locale?: LocaleKey
+}
+
+export function renderBroadcastEmail(vars: BroadcastEmailVars): RenderedEmail {
+  const locale: LocaleKey = vars.locale ?? 'uk'
+  const paragraphs = vars.body
+    .split(/\n{2,}/)
+    .map((p) => renderParagraph(escapeText(p).replace(/\n/g, '<br />')))
+    .join('\n')
+  const bodyHtml = [renderHeading(escapeText(vars.subject)), paragraphs].join('\n')
+  return {
+    subject: vars.subject,
+    html: renderLayout({ locale, title: vars.subject, preheader: vars.subject, bodyHtml }),
+  }
+}

@@ -97,7 +97,9 @@ webhooks + ApiKey беремо **лише коли система цілісна
 ✅ **testimonials** (11.07) → ✅ **announcement-feed** (11.07) → ✅ **documents-eu (06-Е EU-комплект + 06-Д публічний рахунок)** (11.07) —
 **дизайн-хвости Фази B закрито повністю** → **S9–S13 Enhancement** (черга власника 2026-07-11):
 ✅ **податок-на-дохід S13-06ч** (11.07) → ✅ **відпустки S13-04/05** (11.07) → ✅ **notify-пакет S12-03/06** (11.07) →
-✅ **залежності замовлень + gantt S10-03** (11.07) — **черга Enhancement №1 закрита 4/4**; наступну чергу обирає власник.
+✅ **залежності замовлень + gantt S10-03** (11.07) — **черга №1 закрита 4/4**.
+**Черга №2 (вибір власника 11.07):** ✅ **bulk-розсилки S12-07** (11.07) → **retention-дашборд S11-07** →
+**email-inbound → тікет S12-05** → **пакет дрібних хвостів** (hireDate-форма · thumbnails · GDPR-export).
 **SaaS (S14) — лише коли все повністю працює і зафіксовано.**
 
 **📌 Що варто доробити далі (черга після тесту):**
@@ -140,6 +142,24 @@ webhooks + ApiKey беремо **лише коли система цілісна
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **BROADCAST (S12-07, черга №2 — 1/4) — bulk email-розсилки сегменту клієнтів — ЗБУДОВАНО (2026-07-11).**
+  Модель `Broadcast` (forced-RLS, enum-и segment all/debtors/tier + status draft/sending/sent
+  у drift; міграція `20260718_broadcasts` fresh-PG-proven). Флоу: owner-чернетка →
+  preview (`resolveBroadcastRecipients`: власники компаній сегмента, дедуп по профілю;
+  debtors = moneyBalance<0, tier = loyaltyTier) → send (**атомарний claim draft→sending**,
+  повторний 409) → outbox `broadcast.send` → воркер `handleBroadcastSend` шле через
+  `deliverToRecipients('system.broadcast')` — notify-МАТРИЦЯ: вимкнений system-email
+  клієнта поважається, in-app пишеться завжди → status sent + counts. Email-шаблон
+  `renderBroadcastEmail` (subject/body власника, plain-text → абзаци, повний escape).
+  UI: секція «Email-розсилки» на /announcements (список зі статусами/counts, модалка
+  subject+textarea+сегмент(+тір), лайв-«отримають N», send з confirm; правка/видалення
+  лише чернеток). Тести broadcasts 4 (403 executor, tier-валідація, дедуп+debtors-фільтр,
+  send-клейм+409, draft-only 404). Live-verify: чернетка → preview 2 → send → воркер
+  sent 2/2 → in-app рядки обом власникам + **email status=sent** у notification*logs →
+  повторний send 409 → executor 403. Гейт turbo **37/37**, api **1020**.
+  *Ретрай-семантика воркера: обробляється лише status='sending' (після 'sent' — no-op);
+  частковий ретрай з дублями малоймовірний (notify не кидає) — задокументовано.\_
 
 - **DEPS+GANTT (S10-03, Enhancement №4 — черга закрита 4/4) — залежності замовлень + gantt-view — ЗБУДОВАНО (2026-07-11).**
   Спека 02-D повністю: модель `OrderDependency` (forced-RLS, unique пара, міграція

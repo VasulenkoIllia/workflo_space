@@ -78,6 +78,7 @@ model Profile {
   leaveRequests          LeaveRequest[]            @relation("LeaveProfile") // S13-04
   leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
   pushSubscriptions      PushSubscription[] // S12-03
+  broadcastsCreated      Broadcast[]               @relation("BroadcastCreatedBy") // S12-07
 
   @@index([role])
   @@map("profiles")
@@ -1501,6 +1502,43 @@ model AnnouncementRead {
   @@map("announcement_reads")
 }
 
+// S12-07: сегмент email-розсилки — всі клієнти / боржники (moneyBalance<0) / loyalty-тір
+enum BroadcastSegment {
+  all
+  debtors
+  tier
+}
+
+enum BroadcastStatus {
+  draft
+  sending
+  sent
+}
+
+/// S12-07 BULK-РОЗСИЛКИ: owner-лист сегменту клієнтів. Одержувачі — власники
+/// компаній сегмента (дедуп по профілю); доставка через outbox (broadcast.send)
+/// → notify-матриця (event system.broadcast; вимкнений system-email поважається).
+model Broadcast {
+  id             String           @id @default(uuid())
+  agencyId       String
+  agency         Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  subject        String
+  body           String // плоский текст; \n\n → абзаци в email-шаблоні
+  segment        BroadcastSegment @default(all)
+  tier           LoyaltyTier? // обовʼязковий при segment=tier
+  status         BroadcastStatus  @default(draft)
+  recipientCount Int              @default(0)
+  sentCount      Int              @default(0)
+  createdById    String
+  createdBy      Profile          @relation("BroadcastCreatedBy", fields: [createdById], references: [id])
+  sentAt         DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, status])
+  @@map("broadcasts")
+}
+
 // S13-04: тип відсутності (дизайн calendar-plus WsLeaves: відпустка/лікарняний/відгул + без збереження)
 enum LeaveType {
   vacation
@@ -1742,6 +1780,7 @@ model Agency {
   announcementReads    AnnouncementRead[]
   leaveRequests        LeaveRequest[] // S13-04 (11.07)
   orderDependencies    OrderDependency[] // S10-03 (11.07)
+  broadcasts           Broadcast[] // S12-07 (11.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE

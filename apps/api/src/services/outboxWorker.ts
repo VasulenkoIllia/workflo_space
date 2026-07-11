@@ -8,6 +8,7 @@ import {
 import type { FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { captureException } from '../observability/sentry.js'
+import { resolveBroadcastRecipients } from './broadcast.js'
 import { renderDocumentAttachmentById } from './documentRender.js'
 import { resolveEmailOverrides } from './emailTemplates.js'
 import { maybeAutoInvoiceOnDone } from './autoInvoice.js'
@@ -469,6 +470,44 @@ async function handlePaymentConfirmed(
   )
 }
 
+const broadcastSendPayload = z.object({ broadcastId: z.string() })
+
+/** S12-07 `broadcast.send` → лист кожному власнику компанії сегмента через notify-матрицю.
+ * Ідемпотентність ретраю: обробляємо лише status='sending'; після 'sent' — no-op.
+ * (deliverToRecipients не кидає — частковий ретрай з дублями малоймовірний, задокументовано.) */
+async function handleBroadcastSend(
+  logger: FastifyBaseLogger,
+  event: OutboxEventView
+): Promise<void> {
+  const p = broadcastSendPayload.parse(event.payload)
+  const b = await prisma.broadcast.findUnique({
+    where: { id: p.broadcastId },
+    select: {
+      id: true,
+      agencyId: true,
+      subject: true,
+      body: true,
+      segment: true,
+      tier: true,
+      status: true,
+    },
+  })
+  if (!b || b.status !== 'sending') return
+  const ids = await resolveBroadcastRecipients(prisma, b.agencyId, b.segment, b.tier)
+  await deliverToRecipients(
+    logger,
+    ids,
+    'system.broadcast',
+    { subject: b.subject, body: b.body },
+    { title: b.subject, body: b.body.slice(0, 140) }
+  )
+  await prisma.broadcast.update({
+    where: { id: b.id },
+    data: { status: 'sent', sentAt: new Date(), recipientCount: ids.length, sentCount: ids.length },
+  })
+  logger.info({ broadcastId: b.id, recipients: ids.length }, 'broadcast: dispatched')
+}
+
 /** Route a claimed event to its handler. Unknown type → throw → retried → DLQ (visible, not dropped). */
 export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
   return async (event: OutboxEventView) => {
@@ -499,6 +538,9 @@ export function buildDispatch(logger: FastifyBaseLogger): OutboxHandler {
         return
       case 'payment.confirmed':
         await handlePaymentConfirmed(logger, event)
+        return
+      case 'broadcast.send':
+        await handleBroadcastSend(logger, event)
         return
       case 'charge.approval_approved':
       case 'charge.approval_rejected':

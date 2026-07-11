@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import announcementsRoute from './announcements.js'
+import broadcastsRoute from './broadcasts.js'
 import notificationsRoute from './notifications.js'
 import pushRoute from './push.js'
 
@@ -8,6 +9,7 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(notificationsRoute)
   await fastify.register(announcementsRoute)
   await fastify.register(pushRoute)
+  await fastify.register(broadcastsRoute)
 }
 
 export default notificationRoutes

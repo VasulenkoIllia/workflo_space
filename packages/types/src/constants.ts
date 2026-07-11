@@ -192,6 +192,8 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'system.digest': NotificationCategory.SYSTEM,
   // S10-03: розблокування залежного замовлення
   'orders.unblocked': NotificationCategory.ORDERS,
+  // S12-07: owner-розсилка клієнтам
+  'system.broadcast': NotificationCategory.SYSTEM,
 }
 
 /**

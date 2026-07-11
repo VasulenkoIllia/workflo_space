@@ -145,6 +145,19 @@ export enum DocKit {
   EU = 'eu',
 }
 
+/** S12-07: сегмент email-розсилки клієнтам. */
+export enum BroadcastSegment {
+  ALL = 'all',
+  DEBTORS = 'debtors',
+  TIER = 'tier',
+}
+
+export enum BroadcastStatus {
+  DRAFT = 'draft',
+  SENDING = 'sending',
+  SENT = 'sent',
+}
+
 /** S13-04: тип відсутності (відпустка / лікарняний / відгул / без збереження). */
 export enum LeaveType {
   VACATION = 'vacation',
@@ -462,6 +475,8 @@ export type NotificationEvent =
   | 'system.digest'
   // S10-03: блокер виконано — залежне замовлення розблоковано (in-app виконавцям)
   | 'orders.unblocked'
+  // S12-07: owner-розсилка сегменту клієнтів (email через notify-матрицю + in-app)
+  | 'system.broadcast'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

@@ -9,6 +9,21 @@ import {
   useDeleteAnnouncement,
   useUpdateAnnouncement,
 } from '@/lib/announcements'
+import {
+  BROADCAST_STATUS_LABEL,
+  SEGMENT_LABEL,
+  TIER_LABEL,
+  useBroadcastPreview,
+  useBroadcasts,
+  useDeleteBroadcast,
+  useSaveBroadcast,
+  useSendBroadcast,
+  type Broadcast,
+  type BroadcastSegment,
+  type LoyaltyTier,
+} from '@/lib/broadcasts'
+import { Card } from '@workflo/ui'
+import { formatDate } from '@/lib/format'
 
 /**
  * ANNOUNCEMENTS (07-В, owner): оголошення агенції — sticky-банер у workspace (team/all)
@@ -149,8 +164,263 @@ export function AnnouncementsPage() {
         </div>
       )}
 
+      {/* S12-07: email-розсилки сегменту клієнтів */}
+      <div style={{ marginTop: 24 }}>
+        <BroadcastsSection />
+      </div>
+
       {creating && <CreateModal onClose={() => setCreating(false)} />}
     </div>
+  )
+}
+
+/** S12-07: розсилки — список + модалка створення + preview + send. */
+function BroadcastsSection() {
+  const { data, isLoading } = useBroadcasts()
+  const send = useSendBroadcast()
+  const del = useDeleteBroadcast()
+  const [editing, setEditing] = useState<Broadcast | null | 'new'>(null)
+  const items = data?.broadcasts ?? []
+
+  return (
+    <Card
+      title="Email-розсилки"
+      aux={
+        <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+          + Розсилка
+        </Button>
+      }
+    >
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // лист власникам компаній сегмента · доставка поважає їхні налаштування сповіщень
+      </div>
+      {isLoading ? (
+        <Skeleton style={{ height: 100 }} />
+      ) : items.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // розсилок ще не було
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {items.map((b) => (
+            <div
+              key={b.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.6fr auto auto auto auto',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 8px',
+                borderBottom: '1px solid var(--wf-border)',
+              }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{b.subject}</div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--wf-fg-secondary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={b.body}
+                >
+                  {b.body}
+                </div>
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                → {SEGMENT_LABEL[b.segment]}
+                {b.segment === 'tier' && b.tier ? ` · ${TIER_LABEL[b.tier]}` : ''}
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                {b.status === 'sent'
+                  ? `${b.sentCount} одерж. · ${b.sentAt ? formatDate(b.sentAt) : ''}`
+                  : '—'}
+              </span>
+              <span
+                className={`wfp-badge wfp-badge--${
+                  b.status === 'sent' ? 'success' : b.status === 'sending' ? 'warning' : 'muted'
+                }`}
+              >
+                {BROADCAST_STATUS_LABEL[b.status]}
+              </span>
+              <span style={{ display: 'inline-flex', gap: 6 }}>
+                {b.status === 'draft' && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(b)}>
+                      Редагувати
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        del.mutate(b.id, { onSuccess: () => toast.success('Видалено') })
+                      }
+                    >
+                      ✕
+                    </Button>
+                  </>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {editing && (
+        <BroadcastModal
+          broadcast={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSend={(id) =>
+            send.mutate(id, {
+              onSuccess: () => {
+                toast.success('Розсилку поставлено в чергу — листи підуть за хвилину')
+                setEditing(null)
+              },
+              onError: (err) =>
+                toast.error(err instanceof ApiError ? err.message : 'Не вдалося надіслати'),
+            })
+          }
+        />
+      )}
+    </Card>
+  )
+}
+
+function BroadcastModal({
+  broadcast,
+  onClose,
+  onSend,
+}: {
+  broadcast: Broadcast | null
+  onClose: () => void
+  onSend: (id: string) => void
+}) {
+  const save = useSaveBroadcast()
+  const [subject, setSubject] = useState(broadcast?.subject ?? '')
+  const [body, setBody] = useState(broadcast?.body ?? '')
+  const [segment, setSegment] = useState<BroadcastSegment>(broadcast?.segment ?? 'all')
+  const [tier, setTier] = useState<LoyaltyTier>(broadcast?.tier ?? 'vip')
+  const [savedId, setSavedId] = useState<string | null>(broadcast?.id ?? null)
+  const preview = useBroadcastPreview(savedId)
+  const valid = subject.trim().length >= 3 && body.trim().length >= 10
+
+  const persist = (then?: (id: string) => void) =>
+    save.mutate(
+      {
+        id: savedId ?? undefined,
+        subject: subject.trim(),
+        body: body.trim(),
+        segment,
+        tier: segment === 'tier' ? tier : null,
+      },
+      {
+        onSuccess: (r) => {
+          setSavedId(r.broadcast.id)
+          then?.(r.broadcast.id)
+        },
+        onError: (err) =>
+          toast.error(err instanceof ApiError ? err.message : 'Не вдалося зберегти'),
+      }
+    )
+
+  return (
+    <Modal
+      open
+      title={savedId ? 'Розсилка (чернетка)' : 'Нова розсилка'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={save.isPending}>
+            Закрити
+          </Button>
+          <Button
+            variant="secondary"
+            loading={save.isPending}
+            disabled={!valid}
+            onClick={() => persist()}
+          >
+            Зберегти чернетку
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!valid}
+            loading={save.isPending}
+            onClick={() =>
+              persist((id) => {
+                const n = preview.data?.recipientCount
+                if (
+                  window.confirm(
+                    `Надіслати розсилку${n != null ? ` ${n} одержувачам` : ''}? Скасувати буде неможливо.`
+                  )
+                )
+                  onSend(id)
+              })
+            }
+          >
+            Надіслати
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'grid', gap: 10 }}>
+        <Input label="Тема листа" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+          Текст (порожній рядок = новий абзац)
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={7}
+            style={{ width: '100%', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+          />
+        </label>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: segment === 'tier' ? '1fr 1fr' : '1fr',
+            gap: 10,
+          }}
+        >
+          <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+            Сегмент
+            <select
+              value={segment}
+              onChange={(e) => setSegment(e.target.value as BroadcastSegment)}
+              style={{ padding: 8 }}
+            >
+              <option value="all">Усі клієнти</option>
+              <option value="debtors">Боржники (борг {'>'} 0)</option>
+              <option value="tier">Loyalty-тір…</option>
+            </select>
+          </label>
+          {segment === 'tier' && (
+            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+              Тір
+              <select
+                value={tier}
+                onChange={(e) => setTier(e.target.value as LoyaltyTier)}
+                style={{ padding: 8 }}
+              >
+                {(Object.keys(TIER_LABEL) as LoyaltyTier[]).map((t) => (
+                  <option key={t} value={t}>
+                    {TIER_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {savedId && (
+          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-accent)' }}>
+            // отримають: {preview.isLoading ? '…' : (preview.data?.recipientCount ?? '—')}{' '}
+            власників компаній
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

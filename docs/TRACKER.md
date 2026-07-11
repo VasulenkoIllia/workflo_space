@@ -541,15 +541,15 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 
 ## SPRINT 12 — Documents & Notifications (повний)
 
-| ID     | Задача                                                                                                                                      | Модуль   | Статус |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| S12-01 | e-signature (click→accept; SignatureProvider for Diia/КЕП)                                                                                  | [06-doc] | ⬜     |
-| S12-02 | DocumentTemplate + bulk-generate (outbox) + draft→preview→approve                                                                           | [06]     | ⬜     |
-| S12-03 | ✅ **ЗБУДОВАНО 11.07.2026** (web-push VAPID, канал у матриці, sw.js обох апок; ключі → env) — Web Push (PushSubscription+VAPID+PushAdapter) | [07]     | ⬜     |
-| S12-04 | SMS adapter (SmsAdapter TurboSMS/Twilio, per-agency)                                                                                        | [07]     | ⬜     |
-| S12-05 | Email inbound→task + bounce/suppression + unsubscribe + DKIM domain                                                                         | [08]     | ⬜     |
-| S12-06 | ✅ **ЗБУДОВАНО 11.07.2026** (quietFrom/quietTo Kyiv на NotificationSettings + digestDaily + cron 08:00) — Quiet-hours / digest ⬅backlog     | [07]     | ⬜     |
-| S12-07 | Bulk-розсилки (BulkBroadcast + outbox worker, сегментація) ⬅backlog                                                                         | [07]     | ⬜     |
+| ID     | Задача                                                                                                                                                   | Модуль   | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| S12-01 | e-signature (click→accept; SignatureProvider for Diia/КЕП)                                                                                               | [06-doc] | ⬜     |
+| S12-02 | DocumentTemplate + bulk-generate (outbox) + draft→preview→approve                                                                                        | [06]     | ⬜     |
+| S12-03 | ✅ **ЗБУДОВАНО 11.07.2026** (web-push VAPID, канал у матриці, sw.js обох апок; ключі → env) — Web Push (PushSubscription+VAPID+PushAdapter)              | [07]     | ⬜     |
+| S12-04 | SMS adapter (SmsAdapter TurboSMS/Twilio, per-agency)                                                                                                     | [07]     | ⬜     |
+| S12-05 | Email inbound→task + bounce/suppression + unsubscribe + DKIM domain                                                                                      | [08]     | ⬜     |
+| S12-06 | ✅ **ЗБУДОВАНО 11.07.2026** (quietFrom/quietTo Kyiv на NotificationSettings + digestDaily + cron 08:00) — Quiet-hours / digest ⬅backlog                  | [07]     | ⬜     |
+| S12-07 | ✅ **ЗБУДОВАНО 11.07.2026** (Broadcast + сегменти all/debtors/tier + outbox-воркер через notify-матрицю + UI на /announcements) — Bulk-розсилки ⬅backlog | [07]     | ⬜     |
 
 ## SPRINT 13 — Calendar + Leave + Finance Phase 2
 
