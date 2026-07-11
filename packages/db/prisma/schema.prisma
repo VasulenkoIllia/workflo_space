@@ -1408,6 +1408,25 @@ model BlogPost {
   @@map("blog_posts")
 }
 
+// TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
+// agencyId, як BlogPost) — редагує owner через /content, лендінг читає published.
+model Testimonial {
+  id         String   @id @default(uuid())
+  authorName String
+  authorRole String?
+  company    String?
+  text       String
+  rating     Int      @default(5)
+  featured   Boolean  @default(false)
+  published  Boolean  @default(false)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([published, featured])
+  @@map("testimonials")
+}
+
 model ContactForm {
   id          String   @id @default(uuid())
   name        String

@@ -168,3 +168,68 @@ export function useGenerateDraft() {
       api.post<{ draft: BlogDraft }>('/workspace/content/generate', body).then((r) => r.draft),
   })
 }
+
+// ── TESTIMONIALS (Фаза B): відгуки лендінга — owner-CRUD, лендінг читає published ──
+export interface Testimonial {
+  id: string
+  authorName: string
+  authorRole: string | null
+  company: string | null
+  text: string
+  rating: number
+  featured: boolean
+  published: boolean
+  position: number
+  updatedAt: string
+}
+
+export interface TestimonialInput {
+  authorName: string
+  authorRole?: string | null
+  company?: string | null
+  text: string
+  rating: number
+  featured: boolean
+}
+
+export function useTestimonials() {
+  return useQuery({
+    queryKey: ['cms-testimonials'],
+    queryFn: () =>
+      api
+        .get<{ testimonials: Testimonial[] }>('/workspace/content/testimonials')
+        .then((r) => r.testimonials),
+  })
+}
+
+function invalidateTestimonials(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['cms-testimonials'] })
+}
+
+export function useCreateTestimonial() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: TestimonialInput) => api.post('/workspace/content/testimonials', body),
+    onSuccess: () => invalidateTestimonials(qc),
+  })
+}
+
+export function useUpdateTestimonial() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: Partial<TestimonialInput & { published: boolean; position: number }> & { id: string }) =>
+      api.patch(`/workspace/content/testimonials/${id}`, body),
+    onSuccess: () => invalidateTestimonials(qc),
+  })
+}
+
+export function useDeleteTestimonial() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/workspace/content/testimonials/${id}`),
+    onSuccess: () => invalidateTestimonials(qc),
+  })
+}

@@ -546,6 +546,78 @@ function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
   )
 }
 
+/** TESTIMONIALS (Фаза B): відгуки з міні-CMS (/content, таб «Відгуки»). Client-fetch
+ * published-відгуків; порожньо/помилка → секція просто не рендериться (fail-soft, як блог). */
+interface PublicTestimonial {
+  id: string
+  authorName: string
+  authorRole: string | null
+  company: string | null
+  text: string
+  rating: number
+  featured: boolean
+}
+
+function TestimonialsSection() {
+  const [items, setItems] = useState<PublicTestimonial[]>([])
+  useEffect(() => {
+    const api = process.env.NEXT_PUBLIC_API_URL ?? 'https://dev-api.workflo.space'
+    fetch(`${api}/content/testimonials`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { data?: { testimonials?: PublicTestimonial[] } } | null) => {
+        if (d?.data?.testimonials) setItems(d.data.testimonials)
+      })
+      .catch(() => {})
+  }, [])
+  if (items.length === 0) return null
+  return (
+    <section className="wf-tm-section" id="testimonials" data-screen-label="testimonials">
+      <TermDivider section="відгуки" cmd="cat ~/clients/feedback.log" />
+      <div className="wf-tm-output">
+        <p className="wf-tm-section-intro">
+          // {items.length} відгуків · сер. оцінка{' '}
+          {(items.reduce((n, t) => n + t.rating, 0) / items.length).toFixed(1)} з 5
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 14,
+          }}
+        >
+          {items.map((t) => (
+            <blockquote
+              key={t.id}
+              style={{
+                margin: 0,
+                padding: '16px 18px',
+                border: '1px solid var(--wf-border, #333)',
+                borderRadius: 8,
+                display: 'grid',
+                gap: 10,
+                alignContent: 'start',
+              }}
+            >
+              <span aria-label={`Оцінка ${t.rating} з 5`} className="wf-tm-accent">
+                {'★'.repeat(t.rating)}
+                <span style={{ opacity: 0.25 }}>{'★'.repeat(5 - t.rating)}</span>
+              </span>
+              <p className="wf-tm-body" style={{ margin: 0 }}>
+                “{t.text}”
+              </p>
+              <footer className="wf-tm-section-intro" style={{ margin: 0 }}>
+                — {t.authorName}
+                {[t.authorRole, t.company].filter(Boolean).length > 0 &&
+                  `, ${[t.authorRole, t.company].filter(Boolean).join(', ')}`}
+              </footer>
+            </blockquote>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function TerminalLanding({ content = UA }: { content?: LandingContent }) {
   const c = content
   const [mounted, setMounted] = useState(false)
@@ -679,6 +751,7 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
             <ServicesSection items={c.services} />
             <ProcessSection items={c.process} />
             <SpotlightSection spotlight={c.spotlight} />
+            <TestimonialsSection />
             <AboutSection about={c.about} />
             <ContactSection contact={c.contact} />
           </div>

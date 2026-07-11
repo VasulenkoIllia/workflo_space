@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
 import { ApiError } from '@/lib/api'
 import {
   type BlogDraft,
   type CmsPostInput,
   type CmsPostRow,
+  type Testimonial,
+  type TestimonialInput,
+  useCreateTestimonial,
+  useDeleteTestimonial,
+  useTestimonials,
+  useUpdateTestimonial,
   blocksToText,
   textToBlocks,
   useCmsPost,
@@ -77,6 +83,8 @@ export function ContentPage() {
   const { data: posts = [], isLoading } = useCmsPosts()
   // 'new' — сентинел створення; будь-який інший рядок — id поста
   const [editingId, setEditingId] = useState<string | null>(null)
+  // TESTIMONIALS: другий таб контенту — відгуки лендінга
+  const [section, setSection] = useState('posts')
   const publish = usePublishCmsPost()
   const del = useDeleteCmsPost()
 
@@ -89,15 +97,28 @@ export function ContentPage() {
             className="wfp-mono"
             style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 20 }}
           >
-            // блог · кейси лендінга — чернетки і публікації
+            // блог · кейси · відгуки лендінга — чернетки і публікації
           </div>
         </div>
-        <Button variant="primary" onClick={() => setEditingId('new')}>
-          + Пост
-        </Button>
+        {section === 'posts' && (
+          <Button variant="primary" onClick={() => setEditingId('new')}>
+            + Пост
+          </Button>
+        )}
       </div>
 
-      {isLoading ? (
+      <Tabs
+        value={section}
+        onChange={setSection}
+        items={[
+          { id: 'posts', label: 'Пости' },
+          { id: 'testimonials', label: 'Відгуки' },
+        ]}
+      />
+
+      {section === 'testimonials' ? (
+        <TestimonialsSection />
+      ) : isLoading ? (
         <Skeleton style={{ height: 220 }} />
       ) : posts.length === 0 ? (
         <EmptyState
@@ -371,6 +392,259 @@ function EditorModal({ id, onClose }: { id: string; onClose: () => void }) {
             onClick={save}
           >
             {isNew ? 'Створити чернетку' : 'Зберегти'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── TESTIMONIALS (Фаза B): відгуки лендінга — список + зірки + publish/featured ──
+function Stars({ n }: { n: number }) {
+  return (
+    <span style={{ color: 'var(--wf-accent)', letterSpacing: 1, whiteSpace: 'nowrap' }}>
+      {'★'.repeat(n)}
+      <span style={{ color: 'var(--wf-border-strong, var(--wf-border))' }}>
+        {'★'.repeat(5 - n)}
+      </span>
+    </span>
+  )
+}
+
+function TestimonialsSection() {
+  const { data: items = [], isLoading } = useTestimonials()
+  const update = useUpdateTestimonial()
+  const del = useDeleteTestimonial()
+  const [editing, setEditing] = useState<Testimonial | 'new' | null>(null)
+
+  const published = items.filter((t) => t.published)
+  const avg =
+    published.length > 0
+      ? (published.reduce((s, t) => s + t.rating, 0) / published.length).toFixed(1)
+      : '—'
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          margin: '10px 0 14px',
+        }}
+      >
+        <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // {items.length} всього · {published.length} на лендінгу · сер. оцінка {avg}
+        </span>
+        <Button variant="primary" onClick={() => setEditing('new')}>
+          + Відгук
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <Skeleton style={{ height: 180 }} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          glyph="// ★"
+          title="Відгуків ще немає"
+          description="Додай перший відгук клієнта — опубліковане з'явиться на лендінгу."
+        />
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {items.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.2fr 2fr auto auto auto',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 8px',
+                borderBottom: '1px solid var(--wf-border)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setEditing(t)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  color: 'var(--wf-fg)',
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ fontWeight: 500 }}>
+                  {t.authorName}
+                  {t.featured ? ' ★' : ''}
+                </div>
+                <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                  {[t.authorRole, t.company].filter(Boolean).join(' · ') || '—'}
+                </div>
+              </button>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: 'var(--wf-fg-secondary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={t.text}
+              >
+                {t.text}
+              </span>
+              <Stars n={t.rating} />
+              <span className={`wfp-badge wfp-badge--${t.published ? 'success' : 'muted'}`}>
+                {t.published ? 'на лендінгу' : 'чернетка'}
+              </span>
+              <span style={{ display: 'inline-flex', gap: 6 }}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={update.isPending}
+                  onClick={() =>
+                    update.mutate(
+                      { id: t.id, published: !t.published },
+                      {
+                        onSuccess: () =>
+                          toast.success(t.published ? 'Знято з лендінга' : 'Опубліковано'),
+                      }
+                    )
+                  }
+                >
+                  {t.published ? 'зняти' : 'опублікувати'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    if (!window.confirm(`Видалити відгук «${t.authorName}»?`)) return
+                    del.mutate(t.id, { onSuccess: () => toast.success('Видалено') })
+                  }}
+                >
+                  ✕
+                </Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <TestimonialModal
+          item={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function TestimonialModal({ item, onClose }: { item: Testimonial | null; onClose: () => void }) {
+  const create = useCreateTestimonial()
+  const update = useUpdateTestimonial()
+  const [authorName, setAuthorName] = useState(item?.authorName ?? '')
+  const [authorRole, setAuthorRole] = useState(item?.authorRole ?? '')
+  const [company, setCompany] = useState(item?.company ?? '')
+  const [text, setText] = useState(item?.text ?? '')
+  const [rating, setRating] = useState(item?.rating ?? 5)
+  const [featured, setFeatured] = useState(item?.featured ?? false)
+
+  const save = () => {
+    const body: TestimonialInput = {
+      authorName: authorName.trim(),
+      authorRole: authorRole.trim() || null,
+      company: company.trim() || null,
+      text: text.trim(),
+      rating,
+      featured,
+    }
+    const onError = (err: unknown) =>
+      toast.error(err instanceof ApiError ? err.message : 'Не вдалося зберегти')
+    if (item) {
+      update.mutate(
+        { id: item.id, ...body },
+        { onSuccess: () => (toast.success('Збережено'), onClose()), onError }
+      )
+    } else {
+      create.mutate(body, {
+        onSuccess: () => (toast.success('Відгук додано (чернетка)'), onClose()),
+        onError,
+      })
+    }
+  }
+
+  return (
+    <Modal open title={item ? 'Редагувати відгук' : 'Новий відгук'} onClose={onClose}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <Input
+          label="Автор (ПІБ)"
+          value={authorName}
+          onChange={(e) => setAuthorName(e.target.value)}
+        />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Input
+            label="Посада"
+            value={authorRole}
+            onChange={(e) => setAuthorRole(e.target.value)}
+            placeholder="CEO"
+          />
+          <Input label="Компанія" value={company} onChange={(e) => setCompany(e.target.value)} />
+        </div>
+        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+          Текст відгуку
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            style={{ width: '100%', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+          />
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ display: 'inline-flex', gap: 3 }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRating(n)}
+                style={{
+                  border: 0,
+                  background: 'none',
+                  cursor: 'pointer',
+                  padding: 2,
+                  fontSize: 20,
+                  color:
+                    n <= rating ? 'var(--wf-accent)' : 'var(--wf-border-strong, var(--wf-border))',
+                }}
+                aria-label={`Оцінка ${n}`}
+              >
+                ★
+              </button>
+            ))}
+          </span>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={featured}
+              onChange={(e) => setFeatured(e.target.checked)}
+            />
+            featured (перші на лендінгу)
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={onClose}>
+            Скасувати
+          </Button>
+          <Button
+            variant="primary"
+            loading={create.isPending || update.isPending}
+            disabled={authorName.trim().length < 2 || text.trim().length < 10}
+            onClick={save}
+          >
+            {item ? 'Зберегти' : 'Додати'}
           </Button>
         </div>
       </div>
