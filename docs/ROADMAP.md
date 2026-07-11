@@ -93,8 +93,8 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 **🧭 ПЛАН (рішення власника 2026-07-10):** черга — ✅ **agency_members RLS** (10.07) →
 ✅ **S7-05 міні-CMS** (10.07; кейс-едітор Фази B влився сюди) → **дизайн-хвости Фази B**:
-✅ **team-boards + task-columns** (10.07) → ✅ **team-картка (12-В KPI)** (10.07) → testimonials →
-announcement-feed → documents-eu →
+✅ **team-boards + task-columns** (10.07) → ✅ **team-картка (12-В KPI)** (10.07) →
+✅ **testimonials** (11.07) → announcement-feed → documents-eu →
 далі **S9–S13 Enhancement** («повноцінний продукт» поверх MVP). **SaaS (S14) — лише коли все
 повністю працює і зафіксовано.**
 
@@ -138,6 +138,17 @@ announcement-feed → documents-eu →
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **TESTIMONIALS (Фаза B) — відгуки клієнтів для лендінга — ЗБУДОВАНО (2026-07-11).**
+  Модель **Testimonial** (platform-рівень без agencyId, як BlogPost; міграція
+  `20260711_testimonials`; повний ланцюг прогнано на throwaway-PG з нуля — урок same-day-order).
+  Бек `routes/content/testimonials.ts`: публічний `GET /content/testimonials` (лише published,
+  featured перші) + owner-CRUD (create=чернетка · PATCH publish/featured/rating/position ·
+  delete; rating 1-5 гард). UI: **таб «Відгуки» у `/content`** (стати всього·на лендінгу·сер.
+  оцінка; список з зірками; модалка з зірковим пікером + featured). **Лендінг**: секція
+  `# відгуки` (`cat ~/clients/feedback.log`) — client-fetch published, fail-soft (порожньо →
+  секції нема; копірайт у коді, дані з API). 4 route-тести. Гейт: turbo **56/56**, api **968**.
+  Live: чернетка невидима → publish → публічний GET (featured ★5 перший) → executor 403 → delete.
 
 - **EXEC-CARD (12-В) — KPI-картка виконавця — ЗБУДОВАНО (2026-07-10).** Чесний лишок «team-картки»
   за DESIGN_COVERAGE (ростер/EditMember/компенсація/норма вже були). Бек: `GET
