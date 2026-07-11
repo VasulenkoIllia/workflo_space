@@ -32,6 +32,7 @@ import {
   renderEmailChangeConfirmEmail,
   renderEmailChangeRequestedEmail,
   renderMonthlyReportEmail,
+  renderDigestEmail,
 } from './email/templates/index.js'
 import {
   renderApprovalDecidedTelegram,
@@ -127,6 +128,8 @@ export type EventPayloadMap = {
     daysOverdue: number
     clientUrl: string
   }
+  // S12-06: дайджест — rows = [заголовок сповіщення, текст]
+  'system.digest': { count: number; rows: [string, string][] }
   // 05-В реверси (клієнтські листи)
   'billing.payment_refunded': { amount: string; method?: string | null; portalUrl: string }
   'billing.debt_written_off': { amount: string; portalUrl: string }
@@ -136,6 +139,8 @@ export type EventPayloadMap = {
 export type DispatchResult =
   | { channel: NotificationChannel.EMAIL; result: EmailSendResult }
   | { channel: NotificationChannel.TELEGRAM; result: TelegramSendResult }
+  // S12-03: push — 'sent' коли доставлено хоча б на одну живу підписку
+  | { channel: NotificationChannel.PUSH; result: { status: 'sent' } }
   | { channel: NotificationChannel; result: { status: 'skipped'; reason: string } }
 
 // ─── Email rendering router ─────────────────────────────────────────────────
@@ -184,6 +189,10 @@ export function renderEmailForEvent(
     case 'reports.monthly': {
       const v = vars as EventPayloadMap['reports.monthly']
       return renderMonthlyReportEmail({ periodLabel: v.periodLabel, rows: v.rows, locale })
+    }
+    case 'system.digest': {
+      const v = vars as EventPayloadMap['system.digest']
+      return renderDigestEmail({ count: v.count, rows: v.rows, locale })
     }
     case 'system.invite_sent': {
       // One event, two templates — disambiguated by presence of companyName.

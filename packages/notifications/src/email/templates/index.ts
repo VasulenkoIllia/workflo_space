@@ -51,6 +51,8 @@ export {
 export {
   renderMonthlyReportEmail,
   renderClientMonthlyReportEmail,
+  renderDigestEmail,
   type MonthlyReportEmailVars,
   type ClientMonthlyReportEmailVars,
+  type DigestEmailVars,
 } from './monthlyReport.js'

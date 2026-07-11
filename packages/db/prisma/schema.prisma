@@ -77,9 +77,27 @@ model Profile {
   commentReactions       CommentReaction[] // S10
   leaveRequests          LeaveRequest[]            @relation("LeaveProfile") // S13-04
   leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
+  pushSubscriptions      PushSubscription[] // S12-03
 
   @@index([role])
   @@map("profiles")
+}
+
+/// S12-03 Web Push: підписка браузера (identity-scoped, як refresh_tokens — без
+/// tenant-RLS). endpoint глобально унікальний; повторна підписка перебиває profileId
+/// (той самий браузер, інший акаунт). 404/410 від пуш-сервісу → рядок видаляється.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([profileId])
+  @@map("push_subscriptions")
 }
 
 // Social login (S9, canon 01-auth §E). One row per linked external identity;
@@ -1176,6 +1194,13 @@ model NotificationSettings {
   language         Language  @default(uk)
   telegramChatId   String?   @unique
   telegramLinkedAt DateTime? @db.Timestamptz(3)
+  // S12-06: тихі години (Kyiv, 0–23; null = вимкнено) — некритичні email/telegram/push
+  // у вікні пропускаються (in_app лишається; вікно може переходити північ 22→8)
+  quietFrom        Int?
+  quietTo          Int?
+  // S12-06: ранковий email-дайджест непрочитаних in-app сповіщень (cron 08:00 Kyiv)
+  digestDaily      Boolean   @default(false)
+  lastDigestAt     DateTime? @db.Timestamptz(3)
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
 

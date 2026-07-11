@@ -96,7 +96,7 @@ webhooks + ApiKey беремо **лише коли система цілісна
 ✅ **team-boards + task-columns** (10.07) → ✅ **team-картка (12-В KPI)** (10.07) →
 ✅ **testimonials** (11.07) → ✅ **announcement-feed** (11.07) → ✅ **documents-eu (06-Е EU-комплект + 06-Д публічний рахунок)** (11.07) —
 **дизайн-хвости Фази B закрито повністю** → **S9–S13 Enhancement** (черга власника 2026-07-11):
-✅ **податок-на-дохід S13-06ч** (11.07) → ✅ **відпустки S13-04/05** (11.07) → **notify-пакет S12-03/06 (push+дайджест)** →
+✅ **податок-на-дохід S13-06ч** (11.07) → ✅ **відпустки S13-04/05** (11.07) → ✅ **notify-пакет S12-03/06** (11.07) →
 **залежності задач + gantt S10-03**. **SaaS (S14) — лише коли все повністю працює і зафіксовано.**
 
 **📌 Що варто доробити далі (черга після тесту):**
@@ -139,6 +139,26 @@ webhooks + ApiKey беремо **лише коли система цілісна
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **NOTIFY-ПАКЕТ (S12-03/06, Enhancement №3) — Web Push + тихі години + ранковий дайджест — ЗБУДОВАНО (2026-07-11).**
+  **Push (S12-03):** модель `PushSubscription` (identity-scoped як refresh*tokens, endpoint
+  unique, міграція `20260716_notify_pack` fresh-PG-proven); `PushAdapter` на `web-push`
+  (VAPID з env `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`; без ключів — канал м'яко skipped
+  `push_not_configured`); PUSH-гілка в `notify()` (payload = in_app title/body; 404/410 →
+  підписка видаляється); канал увімкнено в CHANNELS-матриці; роути vapid-key +
+  subscribe/unsubscribe (upsert по endpoint, ре-байнд браузера на інший акаунт);
+  `sw.js` в обох апках + кнопка «Увімкнути push у цьому браузері» в налаштуваннях
+  (ховається без ключів); колонка Push у матриці категорій.
+  **Тихі години + дайджест (S12-06):** `NotificationSettings.quietFrom/quietTo` (Kyiv,
+  вікно через північ 22→8) + `digestDaily/lastDigestAt`; у вікні НЕкритичні
+  email/telegram/push скіпаються `quiet_hours` (CRITICAL_EVENTS пробивають; in_app
+  завжди); cron `notifyDigest` (годинний тік, шле о 08:00 Kyiv) — один email
+  `system.digest` зі списком накопичених in-app сповіщень від lastDigestAt (порожньо →
+  лише зсув маркера); UI: чекбокс тихих годин з селектами годин + чекбокс дайджесту.
+  ⚠️ Знахідка live-verify: `tenantScopedNotifyDb`-проксі фіксував select без
+  quietFrom/quietTo → quiet мовчки не працював; виправлено і доведено наживо
+  (email/telegram у логах skipped `quiet_hours`, in_app persisted). Тести: notifications 86 (8 push/quiet), api 1011 (роути 5 + digest-cron 3). Гейт turbo **37/37**.
+  *Для продакшн-push: згенерувати `npx web-push generate-vapid-keys` → env API.\_
 
 - **LEAVE (S13-04/05, Enhancement №2) — відсутності команди з accrual-балансом — ЗБУДОВАНО (2026-07-11).**
   Модель `LeaveRequest` (forced-RLS, міграція `20260715_leave` fresh-PG-proven) + enum

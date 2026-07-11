@@ -188,6 +188,8 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   // S13-04 LEAVE: заявки на відсутність — внутрішньокомандні (in-app)
   'team.leave_requested': NotificationCategory.SYSTEM,
   'team.leave_status_changed': NotificationCategory.SYSTEM,
+  // S12-06: дайджест — системна розсилка, opt-in тумблером digestDaily
+  'system.digest': NotificationCategory.SYSTEM,
 }
 
 /**
@@ -310,7 +312,8 @@ export const CHANNELS: Record<NotificationChannel, ChannelDescriptor> = {
   [NotificationChannel.TELEGRAM]: { enabled: true, cost: 'low', requiresUserOptIn: true },
   [NotificationChannel.IN_APP]: { enabled: true, cost: 'free', requiresUserOptIn: false },
   [NotificationChannel.SMS]: { enabled: false, cost: 'high', requiresUserOptIn: true },
-  [NotificationChannel.PUSH]: { enabled: false, cost: 'free', requiresUserOptIn: true },
+  // S12-03: канал доступний у матриці; без VAPID-ключів адаптер м'яко скіпає
+  [NotificationChannel.PUSH]: { enabled: true, cost: 'free', requiresUserOptIn: true },
   [NotificationChannel.WEBHOOK]: { enabled: false, cost: 'free', requiresUserOptIn: true },
 }
 

@@ -1,4 +1,4 @@
-import { type Prisma, withTenant } from '@workflo/db'
+import { type Prisma, prisma, withTenant } from '@workflo/db'
 import { type NotifyDeps, type NotifyInput, notify } from '@workflo/notifications'
 import type { NotificationEvent } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
@@ -21,7 +21,15 @@ const tenantScopedNotifyDb = {
       withTenant((tx) =>
         tx.notificationSettings.findUnique({
           where: args.where,
-          select: { id: true, profileId: true, language: true, telegramChatId: true },
+          // S12-06: quietFrom/quietTo — без них notify не бачить тихі години
+          select: {
+            id: true,
+            profileId: true,
+            language: true,
+            telegramChatId: true,
+            quietFrom: true,
+            quietTo: true,
+          },
         })
       ),
   },
@@ -96,6 +104,17 @@ export function buildNotifyDeps(logger: FastifyBaseLogger): NotifyDeps {
         result: 'allowed',
         metadata: { reason: 'blocked_by_user' },
       })
+    },
+    // S12-03: підписки — identity-scoped (як refresh_tokens), читаються raw prisma.
+    pushSubscriptions: {
+      list: async (profileId) =>
+        prisma.pushSubscription.findMany({
+          where: { profileId },
+          select: { endpoint: true, p256dh: true, auth: true },
+        }),
+      removeByEndpoint: async (endpoint) => {
+        await prisma.pushSubscription.deleteMany({ where: { endpoint } })
+      },
     },
   }
 }

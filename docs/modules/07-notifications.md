@@ -4,6 +4,17 @@
 
 > ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
 
+> ✅ **S12-03/06 NOTIFY-ПАКЕТ (2026-07-11, Enhancement №3):** Web Push збудовано —
+> `PushSubscription` (identity-scoped) + `PushAdapter` (web-push, VAPID з env; без ключів канал
+> м'яко skipped) + PUSH-гілка у notify() (payload = in_app-текст; 410 → авто-видалення підписки)
+>
+> - sw.js в обох апках + тумблер у налаштуваннях + колонка Push у матриці. Тихі години
+>   (quietFrom/quietTo, Kyiv, через північ) скіпають некритичні email/telegram/push
+>   (`quiet_hours` у notification_logs; CRITICAL_EVENTS пробивають; in_app завжди) + ранковий
+>   email-дайджест `system.digest` (cron 08:00 Kyiv, digestDaily opt-in, список in-app сповіщень
+>   від lastDigestAt). Урок: tenant-проксі notify фіксував select — нові settings-поля треба
+>   додавати і туди (виправлено). Лишок пакетної лінії: SMS (S12-04), bulk-розсилки (S12-07).
+
 > App: API (api.workflo.space) + всі consumer-додатки
 > Статус: S1 (multi-channel matrix architecture)
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`

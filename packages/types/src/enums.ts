@@ -458,6 +458,8 @@ export type NotificationEvent =
   // S13-04 LEAVE: нова заявка на відсутність (owner/manager) + рішення (заявнику)
   | 'team.leave_requested'
   | 'team.leave_status_changed'
+  // S12-06: ранковий email-дайджест непрочитаних сповіщень (opt-in digestDaily)
+  | 'system.digest'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

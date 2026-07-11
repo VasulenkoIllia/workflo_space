@@ -26,6 +26,12 @@ import {
   NOTIF_CHANNELS,
   prefKey,
   useNotificationPrefs,
+  useSaveQuietSettings,
+  usePushVapidKey,
+  pushSupported,
+  subscribeToPush,
+  unsubscribeFromPush,
+  currentPushSubscribed,
   useSaveNotificationPrefs,
   type NotifCategory,
   type NotifChannel,
@@ -77,7 +83,8 @@ function NfToggle({ on, locked, onClick }: { on: boolean; locked?: boolean; onCl
 }
 
 export function NotificationsSection({ cardStyle }: { cardStyle?: CSSProperties }) {
-  const { data: prefs, isLoading } = useNotificationPrefs()
+  const { data: payload, isLoading } = useNotificationPrefs()
+  const prefs = payload?.preferences
   const save = useSaveNotificationPrefs()
   const [matrix, setMatrix] = useState<Record<string, boolean>>({})
 
@@ -159,9 +166,160 @@ export function NotificationsSection({ cardStyle }: { cardStyle?: CSSProperties 
               Email для «Безпека» та «Рахунки й оплати» завжди увімкнено.
             </span>
           </div>
+          {payload && (
+            <QuietDigestBlock
+              quietFrom={payload.quietFrom}
+              quietTo={payload.quietTo}
+              digestDaily={payload.digestDaily}
+            />
+          )}
+          <PushSubscribeBlock />
         </>
       )}
     </Card>
+  )
+}
+
+/** S12-06: тихі години (Kyiv) + ранковий email-дайджест. */
+function QuietDigestBlock({
+  quietFrom,
+  quietTo,
+  digestDaily,
+}: {
+  quietFrom: number | null
+  quietTo: number | null
+  digestDaily: boolean
+}) {
+  const saveQuiet = useSaveQuietSettings()
+  const [enabled, setEnabled] = useState(quietFrom != null)
+  const [from, setFrom] = useState(quietFrom ?? 22)
+  const [to, setTo] = useState(quietTo ?? 8)
+  const [digest, setDigest] = useState(digestDaily)
+  useEffect(() => {
+    setEnabled(quietFrom != null)
+    setFrom(quietFrom ?? 22)
+    setTo(quietTo ?? 8)
+    setDigest(digestDaily)
+  }, [quietFrom, quietTo, digestDaily])
+
+  const hourOpts = Array.from({ length: 24 }, (_, h) => h)
+  const apply = (body: {
+    quietFrom: number | null
+    quietTo: number | null
+    digestDaily: boolean
+  }) =>
+    saveQuiet.mutate(body, {
+      onSuccess: () => toast.success('Збережено'),
+      onError: () => toast.error('Не вдалося зберегти'),
+    })
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--wf-border)' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => {
+            const on = e.target.checked
+            setEnabled(on)
+            apply({ quietFrom: on ? from : null, quietTo: on ? to : null, digestDaily: digest })
+          }}
+        />
+        Тихі години (email/Telegram/push не турбують; у застосунку — все одно)
+      </label>
+      {enabled && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13 }}>
+          з
+          <select
+            value={from}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setFrom(v)
+              apply({ quietFrom: v, quietTo: to, digestDaily: digest })
+            }}
+          >
+            {hourOpts.map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+          до
+          <select
+            value={to}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setTo(v)
+              apply({ quietFrom: from, quietTo: v, digestDaily: digest })
+            }}
+          >
+            {hourOpts.map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>(за Києвом)</span>
+        </div>
+      )}
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 10 }}>
+        <input
+          type="checkbox"
+          checked={digest}
+          onChange={(e) => {
+            const on = e.target.checked
+            setDigest(on)
+            apply({
+              quietFrom: enabled ? from : null,
+              quietTo: enabled ? to : null,
+              digestDaily: on,
+            })
+          }}
+        />
+        Ранковий email-дайджест (о 08:00 — список сповіщень, що накопичились)
+      </label>
+    </div>
+  )
+}
+
+/** S12-03: підписка ЦЬОГО браузера на Web Push (потрібні VAPID-ключі на сервері). */
+function PushSubscribeBlock() {
+  const { data: vapidKey } = usePushVapidKey()
+  const [subscribed, setSubscribed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void currentPushSubscribed().then(setSubscribed)
+  }, [])
+  if (!vapidKey || !pushSupported()) return null
+
+  const toggle = async () => {
+    setBusy(true)
+    try {
+      if (subscribed) {
+        await unsubscribeFromPush()
+        setSubscribed(false)
+        toast.success('Push вимкнено в цьому браузері')
+      } else {
+        await subscribeToPush(vapidKey)
+        setSubscribed(true)
+        toast.success('Push увімкнено в цьому браузері')
+      }
+    } catch {
+      toast.error('Браузер відхилив підписку (перевірте дозвіл на сповіщення)')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <Button variant="secondary" size="sm" loading={busy} onClick={() => void toggle()}>
+        {subscribed ? 'Вимкнути push у цьому браузері' : 'Увімкнути push у цьому браузері'}
+      </Button>
+      <span style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        Сповіщення прилітають, навіть коли вкладка закрита.
+      </span>
+    </div>
   )
 }
 

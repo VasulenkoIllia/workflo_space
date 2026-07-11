@@ -1,5 +1,6 @@
-import { NotificationChannel, type NotificationEvent } from '@workflo/types'
+import { CRITICAL_EVENTS, NotificationChannel, type NotificationEvent } from '@workflo/types'
 import type { EmailPayload } from './adapters/EmailAdapter.js'
+import { sendWebPush, type PushSubscriptionRow } from './adapters/PushAdapter.js'
 import {
   dispatchEmail,
   dispatchInApp,
@@ -23,6 +24,9 @@ export interface NotifyPrisma extends ResolverPrisma {
       profileId: string
       language: string
       telegramChatId: string | null
+      // S12-06: тихі години (Kyiv, 0–23; null = вимкнено)
+      quietFrom?: number | null
+      quietTo?: number | null
     } | null>
   }
   profile: {
@@ -83,6 +87,36 @@ export interface NotifyDeps {
    * to auto-disable the telegram channel for that user.
    */
   onTelegramBlocked?: (profileId: string) => Promise<void> | void
+  /**
+   * S12-03: Web Push підписки одержувача. Не передано (тест/воркер без пушу) —
+   * push-канал скіпається з reason 'push_deps_missing'.
+   */
+  pushSubscriptions?: {
+    list: (profileId: string) => Promise<PushSubscriptionRow[]>
+    removeByEndpoint: (endpoint: string) => Promise<void>
+  }
+}
+
+/** S12-06: поточна година в Києві (крони проєкту теж Kyiv-anchored). */
+function kyivHour(now: Date): number {
+  return Number(
+    new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      hour12: false,
+      timeZone: 'Europe/Kyiv',
+    }).format(now)
+  )
+}
+
+/** Вікно тихих годин; може переходити північ (22→8). from===to → вимкнено. */
+export function inQuietHours(
+  quietFrom: number | null | undefined,
+  quietTo: number | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (quietFrom == null || quietTo == null || quietFrom === quietTo) return false
+  const h = kyivHour(now)
+  return quietFrom < quietTo ? h >= quietFrom && h < quietTo : h >= quietFrom || h < quietTo
 }
 
 /**
@@ -164,7 +198,14 @@ export async function notify<E extends NotificationEvent>(
 
   const settings = await prisma.notificationSettings.findUnique({
     where: { profileId: input.profileId },
-    select: { id: true, profileId: true, language: true, telegramChatId: true },
+    select: {
+      id: true,
+      profileId: true,
+      language: true,
+      telegramChatId: true,
+      quietFrom: true,
+      quietTo: true,
+    },
   })
 
   if (!settings) {
@@ -191,6 +232,16 @@ export async function notify<E extends NotificationEvent>(
 
   const channels = await resolveTargetChannels(prisma, settings.id, input.event)
 
+  // S12-06: тихі години — некритичні «шумні» канали (email/telegram/push) скіпаються;
+  // in_app лишається завжди (і потрапляє в ранковий дайджест, якщо ввімкнено).
+  const quiet =
+    !CRITICAL_EVENTS.includes(input.event) && inQuietHours(settings.quietFrom, settings.quietTo)
+  const NOISY: ReadonlyArray<NotificationChannel> = [
+    NotificationChannel.EMAIL,
+    NotificationChannel.TELEGRAM,
+    NotificationChannel.PUSH,
+  ]
+
   const results: DispatchResult[] = []
   const attempted: NotificationChannel[] = []
 
@@ -198,7 +249,9 @@ export async function notify<E extends NotificationEvent>(
     attempted.push(channel)
     let result: DispatchResult
 
-    if (channel === NotificationChannel.EMAIL) {
+    if (quiet && NOISY.includes(channel)) {
+      result = { channel, result: { status: 'skipped', reason: 'quiet_hours' } }
+    } else if (channel === NotificationChannel.EMAIL) {
       result = await dispatchEmail(
         input.event,
         recipient,
@@ -254,8 +307,38 @@ export async function notify<E extends NotificationEvent>(
           }
         }
       }
+    } else if (channel === NotificationChannel.PUSH) {
+      // S12-03: payload = компактний in_app-текст; без нього пушити нічого.
+      if (!input.inApp) {
+        result = { channel, result: { status: 'skipped', reason: 'no_payload' } }
+      } else if (!deps.pushSubscriptions) {
+        result = { channel, result: { status: 'skipped', reason: 'push_deps_missing' } }
+      } else {
+        const subs = await deps.pushSubscriptions.list(input.profileId)
+        if (subs.length === 0) {
+          result = { channel, result: { status: 'skipped', reason: 'no_subscriptions' } }
+        } else {
+          let sent = 0
+          let failReason: string | null = null
+          for (const sub of subs) {
+            const r = await sendWebPush(sub, {
+              title: input.inApp.title,
+              body: input.inApp.body,
+            })
+            if (r.status === 'sent') sent += 1
+            else if (r.status === 'gone') {
+              // мертва підписка (404/410) — прибираємо, щоб не довбати сервіс
+              await deps.pushSubscriptions.removeByEndpoint(sub.endpoint).catch(() => undefined)
+            } else failReason = r.reason
+          }
+          result =
+            sent > 0
+              ? { channel, result: { status: 'sent' } }
+              : { channel, result: { status: 'skipped', reason: failReason ?? 'all_gone' } }
+        }
+      }
     } else {
-      // sms / push / webhook — channel is enabled by user pref but adapter not
+      // sms / webhook — channel is enabled by user pref but adapter not
       // shipped yet. Resolver should already filter these via CHANNELS[c].enabled,
       // so this is defensive only.
       result = {

@@ -73,3 +73,14 @@ export { bold, code, escapeHtml, italic, link } from './telegram/escape.js'
 // Templates — directly importable when caller wants more control.
 export * from './email/templates/index.js'
 export * from './telegram/templates/index.js'
+
+// S12-03/06: Web Push адаптер + перевірка тихих годин (API-layer: vapid-key роут, тести)
+export {
+  pushConfigured,
+  pushPublicKey,
+  sendWebPush,
+  resetPushAdapterForTests,
+  type PushSubscriptionRow,
+  type PushPayload,
+} from './adapters/PushAdapter.js'
+export { inQuietHours } from './notify.js'

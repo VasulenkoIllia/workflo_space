@@ -69,3 +69,32 @@ export function renderClientMonthlyReportEmail(vars: ClientMonthlyReportEmailVar
     html: renderLayout({ locale, title: subject, preheader: subject, bodyHtml }),
   }
 }
+
+/**
+ * S12-06: ранковий дайджест непрочитаних in-app сповіщень (opt-in digestDaily).
+ * rows = [заголовок сповіщення, текст]. Без нових i18n-ключів — subject інлайном.
+ */
+export interface DigestEmailVars {
+  count: number
+  rows: [string, string][]
+  locale?: LocaleKey
+}
+
+export function renderDigestEmail(vars: DigestEmailVars): RenderedEmail {
+  const locale: LocaleKey = vars.locale ?? 'uk'
+  const subject =
+    locale === 'en'
+      ? `Notification digest — ${vars.count} new`
+      : `Дайджест сповіщень — ${vars.count} нових`
+  const intro =
+    locale === 'en'
+      ? 'While you were away (quiet hours / since the last digest):'
+      : 'Поки вас не було (тихі години / від минулого дайджесту):'
+  const bodyHtml = [renderHeading(subject), renderParagraph(intro), renderRows(vars.rows)].join(
+    '\n'
+  )
+  return {
+    subject,
+    html: renderLayout({ locale, title: subject, preheader: subject, bodyHtml }),
+  }
+}
