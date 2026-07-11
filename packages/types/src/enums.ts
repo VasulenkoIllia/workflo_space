@@ -145,6 +145,21 @@ export enum DocKit {
   EU = 'eu',
 }
 
+/** S13-04: тип відсутності (відпустка / лікарняний / відгул / без збереження). */
+export enum LeaveType {
+  VACATION = 'vacation',
+  SICK = 'sick',
+  DAYOFF = 'dayoff',
+  UNPAID = 'unpaid',
+}
+
+export enum LeaveStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  CANCELLED = 'cancelled',
+}
+
 // ─── Billing ────────────────────────────────────────────────────────────────
 export enum BillingType {
   FIXED = 'fixed',
@@ -440,6 +455,9 @@ export type NotificationEvent =
   | 'reports.monthly'
   // 06-ПІДПИС: клієнт прийняв договір/акт у порталі (in-app власникам)
   | 'documents.accepted'
+  // S13-04 LEAVE: нова заявка на відсутність (owner/manager) + рішення (заявнику)
+  | 'team.leave_requested'
+  | 'team.leave_status_changed'
 
 // ─── Error codes ────────────────────────────────────────────────────────────
 export enum ApiErrorCode {

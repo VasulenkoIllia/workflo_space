@@ -185,6 +185,9 @@ export const EVENT_TO_CATEGORY: Record<NotificationEvent, NotificationCategory> 
   'reports.monthly': NotificationCategory.SYSTEM,
   // 06-ПІДПИС: прийняття документа клієнтом — in-app власникам (без email-шаблону)
   'documents.accepted': NotificationCategory.DOCUMENTS,
+  // S13-04 LEAVE: заявки на відсутність — внутрішньокомандні (in-app)
+  'team.leave_requested': NotificationCategory.SYSTEM,
+  'team.leave_status_changed': NotificationCategory.SYSTEM,
 }
 
 /**

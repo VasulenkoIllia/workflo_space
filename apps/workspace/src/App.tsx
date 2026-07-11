@@ -22,6 +22,7 @@ import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { ContentPage } from '@/routes/content/ContentPage'
 import { AnnouncementsPage } from '@/routes/announcements/AnnouncementsPage'
+import { LeavePage } from '@/routes/leave/LeavePage'
 import { ExecutorCardPage } from '@/routes/team/ExecutorCardPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
@@ -143,6 +144,15 @@ export default function App() {
           element={
             <RoleRoute allow={['owner', 'manager']}>
               <TeamPage />
+            </RoleRoute>
+          }
+        />
+        {/* S13-04: відсутності — self-service для всієї команди */}
+        <Route
+          path="/leave"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <LeavePage />
             </RoleRoute>
           }
         />

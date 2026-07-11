@@ -75,6 +75,8 @@ model Profile {
   twoFactor              TwoFactorAuth? // S9-01
   oauthAccounts          OAuthAccount[] // S9 §E
   commentReactions       CommentReaction[] // S10
+  leaveRequests          LeaveRequest[]            @relation("LeaveProfile") // S13-04
+  leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
 
   @@index([role])
   @@map("profiles")
@@ -1451,6 +1453,50 @@ model AnnouncementRead {
   @@map("announcement_reads")
 }
 
+// S13-04: тип відсутності (дизайн calendar-plus WsLeaves: відпустка/лікарняний/відгул + без збереження)
+enum LeaveType {
+  vacation
+  sick
+  dayoff
+  unpaid
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+/// S13-04/05 LEAVE: заявка на відсутність. Self-service будь-якого internal-члена →
+/// owner/manager approve/reject. days = РОБОЧІ дні (пн–пт), рахуються на створенні;
+/// свята per-agency — 23-Б follow-up. Баланс відпустки обчислюваний (без таблиці):
+/// accrued = Agency.vacationDaysPerYear × місяці стажу в поточному році / 12,
+/// used = Σ days approved vacation цього року; guard на approve.
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  agencyId     String
+  agency       Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile     @relation("LeaveProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  type         LeaveType   @default(vacation)
+  startDate    DateTime    @db.Date // день, не мить — відпустка по днях
+  endDate      DateTime    @db.Date
+  days         Int // робочі дні періоду (сніпшот на створенні)
+  status       LeaveStatus @default(pending)
+  reason       String?
+  rejectReason String?
+  reviewedById String?
+  reviewedBy   Profile?    @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?   @db.Timestamptz(3)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, status])
+  @@index([profileId, startDate])
+  @@map("leave_requests")
+}
+
 // TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
 // agencyId, як BlogPost) — редагує owner через /content, лендінг читає published.
 model Testimonial {
@@ -1599,6 +1645,8 @@ model Agency {
   // АВТО-РАХУНОК (рішення власника 07.07): разове замовлення (без проекту) перейшло в
   // done → draft-invoice + in-app власнику. Увімкнено за замовчуванням.
   autoInvoiceOneTime            Boolean   @default(true)
+  // S13-05: річна квота відпустки (робочих днів/рік) — база accrual балансу
+  vacationDaysPerYear           Int       @default(24)
 
   members           AgencyMember[]
   nomenclature      Nomenclature[]
@@ -1644,6 +1692,7 @@ model Agency {
   teamColumns          TeamColumn[] // TASK-COLUMNS (10.07)
   announcements        Announcement[] // 07-В (11.07)
   announcementReads    AnnouncementRead[]
+  leaveRequests        LeaveRequest[] // S13-04 (11.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
@@ -1670,6 +1719,8 @@ model AgencyMember {
   // TEAM-BOARDS: команда члена (null = поза командами; SetNull при видаленні команди)
   teamId              String?
   team                Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  // S13-05: дата найму — база accrual відпустки (null → фолбек createdAt)
+  hireDate            DateTime?        @db.Date
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
 
   @@unique([agencyId, profileId])

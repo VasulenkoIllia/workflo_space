@@ -4,6 +4,16 @@
 
 > ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
 
+> ✅ **S13-04/05 ЗБУДОВАНО (2026-07-11, Enhancement №2):** `LeaveRequest` (agencyId+forced-RLS,
+> profileId за конвенцією проєкту, days = робочі дні пн–пт) + `AgencyMember.hireDate` +
+> `Agency.vacationDaysPerYear`. Роути `/workspace/leave` (self-подача з overlap-guard · список
+> self-vs-others · balance accrual-обчислюваний · approve/reject owner+manager з балансовим
+> guard на vacation і забороною self-approve менеджеру · cancel). Нотифікації
+> `team.leave_requested`/`team.leave_status_changed` + audit. UI `/leave` «Відсутності»
+> (дизайн calendar-plus WsLeaves). Відхилення від тіла модуля: hireDate на AgencyMember
+> (не ExecutorRate — там історія ставок, N рядків); LeaveBalance-таблиці нема — баланс
+> обчислюваний (без крону). Follow-ups: календар-шар · 23-А capacity · 23-Б свята · 23-В Telegram · 23-Г конфлікт-ворнінг.
+>
 > App: Workspace (executor self-service + owner approval)
 > Статус: Проєктування (post-MVP, complexity: S — small)
 > Залежить від: `12-team-executors`, `07-notifications`, `24-calendar` (availability)

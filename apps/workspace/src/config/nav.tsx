@@ -92,8 +92,16 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     roles: 'o',
   },
 
-  { group: 'Команда', roles: 'om' },
+  { group: 'Команда', roles: 'omx' },
   { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'om' },
+  // S13-04: відсутності — заявки/баланс у всіх, погодження в owner/manager
+  {
+    id: 'leave',
+    label: 'Відсутності',
+    icon: <Icon name="calendar" />,
+    href: '/leave',
+    roles: 'omx',
+  },
 
   { group: 'Акаунт', roles: 'omx' },
   { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile', roles: 'omx' },
