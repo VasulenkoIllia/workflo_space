@@ -9,6 +9,7 @@ import {
   openDocumentPdf,
   useGenerateDocument,
   useOrderDocuments,
+  usePublicLink,
   useSendDocument,
   type DocumentType,
   type OrderDocument,
@@ -28,6 +29,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
   const { data: documents = [], isLoading } = useOrderDocuments(orderId)
   const generate = useGenerateDocument(orderId)
   const send = useSendDocument(orderId)
+  const publicLink = usePublicLink(orderId)
 
   const onGenerate = (type: DocumentType) =>
     generate.mutate(type, {
@@ -37,6 +39,18 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
   const onSend = (d: OrderDocument) =>
     send.mutate(d.id, {
       onSuccess: (r) => toast.success(`Надіслано клієнту: ${r.document.number}`),
+    })
+
+  // 06-Д: лінк без логіна — копіюємо в буфер (ідемпотентно, токен видається раз)
+  const onPublicLink = (d: OrderDocument) =>
+    publicLink.mutate(d.id, {
+      onSuccess: (r) => {
+        void navigator.clipboard.writeText(r.url).then(
+          () => toast.success('Публічне посилання скопійовано'),
+          () => toast.info(r.url) // буфер недоступний — показуємо лінк
+        )
+      },
+      onError: () => toast.error('Не вдалося видати посилання'),
     })
 
   return (
@@ -116,24 +130,37 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
               >
                 {formatDate(d.generatedAt)}
               </span>
-              {d.status === 'sent' ? (
-                <span
-                  className="wfp-mono"
-                  title="Надіслано клієнту"
-                  style={{ fontSize: 11, color: 'var(--wf-success, var(--wf-accent))' }}
-                >
-                  ✓ надіслано
-                </span>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={send.isPending && send.variables === d.id}
-                  onClick={() => onSend(d)}
-                >
-                  Надіслати
-                </Button>
-              )}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {(d.type === 'invoice' || d.type === 'advance_invoice') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="Публічне посилання на рахунок (без логіна)"
+                    loading={publicLink.isPending && publicLink.variables === d.id}
+                    onClick={() => onPublicLink(d)}
+                  >
+                    🔗
+                  </Button>
+                )}
+                {d.status === 'sent' ? (
+                  <span
+                    className="wfp-mono"
+                    title="Надіслано клієнту"
+                    style={{ fontSize: 11, color: 'var(--wf-success, var(--wf-accent))' }}
+                  >
+                    ✓ надіслано
+                  </span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={send.isPending && send.variables === d.id}
+                    onClick={() => onSend(d)}
+                  >
+                    Надіслати
+                  </Button>
+                )}
+              </span>
             </div>
           ))}
         </div>
@@ -143,7 +170,8 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 12 }}
       >
-        // Клік на номер → PDF · «Надіслати» → клієнт отримує сповіщення + статус «надіслано».
+        // Клік на номер → PDF · «Надіслати» → сповіщення + статус «надіслано» · 🔗 → публічний лінк
+        рахунку без логіна.
       </div>
     </div>
   )

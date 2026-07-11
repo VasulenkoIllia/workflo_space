@@ -16,6 +16,9 @@ export interface LegalEntity {
   legalAddress: string | null
   bankName: string | null
   iban: string | null
+  // 06-Е: комплект документів юр-особи + BIC/SWIFT для EU-переказів
+  docKit: 'ua' | 'eu'
+  bic: string | null
   signerName: string | null
   signerTitle: string | null
   stampUrl: string | null
@@ -39,6 +42,8 @@ export interface LegalEntityInput {
   legalAddress?: string | null
   bankName?: string | null
   iban?: string | null
+  docKit?: 'ua' | 'eu'
+  bic?: string | null
   signerName?: string | null
   signerTitle?: string | null
 }

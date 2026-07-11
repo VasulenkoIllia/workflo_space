@@ -13,3 +13,4 @@ export {
   renderClientMonthlyReportHtml,
   type ClientMonthlyReportData,
 } from './clientMonthlyReport.js'
+export { defaultEuAgreementSections } from './renderEu.js'

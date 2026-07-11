@@ -139,6 +139,12 @@ export enum AnnouncementAudience {
   ALL = 'all',
 }
 
+/** 06-Е: комплект документів юр-особи — ua (український) чи eu (EN/VAT-layout). */
+export enum DocKit {
+  UA = 'ua',
+  EU = 'eu',
+}
+
 // ─── Billing ────────────────────────────────────────────────────────────────
 export enum BillingType {
   FIXED = 'fixed',

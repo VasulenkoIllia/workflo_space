@@ -25,11 +25,29 @@ export const DOC_TYPE_LABEL: Record<string, string> = {
   monthly_report: 'Місячний звіт', // 19-Г
 }
 
+// 06-Е: EN-назви типів для EU-комплекту (дизайн workspace-documents-eu.jsx)
+export const DOC_TYPE_LABEL_EU: Record<string, string> = {
+  invoice: 'Invoice',
+  advance_invoice: 'Proforma · Advance Invoice',
+  completion_act: 'Service Delivery Act',
+  specification: 'Statement of Work',
+  reconciliation_act: 'Statement of Account',
+  contract: 'Service Agreement',
+  monthly_report: 'Monthly Report',
+}
+
 export const fmtMoney = (v: unknown): string =>
   Number(v ?? 0).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export const fmtDate = (d: Date): string =>
   `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`
+
+// 06-Е: EN-формати для EU-комплекту — '3,200.00' та '24 May 2026'
+export const fmtMoneyEn = (v: unknown): string =>
+  Number(v ?? 0).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+export const fmtDateEn = (d: Date): string =>
+  `${String(d.getUTCDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${d.getUTCFullYear()}`
 
 /** Doc row shape used by the PDF endpoint (result of its select). */
 export interface DocRow {
@@ -60,11 +78,15 @@ export interface DocRow {
     legalName: string | null
     taxId: string | null
     vatPayer: boolean
+    vatId: string | null
     legalAddress: string | null
     bankName: string | null
     iban: string | null
     signerName: string | null
     signerTitle: string | null
+    // 06-Е: комплект документів юр-особи + BIC для EU-платіжного блоку
+    docKit: string
+    bic: string | null
   } | null
 }
 
@@ -111,13 +133,20 @@ export async function buildRenderData(
   const currency = order?.currency ?? 'UAH'
   const amountNum = Number(order?.approvedAmount ?? order?.totalAmount ?? 0)
 
+  // 06-Е: комплект юр-особи вирішує layout і мову даних — EU-документи збираються
+  // одразу EN-відформатованими (дати/суми/лейбли), рендерер лише верстає.
+  const isEu = doc.legalEntity?.docKit === 'eu'
+  const fm = isEu ? fmtMoneyEn : fmtMoney
+  const fd = isEu ? fmtDateEn : fmtDate
+
   const data: DocumentRenderData = {
-    typeLabel: DOC_TYPE_LABEL[doc.type] ?? doc.type,
+    kit: isEu ? 'eu' : 'ua',
+    typeLabel: (isEu ? DOC_TYPE_LABEL_EU : DOC_TYPE_LABEL)[doc.type] ?? doc.type,
     number: doc.number,
-    date: fmtDate(doc.generatedAt),
+    date: fd(doc.generatedAt),
     orderTitle: order?.title ?? '—',
     projectName: order?.project?.name ?? null,
-    amount: fmtMoney(amountNum),
+    amount: fm(amountNum),
     currency,
     issuer: doc.legalEntity ?? { name: doc.agency.name },
     recipient: {
@@ -150,7 +179,7 @@ export async function buildRenderData(
         {
           name: nomenclatureName,
           qty: '1',
-          unit: 'послуга',
+          unit: isEu ? 'service' : 'послуга',
           price: data.amount,
           sum: data.amount,
         },
@@ -167,9 +196,9 @@ export async function buildRenderData(
       data.lines = [
         {
           name: order.title,
-          qty: fmtMoney(billHours),
-          unit: 'год',
-          price: fmtMoney(rate),
+          qty: fm(billHours),
+          unit: isEu ? 'h' : 'год',
+          price: fm(rate),
           sum: data.amount,
         },
       ]
@@ -187,10 +216,10 @@ export async function buildRenderData(
       data.lines = estLines.map(
         (l): DocumentLine => ({
           name: l.name,
-          qty: fmtMoney(Number(l.qty)),
-          unit: 'шт',
-          price: fmtMoney(Number(l.unitPrice)),
-          sum: fmtMoney(Number(l.qty) * Number(l.unitPrice)),
+          qty: fm(Number(l.qty)),
+          unit: isEu ? 'pcs' : 'шт',
+          price: fm(Number(l.unitPrice)),
+          sum: fm(Number(l.qty) * Number(l.unitPrice)),
         })
       )
     }
@@ -215,17 +244,18 @@ export async function buildRenderData(
         const rate = hours > 0 && sum > 0 ? sum / hours : null
         return {
           name: l.name,
-          qty: hours > 0 ? fmtMoney(hours) : '1',
-          unit: hours > 0 ? 'год' : 'послуга',
-          price: rate != null ? fmtMoney(rate) : sum > 0 ? fmtMoney(sum) : 'включено',
-          sum: sum > 0 ? fmtMoney(sum) : '0,00',
+          qty: hours > 0 ? fm(hours) : '1',
+          unit: hours > 0 ? (isEu ? 'h' : 'год') : isEu ? 'service' : 'послуга',
+          price: rate != null ? fm(rate) : sum > 0 ? fm(sum) : isEu ? 'included' : 'включено',
+          sum: sum > 0 ? fm(sum) : fm(0),
         }
       })
     }
   }
 
   // ── грн-еквівалент для не-UAH валют (курс агенції, S5-03a) ──
-  if (currency !== 'UAH' && amountNum > 0) {
+  // UA-специфіка обліку — на EU-документах не друкується.
+  if (!isEu && currency !== 'UAH' && amountNum > 0) {
     const rate = await tx.exchangeRate.findUnique({
       where: { agencyId: doc.agencyId },
       select: { usdToUah: true, eurToUah: true, updatedAt: true },
@@ -242,7 +272,15 @@ export async function buildRenderData(
     }
   }
 
-  data.vatNote = doc.legalEntity?.vatPayer ? 'у т.ч. ПДВ 20%' : 'без ПДВ (неплатник ПДВ)'
+  // 06-Е: на EU-комплекті ПДВ display-only (повне числення — S13-06): типовий
+  // intra-EU B2B кейс — reverse charge, сума не змінюється.
+  data.vatNote = isEu
+    ? doc.legalEntity?.vatPayer
+      ? '0% — reverse charge (Art. 196, 2006/112/EC)'
+      : 'not applicable'
+    : doc.legalEntity?.vatPayer
+      ? 'у т.ч. ПДВ 20%'
+      : 'без ПДВ (неплатник ПДВ)'
 
   // 06-ДОГОВІР-2 «Підстава»: проектний привʼязаний договір (якщо accepted) →
   // інакше останній accepted-договір компанії. Нема жодного — рядок не друкується.
@@ -265,7 +303,9 @@ export async function buildRenderData(
       const n = contract.number.trim().startsWith('№')
         ? contract.number.trim()
         : `№ ${contract.number}`
-      data.contractRef = `Договір ${n} від ${fmtDate(cDate)}`
+      data.contractRef = isEu
+        ? `Agreement ${n} dated ${fd(cDate)}`
+        : `Договір ${n} від ${fd(cDate)}`
     }
   }
 
@@ -275,21 +315,31 @@ export async function buildRenderData(
       select: { paymentTermsDays: true },
     })
     const terms = settings?.paymentTermsDays ?? 7
-    data.dueDate = fmtDate(new Date(doc.generatedAt.getTime() + terms * 86_400_000))
-    const advance = kind === 'advance_invoice' ? 'Авансова оплата' : 'Оплата'
-    const subject = nomenclatureName ?? `послуги з розробки ПЗ (${data.orderTitle})`
-    data.paymentPurpose = `${advance} за рахунком № ${doc.number} від ${data.date} за ${subject}. ${data.vatNote === 'без ПДВ (неплатник ПДВ)' ? 'Без ПДВ.' : 'З ПДВ.'}`
+    data.dueDate = fd(new Date(doc.generatedAt.getTime() + terms * 86_400_000))
+    if (isEu) {
+      // EU: примітка з reverse-charge-семантикою; референс переказу друкує pay-блок
+      const advance = kind === 'advance_invoice' ? 'Advance payment' : 'Payment'
+      data.paymentPurpose = `${advance} for invoice № ${doc.number} dated ${data.date}. For intra-EU B2B supply with a valid VAT ID, reverse charge applies (Art. 196, Directive 2006/112/EC).`
+    } else {
+      const advance = kind === 'advance_invoice' ? 'Авансова оплата' : 'Оплата'
+      const subject = nomenclatureName ?? `послуги з розробки ПЗ (${data.orderTitle})`
+      data.paymentPurpose = `${advance} за рахунком № ${doc.number} від ${data.date} за ${subject}. ${data.vatNote === 'без ПДВ (неплатник ПДВ)' ? 'Без ПДВ.' : 'З ПДВ.'}`
+    }
   }
 
   if (kind === 'completion_act' && order) {
-    data.periodFrom = fmtDate(order.createdAt)
-    data.periodTo = fmtDate(doc.generatedAt)
+    data.periodFrom = fd(order.createdAt)
+    data.periodTo = fd(doc.generatedAt)
     const invoice = await tx.document.findFirst({
       where: { orderId: order.id, type: { in: ['invoice', 'advance_invoice'] } },
       orderBy: { generatedAt: 'desc' },
       select: { number: true, generatedAt: true },
     })
-    if (invoice) data.basisRef = `Рахунок ${invoice.number} від ${fmtDate(invoice.generatedAt)}`
+    if (invoice) {
+      data.basisRef = isEu
+        ? `Invoice ${invoice.number} dated ${fd(invoice.generatedAt)}`
+        : `Рахунок ${invoice.number} від ${fd(invoice.generatedAt)}`
+    }
   }
 
   if (kind === 'specification') {
@@ -326,10 +376,10 @@ export async function buildRenderData(
       debit += v
       ops.push({
         at: c.month.getTime(),
-        date: fmtDate(c.month),
-        doc: c.kind === 'subscription' ? 'нарахування' : c.kind,
-        desc: c.project?.name ?? 'Разове нарахування',
-        debit: fmtMoney(v),
+        date: fd(c.month),
+        doc: isEu ? 'charge' : c.kind === 'subscription' ? 'нарахування' : c.kind,
+        desc: c.project?.name ?? (isEu ? 'One-off charge' : 'Разове нарахування'),
+        debit: fm(v),
         credit: null,
       })
     }
@@ -338,23 +388,23 @@ export async function buildRenderData(
       credit += v
       ops.push({
         at: p.confirmedAt.getTime(),
-        date: fmtDate(p.confirmedAt),
-        doc: 'оплата',
-        desc: p.paymentMethod ?? 'Платіж',
+        date: fd(p.confirmedAt),
+        doc: isEu ? 'payment' : 'оплата',
+        desc: p.paymentMethod ?? (isEu ? 'Payment received' : 'Платіж'),
         debit: null,
-        credit: fmtMoney(v),
+        credit: fm(v),
       })
     }
     ops.sort((a, b) => a.at - b.at)
     data.operations = ops.map(({ at: _at, ...row }) => row)
-    data.opening = fmtMoney(0)
-    data.totalDebit = fmtMoney(debit)
-    data.totalCredit = fmtMoney(credit)
-    data.closing = fmtMoney(debit - credit)
-    data.amount = fmtMoney(debit - credit)
+    data.opening = fm(0)
+    data.totalDebit = fm(debit)
+    data.totalCredit = fm(credit)
+    data.closing = fm(debit - credit)
+    data.amount = fm(debit - credit)
     if (ops.length > 0) {
       data.periodFrom = ops[0]?.date
-      data.periodTo = fmtDate(doc.generatedAt)
+      data.periodTo = fd(doc.generatedAt)
     }
   }
 
@@ -409,11 +459,14 @@ export async function renderDocumentAttachmentById(
             legalName: true,
             taxId: true,
             vatPayer: true,
+            vatId: true,
             legalAddress: true,
             bankName: true,
             iban: true,
             signerName: true,
             signerTitle: true,
+            docKit: true,
+            bic: true,
           },
         },
       },

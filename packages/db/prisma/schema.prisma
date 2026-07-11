@@ -1315,6 +1315,8 @@ model Document {
   signedExternally Boolean        @default(false)
   contractDate     DateTime?      @db.Timestamptz(3)
   externalUrl      String?
+  // 06-Д: непередбачуваний токен публічної сторінки рахунку (null = лінка нема)
+  publicToken      String?        @unique
   generatedAt      DateTime       @default(now()) @db.Timestamptz(3)
   createdById      String
   createdBy        Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
@@ -1776,6 +1778,12 @@ enum Language {
   en
 }
 
+// 06-Е: комплект документів юр-особи — ua (український) чи eu (EN/VAT-layout)
+enum DocKit {
+  ua
+  eu
+}
+
 enum Theme {
   light
   dark
@@ -2125,10 +2133,14 @@ model LegalEntity {
   legalName    String // повна юр-назва для документів
   taxId        String? // ЄДРПОУ / ІПН / РНОКПП
   vatPayer     Boolean @default(false) // платник ПДВ (звʼязок 05-Ж VAT-поля)
-  vatId        String? // ІПН платника ПДВ
+  vatId        String? // ІПН платника ПДВ / EU VAT ID (EE…, DE…)
   legalAddress String?
   bankName     String?
   iban         String?
+  // 06-Е: комплект документів цієї юр-особи (eu = EN/VAT-layout, інший формат,
+  // не переклад) + BIC/SWIFT для EU-переказів у платіжному блоці.
+  docKit       DocKit  @default(ua)
+  bic          String?
   signerName   String? // ПІБ, хто підписує
   signerTitle  String? // посада («директор», «ФОП»)
   stampUrl     String? // печатка/підпис (storage key)

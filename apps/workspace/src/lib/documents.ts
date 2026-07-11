@@ -111,6 +111,16 @@ export function useSendDocument(orderId: string) {
   })
 }
 
+/** 06-Д: видати публічний лінк на рахунок (без логіна; ідемпотентно). */
+export function usePublicLink(orderId: string) {
+  return useMutation({
+    mutationFn: (docId: string) =>
+      api.post<{ publicToken: string; url: string }>(
+        `/orders/${orderId}/documents/${docId}/public-link`
+      ),
+  })
+}
+
 /** 06-ДОГОВІР-2: реєстрація зовнішнього договору (номер/дата/підписант + файл або лінк). */
 export async function registerExternalContract(
   companyId: string,

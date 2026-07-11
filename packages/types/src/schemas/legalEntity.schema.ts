@@ -42,6 +42,9 @@ export const createLegalEntitySchema = z.object({
   legalAddress: z.string().trim().max(500).nullish(),
   bankName: z.string().trim().max(200).nullish(),
   iban: iban.nullish(),
+  // 06-Е: комплект документів (ua = український, eu = EN/VAT-layout) + BIC/SWIFT
+  docKit: z.enum(['ua', 'eu']).default('ua'),
+  bic: z.string().trim().min(8).max(11).nullish(),
   signerName: shortText.nullish(),
   signerTitle: z.string().trim().max(100).nullish(),
   stampUrl: z.string().trim().max(500).nullish(),
@@ -60,6 +63,8 @@ export const updateLegalEntitySchema = z
     legalAddress: z.string().trim().max(500).nullish(),
     bankName: z.string().trim().max(200).nullish(),
     iban: iban.nullish(),
+    docKit: z.enum(['ua', 'eu']).optional(),
+    bic: z.string().trim().min(8).max(11).nullish(),
     signerName: shortText.nullish(),
     signerTitle: z.string().trim().max(100).nullish(),
     stampUrl: z.string().trim().max(500).nullish(),

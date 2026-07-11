@@ -193,3 +193,165 @@ describe('renderDocumentHtml — повний UA-комплект (06)', () => {
     }
   })
 })
+
+// ── 06-Е: EU-комплект (kit='eu') — EN/VAT-layout, не переклад UA ──────────────
+const EU_BASE: DocumentRenderData = {
+  kit: 'eu',
+  typeLabel: 'Invoice',
+  number: 'INV-2026-000009',
+  date: '24 May 2026',
+  orderTitle: 'CRM rebuild — fixed scope',
+  projectName: 'Sales automation',
+  amount: '9,800.00',
+  currency: 'EUR',
+  issuer: {
+    name: 'Workflo OÜ',
+    legalName: 'Workflo OÜ',
+    taxId: '16482931',
+    vatId: 'EE102564831',
+    legalAddress: 'Sepapaja tn 6, 15551 Tallinn, Estonia',
+    bankName: 'LHV Pank',
+    iban: 'EE477700771001234567',
+    bic: 'LHVBEE22',
+    signerName: 'I. Vasiulenko',
+  },
+  recipient: {
+    name: 'Brunky Foods GmbH',
+    legalName: 'Brunky Foods GmbH',
+    taxId: 'DE314205991',
+    legalAddress: 'Friedrichstraße 68, 10117 Berlin, Germany',
+  },
+  vatNote: '0% — reverse charge (Art. 196, 2006/112/EC)',
+}
+
+describe('renderDocumentHtml — EU-комплект (06-Е)', () => {
+  it('invoice: EN-layout, Bill to, IBAN/BIC pay-блок, reverse-charge VAT, lang=en', () => {
+    const html = renderDocumentHtml('invoice', {
+      ...EU_BASE,
+      dueDate: '07 Jun 2026',
+      lines: [
+        {
+          name: 'Platform support — monthly retainer',
+          qty: '1',
+          unit: 'service',
+          price: '3,200.00',
+          sum: '3,200.00',
+        },
+      ],
+    })
+    expect(html).toContain('<html lang="en"')
+    expect(html).toContain('Bill to')
+    expect(html).toContain('Due date')
+    expect(html).toContain('VAT EE102564831')
+    expect(html).toContain('LHVBEE22')
+    expect(html).toContain('EE477700771001234567')
+    expect(html).toContain('reverse charge')
+    expect(html).toContain('Total due')
+    expect(html).toContain('Please quote on transfer')
+    // UA-мова не протікає в EU-документ
+    expect(html).not.toContain('Постачальник')
+    expect(html).not.toContain('ПДВ')
+  })
+
+  it('advance_invoice (Proforma): нотатка про проформу і Amount due now', () => {
+    const html = renderDocumentHtml('advance_invoice', {
+      ...EU_BASE,
+      typeLabel: 'Proforma · Advance Invoice',
+    })
+    expect(html).toContain('proforma advance invoice')
+    expect(html).toContain('Amount due now')
+  })
+
+  it('completion_act → Service Delivery Act: acceptance-текст + підписи двох сторін', () => {
+    const html = renderDocumentHtml('completion_act', {
+      ...EU_BASE,
+      typeLabel: 'Service Delivery Act',
+      periodFrom: '01 May 2026',
+      periodTo: '31 May 2026',
+      basisRef: 'Invoice INV-2026-000009 dated 24 May 2026',
+    })
+    expect(html).toContain('Service Delivery Act')
+    expect(html).toContain('accepted without reservation')
+    expect(html).toContain('Total accepted')
+    expect(html).toContain('Service Provider')
+    expect(html).toContain('Authorised signatory')
+    expect(html).toContain('01 May 2026 – 31 May 2026')
+  })
+
+  it('reconciliation_act → Statement of Account: opening/closing + charges/payments', () => {
+    const html = renderDocumentHtml('reconciliation_act', {
+      ...EU_BASE,
+      typeLabel: 'Statement of Account',
+      opening: '0.00',
+      totalDebit: '4,320.00',
+      totalCredit: '1,260.00',
+      closing: '3,060.00',
+      operations: [
+        {
+          date: '01 May 2026',
+          doc: 'charge',
+          desc: 'Hourly work — April',
+          debit: '1,260.00',
+          credit: null,
+        },
+        {
+          date: '06 May 2026',
+          doc: 'payment',
+          desc: 'Payment received',
+          debit: null,
+          credit: '1,260.00',
+        },
+      ],
+    })
+    expect(html).toContain('Opening balance')
+    expect(html).toContain('Closing balance')
+    expect(html).toContain('3,060.00')
+    expect(html).toContain('report any discrepancy within 10 days')
+  })
+
+  it('contract → Service Agreement: EN-клаузи за замовчуванням, кастомні мають пріоритет', () => {
+    const html = renderDocumentHtml('contract', { ...EU_BASE, typeLabel: 'Service Agreement' })
+    expect(html).toContain('Service Agreement')
+    expect(html).toContain('Fees &amp; Billing')
+    expect(html).toContain('Governing Law')
+    expect(html).toContain('reverse charge applies')
+    const custom = renderDocumentHtml('contract', {
+      ...EU_BASE,
+      typeLabel: 'Service Agreement',
+      contractSections: [{ h: '1. Custom clause', p: ['Custom text'] }],
+    })
+    expect(custom).toContain('Custom clause')
+    expect(custom).not.toContain('Governing Law')
+  })
+
+  it('specification → Statement of Work: deliverables + Budget', () => {
+    const html = renderDocumentHtml('specification', {
+      ...EU_BASE,
+      typeLabel: 'Statement of Work',
+      description: 'Replace the legacy spreadsheet workflow with a unified CRM.',
+      lines: [
+        {
+          name: 'CRM data model & migration',
+          qty: '1',
+          unit: 'pcs',
+          price: '9,800.00',
+          sum: '9,800.00',
+        },
+      ],
+    })
+    expect(html).toContain('Statement of Work')
+    expect(html).toContain('Objectives')
+    expect(html).toContain('Deliverables')
+    expect(html).toContain('Budget')
+    expect(html).toContain('CRM data model &amp; migration')
+  })
+
+  it('екранує HTML і в EU-рендерері (XSS у назві клієнта)', () => {
+    const html = renderDocumentHtml('invoice', {
+      ...EU_BASE,
+      recipient: { name: '<script>alert(1)</script>' },
+    })
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;')
+  })
+})

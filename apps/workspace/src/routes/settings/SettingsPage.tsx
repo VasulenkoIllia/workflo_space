@@ -712,6 +712,9 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
   const [legalAddress, setLegalAddress] = useState(entity?.legalAddress ?? '')
   const [bankName, setBankName] = useState(entity?.bankName ?? '')
   const [iban, setIban] = useState(entity?.iban ?? '')
+  // 06-Е: EU-комплект документів (EN/VAT-layout) + BIC/SWIFT для EU-переказів
+  const [docKit, setDocKit] = useState<'ua' | 'eu'>(entity?.docKit ?? 'ua')
+  const [bic, setBic] = useState(entity?.bic ?? '')
   const [signerName, setSignerName] = useState(entity?.signerName ?? '')
   const [signerTitle, setSignerTitle] = useState(entity?.signerTitle ?? '')
 
@@ -731,6 +734,8 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
       legalAddress: legalAddress.trim() || null,
       bankName: bankName.trim() || null,
       iban: iban.trim() || null,
+      docKit,
+      bic: bic.trim() || null,
       signerName: signerName.trim() || null,
       signerTitle: signerTitle.trim() || null,
     }
@@ -811,6 +816,28 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
           <Input label="Банк" value={bankName} onChange={(e) => setBankName(e.target.value)} />
           <Input label="IBAN" value={iban} onChange={(e) => setIban(e.target.value)} />
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Select
+            label="Комплект документів"
+            value={docKit}
+            onChange={(v) => setDocKit(v as 'ua' | 'eu')}
+            options={[
+              { value: 'ua', label: '🇺🇦 UA — український' },
+              { value: 'eu', label: '🇪🇺 EU — English / VAT' },
+            ]}
+          />
+          <Input
+            label="BIC / SWIFT"
+            value={bic}
+            onChange={(e) => setBic(e.target.value)}
+            placeholder="LHVBEE22"
+          />
+        </div>
+        {docKit === 'eu' && (
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            // EU-комплект: Invoice / Service Act / SoW / Statement англійською, reverse-charge VAT
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Input
             label="Підписант"

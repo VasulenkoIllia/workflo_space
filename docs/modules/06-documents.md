@@ -17,6 +17,26 @@
 >
 > ✅ **S6-D2 (2026-06-24):** PDF-движок **реалізовано** — `packages/templates`: `renderDocumentHtml()` (брендований HTML, `wfd-*`-мова, кирилиця) + `htmlToPdf()` (`puppeteer-core` → system Chromium; `Dockerfile.api` ставить `chromium`+шрифти, `PUPPETEER_EXECUTABLE_PATH`). `GET /orders/:id/documents/:docId/pdf` віддає PDF; **без Chromium (local/CI) — graceful HTML-fallback** (той самий HTML, друк-у-PDF). Реальний рендер звірено (76 КБ `%PDF-`).
 >
+> ✅ **06-Е + 06-Д DOCUMENTS-EU (2026-07-11) — останній дизайн-хвіст Фази B:**
+> **EU-комплект збудовано** — `LegalEntity.docKit` (`DocKit` ua/eu) + `bic`; юр-особа з `docKit=eu`
+> друкує окремий EN/VAT-layout (`packages/templates/src/renderEu.ts`, дизайн 1:1): **Invoice ·
+> Proforma·Advance · Service Delivery Act · Statement of Work · Statement of Account · Service
+> Agreement** (EN-клаузи за замовчуванням, кастомні `contractSections` з 06-А мають пріоритет).
+> `buildRenderData` віддає EU-дані одразу EN-відформатованими (en-IE суми, `24 May 2026`,
+> EN-«Підстава»/звірка); грн-еквівалент на EU-документах не друкується. **ПДВ display-only:**
+> `VAT 0% — reverse charge (Art. 196, 2006/112/EC)` при vatPayer / `not applicable` без —
+> суми системи незмінні, повне VAT-числення відкладено в S13-06 (рішення власника).
+> **Публічна сторінка рахунку (06-Д)** — `Document.publicToken` (unique, 192-біт base64url):
+> `POST/DELETE /orders/:id/documents/:docId/public-link` (team, ідемпотентно, audit-події) +
+> no-auth `GET /public/documents/:token` (HTML: документ + sticky-бар статус/сума/PDF-лінк) і
+> `GET …/:token/pdf` (Chromium-фолбек як в авторизованому PDF), rate-limit 30/хв, системний
+> RLS-контекст, пошук лише по токену. Кнопки онлайн-оплати нема by-design (05-А провайдери
+> вимкнені) — сторінка показує реквізити з документа. UI: селект комплекту + BIC у формі юр-особи,
+> 🔗 copy-лінк на рахунках у DocumentsTab. Тести: templates 15 (8 EU), api publicInvoice 8.
+> Live-verify наживо: EN-рендер без UA-протікань + повний цикл issue→open(no-auth)→revoke→404.
+> ⚠️ Лишок модуля (свідомо): credit-note як Document-тип · stored-snapshot · автоген акту при
+> `done` · pay-кнопка публічної сторінки (з 05-А) · DocKitViewer-екран «Бланки документів».
+>
 > ✅ **S6-BE-2 (2026-06-25):** **надсилання клієнту** — `POST /orders/:id/documents/:docId/send` (team) → status `sent` + `sentAt` → outbox `document.sent` → нотифікація клієнту (рахунок → `billing.invoice_sent` email; інші типи → in_app). Звірено наживо. ⚠️ **Лишається:** email-вкладення PDF (зараз лінк) · stored-snapshot (`storedAs`, рендер on-demand) · автоген акту при `done` · credit-note · решта EU-шаблонів · UI-кнопка «Надіслати» (фронт-фаза).
 
 ## Огляд

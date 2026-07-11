@@ -9,6 +9,8 @@
  * (goals/milestones — полів у моделі ще нема); решта — 1:1 за структурою.
  */
 
+import { EU_BODY_BY_KIND, EU_CSS } from './renderEu.js'
+
 export type DocumentKind =
   | 'invoice'
   | 'advance_invoice'
@@ -26,6 +28,9 @@ export interface DocumentParty {
   iban?: string | null
   signerName?: string | null
   signerTitle?: string | null
+  // 06-Е (EU-комплект): EU VAT ID у шапці сторін + BIC/SWIFT у платіжному блоці
+  vatId?: string | null
+  bic?: string | null
 }
 
 /** Одна позиція таблиці робіт (рахунок/акт/специфікація). Усі значення вже відформатовані. */
@@ -52,7 +57,10 @@ export interface ContractSection {
 }
 
 export interface DocumentRenderData {
-  typeLabel: string // «Рахунок», «Акт виконаних робіт», …
+  // 06-Е: комплект документів — 'eu' перемикає на EN/VAT-layout (renderEu.ts).
+  // Дані для 'eu' приходять уже EN-відформатованими (дати/суми/лейбли).
+  kit?: 'ua' | 'eu'
+  typeLabel: string // «Рахунок», «Акт виконаних робіт», … / 'Invoice', …
   number: string // INV-2026-000001
   date: string // already-formatted issue date
   orderTitle: string
@@ -512,16 +520,24 @@ const BODY_BY_KIND: Record<DocumentKind, (d: DocumentRenderData) => string> = {
 }
 
 export function renderDocumentHtml(kind: DocumentKind, d: DocumentRenderData): string {
-  const body = BODY_BY_KIND[kind](d)
+  // 06-Е: kit='eu' → окремий європейський layout (EN, VAT-блок) з renderEu.ts
+  const isEu = d.kit === 'eu'
+  const body = (isEu ? EU_BODY_BY_KIND : BODY_BY_KIND)[kind](d)
   // 06-А брендинг: акцентний колір агенції підміняє системний у CSS (крапка бренду
   // та тотал-плашки). Формат кольору валідовано на вході (#hex).
-  let css = CSS
+  let css = isEu ? EU_CSS : CSS
   const accent = d.branding?.accentColor
   if (accent) {
-    css = css.split('#A3D90D').join(accent).split('#d3f36b').join(accent)
+    css = css
+      .split('#A3D90D')
+      .join(accent)
+      .split('#d3f36b')
+      .join(accent)
+      .split('#C5F82A')
+      .join(accent)
   }
   return `<!doctype html>
-<html lang="uk"><head><meta charset="utf-8" />
+<html lang="${isEu ? 'en' : 'uk'}"><head><meta charset="utf-8" />
 <title>${esc(d.typeLabel)} ${esc(d.number)}</title>
 <style>${css}</style></head>
 <body>

@@ -94,9 +94,9 @@ webhooks + ApiKey беремо **лише коли система цілісна
 **🧭 ПЛАН (рішення власника 2026-07-10):** черга — ✅ **agency_members RLS** (10.07) →
 ✅ **S7-05 міні-CMS** (10.07; кейс-едітор Фази B влився сюди) → **дизайн-хвости Фази B**:
 ✅ **team-boards + task-columns** (10.07) → ✅ **team-картка (12-В KPI)** (10.07) →
-✅ **testimonials** (11.07) → ✅ **announcement-feed** (11.07) → documents-eu →
-далі **S9–S13 Enhancement** («повноцінний продукт» поверх MVP). **SaaS (S14) — лише коли все
-повністю працює і зафіксовано.**
+✅ **testimonials** (11.07) → ✅ **announcement-feed** (11.07) → ✅ **documents-eu (06-Е EU-комплект + 06-Д публічний рахунок)** (11.07) —
+**дизайн-хвости Фази B закрито повністю** → далі **S9–S13 Enhancement** («повноцінний продукт»
+поверх MVP). **SaaS (S14) — лише коли все повністю працює і зафіксовано.**
 
 **📌 Що варто доробити далі (черга після тесту):**
 
@@ -138,6 +138,24 @@ webhooks + ApiKey беремо **лише коли система цілісна
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **DOCUMENTS-EU (06-Е + 06-Д, Фаза B) — EU-комплект документів + публічна сторінка рахунку — ЗБУДОВАНО (2026-07-11).**
+  Останній дизайн-хвіст Фази B. **06-Е:** `LegalEntity.docKit` (enum `DocKit` ua/eu, drift-тест)
+  - `bic`; окремий EN/VAT-layout у `@workflo/templates/renderEu.ts` (Invoice · Proforma · Service
+    Delivery Act · Statement of Work · Statement of Account · Service Agreement — за дизайном
+    `workspace-documents-eu.jsx`, НЕ переклад UA); `buildRenderData` збирає EU-дані одразу
+    EN-відформатованими (en-IE суми, '24 May 2026' дати, EN-лейбли звірки/договору/«Підстави»).
+    **ПДВ display-only:** «VAT 0% — reverse charge (Art. 196, 2006/112/EC)» — типовий intra-EU B2B
+    кейс, суми системи незмінні; повне VAT-числення свідомо лишається в S13-06 (рішення власника).
+    **06-Д:** `Document.publicToken` (unique) → `POST/DELETE …/public-link` (team, ідемпотентно,
+    audit) + no-auth `GET /public/documents/:token[.pdf]` (rate-limit 30/хв, системний RLS-контекст,
+    пошук ЛИШЕ по 192-бітному токену; сторінка = документ + sticky-бар зі статусом/PDF; кнопки
+    оплати нема by-design — 05-А провайдери вимкнені). UI: селект «Комплект документів» + BIC у
+    формі юр-особи (settings), кнопка 🔗 на рахунках у DocumentsTab (copy-to-clipboard). Тести:
+    templates 15 (8 нових EU), api `publicInvoice.test.ts` 8 (403 клієнт, ідемпотентність, no-auth
+    200/404, revoke, HTML-фолбек). Міграція `20260713_documents_eu` fresh-PG-proven. Live-verify:
+    EU-інвойс EN-рендер без UA-протікань, повний лінк-цикл issue→open→revoke→404 на реальній БД.
+    Гейт: turbo **37/37**, api **981**.
 
 - **ANNOUNCEMENTS (07-В, Фаза B) — оголошення агенції зі sticky-банером — ЗБУДОВАНО (2026-07-11).**
   Моделі **Announcement + AnnouncementRead** (forced-RLS; enum `AnnouncementAudience`
@@ -1115,7 +1133,7 @@ conformance + form-submit smoke на кожен зріз).
 
 - ~~**client360** (картка клієнта 360°)~~ ✅ **ЗАКРИТО** — таб-shell + 8 табів (Огляд·Люди·Проєкти·Фінанси·Документи·Реквізити·Активність), решта write-частин по мірі появи бекенду (drift-звірка r5 2026-07-08).
 - ~~**notify-feed** (центр сповіщень)~~ ✅ **ЗАКРИТО (2026-07-04)** — read/mark-read/unread/snooze (`routes/notifications`) + bell-dropdown + inbox-таби; цей рядок був застарілим (drift-звірка r4).
-- ~~**vault·support·calendar·PDF-движок**~~ ✅ **ЗАКРИТО** (модуль 17 повністю · SUP-MVP 29 · CAL-MVP 24 · 06-А/06-SEND PDF). Лишок цієї лінії: **documents-eu** (EU-специфіка), **testimonials**, **case-editor** (drift-звірка r5 2026-07-08).
+- ~~**vault·support·calendar·PDF-движок**~~ ✅ **ЗАКРИТО** (модуль 17 повністю · SUP-MVP 29 · CAL-MVP 24 · 06-А/06-SEND PDF). Лишок цієї лінії закрито повністю: ✅ documents-eu (11.07) · ✅ testimonials (11.07) · ✅ case-editor (у складі S7-05 CMS, 10.07).
 - **Глобальна командна дошка** (`workspace-board.jsx`: team-boards, агрегація «усі команди», DnD, фільтри) — нема cross-order/team-board API (`InternalTask` лише per-order). _Per-order kanban задач уже зроблено (slice №4)._
 - **Team** ростер/картка виконавця — бекенд partial, перевірити перед плануванням.
 - **S6 core:** Documents + Notifications + Bot.
