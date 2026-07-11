@@ -19,6 +19,8 @@ export interface LegalEntity {
   // 06-Е: комплект документів юр-особи + BIC/SWIFT для EU-переказів
   docKit: 'ua' | 'eu'
   bic: string | null
+  // S13-06: % податку з отриманого доходу (Decimal серіалізується рядком, напр. "5")
+  incomeTaxPct: string
   signerName: string | null
   signerTitle: string | null
   stampUrl: string | null
@@ -44,6 +46,7 @@ export interface LegalEntityInput {
   iban?: string | null
   docKit?: 'ua' | 'eu'
   bic?: string | null
+  incomeTaxPct?: number
   signerName?: string | null
   signerTitle?: string | null
 }

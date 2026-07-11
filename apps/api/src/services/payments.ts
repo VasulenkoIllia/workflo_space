@@ -37,6 +37,9 @@ export interface ConfirmManualPaymentArgs {
   paymentMethod?: string | null
   paymentReference?: string | null
   note?: string | null
+  /** S13-06: юр-особа/канал-отримувач (податок-на-дохід). Не задано — каскад
+   *  проєкт замовлення → дефолтна юр-особа агенції. */
+  legalEntityId?: string | null
   /** Actor profile id stamped onto `Payment.confirmedBy`. */
   confirmedBy: string
   /** Idempotency anchor handed to the provider (the request's Idempotency-Key). */
@@ -161,6 +164,34 @@ export async function confirmManualPayment(
   // 2. FX snapshot (immutable from here on).
   const { amountUsd, rateUsed } = await snapshotUsd(tx, args.agencyId, amount, args.currency)
 
+  // 2б. S13-06: юр-особа/канал-отримувач — явний вибір (tenant-валідований) →
+  // юр-особа проєкту замовлення → дефолтна юр-особа. Її ставка × amountUsd = лінія
+  // «податок з доходу» в P&L. NULL (нема жодної) = без податку.
+  let legalEntityId: string | null = null
+  if (args.legalEntityId) {
+    const le = await tx.legalEntity.findFirst({
+      where: { id: args.legalEntityId, agencyId: args.agencyId },
+      select: { id: true },
+    })
+    if (!le) throw new AppError(ApiErrorCode.NOT_FOUND, 'Юр-особу не знайдено', 404)
+    legalEntityId = le.id
+  } else {
+    if (order) {
+      const o = await tx.order.findUnique({
+        where: { id: order.id },
+        select: { project: { select: { legalEntityId: true } } },
+      })
+      legalEntityId = o?.project?.legalEntityId ?? null
+    }
+    legalEntityId ??=
+      (
+        await tx.legalEntity.findFirst({
+          where: { agencyId: args.agencyId, isDefault: true },
+          select: { id: true },
+        })
+      )?.id ?? null
+  }
+
   // 3. Provider confirm — pure (no money mutation); ManualProvider returns providerPaymentId=null.
   const confirmation = await provider.confirmPayment({
     amount: args.amount,
@@ -189,6 +220,7 @@ export async function confirmManualPayment(
       paymentMethod: args.paymentMethod ?? null,
       paymentReference: args.paymentReference ?? null,
       note: args.note ?? null,
+      legalEntityId,
       confirmedBy: args.confirmedBy,
     },
     select: { id: true, amount: true, currency: true, type: true, confirmedAt: true },

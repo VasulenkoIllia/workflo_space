@@ -344,6 +344,10 @@ export function FinancePage() {
               {num(p?.laborHourlyUsd) ? (
                 <Stat k="погодинна праця" v={formatMoney(num(p?.laborHourlyUsd))} />
               ) : null}
+              {num(p?.incomeTaxUsd) ? (
+                // S13-06: податок з доходу per-юр-особа (ФОП 5% / крипта 0%)
+                <Stat k="податок з доходу" v={formatMoney(num(p?.incomeTaxUsd))} />
+              ) : null}
               <Stat
                 k={`чистий · ${p?.marginPct ?? '—'}%`}
                 v={formatMoney(num(p?.netProfitUsd))}

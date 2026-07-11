@@ -15,6 +15,12 @@ import { type FxRates, toUsd } from './currency.js'
  *    SINGLE salary source. Manual `category=salary` expenses are EXCLUDED from the sum
  *    so an executor's pay is never double-counted; ExecutorPayout (settlement) is also
  *    never added (ExecutorRate is the cost basis).
+ *  - INCOME TAX (S13-06, рішення власника 18.06): податок = % від ОТРИМАНОГО доходу
+ *    per-юр-особа/канал (ФОП 5% / крипта 0%) — НЕ класичний ПДВ. Лінія `income_tax` =
+ *    Σ по юр-особах ((confirmed amountUsd − refunds confirmed-платежів) × incomeTaxPct).
+ *    Period-семантика як у комісії-клавбеку: refund зменшує базу ПОТОЧНОГО вікна (може
+ *    дати відʼємний податок-кредит). Платежі без legalEntityId (легасі) і bonus-платежі
+ *    (amountUsd=0) не оподатковуються.
  *  - non-USD amounts are converted with the agency's stored ExchangeRate.
  */
 
@@ -73,6 +79,7 @@ export interface Pnl {
   expensesUsd: string
   salaryUsd: string
   laborHourlyUsd: string
+  incomeTaxUsd: string // S13-06: податок з доходу per-юр-особа (входить і в byCategory/expenses)
   netProfitUsd: string
   marginPct: string
   byCategory: PnlLine[]
@@ -88,7 +95,17 @@ export async function computePnl(args: {
   const months = monthsInRange(from, to)
 
   const data = await withTenant(async (tx) => {
-    const [revenueAgg, refundAgg, expenses, rates, rate, laborRows] = await Promise.all([
+    const [
+      revenueAgg,
+      refundAgg,
+      expenses,
+      rates,
+      rate,
+      laborRows,
+      taxRows,
+      taxRefunds,
+      taxedEntities,
+    ] = await Promise.all([
       tx.payment.aggregate({
         where: {
           agencyId: args.agencyId,
@@ -149,8 +166,42 @@ export async function computePnl(args: {
           AND t."date" <= ${to}
         GROUP BY t."executorId", date_trunc('month', t."date")
       `,
+      // S13-06: податкова база — confirmed-платежі вікна, згруповані по юр-особі.
+      tx.payment.groupBy({
+        by: ['legalEntityId'],
+        where: {
+          agencyId: args.agencyId,
+          status: 'confirmed',
+          legalEntityId: { not: null },
+          confirmedAt: { gte: from, lte: to },
+        },
+        _sum: { amountUsd: true },
+      }),
+      // Refund-клавбек бази (той самий М-1 фільтр: лише refund-и confirmed-платежів).
+      tx.paymentRefund.findMany({
+        where: {
+          agencyId: args.agencyId,
+          createdAt: { gte: from, lte: to },
+          payment: { is: { status: 'confirmed', legalEntityId: { not: null } } },
+        },
+        select: { amountUsd: true, payment: { select: { legalEntityId: true } } },
+      }),
+      tx.legalEntity.findMany({
+        where: { agencyId: args.agencyId, incomeTaxPct: { gt: 0 } },
+        select: { id: true, incomeTaxPct: true },
+      }),
     ])
-    return { revenueAgg, refundAgg, expenses, rates, rate, laborRows }
+    return {
+      revenueAgg,
+      refundAgg,
+      expenses,
+      rates,
+      rate,
+      laborRows,
+      taxRows,
+      taxRefunds,
+      taxedEntities,
+    }
   })
 
   const rates: FxRates = {
@@ -214,6 +265,29 @@ export async function computePnl(args: {
   laborHourlyUsd = laborHourlyUsd.toDecimalPlaces(2)
   if (laborHourlyUsd.greaterThan(0)) add('labor_hourly', laborHourlyUsd)
 
+  // S13-06: податок з доходу — по кожній оподаткованій юр-особі:
+  // (confirmed-платежі вікна − refund-клавбек) × ставка. Період-семантика: refund
+  // зменшує базу поточного вікна; відʼємна база → податок-кредит (без clamp).
+  const taxRate = new Map(data.taxedEntities.map((e) => [e.id, new Prisma.Decimal(e.incomeTaxPct)]))
+  const taxBase = new Map<string, Prisma.Decimal>()
+  for (const row of data.taxRows) {
+    if (!row.legalEntityId || !taxRate.has(row.legalEntityId)) continue
+    taxBase.set(row.legalEntityId, new Prisma.Decimal(row._sum.amountUsd ?? 0))
+  }
+  for (const r of data.taxRefunds) {
+    const leId = r.payment.legalEntityId
+    if (!leId || !taxRate.has(leId)) continue
+    taxBase.set(leId, (taxBase.get(leId) ?? new Prisma.Decimal(0)).minus(r.amountUsd ?? 0))
+  }
+  let incomeTaxUsd = new Prisma.Decimal(0)
+  for (const [leId, base] of taxBase) {
+    const pct = taxRate.get(leId)
+    if (!pct) continue
+    incomeTaxUsd = incomeTaxUsd.plus(base.times(pct).div(100))
+  }
+  incomeTaxUsd = incomeTaxUsd.toDecimalPlaces(2)
+  if (!incomeTaxUsd.isZero()) add('income_tax', incomeTaxUsd)
+
   let expensesUsd = new Prisma.Decimal(0)
   for (const v of byCategory.values()) expensesUsd = expensesUsd.plus(v)
 
@@ -229,6 +303,7 @@ export async function computePnl(args: {
     expensesUsd: expensesUsd.toFixed(2),
     salaryUsd: salaryUsd.toFixed(2),
     laborHourlyUsd: laborHourlyUsd.toFixed(2),
+    incomeTaxUsd: incomeTaxUsd.toFixed(2),
     netProfitUsd: netProfit.toFixed(2),
     marginPct: marginPct.toFixed(2),
     byCategory: [...byCategory.entries()].map(([category, amountUsd]) => ({

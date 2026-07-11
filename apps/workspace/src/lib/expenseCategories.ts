@@ -16,6 +16,8 @@ export const EXPENSE_CAT: Record<ExpenseCategory, { label: string; color: string
 // Синтетичні P&L-статті (не користувацькі expense-категорії): собівартість погодинної праці.
 const PNL_SYNTHETIC: Record<string, { label: string; color: string }> = {
   labor_hourly: { label: 'Погодинна праця', color: '#FBBF24' },
+  // S13-06: податок-на-дохід per-юр-особа (обчислюваний, не Expense-рядок)
+  income_tax: { label: 'Податок з доходу', color: '#E879F9' },
 }
 
 export function catLabel(c: string): string {

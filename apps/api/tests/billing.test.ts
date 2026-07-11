@@ -10,6 +10,9 @@ const paymentFindMany = vi.fn()
 const paymentCount = vi.fn()
 const orderUpdate = vi.fn()
 const exchangeRateFindUnique = vi.fn()
+// S13-06: резолв юр-особи-отримувача у confirm-флоу
+const orderFindUnique = vi.fn()
+const legalEntityFindFirst = vi.fn()
 const idempotencyUpdate = vi.fn()
 const serviceChargeFindMany = vi.fn()
 const projectFindMany = vi.fn()
@@ -61,7 +64,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
       findMany: paymentFindMany,
       count: paymentCount,
     },
-    order: { update: orderUpdate },
+    order: { update: orderUpdate, findUnique: orderFindUnique },
+    legalEntity: { findFirst: legalEntityFindFirst },
     exchangeRate: { findUnique: exchangeRateFindUnique },
     idempotencyKey: { update: idempotencyUpdate },
     serviceCharge: { findMany: serviceChargeFindMany },
@@ -147,6 +151,9 @@ describe('POST /workspace/billing/payments', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetState()
+    // S13-06: дефолт — юр-особа не резолвиться (легасі-платіж, без податку)
+    orderFindUnique.mockResolvedValue(null)
+    legalEntityFindFirst.mockResolvedValue(null)
   })
   afterEach(() => vi.clearAllMocks())
 
@@ -239,6 +246,46 @@ describe('POST /workspace/billing/payments', () => {
     expect(data.confirmedBy).toBe('exec-1')
     expect(exchangeRateFindUnique).not.toHaveBeenCalled() // USD → no FX lookup
     expect(auditLogCreate).toHaveBeenCalled()
+  })
+
+  // ── S13-06: юр-особа-отримувач платежу (податок-на-дохід) ────────────────────
+  it('явна legalEntityId: tenant-валідована і записана на платіж', async () => {
+    legalEntityFindFirst.mockResolvedValue({ id: 'le-fop' })
+    paymentCreate.mockResolvedValue(paymentRow('100.00'))
+    const res = await post(EXECUTOR, {
+      companyId: COMPANY_ID,
+      amount: 100,
+      legalEntityId: '11111111-1111-4111-8111-111111111111',
+    })
+    expect(res.statusCode).toBe(201)
+    expect(legalEntityFindFirst.mock.calls[0][0].where).toMatchObject({
+      id: '11111111-1111-4111-8111-111111111111',
+      agencyId: 'agency-1',
+    })
+    expect(paymentCreate.mock.calls[0][0].data.legalEntityId).toBe('le-fop')
+  })
+
+  it('чужа/неіснуюча legalEntityId → 404, платіж не створюється', async () => {
+    legalEntityFindFirst.mockResolvedValue(null)
+    const res = await post(EXECUTOR, {
+      companyId: COMPANY_ID,
+      amount: 100,
+      legalEntityId: '22222222-2222-4222-8222-222222222222',
+    })
+    expect(res.statusCode).toBe(404)
+    expect(paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it('без явної юр-особи: каскад падає на дефолтну юр-особу агенції', async () => {
+    legalEntityFindFirst.mockResolvedValue({ id: 'le-default' })
+    paymentCreate.mockResolvedValue(paymentRow('100.00'))
+    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 })
+    expect(res.statusCode).toBe(201)
+    expect(legalEntityFindFirst.mock.calls[0][0].where).toMatchObject({
+      agencyId: 'agency-1',
+      isDefault: true,
+    })
+    expect(paymentCreate.mock.calls[0][0].data.legalEntityId).toBe('le-default')
   })
 
   it('order full payment → order marked paid, newDebt 0', async () => {

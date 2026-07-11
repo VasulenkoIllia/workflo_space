@@ -84,6 +84,7 @@ const createPaymentRoute: FastifyPluginAsync = (fastify) => {
               paymentMethod: input.paymentMethod ?? null,
               paymentReference: input.paymentReference ?? null,
               note: input.note ?? null,
+              legalEntityId: input.legalEntityId ?? null,
               confirmedBy: user.sub,
               idempotencyKey,
             })

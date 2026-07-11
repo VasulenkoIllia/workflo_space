@@ -147,6 +147,8 @@ export interface CreatePaymentVars {
   paymentMethod?: string
   paymentReference?: string
   note?: string
+  // S13-06: юр-особа/канал-отримувач (податок-на-дохід); не задано — каскад на беку
+  legalEntityId?: string
 }
 
 /** Fresh idempotency key per submit; mutations don't auto-retry, so one submit = one key. */

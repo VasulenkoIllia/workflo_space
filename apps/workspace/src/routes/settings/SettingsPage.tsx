@@ -715,14 +715,20 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
   // 06-Е: EU-комплект документів (EN/VAT-layout) + BIC/SWIFT для EU-переказів
   const [docKit, setDocKit] = useState<'ua' | 'eu'>(entity?.docKit ?? 'ua')
   const [bic, setBic] = useState(entity?.bic ?? '')
+  // S13-06: % податку з отриманого доходу цього каналу (ФОП 5 / крипта 0)
+  const [incomeTaxPct, setIncomeTaxPct] = useState(
+    entity ? String(Number(entity.incomeTaxPct)) : '0'
+  )
   const [signerName, setSignerName] = useState(entity?.signerName ?? '')
   const [signerTitle, setSignerTitle] = useState(entity?.signerTitle ?? '')
 
   const nameInvalid = name.trim().length < 2
   const legalNameInvalid = legalName.trim().length < 2
+  const taxNum = Number(incomeTaxPct)
+  const taxInvalid = !Number.isFinite(taxNum) || taxNum < 0 || taxNum > 99.99
 
   const submit = () => {
-    if (nameInvalid || legalNameInvalid) return
+    if (nameInvalid || legalNameInvalid || taxInvalid) return
     const body: LegalEntityInput & { id?: string } = {
       id: entity?.id,
       name: name.trim(),
@@ -736,6 +742,7 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
       iban: iban.trim() || null,
       docKit,
       bic: bic.trim() || null,
+      incomeTaxPct: taxNum,
       signerName: signerName.trim() || null,
       signerTitle: signerTitle.trim() || null,
     }
@@ -816,7 +823,7 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
           <Input label="Банк" value={bankName} onChange={(e) => setBankName(e.target.value)} />
           <Input label="IBAN" value={iban} onChange={(e) => setIban(e.target.value)} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <Select
             label="Комплект документів"
             value={docKit}
@@ -831,6 +838,13 @@ function EntityModal({ entity, onClose }: { entity: LegalEntity | null; onClose:
             value={bic}
             onChange={(e) => setBic(e.target.value)}
             placeholder="LHVBEE22"
+          />
+          <Input
+            label="Податок % з доходу"
+            type="number"
+            value={incomeTaxPct}
+            onChange={(e) => setIncomeTaxPct(e.target.value)}
+            error={taxInvalid ? '0–99.99' : undefined}
           />
         </div>
         {docKit === 'eu' && (

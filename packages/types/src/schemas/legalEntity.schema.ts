@@ -45,6 +45,8 @@ export const createLegalEntitySchema = z.object({
   // 06-Е: комплект документів (ua = український, eu = EN/VAT-layout) + BIC/SWIFT
   docKit: z.enum(['ua', 'eu']).default('ua'),
   bic: z.string().trim().min(8).max(11).nullish(),
+  // S13-06: податок-на-дохід каналу — % від отриманих платежів (ФОП 5 / крипта 0)
+  incomeTaxPct: z.number().min(0).max(99.99).default(0),
   signerName: shortText.nullish(),
   signerTitle: z.string().trim().max(100).nullish(),
   stampUrl: z.string().trim().max(500).nullish(),
@@ -65,6 +67,7 @@ export const updateLegalEntitySchema = z
     iban: iban.nullish(),
     docKit: z.enum(['ua', 'eu']).optional(),
     bic: z.string().trim().min(8).max(11).nullish(),
+    incomeTaxPct: z.number().min(0).max(99.99).optional(),
     signerName: shortText.nullish(),
     signerTitle: z.string().trim().max(100).nullish(),
     stampUrl: z.string().trim().max(500).nullish(),

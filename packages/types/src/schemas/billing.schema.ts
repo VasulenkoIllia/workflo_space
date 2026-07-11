@@ -47,6 +47,9 @@ export const createPaymentSchema = z.object({
   paymentMethod: z.string().max(100).optional(),
   paymentReference: z.string().max(200).optional(),
   note: z.string().max(1000).optional(),
+  // S13-06: юр-особа/канал, що отримав платіж (податок-на-дохід). Не вказано —
+  // каскад: проєкт замовлення → дефолтна юр-особа агенції.
+  legalEntityId: z.string().uuid().optional(),
 })
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
 

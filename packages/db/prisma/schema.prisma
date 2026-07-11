@@ -1041,6 +1041,10 @@ model Payment {
   confirmer         Profile       @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
   confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
   agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  // S13-06: юр-особа/канал, що ОТРИМАВ платіж (податок-на-дохід = amountUsd × її ставка).
+  // Каскад при confirm: явний вибір → проєкт замовлення → дефолтна юр-особа. NULL (легасі) = без податку.
+  legalEntityId     String?
+  legalEntity       LegalEntity?  @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
   allocations PaymentAllocation[]
   refunds     PaymentRefund[] // 05-В: повернення (повне/часткове)
@@ -1058,6 +1062,7 @@ model Payment {
   @@index([confirmedBy])
   @@index([confirmedAt])
   @@index([status])
+  @@index([legalEntityId])
   @@map("payments")
 }
 
@@ -2141,6 +2146,10 @@ model LegalEntity {
   // не переклад) + BIC/SWIFT для EU-переказів у платіжному блоці.
   docKit       DocKit  @default(ua)
   bic          String?
+  // S13-06: податок-на-дохід каналу — % від отриманих платежів цієї юр-особи
+  // (ФОП 5% / крипта-картка 0%; рішення власника 18.06 — НЕ класичний ПДВ).
+  // Лінія «податок» у P&L/маржі рахується з Payment.legalEntityId × ця ставка.
+  incomeTaxPct Decimal @default(0) @db.Decimal(5, 2)
   signerName   String? // ПІБ, хто підписує
   signerTitle  String? // посада («директор», «ФОП»)
   stampUrl     String? // печатка/підпис (storage key)
@@ -2152,6 +2161,7 @@ model LegalEntity {
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
   documents Document[] // від якої юр-особи виставлено (Document.legalEntityId)
+  payments  Payment[] // S13-06: платежі, отримані цією юр-особою/каналом (податок-на-дохід)
   projects  Project[] // 20-Д: проєкти, що виставляють від цієї юр-особи (Юр-3 каскад)
 
   @@unique([agencyId, name])

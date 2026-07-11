@@ -17,6 +17,7 @@ import {
   type WsPayment,
 } from '@/lib/billing'
 import { useCompanies } from '@/lib/projects'
+import { useLegalEntities } from '@/lib/legalEntities'
 import { useAuth } from '@/contexts/AuthContext'
 
 const KIND_LABEL: Record<string, string> = {
@@ -541,12 +542,15 @@ function CreatePaymentModal({ onClose }: { onClose: () => void }) {
   const companies = useCompanies()
   const list = companies.data?.companies ?? []
   const companyOptions = useMemo(() => list.map((c) => ({ value: c.id, label: c.name })), [list])
+  // S13-06: юр-особа/канал-отримувач — її ставка дає лінію «податок з доходу» в P&L
+  const { entities } = useLegalEntities()
   const [companyId, setCompanyId] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [type, setType] = useState<'advance' | 'final' | 'partial'>('final')
   const [method, setMethod] = useState('')
   const [note, setNote] = useState('')
+  const [legalEntityId, setLegalEntityId] = useState('')
 
   const amountNum = Number(amount)
   const amountInvalid = !(amountNum > 0)
@@ -568,6 +572,7 @@ function CreatePaymentModal({ onClose }: { onClose: () => void }) {
         type,
         paymentMethod: method.trim() || undefined,
         note: note.trim() || undefined,
+        legalEntityId: legalEntityId || undefined,
       },
       { onSuccess: onClose }
     )
@@ -626,6 +631,20 @@ function CreatePaymentModal({ onClose }: { onClose: () => void }) {
           value={type}
           onChange={(v) => setType(v as 'advance' | 'final' | 'partial')}
           options={CREATE_TYPE}
+        />
+        <Select
+          label="Юр-особа-отримувач (податок з доходу)"
+          value={legalEntityId}
+          onChange={setLegalEntityId}
+          options={[
+            { value: '', label: 'авто (проєкт → дефолтна юр-особа)' },
+            ...entities
+              .filter((e) => e.active)
+              .map((e) => ({
+                value: e.id,
+                label: `${e.name}${Number(e.incomeTaxPct) > 0 ? ` · податок ${Number(e.incomeTaxPct)}%` : ''}`,
+              })),
+          ]}
         />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Input

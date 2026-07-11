@@ -12,6 +12,10 @@ const expenseDelete = vi.fn()
 const rateFindMany = vi.fn()
 const laborRawMock = vi.fn() // ХВІСТ-3: $queryRaw погодинної собівартості
 const exchangeRateFindUnique = vi.fn()
+// S13-06: податок-на-дохід — база по юр-особах + refund-клавбек + ставки
+const paymentGroupBy = vi.fn()
+const paymentRefundFindMany = vi.fn()
+const legalEntityFindMany = vi.fn()
 const auditLogCreate = vi.fn()
 
 let Dec: (v: string | number) => unknown
@@ -23,8 +27,9 @@ vi.mock('@workflo/db', async (importOriginal) => {
   const Prisma = actual.Prisma
   Dec = (v: string | number) => new Prisma.Decimal(v)
   const prisma = {
-    payment: { aggregate: paymentAggregate },
-    paymentRefund: { aggregate: paymentRefundAggregate },
+    payment: { aggregate: paymentAggregate, groupBy: paymentGroupBy },
+    paymentRefund: { aggregate: paymentRefundAggregate, findMany: paymentRefundFindMany },
+    legalEntity: { findMany: legalEntityFindMany },
     expense: {
       findMany: expenseFindMany,
       findUnique: expenseFindUnique,
@@ -78,6 +83,9 @@ function authed(claims: unknown) {
 beforeEach(() => {
   vi.clearAllMocks()
   auditLogCreate.mockResolvedValue({})
+  paymentGroupBy.mockResolvedValue([])
+  paymentRefundFindMany.mockResolvedValue([])
+  legalEntityFindMany.mockResolvedValue([])
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -91,6 +99,9 @@ describe('computePnl (service)', () => {
       rate?: { usdToUah: unknown } | null
       labor?: Array<{ executorId: string; ym: string; cost: string }>
       refunds?: string
+      taxRows?: Array<{ legalEntityId: string; _sum: { amountUsd: unknown } }>
+      taxRefunds?: Array<{ amountUsd: unknown; payment: { legalEntityId: string } }>
+      taxedEntities?: Array<{ id: string; incomeTaxPct: unknown }>
     } = {}
   ) {
     paymentAggregate.mockResolvedValue({ _sum: { amountUsd: Dec(over.revenue ?? '0') } })
@@ -99,6 +110,9 @@ describe('computePnl (service)', () => {
     rateFindMany.mockResolvedValue(over.rates ?? [])
     exchangeRateFindUnique.mockResolvedValue(over.rate ?? null)
     laborRawMock.mockResolvedValue(over.labor ?? [])
+    paymentGroupBy.mockResolvedValue(over.taxRows ?? [])
+    paymentRefundFindMany.mockResolvedValue(over.taxRefunds ?? [])
+    legalEntityFindMany.mockResolvedValue(over.taxedEntities ?? [])
   }
 
   it('netProfit = revenue − (normalized expenses + ExecutorRate salary); margin computed', async () => {
@@ -262,6 +276,57 @@ describe('computePnl (service)', () => {
     })
     const pnl = await computePnl({ agencyId: 'agency-1', from: '2026-06-01', to: '2026-06-30' })
     expect(pnl.expensesUsd).toBe('100.00') // 4000 UAH / 40
+  })
+
+  // S13-06: податок-на-дохід per-юр-особа/канал (ФОП 5% / крипта 0%)
+  describe('computePnl — income tax (S13-06)', () => {
+    const WINDOW = { agencyId: 'agency-1', from: '2026-06-01', to: '2026-06-30' }
+
+    it('податок = Σ база юр-особи × її ставка; неоподаткована юр-особа (0%) не дає лінії', async () => {
+      setup({
+        revenue: '10000.00',
+        taxRows: [
+          { legalEntityId: 'fop', _sum: { amountUsd: Dec('8000.00') } },
+          { legalEntityId: 'crypto', _sum: { amountUsd: Dec('2000.00') } },
+        ],
+        // crypto (0%) НЕ повертається запитом taxedEntities (фільтр pct > 0)
+        taxedEntities: [{ id: 'fop', incomeTaxPct: Dec('5') }],
+      })
+      const pnl = await computePnl(WINDOW)
+      expect(pnl.incomeTaxUsd).toBe('400.00') // 8000 × 5%
+      expect(pnl.byCategory.find((l) => l.category === 'income_tax')?.amountUsd).toBe('400.00')
+      expect(pnl.expensesUsd).toBe('400.00')
+      expect(pnl.netProfitUsd).toBe('9600.00')
+    })
+
+    it('refund-клавбек зменшує базу поточного вікна (period-семантика)', async () => {
+      setup({
+        revenue: '5000.00',
+        taxRows: [{ legalEntityId: 'fop', _sum: { amountUsd: Dec('5000.00') } }],
+        taxRefunds: [{ amountUsd: Dec('1000.00'), payment: { legalEntityId: 'fop' } }],
+        taxedEntities: [{ id: 'fop', incomeTaxPct: Dec('5') }],
+      })
+      const pnl = await computePnl(WINDOW)
+      expect(pnl.incomeTaxUsd).toBe('200.00') // (5000−1000) × 5%
+    })
+
+    it('refund без платежів у вікні → відʼємний податок-кредит (без clamp)', async () => {
+      setup({
+        taxRefunds: [{ amountUsd: Dec('2000.00'), payment: { legalEntityId: 'fop' } }],
+        taxedEntities: [{ id: 'fop', incomeTaxPct: Dec('5') }],
+      })
+      const pnl = await computePnl(WINDOW)
+      expect(pnl.incomeTaxUsd).toBe('-100.00')
+      // відʼємний податок ЗМЕНШУЄ витрати вікна
+      expect(pnl.expensesUsd).toBe('-100.00')
+    })
+
+    it('без оподаткованих юр-осіб лінії income_tax немає взагалі', async () => {
+      setup({ revenue: '10000.00' })
+      const pnl = await computePnl(WINDOW)
+      expect(pnl.incomeTaxUsd).toBe('0.00')
+      expect(pnl.byCategory.find((l) => l.category === 'income_tax')).toBeUndefined()
+    })
   })
 })
 

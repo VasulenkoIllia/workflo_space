@@ -38,6 +38,7 @@ export interface Pnl {
   expensesUsd: string
   salaryUsd: string
   laborHourlyUsd: string
+  incomeTaxUsd: string // S13-06: податок з доходу per-юр-особа (входить у витрати)
   netProfitUsd: string
   marginPct: string
   byCategory: { category: string; amountUsd: string }[]
