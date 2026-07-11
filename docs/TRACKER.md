@@ -529,15 +529,15 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 
 ## SPRINT 11 — Search + Reports + Admin (повний)
 
-| ID     | Задача                                                                                    | Модуль       | Статус |
-| ------ | ----------------------------------------------------------------------------------------- | ------------ | ------ |
-| S11-01 | Search — Postgres FTS (agency-scoped GIN) + SearchAdapter                                 | [16-search]  | ⬜     |
-| S11-02 | Search — Cmd+K command palette (+ Meilisearch adapter stub)                               | [16-search]  | ⬜     |
-| S11-03 | Reports — scheduled email (ReportSchedule+cron) + PDF/XLSX                                | [19-reports] | ⬜     |
-| S11-04 | Reports — custom ReportDefinition builder + revenue_monthly_mv                            | [19-reports] | ⬜     |
-| S11-05 | Admin — templates/SMTP/branding/nomenclature/departments editor (per-agency)              | [20-admin]   | ⬜     |
-| S11-06 | Admin — AgencyFeatureFlag + outbound webhooks + ApiKey + config export                    | [20-admin]   | ⬜     |
-| S11-07 | Retention-аналітика дашборд (NEW→REGULAR/time-to-2nd/churn) + Public API Swagger ⬅backlog | [19/20]      | ⬜     |
+| ID     | Задача                                                                                                                                                                                                                                     | Модуль       | Статус |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ------ |
+| S11-01 | Search — Postgres FTS (agency-scoped GIN) + SearchAdapter                                                                                                                                                                                  | [16-search]  | ⬜     |
+| S11-02 | Search — Cmd+K command palette (+ Meilisearch adapter stub)                                                                                                                                                                                | [16-search]  | ⬜     |
+| S11-03 | Reports — scheduled email (ReportSchedule+cron) + PDF/XLSX                                                                                                                                                                                 | [19-reports] | ⬜     |
+| S11-04 | Reports — custom ReportDefinition builder + revenue_monthly_mv                                                                                                                                                                             | [19-reports] | ⬜     |
+| S11-05 | Admin — templates/SMTP/branding/nomenclature/departments editor (per-agency)                                                                                                                                                               | [20-admin]   | ⬜     |
+| S11-06 | Admin — AgencyFeatureFlag + outbound webhooks + ApiKey + config export                                                                                                                                                                     | [20-admin]   | ⬜     |
+| S11-07 | ✅ **retention-дашборд ЗБУДОВАНО 11.07.2026** (repeat rate + медіана time-to-2nd + NEW→REGULAR 90д + churn 60/120 + at-risk топ у /reports; Swagger — свідомо в лінії webhooks/ApiKey) — Retention-аналітика + Public API Swagger ⬅backlog | [19/20]      | ⬜     |
 
 ## SPRINT 12 — Documents & Notifications (повний)
 

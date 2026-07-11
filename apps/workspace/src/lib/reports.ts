@@ -140,3 +140,32 @@ export function useMomReport(enabled = true) {
     enabled,
   })
 }
+
+/** S11-07: retention-аналітика клієнтської бази (life-time). Owner-only. */
+export interface RetentionReport {
+  totalCompanies: number
+  tierCounts: { tier: string; count: number }[]
+  repeatRatePct: string
+  companiesWithOrders: number
+  companiesWithRepeat: number
+  medianDaysToSecondOrder: number | null
+  newToRegularPct: string
+  matureCompanies: number
+  convertedCompanies: number
+  activity: { active: number; atRisk: number; churned: number }
+  atRiskClients: {
+    id: string
+    name: string
+    lastActivityAt: string
+    daysSince: number
+    lifetimeUsd: string
+    tier: string
+  }[]
+}
+
+export function useRetentionReport() {
+  return useQuery({
+    queryKey: ['ws-reports', 'retention'],
+    queryFn: () => api.get<RetentionReport>('/workspace/reports/retention'),
+  })
+}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, EmptyState, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
 import {
@@ -11,6 +12,8 @@ import {
   useHoursReport,
   useLeadSourceReport,
   useRevenueReport,
+  useRetentionReport,
+  type RetentionReport,
   useSlaReport,
 } from '@/lib/reports'
 import { type ExportTable } from '@/lib/exportTable'
@@ -171,6 +174,144 @@ function buildRevenueTables(r: RevenueReport): ExportTable[] {
 }
 
 /** 19-А: виручка по місяцях/клієнтах + нові клієнти + дебіторка з віком. */
+const TIER_UA: Record<string, string> = {
+  new: 'Нові',
+  regular: 'Постійні',
+  partner: 'Партнери',
+  vip: 'VIP',
+}
+
+function buildRetentionTables(r: RetentionReport): ExportTable[] {
+  return [
+    {
+      sheet: 'Retention',
+      headers: ['показник', 'значення'],
+      rows: [
+        ['компаній усього', String(r.totalCompanies)],
+        ['repeat rate %', r.repeatRatePct],
+        ['медіана днів до 2-го замовлення', String(r.medianDaysToSecondOrder ?? '—')],
+        ['NEW→REGULAR % (90+ днів)', r.newToRegularPct],
+        [
+          'активні / під ризиком / втрачені',
+          `${r.activity.active} / ${r.activity.atRisk} / ${r.activity.churned}`,
+        ],
+      ],
+    },
+    {
+      sheet: 'At-risk клієнти',
+      headers: ['клієнт', 'тір', 'днів без активності', 'lifetime USD'],
+      rows: r.atRiskClients.map((c) => [
+        c.name,
+        TIER_UA[c.tier] ?? c.tier,
+        c.daysSince,
+        c.lifetimeUsd,
+      ]),
+    },
+  ]
+}
+
+/** S11-07: retention — життєвий цикл клієнтської бази (без вікна дат). */
+function RetentionSection() {
+  const { data, isLoading } = useRetentionReport()
+  if (isLoading) return <Skeleton style={{ height: 240 }} />
+  if (!data) return null
+  const risky = data.activity.atRisk + data.activity.churned
+  return (
+    <Card
+      title="Retention · життєвий цикл клієнтів"
+      aux={
+        <ExportButtons
+          getTables={() => buildRetentionTables(data)}
+          filename="retention"
+          disabled={data.totalCompanies === 0}
+        />
+      }
+      style={{ marginBottom: 20 }}
+    >
+      <div className="wfp-stats" style={{ marginBottom: 14 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">repeat rate</div>
+          <div className="wfp-stat-v" style={{ color: 'var(--wf-accent)' }}>
+            {data.repeatRatePct}%
+          </div>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            {data.companiesWithRepeat} з {data.companiesWithOrders} замовляли повторно
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">до 2-го замовлення</div>
+          <div className="wfp-stat-v">
+            {data.medianDaysToSecondOrder != null ? `${data.medianDaysToSecondOrder} дн.` : '—'}
+          </div>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            медіана
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">NEW → REGULAR</div>
+          <div className="wfp-stat-v">{data.newToRegularPct}%</div>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            {data.convertedCompanies} з {data.matureCompanies} зрілих (90+ дн.)
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">активні · ризик · втрачені</div>
+          <div className="wfp-stat-v">
+            {data.activity.active} ·{' '}
+            <span style={{ color: 'var(--wf-warning)' }}>{data.activity.atRisk}</span> ·{' '}
+            <span style={{ color: 'var(--wf-destructive)' }}>{data.activity.churned}</span>
+          </div>
+          <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            60 / 120 днів без активності
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 6 }}
+      >
+        // розподіл по тірах:{' '}
+        {data.tierCounts.map((t) => `${TIER_UA[t.tier] ?? t.tier} ${t.count}`).join(' · ')}
+      </div>
+
+      {risky > 0 && (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Клієнт під ризиком</th>
+              <th>Тір</th>
+              <th className="wfp-num">Днів без активності</th>
+              <th className="wfp-num">Lifetime USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.atRiskClients.map((c) => (
+              <tr key={c.id}>
+                <td>
+                  <Link to={`/clients/${c.id}`}>{c.name}</Link>
+                </td>
+                <td className="wfp-mono" style={{ fontSize: 11 }}>
+                  {TIER_UA[c.tier] ?? c.tier}
+                </td>
+                <td
+                  className="wfp-num"
+                  style={{
+                    color: c.daysSince > 120 ? 'var(--wf-destructive)' : 'var(--wf-warning)',
+                  }}
+                >
+                  {c.daysSince}
+                </td>
+                <td className="wfp-num">{c.lifetimeUsd}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
+
 function RevenueSection({ from, to }: { from: string; to: string }) {
   const { data, isLoading } = useRevenueReport(from, to)
   if (isLoading) return <Skeleton style={{ height: 240 }} />
@@ -528,6 +669,7 @@ export function ReportsPage() {
       <RevenueSection from={from} to={to} />
       <SlaSection from={from} to={to} />
       <LeadSourcesSection from={from} to={to} />
+      <RetentionSection />
 
       {isLoading ? (
         <Skeleton style={{ height: 280 }} />

@@ -6,6 +6,7 @@ import { computeHoursReport, hoursReportToCsv } from '../../services/hoursReport
 import { computeLeadSourceReport } from '../../services/leadSourceReport.js'
 import { computeMomReport } from '../../services/momReport.js'
 import { computePnl, pnlToCsv } from '../../services/pnl.js'
+import { computeRetentionReport } from '../../services/retentionReport.js'
 import { computeRevenueReport } from '../../services/revenueReport.js'
 import { computeSlaReport } from '../../services/slaReport.js'
 
@@ -63,6 +64,17 @@ const reportsRoute: FastifyPluginAsync = (fastify) => {
       const report = await withTenant((tx) =>
         computeRevenueReport(tx, { agencyId, from: query.from, to: query.to })
       )
+      return reply.send({ success: true, data: report })
+    }
+  )
+
+  // ── S11-07: retention-аналітика клієнтської бази (life-time, без вікна) ───────
+  fastify.get(
+    '/workspace/reports/retention',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const agencyId = ownerAgency(request.user)
+      const report = await withTenant((tx) => computeRetentionReport(tx, { agencyId }))
       return reply.send({ success: true, data: report })
     }
   )
