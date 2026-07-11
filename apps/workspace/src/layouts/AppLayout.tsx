@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { AnnouncementBanner } from '@/components/AnnouncementBanner'
 import {
   AppShell,
   CommandPalette,
@@ -276,6 +277,7 @@ export function AppLayout() {
               </button>
             </div>
           )}
+          <AnnouncementBanner />
           <Outlet />
         </>
       )}

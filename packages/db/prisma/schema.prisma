@@ -58,6 +58,7 @@ model Profile {
   invitesSent            Invite[]                  @relation("InvitedBy")
   executorRates          ExecutorRate[]
   blogPosts              BlogPost[]
+  announcementReads      AnnouncementRead[]
   uploadedFiles          OrderFile[]
   notifications          Notification[]
   activityLogsAsActor    ActivityLog[]
@@ -1408,6 +1409,41 @@ model BlogPost {
   @@map("blog_posts")
 }
 
+// ANNOUNCEMENTS (07-В, Фаза B, 11.07): оголошення агенції — sticky-банер у workspace/porталі
+// за аудиторією (team/clients/all) + read-receipt (✕ банера) + % прочитань в owner-адмінці.
+model Announcement {
+  id         String               @id @default(uuid())
+  agencyId   String
+  agency     Agency               @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  title      String
+  body       String
+  audience   AnnouncementAudience @default(all)
+  published  Boolean              @default(false)
+  archivedAt DateTime?            @db.Timestamptz(3)
+  createdAt  DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
+  reads      AnnouncementRead[]
+
+  @@index([agencyId, published])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  agencyId       String
+  agency         Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  profileId      String
+  profile        Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([announcementId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("announcement_reads")
+}
+
 // TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
 // agencyId, як BlogPost) — редагує owner через /content, лендінг читає published.
 model Testimonial {
@@ -1599,6 +1635,8 @@ model Agency {
   leadStages           LeadStage[] // ХВІСТ-4: кастомні стадії воронки
   teams                Team[] // TEAM-BOARDS (Фаза B, 10.07)
   teamColumns          TeamColumn[] // TASK-COLUMNS (10.07)
+  announcements        Announcement[] // 07-В (11.07)
+  announcementReads    AnnouncementRead[]
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
   credentials          CredentialVault[] // 17-CREDENTIALS
   credentialShares     CredentialShare[] // 17-SHARE
@@ -1862,6 +1900,12 @@ enum InviteType {
 enum BlogPostType {
   article
   case_study
+}
+
+enum AnnouncementAudience {
+  team
+  clients
+  all
 }
 
 enum DocumentType {

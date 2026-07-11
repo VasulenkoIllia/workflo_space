@@ -94,7 +94,7 @@ webhooks + ApiKey беремо **лише коли система цілісна
 **🧭 ПЛАН (рішення власника 2026-07-10):** черга — ✅ **agency_members RLS** (10.07) →
 ✅ **S7-05 міні-CMS** (10.07; кейс-едітор Фази B влився сюди) → **дизайн-хвости Фази B**:
 ✅ **team-boards + task-columns** (10.07) → ✅ **team-картка (12-В KPI)** (10.07) →
-✅ **testimonials** (11.07) → announcement-feed → documents-eu →
+✅ **testimonials** (11.07) → ✅ **announcement-feed** (11.07) → documents-eu →
 далі **S9–S13 Enhancement** («повноцінний продукт» поверх MVP). **SaaS (S14) — лише коли все
 повністю працює і зафіксовано.**
 
@@ -138,6 +138,21 @@ webhooks + ApiKey беремо **лише коли система цілісна
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **ANNOUNCEMENTS (07-В, Фаза B) — оголошення агенції зі sticky-банером — ЗБУДОВАНО (2026-07-11).**
+  Моделі **Announcement + AnnouncementRead** (forced-RLS; enum `AnnouncementAudience`
+  team/clients/all у drift-тесті; міграція `20260712_announcements`, fresh-PG-proven). Бек
+  `routes/notifications/announcements.ts`: owner-CRUD (create=чернетка · publish/unpublish ·
+  archive зі stamp-once · delete) + **% прочитань** по цільовій аудиторії (team=члени агенції,
+  clients=distinct-профілі компаній, all=сума) + `GET /announcements/active` (моя аудиторія,
+  published, неархівні, **непрочитані**) + `POST /:id/read` (ідемпотентний upsert). UI: sticky-
+  банер над контентом у **workspace і порталі** (✕ = read-receipt → банер зникає для юзера);
+  owner-сторінка **/announcements** (nav «Оголошення»): список з % прочитань, publish/archive/
+  delete, модалка створення з вибором аудиторії. 5 route-тестів (%, аудиторний фільтр team/client,
+  read-ідемпотентність, archive stamp-once, executor 403). Гейт: turbo **56/56**, api **973**.
+  Live повний цикл: create(team)→publish→executor бачить банер→✕→банер зник, адмінка 1/2=50%→
+  archive→зник у всіх→delete. _Follow-up (свідомо): дайджест/пороги/DLQ-адмінка з дизайну
+  workspace-notify — за потребою._
 
 - **TESTIMONIALS (Фаза B) — відгуки клієнтів для лендінга — ЗБУДОВАНО (2026-07-11).**
   Модель **Testimonial** (platform-рівень без agencyId, як BlogPost; міграція

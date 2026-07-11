@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AnnouncementBanner } from '@/components/AnnouncementBanner'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppShell,
@@ -180,7 +181,10 @@ export function AppLayout() {
           </button>
         </div>
       )}
-      <Outlet />
+      <>
+        <AnnouncementBanner />
+        <Outlet />
+      </>
       <CommandPalette
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}

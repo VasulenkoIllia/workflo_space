@@ -76,6 +76,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   },
   // S7-05 міні-CMS: блог + кейси лендінга (owner)
   { id: 'content', label: 'Контент', icon: <Icon name="file" />, href: '/content', roles: 'o' },
+  // 07-В: оголошення агенції (sticky-банер команді/клієнтам)
+  {
+    id: 'announcements',
+    label: 'Оголошення',
+    icon: <Icon name="bell" />,
+    href: '/announcements',
+    roles: 'o',
+  },
   {
     id: 'admin-wallet',
     label: 'Бонусні гаманці',

@@ -132,6 +132,13 @@ export enum LeadStageKind {
   LOST = 'lost',
 }
 
+/** 07-В: аудиторія оголошення агенції (sticky-банер). */
+export enum AnnouncementAudience {
+  TEAM = 'team',
+  CLIENTS = 'clients',
+  ALL = 'all',
+}
+
 // ─── Billing ────────────────────────────────────────────────────────────────
 export enum BillingType {
   FIXED = 'fixed',
