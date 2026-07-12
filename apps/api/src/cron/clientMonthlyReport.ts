@@ -12,7 +12,7 @@ import {
 } from '@workflo/templates'
 import type { FastifyBaseLogger } from 'fastify'
 import { captureException } from '../observability/sentry.js'
-import { nextDocumentNumber } from '../routes/documents/documents.js'
+import { nextDocumentNumber } from '../services/documentNumber.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../services/clientMonthlyReport.js'
 
 /**

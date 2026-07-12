@@ -146,12 +146,13 @@ webhooks + ApiKey беремо **лише коли система цілісна
 > Повний звіт — [`AUDIT_2026-07-12.md`](AUDIT_2026-07-12.md). Усі підтверджені **баги**
 > вже виправлено (H1-H3, M1-M7 — див. «Готово нещодавно»). Нижче — свідомо відкладене.
 
-- **Рефактори модульності** (борг чистоти, не баги): R1 винести гейти старту з
-  `transitionOrderStatus.ts` → `services/orderTransition.ts` (тестованість); R2 розбити
-  `documents.ts` (688 LOC) + перенести `nextDocumentNumber` route→service (cron→route
-  inversion); R3 `services/recipients.ts` (дедуп fan-out нотифікацій, ~10 місць); R4
-  `scheduleCron` helper (~12 крон-файлів boilerplate); R5 `AnnouncementBanner` → app-core
-  (byte-identical дубль у двох апках, AR-42 drift); R6 `requireOwnerAgency` helper.
+- **Рефактори модульності** (борг чистоти, не баги): ~~R1~~ ✅ (2026-07-12) гейти старту/
+  settlements/нотифай-фан-аути → `services/orderTransition.ts`, роут 419→245 рядків;
+  ~~R2~~ ✅ (2026-07-12) `documents.ts` (688) розбито на `orderDocuments`/`contracts`/
+  `companyDocuments` + `nextDocumentNumber` → `services/documentNumber.ts` (cron→route
+  inversion виправлено). Лишились: R3 `services/recipients.ts` (дедуп fan-out нотифікацій,
+  ~10 місць); R4 `scheduleCron` helper (~12 крон-файлів boilerplate); R5 `AnnouncementBanner`
+  → app-core (byte-identical дубль у двох апках, AR-42 drift); R6 `requireOwnerAgency` helper.
 - **LOW-hardening:** inbound per-poll cap (мейл-бомба); inbound DKIM-surface (ops, не код);
   `notifyTeamOfInbound` через withTenant (косметика конвенції).
 - **SaaS-era гейти (→ S14):** `blog_posts`/`testimonials`/`cms` під `isAgencyOwner`, а не

@@ -6,7 +6,7 @@ vi.mock('@workflo/db', () => ({
   withTenant: vi.fn(),
 }))
 
-const { nextDocumentNumber } = await import('../src/routes/documents/documents.js')
+const { nextDocumentNumber } = await import('../src/services/documentNumber.js')
 
 type Tx = Parameters<typeof nextDocumentNumber>[0]
 const txWithCount = (count: number): Tx =>

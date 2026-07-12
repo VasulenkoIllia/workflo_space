@@ -1,7 +1,7 @@
 import { type Prisma, prisma } from '@workflo/db'
 import { notify } from '@workflo/notifications'
 import type { FastifyBaseLogger } from 'fastify'
-import { nextDocumentNumber } from '../routes/documents/documents.js'
+import { nextDocumentNumber } from './documentNumber.js'
 import { buildNotifyDeps } from './notifications.js'
 
 /**
