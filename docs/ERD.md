@@ -133,7 +133,7 @@ erDiagram
 - `OrderFile.thumbKey` — webp thumbnail for inline preview
 - `AgencyMember.hireDate` — leave accrual base
 - `Agency.vacationDaysPerYear` — vacation accrual policy
-- `PushSubscription` carries `agencyId` for tenant isolation
+- `PushSubscription` — identity-scoped (profileId only, **no** agencyId/RLS, як `RefreshToken`)
 
 ## NOT tenant-scoped (no RLS — global/identity)
 
