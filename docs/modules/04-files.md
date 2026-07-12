@@ -295,11 +295,12 @@ Permissions: `0640` files, `0750` directories. Owner `workflo`, group `workflo`.
 - **`agencyId`** + access-check `canAccessFile` (tenant + participant + internal-comment confidentiality).
 - Path-traversal guard + SVG-removal + `Content-Disposition: attachment` (вже є).
 
-### B. Image preview / тумбнейли ✅
+### B. Image preview / тумбнейли ✅ (S10-06ч, 2026-07-12 ЗБУДОВАНО)
 
-- На upload зображення/PDF → async генерація прев'ю (`sharp`): `thumbnail` (256px) + `preview` (1024px) варіанти; `OrderFile.thumbStoredAs String?`.
-- `GET /files/:id?variant=thumb|preview|original` (з access-check). UI: тумбнейли в чаті/галереї + lightbox.
-- PDF: перша сторінка як прев'ю (`pdf-thumbnail`/`pdftoppm`).
+- На upload зображень → синхронна генерація webp-прев'ю (`sharp`, best-effort): один розмір ≤400px (рідко на чинах, не на PDF/SVG); `OrderFile.thumbKey String?` (окремий blob-ключ).
+- `GET /files/:id/thumb` (з access-check) — inline-рендер webp (безпечний на XSS: растровий, перекодований sharp'ом). Кеш 1 година.
+- Рідко зображення/PDF: 404. SVG виключено на upload (MIME-гвард).
+- UI: тумбнейли в чаті/галереї + FilesTab preview.
 
 ### C. S3/R2 storage adapter ✅
 

@@ -12,20 +12,29 @@
 **Реально працює (всі — plain `setTimeout`/`setInterval` у `apps/api/src/cron/`, БЕЗ
 `node-cron`; стартують через `startWorkers()` — inline або worker-контейнер, ADR-006):**
 
-| Що                                          | Розклад                                                     | Файл                        |
-| ------------------------------------------- | ----------------------------------------------------------- | --------------------------- |
-| НБУ курс USD/UAH (≈C01)                     | щодня 06:10 UTC                                             | `cron/exchangeRate.ts`      |
-| Recurring charges (≈C02, Node а НЕ pg_cron) | щомісяця                                                    | `cron/recurringCharges.ts`  |
-| Loyalty tier recalc (≈C16, без escalation)  | щодня                                                       | `cron/loyaltyRecalc.ts`     |
-| Refresh-token sweep (S5.5 AR-31)            | щодня 03:40 UTC                                             | `cron/refreshTokenSweep.ts` |
-| Outbox drain (не cron — фоновий loop)       | кожні 5 c                                                   | `services/outboxWorker.ts`  |
-| Email-inbound полер (S12-05, graceful-off)  | кожні ~2 хв — лише якщо задані `INBOUND_IMAP_*`             | `cron/inboundEmail.ts`      |
-| Daily DB backup + offsite-обвʼязка (AR-51)  | щодня 03:00 — інсталюється `scripts/install-backup-cron.sh` | `scripts/backup.sh`         |
+| Що                                              | Розклад                                                         | Файл                          |
+| ----------------------------------------------- | --------------------------------------------------------------- | ----------------------------- |
+| НБУ курс USD/UAH (C01)                          | щодня 06:10 UTC                                                 | `cron/exchangeRate.ts`        |
+| Recurring charges (C02, Node а НЕ pg_cron)      | щомісяця                                                        | `cron/recurringCharges.ts`    |
+| Loyalty tier recalc (C16)                       | щодня                                                           | `cron/loyaltyRecalc.ts`       |
+| Refresh-token sweep (S5.5)                      | щодня 03:50 UTC                                                 | `cron/refreshTokenSweep.ts`   |
+| Outbox drain (не cron — фоновий loop)           | кожні 5 c                                                       | `services/outboxWorker.ts`    |
+| Email-inbound полер (S12-05)                    | кожні ~2 хв — лише якщо задані `INBOUND_IMAP_*`                 | `cron/inboundEmail.ts`        |
+| Daily DB backup + offsite-обвʼязка              | щодня 03:00 UTC — інсталюється `scripts/install-backup-cron.sh` | `scripts/backup.sh`           |
+| Notify digest (S12-06)                          | щогодини, при 8-й годині Kyiv шле дайджест                      | `cron/notifyDigest.ts`        |
+| Timer auto-stop (C15)                           | щогодини (~1 хв після старту, далі щогодини)                    | `cron/timerAutoStop.ts`       |
+| Calendar reminder (S24)                         | кожні 15 хв (вікно 45–60 хв до зустрічі)                        | `cron/calendarReminder.ts`    |
+| Dunning payment reminders (C-dunning)           | щогодини (batch-обробка нарахувань)                             | `cron/dunning.ts`             |
+| Client monthly report (C-client_monthly_report) | щодня (зведення за попередній місяц)                            | `cron/clientMonthlyReport.ts` |
+| Monthly report (C-monthly_report, S11)          | щодня (зведення за попередній місяц)                            | `cron/monthlyReport.ts`       |
+| SLA check (S10-02)                              | кожні 15 хв                                                     | `cron/slaCheck.ts`            |
+| Credentials rotation reminder (S17-D)           | щодня (daily sweep, reminder через rotationRemindedAt)          | `cron/credentialsRotation.ts` |
+| Idempotency key sweep (S6)                      | щодня 03:50 UTC                                                 | `cron/idempotencyKeySweep.ts` |
 
-**НЕ існує (план на майбутні спринти):** pg_cron-джоби (C02/C05/C06/C17 — extension
+**Новіші розширення (план на S8+):** pg_cron-джоби (C02/C05/C06/C17 — extension
 увімкнено, джоби не створені) · `dueDateReminder`/`cleanupFiles`/`subscriptionExpiry`/
-`timerAutoStop`/`overdueEscalation`/`retentionPurge`/`heartbeatCheck` ·
-`disk-check.sh`/`uploads-backup.sh`. Створюючи будь-який — онови ЦЮ секцію.
+`overdueEscalation`/`retentionPurge`/`heartbeatCheck` · `disk-check.sh`/`uploads-backup.sh`.
+Створюючи будь-який — онови ЦЮ секцію.
 
 ---
 

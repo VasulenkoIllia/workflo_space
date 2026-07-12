@@ -371,9 +371,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 - `Profile.timezone String @default("Europe/Kyiv")` (для календаря/quiet-hours/рендеру) + `Profile.phone String?` (+ phone-verify через SMS OTP для SMS-каналу).
 
-### C. Data export (GDPR self-service) ✅
+### C. Data export (GDPR self-service) ✅ (S9-06, 2026-07-12 ЗБУДОВАНО)
 
-- `POST /profile/data-export` → async ZIP/JSON (через outbox) → email-лінк. `POST /profile/data-deletion-request` (password + email confirm; flow з RETENTION.md → anonymize, фін.документи зберігаються).
+- `GET /profile/export` → synchronous JSON attachment (workflo-my-data.json) з даними: профіль/settings/членства/сповіщення/тікет-повідомлення/відсутності; без секретів. Без моделі `DataExportRequest` — обробка синхронна за один запит. `POST /profile/data-deletion-request` (future, S9) з password + email confirm; flow з RETENTION.md → anonymize, фін.документи зберігаються.
 
 ### D. Appearance ✅
 

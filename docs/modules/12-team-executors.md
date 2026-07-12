@@ -381,6 +381,60 @@ New: Department, ExecutorPayout; AgencyMember (tenancy)
 
 ---
 
+## TEAM-BOARDS (S13-04+, 2026-07-12 ЗБУДОВАНО) — Kanban за командами
+
+Команда має власну kanban-дошку з колонками, на яку можна розподіляти замовлення.
+
+### DB моделі
+
+- `Team` (agencyId, name, description)
+- `TeamColumn` (teamId, ordinalPosition, statusKind='backlog'|'in_progress'|'done' — mapping на Order.internalStatus через `kind`)
+
+### Маршрути
+
+- `GET /teams` — список команд агенції
+- `GET /teams/:teamId` — деталі + колонки
+- `POST /teams` — создати команду (owner)
+- `POST /teams/:teamId/columns` — додати колонку (owner)
+- `PATCH /teams/:teamId/columns/:colId` — перевпорядкування (owner)
+
+### Інтеграція з замовленнями
+
+- Order може мати `teamId` + `TeamColumn.statusKind` → у workflow відстежується прогрес по колонках (backlog → in_progress → done).
+- В UI Workspace: таб **"Тім-дошка"** на `/teams/:id` показує Kanban з замовленнями за колонками.
+
+---
+
+## TASK-COLUMNS (S13-04+, 2026-07-12 ЗБУДОВАНО) — Статуси на рівні замовлення
+
+`InternalTask` (завдання всередину замовлення) мають власні колонки (kind → status mapping):
+
+- `statusKind='backlog'|'in_progress'|'done'|'cancelled'`
+- У Workspace на /orders/:id таб **"Задачі"** показує Kanban `InternalTask` по колонках.
+- Дозволяє декомпозицію замовлення на внутрішні кроки без зміни самого Order.internalStatus.
+
+---
+
+## EXEC-CARD KPI (S13-05, 2026-07-12 ЗБУДОВАНО) — KPI виконавця
+
+Workspace маршрут `GET /workspace/team/:memberId/kpi` (`routes/team/executorKpi.ts`) повертає KPI-картку виконавця:
+
+- **Активні замовлення:** кількість
+- **Години в період:** `SUM(TimeLog.hours)` за поточний тиждень/місяць
+- **Вчасність:** % замовлень завершено до дедлайну (за 90 днів)
+- **Середня оцінка:** рейтинг від owner у відгуках (фаза 2)
+- **Дохід:** `ExecutorPayout.total` за поточний місяць (owner-only вигляд)
+
+**Джерела даних:**
+
+- `Order.internalStatus` (завершено)
+- `TimeLog` (години)
+- `OrderExecutorSettlement` (статус приймання)
+- `ExecutorPayout` (виплата місяця)
+- `AgencyMember.hireDate` — база розрахунку залікових днів відпустки (Leave-модуль S13-05)
+
+---
+
 ## Прохід власника (11.06.2026) — прийняті розширення
 
 > Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).

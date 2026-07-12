@@ -1,7 +1,7 @@
 # WORKFLO.SPACE — Data Model (ERD)
 
-> Створено: 7 червня 2026 (аудит) · Канон схеми — `packages/db/prisma/schema.prisma`.
-> Це оглядова мапа **ядра tenant-графа** (не всі 46 моделей) — для онбордингу й
+> Створено: 7 червня 2026 (аудит) · Оновлено: 12 липня 2026 · Канон схеми — `packages/db/prisma/schema.prisma`.
+> Це оглядова мапа **ядра tenant-графа** (не всі 84 моделей) — для онбордингу й
 > розуміння меж мультитенантності. Деталі полів — у схемі.
 >
 > **Дельта S5.5 (11.06.2026, AR-20/21/22):** `Referral` тепер несе власний
@@ -96,9 +96,8 @@ erDiagram
 
 - **Idempotency at the DB layer** (Block 1): `Payment(provider, providerPaymentId)` for
   webhook dedup; `ReferralBonus(sourceType, sourceId)` for accrual dedup.
-- **Not yet modelled (S5, design in 25-wallet/05-billing):** `WalletTransaction`,
-  `PaymentAllocation`, `Expense` ledger. Ship test-first with `agencyId NOT NULL` +
-  `UNIQUE(companyId, sourceType, sourceId)` idempotency.
+- **Modelled (S5.6):** `WalletTransaction`, `PaymentAllocation`, `Expense` ledger (all
+  with `agencyId NOT NULL` + idempotency keys).
 
 ## SaaS / platform tables
 
@@ -117,6 +116,24 @@ erDiagram
 
 - `UsageCounter` + `AgencyFeatureFlag` (Block 1) are the substrate the F2 quota/feature
   seam (`assertWithinQuota` / `featureEnabled`) reads once SaaS enablement lands.
+
+## Recent models (post-S6)
+
+- **Team & Leave:** `Team`, `TeamColumn` (kanban boards), `LeaveRequest` (баланс відпустки — обчислюваний, НЕ таблиця; accrual від `AgencyMember.hireDate`)
+- **Content & Testimonials:** `BlogPost`, `Testimonial`, `Announcement`
+- **Notifications:** `PushSubscription`, `Broadcast`
+- **Orders:** `OrderDependency` (cycle-guard + gantt dependencies)
+- **Files:** `OrderFile.thumbKey` (webp thumbnail storage key for S10-06)
+
+**New columns (2026-07):**
+
+- `LegalEntity.{docKit, bic, incomeTaxPct}` — tax per legal entity per-channel
+- `Payment.legalEntityId` — ties payment to entity for income tax accrual
+- `TicketMessage.sourceMessageId` — email inbound dedup
+- `OrderFile.thumbKey` — webp thumbnail for inline preview
+- `AgencyMember.hireDate` — leave accrual base
+- `Agency.vacationDaysPerYear` — vacation accrual policy
+- `PushSubscription` carries `agencyId` for tenant isolation
 
 ## NOT tenant-scoped (no RLS — global/identity)
 

@@ -13,7 +13,7 @@
 >   (`quiet_hours` у notification_logs; CRITICAL_EVENTS пробивають; in_app завжди) + ранковий
 >   email-дайджест `system.digest` (cron 08:00 Kyiv, digestDaily opt-in, список in-app сповіщень
 >   від lastDigestAt). Урок: tenant-проксі notify фіксував select — нові settings-поля треба
->   додавати і туди (виправлено). Лишок пакетної лінії: SMS (S12-04), bulk-розсилки (S12-07).
+>   додавати і туди (виправлено). **S12-07 bulk-розсилки ЗБУДОВАНО (2026-07-11):** Broadcast модель + segmentation (all/debtors/tier) + outbox-worker через notify-матрицю. Лишок: SMS (S12-04).
 
 > App: API (api.workflo.space) + всі consumer-додатки
 > Статус: S1 (multi-channel matrix architecture)
@@ -22,7 +22,7 @@
 
 ---
 
-> 🔄 **design-v2 (2026-06-20):** доставлено **notification center** — 10 екранів (стрічка нотифікацій, loyalty-tiers, announcements, digest config, wait-thresholds): [`workspace-notify.jsx`](../../design-v2/project/workspace-notify.jsx) + data. 🟡 **частково** (звірено): `Notification` модель + write-path є, але **read-feed/mark-read API нема**; announcements — greenfield. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+> 🔄 **design-v2 (2026-06-20):** доставлено **notification center** — 10 екранів (стрічка нотифікацій, loyalty-tiers, announcements, digest config, wait-thresholds): [`workspace-notify.jsx`](../../design-v2/project/workspace-notify.jsx) + data. 🟡 **частково** (звірено): `Notification` модель + write-path є, але **read-feed/mark-read API нема**; **announcements ЗБУДОВАНО (2026-07-11):** `routes/notifications/announcements.ts` + Announcement модель + AnnouncementRead для read-tracking. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
 
 ## Огляд
 

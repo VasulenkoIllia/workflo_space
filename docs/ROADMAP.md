@@ -141,7 +141,37 @@ webhooks + ApiKey беремо **лише коли система цілісна
 7. ~~**Реальний таймер часу (T2).**~~ ✅ **ПОВНІСТЮ ЗАКРИТО (2026-06-29):** бек — `TimeLog`+startedAt/endedAt (міграція `20260629_t2_timer`, drift-free), `services/timer.ts` (start auto-stops попередній + снапшот ставок; one-active через advisory-lock), `/workspace/timer` GET/start/stop, cron C15 auto-stop>8год, 13 тестів; UI — глобальний `TimerBar` + `OrderTimerControl` у табі «Час». Глобальний 1-таймер фактично per-tenant (RLS-scope) — достатньо для single-agency.
 8. **Деталь замовлення v2 — розбіжність з дизайном.** Дизайн ([`product-app.jsx`](../design-v2/project/product-app.jsx):622): таби **Огляд · Чат · Час · Специфікація · Файли · Документи · Activity** + floating timer; задачі — в **глобальній «Дошці задач»** (`workspace-board.jsx`, лівий нав), НЕ в замовленні. **Прогрес:** ✅ Документи-таб (S6) · ✅ **Специфікація-таб** (естімейт проєкту, 2026-06-29) · ✅ звʼязок замовлення↔проєкт (лінк у сайдбарі) · Activity = сайдбар-картка (не таб, але дані є). **Лишилось:** Огляд-таб (вміст уже в сайдбарі — низька цінність). ✅ floating timer (T2, 2026-06-29), ✅ глобальна «Дошка задач» (`/workspace/tasks` + `/board`, 2026-06-30) — закрито.
 
+## 🔭 Пост-аудит r6 (2026-07-12) — черга доробок (не зараз, за пріоритетом)
+
+> Повний звіт — [`AUDIT_2026-07-12.md`](AUDIT_2026-07-12.md). Усі підтверджені **баги**
+> вже виправлено (H1-H3, M1-M7 — див. «Готово нещодавно»). Нижче — свідомо відкладене.
+
+- **Рефактори модульності** (борг чистоти, не баги): R1 винести гейти старту з
+  `transitionOrderStatus.ts` → `services/orderTransition.ts` (тестованість); R2 розбити
+  `documents.ts` (688 LOC) + перенести `nextDocumentNumber` route→service (cron→route
+  inversion); R3 `services/recipients.ts` (дедуп fan-out нотифікацій, ~10 місць); R4
+  `scheduleCron` helper (~12 крон-файлів boilerplate); R5 `AnnouncementBanner` → app-core
+  (byte-identical дубль у двох апках, AR-42 drift); R6 `requireOwnerAgency` helper.
+- **LOW-hardening:** inbound per-poll cap (мейл-бомба); inbound DKIM-surface (ops, не код);
+  `notifyTeamOfInbound` через withTenant (косметика конвенції).
+- **SaaS-era гейти (→ S14):** `blog_posts`/`testimonials`/`cms` під `isAgencyOwner`, а не
+  `platformAdmin` — при мульти-агенційному онбордингу окрема platform-admin роль; inbound
+  потребує per-agency alias/mailbox для однозначного маршрутингу (зараз одна платформна скринька).
+- **Досі відкрито (r4):** `agency_members` RLS — app-шар гейтить, чекає RLS-flip фази.
+
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **АУДИТ r6 РЕМЕДІАЦІЯ (2026-07-12) — 10 багів delta-після-r5 закрито.** П'ять паралельних
+  рецензентів (security/logic/DB/модульність/doc-drift) + пряма RLS-перевірка наживо. Загальний
+  стан — здоровий (RLS повний, гроші коректні, delta без tech-debt). Виправлено: **H1** soft-delete
+  блокера дедлочив залежні (фільтр `deletedAt` у gate/DFS/unblocked); **H2/H3** inbound крос-тенант
+  (профіль у кількох агенціях → `ambiguous_tenant`; тредінг перевіряє тенант відправника →
+  `wrong_tenant`); **M1** sharp `limitInputPixels` (DoS); **M2** leave approve fail-closed;
+  **M3** leave TOCTOU advisory-lock; **M4** retention `lastActivity` через groupBy-max (не зрізаний
+  take); **M5** order_dependencies `CHECK(orderId<>dependsOnId)` + advisory-lock (2-cycle race);
+  **M6** drop мертвої `ExecutorRate.hireDate`; **M7** FK-індекси `leave_requests.reviewedById` +
+  `broadcasts.createdById`. Міграція `20260721_audit_remediation`, fresh-PG-proven + CHECK
+  live-verified. Гейт turbo **37/37**, api **1047**. Форвард-план — секція «Пост-аудит r6» вище.
 
 - **ХВОСТИ-ПАКЕТ (черга №2 — 4/4, черга закрита) — три дрібні фічі одним зрізом — ЗБУДОВАНО (2026-07-12).**
   - **A · hireDate у команду (S13-04 хвіст):** знайдено латентний баг — форма ставки писала
