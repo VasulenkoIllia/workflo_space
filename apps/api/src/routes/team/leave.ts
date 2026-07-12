@@ -297,9 +297,22 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
         if (existing.profileId === user.sub && role !== 'owner') {
           throw new AppError(ApiErrorCode.FORBIDDEN, 'Власну заявку погоджує owner', 403)
         }
+        // audit-M3: серіалізуємо погодження per-profile (як rates.ts для вікон ставок),
+        // інакше двоє рев'юерів апрувлять дві РІЗНІ pending-заявки одночасно й сумарно
+        // пробивають баланс — обидва читають balance до коміту одне одного.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`leave:${agencyId}:${existing.profileId}`}))`
         if (existing.type === 'vacation') {
           const balance = await computeBalance(agencyId, existing.profileId, now)
-          if (balance && existing.days > balance.balanceDays) {
+          // audit-M2: fail-closed — якщо профіль співробітника зник, баланс не
+          // обчислити, тож НЕ пропускаємо перевірку мовчки, а відмовляємо.
+          if (!balance) {
+            throw new AppError(
+              ApiErrorCode.CONFLICT,
+              'Баланс відпустки не обчислити (немає активного профілю співробітника)',
+              409
+            )
+          }
+          if (existing.days > balance.balanceDays) {
             throw new AppError(
               ApiErrorCode.CONFLICT,
               `Понад баланс відпустки: заявка ${existing.days} дн., доступно ${balance.balanceDays}`,

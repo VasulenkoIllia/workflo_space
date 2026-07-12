@@ -88,13 +88,15 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       }
 
       // S10-03 (02-D): заблоковане замовлення не стартує, поки ВСІ блокери не
-      // done (cancelled-блокер вважаємо знятим — він уже нічого не завершить).
+      // done (cancelled- АБО soft-deleted-блокер вважаємо знятим — він уже нічого
+      // не завершить; без deletedAt-фільтра видалений in_progress-блокер дедлочив
+      // залежне назавжди — audit-H1 2026-07-12).
       if (to === OrderInternalStatus.IN_PROGRESS) {
         const liveBlockers = await withTenant((tx) =>
           tx.orderDependency.findMany({
             where: {
               orderId: order.id,
-              dependsOn: { internalStatus: { notIn: ['done', 'cancelled'] } },
+              dependsOn: { deletedAt: null, internalStatus: { notIn: ['done', 'cancelled'] } },
             },
             select: { dependsOn: { select: { title: true } } },
             take: 5,
@@ -373,7 +375,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
                   assigneeId: true,
                   coAssignees: { select: { profileId: true } },
                   blockedBy: {
-                    select: { dependsOn: { select: { internalStatus: true } } },
+                    select: { dependsOn: { select: { internalStatus: true, deletedAt: true } } },
                   },
                 },
               },
@@ -383,7 +385,9 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         for (const d of dependents) {
           const stillBlocked = d.order.blockedBy.some(
             (b) =>
-              b.dependsOn.internalStatus !== 'done' && b.dependsOn.internalStatus !== 'cancelled'
+              b.dependsOn.deletedAt === null &&
+              b.dependsOn.internalStatus !== 'done' &&
+              b.dependsOn.internalStatus !== 'cancelled'
           )
           if (stillBlocked) continue
           const ids = [d.order.assigneeId, ...d.order.coAssignees.map((c) => c.profileId)]

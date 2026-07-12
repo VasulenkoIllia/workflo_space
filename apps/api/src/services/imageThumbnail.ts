@@ -8,6 +8,10 @@ import sharp from 'sharp'
  */
 const THUMB_MAX_PX = 400
 const THUMB_QUALITY = 78
+// audit-M1: стеля вхідних пікселів проти decompression-bomb (маленький файл, що
+// заявляє гігантські розміри). 24 Мп (≈6000×4000) з запасом покриває реальні фото;
+// понад — sharp кине, і makeThumbnail поверне null (upload не постраждає).
+const MAX_INPUT_PIXELS = 24_000_000
 
 /**
  * Растрові формати, які sharp безпечно перекодовує. SVG свідомо пропускаємо —
@@ -20,7 +24,7 @@ export function isThumbnailable(mimeType: string): boolean {
 /** webp-мініатюра (вписана в THUMB_MAX_PX) або null, якщо зображення не читається. */
 export async function makeThumbnail(buffer: Buffer): Promise<Buffer | null> {
   try {
-    return await sharp(buffer, { failOn: 'error' })
+    return await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS })
       .rotate() // авто-орієнтація за EXIF (метадані далі стрипляться sharp'ом)
       .resize({
         width: THUMB_MAX_PX,

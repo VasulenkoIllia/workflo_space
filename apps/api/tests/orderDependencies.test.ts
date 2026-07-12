@@ -17,6 +17,8 @@ const db = {
   orderExecutorSettlement: { findMany: vi.fn().mockResolvedValue([]) },
   timeLog: { groupBy: vi.fn().mockResolvedValue([]) },
   agencyMember: { findMany: vi.fn().mockResolvedValue([]) },
+  // audit-M5: advisory-lock у create-транзакції залежностей
+  $executeRaw: vi.fn().mockResolvedValue(1),
 }
 
 vi.mock('@workflo/db', async (importOriginal) => {
@@ -242,6 +244,36 @@ describe('PATCH /orders/:id/status — гейт блокерів (S10-03)', () =
       payload: { status: 'in_progress' },
     })
     expect(ok.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('audit-H1: гейт блокерів виключає soft-deleted блокери (deletedAt=null у запиті)', async () => {
+    db.order.findUnique.mockResolvedValue(transitionRow())
+    db.orderDependency.findMany.mockResolvedValue([]) // жодного живого блокера
+    db.order.updateMany.mockResolvedValue({ count: 1 })
+    db.order.findUniqueOrThrow.mockResolvedValue({
+      id: A,
+      internalStatus: 'in_progress',
+      clientStatus: 'in_progress',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    db.activityLog.create.mockResolvedValue({})
+    db.outboxEvent.create.mockResolvedValue({})
+    const { app, token } = await authed()
+    await app.inject({
+      method: 'PATCH',
+      url: `/orders/${A}/status`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'in_progress' },
+    })
+    // Запит живих блокерів має вимагати НЕ видалених (інакше видалений in_progress
+    // блокер дедлочив би залежне назавжди).
+    const gateCall = db.orderDependency.findMany.mock.calls.find(
+      (c) => (c[0] as { where?: { orderId?: unknown } })?.where?.orderId === A
+    )
+    expect(gateCall?.[0].where.dependsOn).toMatchObject({ deletedAt: null })
     await app.close()
   })
 })

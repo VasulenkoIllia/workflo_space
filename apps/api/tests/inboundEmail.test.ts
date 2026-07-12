@@ -21,7 +21,9 @@ function makeDb(
       }
     } | null
     sender?: { id: string } | null
-    membership?: { company: { id: string; agencyId: string } } | null
+    memberships?: Array<{ company: { id: string; agencyId: string } }>
+    threadMember?: { id: string } | null // audit-H3: член компанії цільового тікета
+    threadStaff?: { id: string } | null // audit-H3: staff агенції цільового тікета
   } = {}
 ) {
   return {
@@ -34,7 +36,11 @@ function makeDb(
       findFirst: vi.fn().mockResolvedValue(over.sender ?? null),
     },
     companyMember: {
-      findFirst: vi.fn().mockResolvedValue(over.membership ?? null),
+      findMany: vi.fn().mockResolvedValue(over.memberships ?? []),
+      findFirst: vi.fn().mockResolvedValue(over.threadMember ?? null),
+    },
+    agencyMember: {
+      findFirst: vi.fn().mockResolvedValue(over.threadStaff ?? null),
     },
     ticket: {
       create: vi.fn().mockResolvedValue({ id: 'ticket-new' }),
@@ -104,7 +110,7 @@ describe('ingestInboundEmail — новий тікет', () => {
   it('відомий відправник з компанією → створює email-тікет', async () => {
     const db = makeDb({
       sender: { id: 'profile-1' },
-      membership: { company: { id: 'company-1', agencyId: 'agency-1' } },
+      memberships: [{ company: { id: 'company-1', agencyId: 'agency-1' } }],
     })
     const r = await ingestInboundEmail(db, baseEmail())
     expect(r).toEqual({
@@ -139,7 +145,7 @@ describe('ingestInboundEmail — новий тікет', () => {
   it('email матчиться case-insensitive (from нормалізується у lower-case)', async () => {
     const db = makeDb({
       sender: { id: 'profile-1' },
-      membership: { company: { id: 'company-1', agencyId: 'agency-1' } },
+      memberships: [{ company: { id: 'company-1', agencyId: 'agency-1' } }],
     })
     await ingestInboundEmail(db, baseEmail({ from: 'Client@Example.COM' }))
     expect(db.profile.findFirst).toHaveBeenCalledWith(
@@ -152,7 +158,7 @@ describe('ingestInboundEmail — новий тікет', () => {
   it('Re:/Fwd:-префікси прибираються з теми тікета', async () => {
     const db = makeDb({
       sender: { id: 'profile-1' },
-      membership: { company: { id: 'company-1', agencyId: 'agency-1' } },
+      memberships: [{ company: { id: 'company-1', agencyId: 'agency-1' } }],
     })
     await ingestInboundEmail(db, baseEmail({ subject: 'Re: Fwd: Рахунок №5' }))
     expect(db.ticket.create).toHaveBeenCalledWith(
@@ -163,7 +169,7 @@ describe('ingestInboundEmail — новий тікет', () => {
   it('порожнє тіло/тема → плейсхолдери, тікет усе одно створюється', async () => {
     const db = makeDb({
       sender: { id: 'profile-1' },
-      membership: { company: { id: 'company-1', agencyId: 'agency-1' } },
+      memberships: [{ company: { id: 'company-1', agencyId: 'agency-1' } }],
     })
     await ingestInboundEmail(db, baseEmail({ subject: '   ', text: '' }))
     expect(db.ticket.create).toHaveBeenCalledWith(
@@ -189,6 +195,7 @@ describe('ingestInboundEmail — тредінг і skip', () => {
         },
       },
       sender: { id: 'profile-1' },
+      threadMember: { id: 'cm-1' }, // audit-H3: відправник справді член компанії тікета
     })
     const r = await ingestInboundEmail(
       db,
@@ -224,10 +231,60 @@ describe('ingestInboundEmail — тредінг і skip', () => {
   })
 
   it('відправник без компанії → skip no_company', async () => {
-    const db = makeDb({ sender: { id: 'profile-1' }, membership: null })
+    const db = makeDb({ sender: { id: 'profile-1' }, memberships: [] })
     const r = await ingestInboundEmail(db, baseEmail())
     expect(r).toEqual({ status: 'skipped', reason: 'no_company' })
     expect(db.ticket.create).not.toHaveBeenCalled()
+  })
+
+  it('audit-H2: відправник у кількох агенціях → skip ambiguous_tenant (не вгадуємо)', async () => {
+    const db = makeDb({
+      sender: { id: 'profile-1' },
+      memberships: [
+        { company: { id: 'company-a', agencyId: 'agency-1' } },
+        { company: { id: 'company-b', agencyId: 'agency-2' } },
+      ],
+    })
+    const r = await ingestInboundEmail(db, baseEmail())
+    expect(r).toEqual({ status: 'skipped', reason: 'ambiguous_tenant' })
+    expect(db.ticket.create).not.toHaveBeenCalled()
+  })
+
+  it('кілька компаній в ОДНІЙ агенції → тікет створюється (перша за joinedAt)', async () => {
+    const db = makeDb({
+      sender: { id: 'profile-1' },
+      memberships: [
+        { company: { id: 'company-a', agencyId: 'agency-1' } },
+        { company: { id: 'company-b', agencyId: 'agency-1' } },
+      ],
+    })
+    const r = await ingestInboundEmail(db, baseEmail())
+    expect(r).toMatchObject({ status: 'created', companyId: 'company-a', agencyId: 'agency-1' })
+  })
+
+  it('audit-H3: тред-відповідь від чужого тенанту → skip wrong_tenant', async () => {
+    const db = makeDb({
+      parent: {
+        ticketId: 'ticket-42',
+        ticket: {
+          id: 'ticket-42',
+          agencyId: 'agency-1',
+          subject: 'Чужий тред',
+          companyId: 'company-1',
+          status: 'open',
+        },
+      },
+      sender: { id: 'attacker' },
+      threadMember: null, // не член компанії тікета
+      threadStaff: null, // і не staff агенції
+    })
+    const r = await ingestInboundEmail(
+      db,
+      baseEmail({ messageId: '<evil@mail>', inReplyTo: '<abc@mail.example>' })
+    )
+    expect(r).toEqual({ status: 'skipped', reason: 'wrong_tenant' })
+    expect(db.ticketMessage.create).not.toHaveBeenCalled()
+    expect(db.ticket.update).not.toHaveBeenCalled()
   })
 
   it('порожній Message-ID → skip no_message_id', async () => {

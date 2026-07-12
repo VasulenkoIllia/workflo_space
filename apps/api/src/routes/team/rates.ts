@@ -16,7 +16,6 @@ interface RateRow {
   currency: string
   effectiveFrom: Date
   effectiveUntil: Date | null
-  hireDate: Date | null
   zeroCostDefault: boolean
 }
 
@@ -28,7 +27,6 @@ const RATE_SELECT = {
   currency: true,
   effectiveFrom: true,
   effectiveUntil: true,
-  hireDate: true,
   zeroCostDefault: true,
 } satisfies Prisma.ExecutorRateSelect
 
@@ -41,7 +39,6 @@ function toDto(r: RateRow) {
     currency: r.currency,
     effectiveFrom: r.effectiveFrom,
     effectiveUntil: r.effectiveUntil,
-    hireDate: r.hireDate,
     zeroCostDefault: r.zeroCostDefault,
   }
 }
@@ -135,7 +132,6 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
             commissionPercent: input.commissionPercent ?? 0,
             currency: input.currency ?? 'USD',
             effectiveFrom: now,
-            hireDate: input.hireDate ? new Date(input.hireDate) : null,
             zeroCostDefault: open?.zeroCostDefault ?? false,
           },
           select: RATE_SELECT,
@@ -210,7 +206,6 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
             hourlyRate: open?.hourlyRate ?? null,
             commissionPercent: open?.commissionPercent ?? 0,
             currency: open?.currency ?? 'USD',
-            hireDate: open?.hireDate ?? null,
             effectiveFrom: now,
             zeroCostDefault: input.zeroCostDefault,
           },

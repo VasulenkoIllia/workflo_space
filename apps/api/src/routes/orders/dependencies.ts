@@ -28,7 +28,8 @@ async function reachesTarget(
   // покривають будь-який реальний ланцюг, а патологію рвемо як «цикл».
   for (let depth = 0; depth < 50 && frontier.length > 0; depth++) {
     const edges = await tx.orderDependency.findMany({
-      where: { agencyId, orderId: { in: frontier } },
+      // видалені блокери випадають з графа циклів (audit-H1) — вони вже не гейтять
+      where: { agencyId, orderId: { in: frontier }, dependsOn: { deletedAt: null } },
       select: { dependsOnId: true },
     } as never)
     const next: string[] = []
@@ -61,6 +62,10 @@ const dependenciesRoute: FastifyPluginAsync = (fastify) => {
       }
 
       const dependency = await tenantTransaction(prisma, async (tx) => {
+        // audit-M5: серіалізуємо створення залежностей агенції, інакше два паралельні
+        // insert'и A→B і B→A (READ COMMITTED) не бачать одне одного → обидва проходять
+        // cycle-guard і комітяться → реальний 2-cycle назавжди дедлочить обидва старти.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`orderdep:${agencyId}`}))`
         const blocker = await tx.order.findFirst({
           where: { id: dependsOnId, agencyId, deletedAt: null },
           select: { id: true, title: true, internalStatus: true },

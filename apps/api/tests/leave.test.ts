@@ -14,6 +14,8 @@ const db = {
   agencyMember: { findUnique: vi.fn(), findMany: vi.fn() },
   agency: { findUnique: vi.fn() },
   auditLog: { create: vi.fn() },
+  // audit-M3: advisory-lock у approve-транзакції серіалізує погодження per-profile
+  $executeRaw: vi.fn().mockResolvedValue(1),
 }
 
 vi.mock('@workflo/db', async (importOriginal) => {

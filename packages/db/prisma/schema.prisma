@@ -1167,7 +1167,7 @@ model ExecutorRate {
   commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
   effectiveFrom     DateTime  @default(now()) @db.Timestamptz(3) // rate validity window for historical P&L
   effectiveUntil    DateTime? @db.Timestamptz(3)
-  hireDate          DateTime? @db.Timestamptz(3) // for leave accrual (module 23)
+  // (audit-M6: колишнє ExecutorRate.hireDate видалено — accrual читає AgencyMember.hireDate)
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
   agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
@@ -1539,6 +1539,7 @@ model Broadcast {
   updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
 
   @@index([agencyId, status])
+  @@index([createdById]) // audit-M7: FK на profiles (RESTRICT) без індексу → seq-scan
   @@map("broadcasts")
 }
 
@@ -1583,6 +1584,7 @@ model LeaveRequest {
 
   @@index([agencyId, status])
   @@index([profileId, startDate])
+  @@index([reviewedById]) // audit-M7: FK на profiles (SET NULL) без індексу → seq-scan
   @@map("leave_requests")
 }
 

@@ -74,7 +74,8 @@ const reportsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = ownerAgency(request.user)
-      const report = await withTenant((tx) => computeRetentionReport(tx, { agencyId }))
+      // структурний Db-інтерфейс (з groupBy) не збігається з Prisma-generic → as never
+      const report = await withTenant((tx) => computeRetentionReport(tx as never, { agencyId }))
       return reply.send({ success: true, data: report })
     }
   )

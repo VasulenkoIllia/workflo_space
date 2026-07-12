@@ -67,19 +67,27 @@ interface Db {
     >
   }
   order: {
+    // Перші 2 замовлення per company (ASC) — для медіани time-to-2nd.
     findMany: (args: {
       where: { agencyId: string; deletedAt: null; companyId: { not: null } }
       select: { companyId: true; createdAt: true }
       orderBy: { createdAt: 'asc' }
       take: number
     }) => Promise<Array<{ companyId: string | null; createdAt: Date }>>
+    // audit-M4: остання активність — max(createdAt) per company (без take-зрізу,
+    // інакше при >10k замовлень активні клієнти хибно ставали churned).
+    groupBy: (args: {
+      by: ['companyId']
+      where: { agencyId: string; deletedAt: null; companyId: { not: null } }
+      _max: { createdAt: true }
+    }) => Promise<Array<{ companyId: string | null; _max: { createdAt: Date | null } }>>
   }
   payment: {
-    findMany: (args: {
+    groupBy: (args: {
+      by: ['companyId']
       where: { agencyId: string; status: 'confirmed' }
-      select: { companyId: true; confirmedAt: true }
-      take: number
-    }) => Promise<Array<{ companyId: string; confirmedAt: Date }>>
+      _max: { confirmedAt: true }
+    }) => Promise<Array<{ companyId: string; _max: { confirmedAt: Date | null } }>>
   }
 }
 
@@ -96,28 +104,34 @@ export async function computeRetentionReport(
   opts: { agencyId: string; now?: Date }
 ): Promise<RetentionReport> {
   const now = opts.now ?? new Date()
-  const [companies, orders, payments] = await Promise.all([
+  const [companies, orders, orderActivity, paymentActivity] = await Promise.all([
     db.company.findMany({
       where: { agencyId: opts.agencyId },
       select: { id: true, name: true, loyaltyTier: true, totalSpent: true, createdAt: true },
       take: 2000,
     }),
+    // Перші замовлення (ASC) — беремо найдавніші, тож перші-2 per company коректні.
     db.order.findMany({
       where: { agencyId: opts.agencyId, deletedAt: null, companyId: { not: null } },
       select: { companyId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
       take: 10_000,
     }),
-    db.payment.findMany({
+    // Остання активність — агрегат max, без take-зрізу (audit-M4).
+    db.order.groupBy({
+      by: ['companyId'],
+      where: { agencyId: opts.agencyId, deletedAt: null, companyId: { not: null } },
+      _max: { createdAt: true },
+    }),
+    db.payment.groupBy({
+      by: ['companyId'],
       where: { agencyId: opts.agencyId, status: 'confirmed' },
-      select: { companyId: true, confirmedAt: true },
-      take: 10_000,
+      _max: { confirmedAt: true },
     }),
   ])
 
-  // Перші два замовлення + остання активність per company
+  // Перші два замовлення per company (для медіани time-to-2nd)
   const firstTwo = new Map<string, Date[]>()
-  const lastActivity = new Map<string, Date>()
   for (const o of orders) {
     if (!o.companyId) continue
     const arr = firstTwo.get(o.companyId) ?? []
@@ -125,12 +139,18 @@ export async function computeRetentionReport(
       arr.push(o.createdAt)
       firstTwo.set(o.companyId, arr)
     }
-    const prev = lastActivity.get(o.companyId)
-    if (!prev || o.createdAt > prev) lastActivity.set(o.companyId, o.createdAt)
   }
-  for (const p of payments) {
+
+  // Остання активність per company: max(замовлення) ∪ max(confirmed-платіж)
+  const lastActivity = new Map<string, Date>()
+  for (const o of orderActivity) {
+    if (o.companyId && o._max.createdAt) lastActivity.set(o.companyId, o._max.createdAt)
+  }
+  for (const p of paymentActivity) {
+    const d = p._max.confirmedAt
+    if (!d) continue
     const prev = lastActivity.get(p.companyId)
-    if (!prev || p.confirmedAt > prev) lastActivity.set(p.companyId, p.confirmedAt)
+    if (!prev || d > prev) lastActivity.set(p.companyId, d)
   }
 
   // Тір-розподіл (стабільний порядок за каноном)

@@ -16,6 +16,11 @@ function makeDb(opts: {
   orders?: Array<{ companyId: string; createdAt: Date }>
   payments?: Array<{ companyId: string; confirmedAt: Date }>
 }) {
+  const orders = opts.orders ?? []
+  const payments = opts.payments ?? []
+  // max(createdAt)/max(confirmedAt) per company — дзеркалить Prisma groupBy _max.
+  const maxCreatedAt = groupMax(orders, 'createdAt')
+  const maxConfirmedAt = groupMax(payments, 'confirmedAt')
   return {
     company: {
       findMany: vi.fn().mockResolvedValue(
@@ -26,9 +31,35 @@ function makeDb(opts: {
         }))
       ),
     },
-    order: { findMany: vi.fn().mockResolvedValue(opts.orders ?? []) },
-    payment: { findMany: vi.fn().mockResolvedValue(opts.payments ?? []) },
+    order: {
+      findMany: vi.fn().mockResolvedValue(orders),
+      groupBy: vi
+        .fn()
+        .mockResolvedValue(
+          maxCreatedAt.map(([companyId, createdAt]) => ({ companyId, _max: { createdAt } }))
+        ),
+    },
+    payment: {
+      groupBy: vi
+        .fn()
+        .mockResolvedValue(
+          maxConfirmedAt.map(([companyId, confirmedAt]) => ({ companyId, _max: { confirmedAt } }))
+        ),
+    },
   } as never
+}
+
+function groupMax<K extends string>(
+  rows: Array<{ companyId: string } & Record<K, Date>>,
+  key: K
+): Array<[string, Date]> {
+  const m = new Map<string, Date>()
+  for (const r of rows) {
+    const d = r[key]
+    const prev = m.get(r.companyId)
+    if (!prev || d > prev) m.set(r.companyId, d)
+  }
+  return [...m.entries()]
 }
 
 describe('computeRetentionReport (S11-07)', () => {

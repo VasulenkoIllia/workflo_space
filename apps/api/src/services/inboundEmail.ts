@@ -42,7 +42,16 @@ export type IngestResult =
       subject: string
       companyId: string | null
     }
-  | { status: 'skipped'; reason: 'duplicate' | 'unknown_sender' | 'no_company' | 'no_message_id' }
+  | {
+      status: 'skipped'
+      reason:
+        | 'duplicate'
+        | 'unknown_sender'
+        | 'no_company'
+        | 'no_message_id'
+        | 'ambiguous_tenant' // audit-H2: відправник у кількох агенціях — не вгадуємо
+        | 'wrong_tenant' // audit-H3: відправник не з тенанту цільового треду
+    }
 
 const SUBJECT_MAX = 200
 const CONTENT_MAX = 10_000
@@ -100,11 +109,21 @@ interface IngestDb {
     }) => Promise<{ id: string } | null>
   }
   companyMember: {
-    findFirst: (args: {
+    findMany: (args: {
       where: { profileId: string }
       orderBy: { joinedAt: 'asc' }
       select: { company: { select: { id: true; agencyId: true } } }
-    }) => Promise<{ company: { id: string; agencyId: string } } | null>
+    }) => Promise<Array<{ company: { id: string; agencyId: string } }>>
+    findFirst: (args: {
+      where: { profileId: string; companyId: string }
+      select: { id: true }
+    }) => Promise<{ id: string } | null>
+  }
+  agencyMember: {
+    findFirst: (args: {
+      where: { agencyId: string; profileId: string }
+      select: { id: true }
+    }) => Promise<{ id: string } | null>
   }
   ticket: {
     create: (args: {
@@ -154,10 +173,24 @@ export async function ingestInboundEmail(db: IngestDb, email: InboundEmail): Pro
         where: { email: { equals: from, mode: 'insensitive' } },
         select: { id: true },
       })
-      // Невідомий відправник у наявний тред: пишемо як внутрішню нотатку неможливо
-      // (треба authorId). Резолвимо на opener — але opener недоступний тут; тож якщо
-      // sender не знайдено, приймаємо opener'а нема → skip unknown_sender.
       if (!sender) return { status: 'skipped', reason: 'unknown_sender' }
+      // audit-H3: тредінг матчиться за глобально-унікальним Message-ID (крос-тенант),
+      // тож перевіряємо, що відправник справді належить тенанту цього тікета —
+      // член його компанії АБО staff його агенції. Інакше чужий In-Reply-To міг би
+      // впорснути повідомлення в тред іншого тенанта.
+      const [inCompany, isStaff] = await Promise.all([
+        t.companyId
+          ? db.companyMember.findFirst({
+              where: { profileId: sender.id, companyId: t.companyId },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        db.agencyMember.findFirst({
+          where: { agencyId: t.agencyId, profileId: sender.id },
+          select: { id: true },
+        }),
+      ])
+      if (!inCompany && !isStaff) return { status: 'skipped', reason: 'wrong_tenant' }
       await db.ticketMessage.create({
         data: {
           agencyId: t.agencyId,
@@ -191,15 +224,21 @@ export async function ingestInboundEmail(db: IngestDb, email: InboundEmail): Pro
     select: { id: true },
   })
   if (!sender) return { status: 'skipped', reason: 'unknown_sender' }
-  const membership = await db.companyMember.findFirst({
+  const memberships = await db.companyMember.findMany({
     where: { profileId: sender.id },
     orderBy: { joinedAt: 'asc' },
     select: { company: { select: { id: true, agencyId: true } } },
   })
-  if (!membership) return { status: 'skipped', reason: 'no_company' }
+  if (memberships.length === 0) return { status: 'skipped', reason: 'no_company' }
+  // audit-H2: спільна скринька одна на платформу, а Profile.email глобально
+  // унікальний — той самий клієнт може бути в компаніях РІЗНИХ агенцій. Тоді лист
+  // без явного маркера агенції неможливо однозначно замаршрутизувати → не вгадуємо
+  // (інакше вміст листа для агенції B засвітився б команді агенції A).
+  const distinctAgencies = new Set(memberships.map((m) => m.company.agencyId))
+  if (distinctAgencies.size > 1) return { status: 'skipped', reason: 'ambiguous_tenant' }
 
-  const agencyId = membership.company.agencyId
-  const companyId = membership.company.id
+  const agencyId = memberships[0]!.company.agencyId
+  const companyId = memberships[0]!.company.id
   const subject = cleanSubject(email.subject)
 
   const ticket = await db.ticket.create({
