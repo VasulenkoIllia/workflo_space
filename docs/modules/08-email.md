@@ -142,10 +142,15 @@ verifyMailer()        // verify() на старті
 - Mailcow inbound → `POST /webhooks/email/inbound` (parse MIME). Routing: `Reply-To`/`+token@` адреса несе `{orderId, profileId}` → створює `OrderComment`; `support@agency` → новий order/тикет (триаж).
 - Дедуп по Message-ID; вкладення → OrderFile; spam-фільтр (SPF/SpamAssassin score). `agencyId` з домену отримувача.
 
-### C. Bounce / suppression ✅
+### C. Bounce / suppression ✅ ЗБУДОВАНО (S12-05, 2026-07-13)
 
-- Mailcow bounce-webhook → `SuppressedEmail { agencyId, email, reason(hard_bounce|complaint|unsubscribe), createdAt }`. `sendEmail` пропускає suppressed.
-- Unsubscribe-токен + `List-Unsubscribe` + `List-Unsubscribe-Post` (one-click, вимога Gmail/Yahoo). `GET /unsubscribe/:token`.
+- **Модель `EmailSuppression { id, email @unique, reason, source?, createdAt }`** — **identity-scoped, БЕЗ tenant-RLS** (як `push_subscriptions`/`refresh_tokens`): suppression прив'язана до email-адреси, а не до агенції; той самий адресат не має отримувати ще й в іншій агенції. `@@map("email_suppressions")`.
+- **Bounce/DSN-детект** (не Mailcow-webhook, а сам IMAP-полер inbound-скриньки — `detectBounce()` у `inboundEmail.ts`): `multipart/report; report-type=delivery-status` **або** відправник `mailer-daemon@`/`postmaster@` → витягуємо адресу з `X-Failed-Recipients` або `Final-Recipient` → upsert `EmailSuppression{reason:'bounce', source:messageId}`, тікет НЕ створюється.
+- **Suppression-guard у `notify()`**: перед EMAIL-каналом `deps.emailSuppressed(email)` → якщо suppressed, `{status:'skipped', reason:'suppressed'}` (лог, без відправки). Hook у `buildNotifyDeps` читає `EmailSuppression` raw prisma (identity-таблиця).
+- **Unsubscribe (HMAC без стану)** — `makeUnsubscribeToken(email)` = `base64url(email).HMAC-SHA256(email, UNSUBSCRIBE_SECRET||JWT_SECRET)`, `verifyUnsubscribeToken` звіряє constant-time. No-auth роут `GET/POST /public/unsubscribe/:token` (rate-limit 30/min): **GET** → HTML-підтвердження (людина з листа), **POST** → one-click JSON (RFC 8058; scoped `application/x-www-form-urlencoded` content-parser, тіло ігнорується). Обидва upsert `EmailSuppression{reason:'unsubscribe', source:'unsubscribe_link'}` + audit `actorId:'public'`.
+- **Broadcast-листи (`system.broadcast`)** несуть заголовки `List-Unsubscribe: <url>` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (вимога Gmail/Yahoo) + футер-лінк «Відписатися». `unsubscribeUrl` = `API_PUBLIC_URL||https://api.workflo.space` + `/public/unsubscribe/<token>`.
+- **DKIM-surface** (не блокуємо, попереджаємо): inbound `Authentication-Results` → `dkim=pass/fail/none`; при `fail` — `⚠️` префікс у титулі нотифікації команди + `(DKIM не пройдено)` у тілі, щоб чутливі запити звіряли іншим каналом.
+- **Per-poll cap 200** повідомлень/прохід (анти-мейлбомба) — решта UNSEEN дочекається наступного тіку.
 
 ### D. Per-agency домен відправки ✅ (white-label)
 

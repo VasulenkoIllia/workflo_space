@@ -49,15 +49,23 @@ export function useCalendarView(from: string, to: string) {
   })
 }
 
+/** S13-05 (хвіст): погоджена відсутність команди у вікні календаря. */
+export interface CalendarLeaveDto {
+  id: string
+  type: 'vacation' | 'sick' | 'dayoff' | 'unpaid'
+  startDate: string
+  endDate: string
+  days: number
+  profile: { id: string; name: string }
+}
+
 export function useCalendarEvents(from: string, to: string) {
   return useQuery({
     queryKey: ['calendar', 'events', from, to],
     queryFn: () =>
-      api
-        .get<{
-          events: CalendarEventDto[]
-        }>(`/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
-        .then((r) => r.events),
+      api.get<{ events: CalendarEventDto[]; leaves: CalendarLeaveDto[] }>(
+        `/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      ),
   })
 }
 

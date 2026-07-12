@@ -121,7 +121,7 @@ erDiagram
 
 - **Team & Leave:** `Team`, `TeamColumn` (kanban boards), `LeaveRequest` (баланс відпустки — обчислюваний, НЕ таблиця; accrual від `AgencyMember.hireDate`)
 - **Content & Testimonials:** `BlogPost`, `Testimonial`, `Announcement`
-- **Notifications:** `PushSubscription`, `Broadcast`
+- **Notifications:** `PushSubscription`, `Broadcast`, `EmailSuppression`
 - **Orders:** `OrderDependency` (cycle-guard + gantt dependencies)
 - **Files:** `OrderFile.thumbKey` (webp thumbnail storage key for S10-06)
 
@@ -134,9 +134,14 @@ erDiagram
 - `AgencyMember.hireDate` — leave accrual base
 - `Agency.vacationDaysPerYear` — vacation accrual policy
 - `PushSubscription` — identity-scoped (profileId only, **no** agencyId/RLS, як `RefreshToken`)
+- `Profile.{phone, timezone}` — contact + IANA timezone (S9-06); timezone validated via `Intl`
+- `EmailSuppression { email @unique, reason, source? }` — identity-scoped (**no** agencyId/RLS,
+  scoped by email like `RefreshToken`); reason `bounce` (DSN-detect) / `unsubscribe` (HMAC token);
+  `notify()` skips EMAIL when suppressed (S12-05)
 
 ## NOT tenant-scoped (no RLS — global/identity)
 
 `Profile`, `RefreshToken`, `PasswordResetToken`, `OtpToken`, `NotificationSettings/
-Preference/Log`, `Notification`, `BillingPlan`, `ContactForm`, `Agency`, `AgencyMember`.
+Preference/Log`, `Notification`, `BillingPlan`, `ContactForm`, `Agency`, `AgencyMember`,
+`PushSubscription`, `EmailSuppression`.
 These are read without the tenant wrapper (identity/auth paths) by design.

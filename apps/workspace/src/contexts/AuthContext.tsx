@@ -25,6 +25,8 @@ export interface AuthProfile {
   language?: string
   theme?: string
   avatarUrl?: string | null
+  phone?: string | null
+  timezone?: string | null
 }
 
 export interface AuthState {

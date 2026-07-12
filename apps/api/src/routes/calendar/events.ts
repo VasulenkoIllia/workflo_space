@@ -165,7 +165,7 @@ const calendarEventsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = request.user
-      requireActiveAgency(user)
+      const agencyId = requireActiveAgency(user)
       const q = request.query as { from?: string; to?: string; type?: string }
       const range: Record<string, Date> = {}
       if (q.from) range.gte = new Date(q.from)
@@ -186,7 +186,35 @@ const calendarEventsRoute: FastifyPluginAsync = (fastify) => {
           select: EVENT_SELECT,
         })
       )
-      return reply.send({ success: true, data: { events } })
+      // S13-05 (хвіст): погоджені відсутності команди у вікні — read-side merge
+      // (без dual-write у CalendarEvent: reject/cancel не потребують синку).
+      // Видимі команді агенції (хто відсутній — нормальна командна інформація);
+      // портальний клієнт (без agencyMemberships) їх не бачить.
+      const isTeam = user.agencyMemberships.some((m) => m.agencyId === agencyId)
+      const leaves =
+        isTeam && q.from && q.to
+          ? await withTenant((tx) =>
+              tx.leaveRequest.findMany({
+                where: {
+                  agencyId,
+                  status: 'approved',
+                  startDate: { lte: new Date(q.to ?? '') },
+                  endDate: { gte: new Date(q.from ?? '') },
+                },
+                orderBy: { startDate: 'asc' },
+                take: 200,
+                select: {
+                  id: true,
+                  type: true,
+                  startDate: true,
+                  endDate: true,
+                  days: true,
+                  profile: { select: { id: true, name: true } },
+                },
+              })
+            )
+          : []
+      return reply.send({ success: true, data: { events, leaves } })
     }
   )
 

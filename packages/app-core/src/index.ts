@@ -31,3 +31,5 @@ export * from './SettingsSections.js'
 export * from './VaultTypedFields.js'
 // ANNOUNCEMENTS читацька сторона — банер + active/read хуки (R5, аудит r6).
 export * from './announcements.js'
+// S9-06 (хвіст): контактні дані профілю (телефон + часовий пояс).
+export * from './ContactDetailsSection.js'

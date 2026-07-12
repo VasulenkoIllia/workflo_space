@@ -367,9 +367,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 Прибрати `telegramUsername` (немає); notifications PATCH → матриця 7×6 (`NotificationPreference`); `/settings/activity-log` читає `AuditLog` (не order-only ActivityLog); **канонічний members-endpoint** = `/companies/:id/members*` (видалити дубль у 13); per-agency system-settings (exchange/billing defaults — не глобальний singleton); password-change → revoke other sessions + `tokenVersion++` + audit + rate-limit; avatar SVG-guard.
 
-### B. Timezone + phone ✅
+### B. Timezone + phone ✅ ЗБУДОВАНО (S9-06, 2026-07-13)
 
-- `Profile.timezone String @default("Europe/Kyiv")` (для календаря/quiet-hours/рендеру) + `Profile.phone String?` (+ phone-verify через SMS OTP для SMS-каналу).
+- **`Profile.phone String?` + `Profile.timezone String?`** (обидва nullable, без default — порожнє = «не вказано»; міграція `20260722_tails2`).
+- `PATCH /profile` приймає обидва: phone тримається як є (порожнє→NULL); **timezone валідується через `new Intl.DateTimeFormat('en',{timeZone})`** у try/catch — невідома IANA-зона → `400 VALIDATION_ERROR` (щоб не зламати майбутнє форматування календаря/quiet-hours/рендеру). Поля протікають у `/auth/me` + gdprExport allow-list.
+- UI: спільна `ContactDetailsSection` (@workflo/app-core) — телефон (Input, regex `[+\d\s()-]`) + timezone-picker (`<select>` з `Intl.supportedValuesOf('timeZone')`, fallback-список), змонтована в settings обох апок (portal `/settings`, workspace `/profile`). Dirty-guard + toast + `reload()` після save.
+- Phone-verify через SMS OTP (для майбутнього SMS-каналу) — post-MVP, не зараз.
 
 ### C. Data export (GDPR self-service) ✅ (S9-06, 2026-07-12 ЗБУДОВАНО)
 

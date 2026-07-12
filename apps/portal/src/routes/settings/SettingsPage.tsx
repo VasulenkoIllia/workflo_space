@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import type { Locale } from '@workflo/i18n'
 import {
+  ContactDetailsSection,
   EmailChangeSection,
   LinkedAccountsSection,
   NotificationsSection,
@@ -121,6 +122,13 @@ export function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      <ContactDetailsSection
+        initialPhone={user?.profile.phone}
+        initialTimezone={user?.profile.timezone}
+        onSaved={() => void reload()}
+        cardStyle={{ marginBottom: 16 }}
+      />
 
       <RequisitesSection />
 

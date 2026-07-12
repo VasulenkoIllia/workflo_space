@@ -138,6 +138,32 @@ describe('notify', () => {
     expect(prisma.notificationLog.create).toHaveBeenCalled()
   })
 
+  it('skips email with reason=suppressed when emailSuppressed returns true (S12-05)', async () => {
+    const prisma = makePrismaStub({ prefs: [{ channel: 'email' }] })
+    const emailSuppressed = vi.fn().mockResolvedValue(true)
+    const result = await notify(
+      { prisma, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, emailSuppressed },
+      { profileId: 'p1', event: 'system.broadcast', vars: { subject: 'X', bodyHtml: '<p>x</p>' } }
+    )
+    expect(emailSuppressed).toHaveBeenCalledWith('a@b.com')
+    const em = result.results.find((r) => r.channel === NotificationChannel.EMAIL)
+    expect(em!.result.status).toBe('skipped')
+    if (em!.result.status === 'skipped') {
+      expect(em!.result.reason).toBe('suppressed')
+    }
+  })
+
+  it('dispatches email normally when emailSuppressed returns false (S12-05)', async () => {
+    const prisma = makePrismaStub({ prefs: [{ channel: 'email' }] })
+    const emailSuppressed = vi.fn().mockResolvedValue(false)
+    const result = await notify(
+      { prisma, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, emailSuppressed },
+      { profileId: 'p1', event: 'auth.welcome', vars: { portalUrl: 'https://portal' } }
+    )
+    const em = result.results.find((r) => r.channel === NotificationChannel.EMAIL)
+    expect(em!.result.status).not.toBe('skipped')
+  })
+
   it('continues dispatching subsequent channels when one fails', async () => {
     const prisma = makePrismaStub({
       prefs: [{ channel: 'email' }, { channel: 'in_app' }],

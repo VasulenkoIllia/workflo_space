@@ -1,5 +1,6 @@
 import { NotificationChannel, type NotificationEvent } from '@workflo/types'
 import { type EmailPayload, type EmailSendResult, sendEmail } from './adapters/EmailAdapter.js'
+import { unsubscribeUrl } from './unsubscribe.js'
 import {
   type TelegramPayload,
   type TelegramSendResult,
@@ -532,11 +533,24 @@ export async function dispatchEmail(
     }
   }
   const tpl = applyEmailOverride(rendered, override, vars)
+  // S12-05 (хвіст): маркетинг-подібні листи (broadcast) несуть підписаний
+  // unsubscribe-лінк у футері + List-Unsubscribe заголовки (one-click, RFC 8058).
+  let html = tpl.html
+  let headers: Record<string, string> | undefined
+  if (event === 'system.broadcast') {
+    const url = unsubscribeUrl(recipient.email)
+    html += `<p style="margin-top:24px;font-size:11px;color:#8a8f98">Не хочете отримувати такі листи? <a href="${url}" style="color:#8a8f98">Відписатися</a>.</p>`
+    headers = {
+      'List-Unsubscribe': `<${url}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    }
+  }
   const payload: EmailPayload = {
     to: recipient.email,
     subject: tpl.subject,
-    html: tpl.html,
+    html,
     ...(attachments?.length ? { attachments } : {}),
+    ...(headers ? { headers } : {}),
   }
   const result = await sendEmail(payload)
   return { channel: NotificationChannel.EMAIL, result }

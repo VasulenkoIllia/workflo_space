@@ -105,6 +105,14 @@ export function buildNotifyDeps(logger: FastifyBaseLogger): NotifyDeps {
         metadata: { reason: 'blocked_by_user' },
       })
     },
+    // S12-05 (хвіст): suppression-список — identity-рівень (email глобальний).
+    emailSuppressed: async (email) => {
+      const row = await prisma.emailSuppression.findUnique({
+        where: { email: email.toLowerCase() },
+        select: { id: true },
+      })
+      return row != null
+    },
     // S12-03: підписки — identity-scoped (як refresh_tokens), читаються raw prisma.
     pushSubscriptions: {
       list: async (profileId) =>

@@ -96,6 +96,8 @@ export async function buildProfileExport(
         language: true,
         theme: true,
         avatarUrl: true,
+        phone: true,
+        timezone: true,
         emailVerifiedAt: true,
         createdAt: true,
       },

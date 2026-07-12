@@ -30,6 +30,19 @@ const MONTHS = [
   'Грудень',
 ]
 
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  vacation: 'відпустка',
+  sick: 'лікарняний',
+  dayoff: 'відгул',
+  unpaid: 'за свій рахунок',
+}
+const LEAVE_TYPE_ICON: Record<string, string> = {
+  vacation: '🏖',
+  sick: '🤒',
+  dayoff: '🌤',
+  unpaid: '⏸',
+}
+
 function monthRange(year: number, month: number) {
   const first = new Date(Date.UTC(year, month, 1))
   const last = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59))
@@ -48,7 +61,9 @@ export function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
   const { from, to } = useMemo(() => monthRange(year, month), [year, month])
   const { data: items, isLoading } = useCalendarView(from, to)
-  const { data: events } = useCalendarEvents(from, to)
+  const { data: eventsData } = useCalendarEvents(from, to)
+  const events = eventsData?.events
+  const leaves = eventsData?.leaves
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -60,6 +75,20 @@ export function CalendarPage() {
     }
     return map
   }, [items])
+
+  // S13-05: відсутності — діапазонні; розгортаємо в day-ключі (стеля 62 дні/заявка).
+  const leavesByDay = useMemo(() => {
+    const map = new Map<string, { name: string; type: string }[]>()
+    for (const l of leaves ?? []) {
+      const start = new Date(l.startDate)
+      const end = new Date(l.endDate)
+      for (let t = start.getTime(), i = 0; t <= end.getTime() && i < 62; t += 86_400_000, i += 1) {
+        const k = new Date(t).toISOString().slice(0, 10)
+        map.set(k, [...(map.get(k) ?? []), { name: l.profile.name, type: l.type }])
+      }
+    }
+    return map
+  }, [leaves])
 
   // Сітка: перший день місяця → зсув до понеділка; 6 тижнів × 7
   const gridStart = useMemo(() => {
@@ -143,6 +172,7 @@ export function CalendarPage() {
             ))}
             {cells.map((c) => {
               const dayItems = byDay.get(c.iso) ?? []
+              const dayLeaves = leavesByDay.get(c.iso) ?? []
               const isToday = c.iso === now.toISOString().slice(0, 10)
               return (
                 <div
@@ -201,6 +231,34 @@ export function CalendarPage() {
                         style={{ fontSize: 9, color: 'var(--wf-fg-muted)' }}
                       >
                         +{(dayItems ?? []).length - 3}
+                      </span>
+                    )}
+                    {/* S13-05: погоджені відсутності команди (read-only чіпи) */}
+                    {dayLeaves.slice(0, 2).map((l, i) => (
+                      <span
+                        key={`leave-${c.iso}-${i}`}
+                        title={`${l.name} — ${LEAVE_TYPE_LABEL[l.type] ?? l.type}`}
+                        style={{
+                          fontSize: 10,
+                          padding: '2px 4px',
+                          borderRadius: 4,
+                          background: 'var(--wf-surface)',
+                          border: '1px dashed var(--wf-border-strong)',
+                          color: 'var(--wf-fg-muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {LEAVE_TYPE_ICON[l.type] ?? '🏖'} {l.name}
+                      </span>
+                    ))}
+                    {dayLeaves.length > 2 && (
+                      <span
+                        className="wfp-mono"
+                        style={{ fontSize: 9, color: 'var(--wf-fg-muted)' }}
+                      >
+                        +{dayLeaves.length - 2} відсутні
                       </span>
                     )}
                   </div>

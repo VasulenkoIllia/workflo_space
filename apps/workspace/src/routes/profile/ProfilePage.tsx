@@ -1,5 +1,10 @@
 import { useMemo } from 'react'
-import { EmailChangeSection, PasswordSection, TwoFactorSection } from '@workflo/app-core'
+import {
+  ContactDetailsSection,
+  EmailChangeSection,
+  PasswordSection,
+  TwoFactorSection,
+} from '@workflo/app-core'
 import { Card, EmptyState, Skeleton, StatusDot } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatMoney } from '@/lib/format'
@@ -20,7 +25,7 @@ const STATUS: Record<PayoutStatus, { tone: 'muted' | 'warning' | 'success'; labe
 /** Профіль виконавця + власний заробіток (13-ПРОФІЛЬ). Сервер віддає не-власнику лише
  * його виплати; власнику (усі рядки команди) — фільтруємо до своїх клієнтськи. */
 export function ProfilePage() {
-  const { user } = useAuth()
+  const { user, reload } = useAuth()
   const p = user?.profile
   const payouts = useMyPayouts()
 
@@ -61,6 +66,13 @@ export function ProfilePage() {
           </div>
         </div>
       </Card>
+
+      <ContactDetailsSection
+        initialPhone={p?.phone}
+        initialTimezone={p?.timezone}
+        onSaved={() => void reload()}
+        cardStyle={{ marginBottom: 16 }}
+      />
 
       {/* Безпекові секції доступні КОЖНІЙ ролі тут (/settings — owner-only), сюди ж
           ведуть банери 2FA-політики та mustChangePassword. */}

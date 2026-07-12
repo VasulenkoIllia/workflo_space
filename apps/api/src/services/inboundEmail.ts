@@ -31,6 +31,8 @@ export interface InboundEmail {
   inReplyTo: string | null
   /** Ланцюг тредінгу (References-заголовок). */
   references: string[]
+  /** Authentication-Results → dkim: true=pass, false=fail/none, null=заголовка нема. */
+  dkimPass?: boolean | null
 }
 
 export type IngestResult =
@@ -300,6 +302,8 @@ export interface InboundPollSummary {
   created: number
   appended: number
   skipped: number
+  /** DSN/bounce-листи: відправника заведено у suppression, тікет не створюється. */
+  bounced: number
 }
 
 /** Сповістити команду про новий/оновлений email-тікет (поза транзакцією, fire-and-forget).
@@ -307,17 +311,46 @@ export interface InboundPollSummary {
  * читав agencyMember повз withTenant-конвенцію». */
 async function notifyTeamOfInbound(
   logger: FastifyBaseLogger,
-  result: Extract<IngestResult, { status: 'created' | 'appended' }>
+  result: Extract<IngestResult, { status: 'created' | 'appended' }>,
+  dkimPass?: boolean | null
 ): Promise<void> {
   const isNew = result.status === 'created'
+  // S12-05 (хвіст, audit-LOW): From підробний — якщо DKIM явно fail, попереджаємо
+  // команду прямо в нотифікації, щоб чутливі запити звіряли іншим каналом.
+  const warn = dkimPass === false ? '⚠️ ' : ''
   fanOut(logger, await agencyStaffIds(result.agencyId), {
     event: isNew ? 'support.new_ticket' : 'support.ticket_reply',
     vars: { subject: result.subject, ticketId: result.ticketId },
     inApp: {
-      title: isNew ? 'Новий тікет з email' : 'Клієнт відповів (email)',
-      body: result.subject,
+      title: warn + (isNew ? 'Новий тікет з email' : 'Клієнт відповів (email)'),
+      body: dkimPass === false ? `${result.subject} (DKIM не пройдено)` : result.subject,
     },
   })
+}
+
+/** DSN/bounce-детект: multipart/report(delivery-status) або mailer-daemon-відправник.
+ * Повертає адресу, що відбилась (X-Failed-Recipients / Final-Recipient), або null. */
+export function detectBounce(parsed: {
+  from?: { value?: Array<{ address?: string }> }
+  headers?: Map<string, unknown>
+  text?: string
+}): string | null {
+  const from = parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
+  const ct = parsed.headers?.get('content-type') as
+    | { value?: string; params?: Record<string, string> }
+    | undefined
+  const isReport =
+    ct?.value === 'multipart/report' && ct?.params?.['report-type'] === 'delivery-status'
+  const isDaemon = /(^|[.<])(mailer-daemon|postmaster)@/i.test(from) || /^mailer-daemon/i.test(from)
+  if (!isReport && !isDaemon) return null
+  const failedHeader = parsed.headers?.get('x-failed-recipients')
+  if (typeof failedHeader === 'string' && failedHeader.includes('@')) {
+    return failedHeader.split(',')[0]!.trim().toLowerCase()
+  }
+  const m = /Final-Recipient:\s*(?:rfc822;)?\s*<?([^\s<>;]+@[^\s<>;]+)>?/i.exec(parsed.text ?? '')
+  if (m) return m[1]!.toLowerCase()
+  const m2 = /<([^\s<>]+@[^\s<>]+)>/.exec(parsed.text ?? '')
+  return m2 ? m2[1]!.toLowerCase() : null
 }
 
 /**
@@ -334,6 +367,7 @@ export async function pollInboundMailbox(logger: FastifyBaseLogger): Promise<Inb
     created: 0,
     appended: 0,
     skipped: 0,
+    bounced: 0,
   }
   if (!cfg) return summary
 
@@ -351,11 +385,45 @@ export async function pollInboundMailbox(logger: FastifyBaseLogger): Promise<Inb
 
   await client.connect()
   const lock = await client.getMailboxLock(cfg.mailbox)
+  // audit-LOW: стеля за прохід — мейл-бомба не розтягує один цикл до безмежності;
+  // решта UNSEEN дочекається наступного тіку (кожні ~2 хв).
+  const MAX_PER_POLL = 200
   try {
     for await (const msg of client.fetch({ seen: false }, { uid: true, source: true })) {
+      if (summary.processed >= MAX_PER_POLL) {
+        logger.warn(
+          { cap: MAX_PER_POLL },
+          'inboundEmail: per-poll cap reached — решта наступним тіком'
+        )
+        break
+      }
       summary.processed += 1
       try {
         const parsed = await simpleParser(msg.source as Buffer)
+        // S12-05 (хвіст): DSN/bounce → suppression замість тікета.
+        const bounced = detectBounce(parsed as never)
+        if (bounced) {
+          await prisma.emailSuppression.upsert({
+            where: { email: bounced },
+            update: {
+              reason: 'bounce',
+              source: (parsed as { messageId?: string }).messageId ?? 'dsn',
+            },
+            create: {
+              email: bounced,
+              reason: 'bounce',
+              source: (parsed as { messageId?: string }).messageId ?? 'dsn',
+            },
+          })
+          summary.bounced += 1
+          logger.warn({ bounced }, 'inboundEmail: DSN — адресу заведено у suppression')
+          try {
+            await client.messageFlagsAdd(msg.uid, ['\\Seen'], { uid: true })
+          } catch (flagErr) {
+            logger.error({ err: flagErr, uid: msg.uid }, 'inboundEmail: failed to mark \\Seen')
+          }
+          continue
+        }
         const email = toInboundEmail(parsed)
         if (email) {
           let result: IngestResult
@@ -375,7 +443,7 @@ export async function pollInboundMailbox(logger: FastifyBaseLogger): Promise<Inb
           else if (result.status === 'appended') summary.appended += 1
           else summary.skipped += 1
           if (result.status === 'created' || result.status === 'appended') {
-            await runWithSystemContext(() => notifyTeamOfInbound(logger, result))
+            await runWithSystemContext(() => notifyTeamOfInbound(logger, result, email.dkimPass))
           } else {
             logger.info(
               { reason: result.reason, from: email.from },
@@ -414,6 +482,7 @@ function toInboundEmail(parsed: unknown): InboundEmail | null {
     inReplyTo?: string
     references?: string | string[]
     from?: { value?: Array<{ address?: string }> }
+    headers?: Map<string, unknown>
   }
   const messageId = p.messageId?.trim()
   const from = p.from?.value?.[0]?.address?.trim().toLowerCase()
@@ -422,11 +491,17 @@ function toInboundEmail(parsed: unknown): InboundEmail | null {
   const references = (Array.isArray(refs) ? refs : refs ? [refs] : [])
     .map((r) => r.trim())
     .filter((r) => r.length > 0)
+  // Authentication-Results (ставить ВХІДНИЙ MTA скриньки): dkim=pass/fail/none.
+  const auth = p.headers?.get('authentication-results')
+  const authStr = typeof auth === 'string' ? auth : ''
+  const dkimMatch = /dkim=([a-z]+)/i.exec(authStr)
+  const dkimPass = dkimMatch ? dkimMatch[1]!.toLowerCase() === 'pass' : null
   return {
     messageId,
     from,
     subject: (p.subject ?? '').trim(),
     text: (p.text ?? '').trim(),
+    dkimPass,
     inReplyTo: p.inReplyTo?.trim() ?? null,
     references,
   }

@@ -19,6 +19,16 @@ export const updateProfileSchema = z
       .refine((v) => v.startsWith('https://'), { message: 'avatarUrl must be https://' })
       .nullable()
       .optional(),
+    // S9-06 (хвіст): контактний телефон (вільний формат, обмежений набір символів)
+    // + IANA-часовий пояс (валідність перевіряє бек через Intl).
+    phone: z
+      .string()
+      .trim()
+      .max(30)
+      .regex(/^[+\d\s()-]*$/, 'Телефон: лише цифри, пробіли та + ( ) -')
+      .nullable()
+      .optional(),
+    timezone: z.string().trim().max(64).nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Потрібно вказати хоча б одне поле для оновлення',

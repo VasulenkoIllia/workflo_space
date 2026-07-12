@@ -1,5 +1,5 @@
 import { type Prisma, prisma, withTenant } from '@workflo/db'
-import { updateProfileSchema } from '@workflo/types'
+import { ApiErrorCode, AppError, updateProfileSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
 import { buildProfileExport } from '../../services/gdprExport.js'
@@ -15,6 +15,23 @@ const updateProfileRoute: FastifyPluginAsync = (fastify) => {
     if (input.language !== undefined) data.language = input.language
     if (input.theme !== undefined) data.theme = input.theme
     if (input.avatarUrl !== undefined) data.avatarUrl = input.avatarUrl
+    // S9-06 (хвіст): телефон + часовий пояс. Timezone валідуємо через Intl —
+    // невідома зона кинула б RangeError у кожному майбутньому форматуванні.
+    if (input.phone !== undefined) data.phone = input.phone === '' ? null : input.phone
+    if (input.timezone !== undefined) {
+      if (input.timezone) {
+        try {
+          new Intl.DateTimeFormat('en', { timeZone: input.timezone })
+        } catch {
+          throw new AppError(
+            ApiErrorCode.VALIDATION_ERROR,
+            'Невідомий часовий пояс (очікується IANA-назва, напр. Europe/Kyiv)',
+            400
+          )
+        }
+      }
+      data.timezone = input.timezone === '' ? null : input.timezone
+    }
 
     const profile = await prisma.profile.update({
       where: { id: profileId },
@@ -27,6 +44,8 @@ const updateProfileRoute: FastifyPluginAsync = (fastify) => {
         language: true,
         theme: true,
         avatarUrl: true,
+        phone: true,
+        timezone: true,
       },
     })
 
@@ -50,6 +69,8 @@ const updateProfileRoute: FastifyPluginAsync = (fastify) => {
           language: profile.language,
           theme: profile.theme,
           avatarUrl: profile.avatarUrl,
+          phone: profile.phone,
+          timezone: profile.timezone,
         },
       },
     })

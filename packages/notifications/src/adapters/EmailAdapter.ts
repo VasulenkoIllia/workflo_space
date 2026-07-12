@@ -15,6 +15,8 @@ export interface EmailPayload {
   from?: { name: string; address: string }
   /** 06-SEND: вкладення (PDF документа тощо) — прокидаються в nodemailer як є. */
   attachments?: EmailAttachment[]
+  /** S12-05: додаткові SMTP-заголовки (List-Unsubscribe тощо). */
+  headers?: Record<string, string>
 }
 
 /**
@@ -60,6 +62,7 @@ export async function sendEmail(
       subject: payload.subject,
       html: payload.html,
       ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
+      ...(payload.headers ? { headers: payload.headers } : {}),
     })) as RawSentInfo
 
     if (info.rejected && info.rejected.length > 0) {

@@ -17,6 +17,8 @@ export interface AuthProfile {
   language?: string
   theme?: string
   avatarUrl?: string | null
+  phone?: string | null
+  timezone?: string | null
   /** false → show the verify banner (S9). undefined on older payloads = don't nag. */
   emailVerified?: boolean
 }

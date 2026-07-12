@@ -34,6 +34,9 @@ model Profile {
   pendingEmail        String?
   // 01-Д: тимчасовий пароль → примусова зміна (знімається зміною пароля).
   mustChangePassword  Boolean   @default(false)
+  // S9-06 (хвіст): контактний телефон + IANA-часовий пояс (self-service у settings).
+  phone               String?
+  timezone            String?
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
 
@@ -99,6 +102,21 @@ model PushSubscription {
 
   @@index([profileId])
   @@map("push_subscriptions")
+}
+
+/// S12-05 (хвіст): suppression-список email-адрес (identity-scoped, без tenant-RLS —
+/// адреса глобальна, як Profile.email). Джерела: bounce (DSN у support-скриньці),
+/// unsubscribe (підписаний лінк у розсилці), complaint (майбутнє). notify() скіпає
+/// email-канал для адрес зі списку (reason 'suppressed').
+model EmailSuppression {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  reason    String // bounce | unsubscribe | complaint
+  /// Звідки прийшло (messageId DSN, 'unsubscribe_link', …) — для розбору.
+  source    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("email_suppressions")
 }
 
 // Social login (S9, canon 01-auth §E). One row per linked external identity;

@@ -165,6 +165,30 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **ХВОСТИ-2 (2026-07-13) — три хвости збудованих зрізів одним зрізом, усі закриті до ✅.**
+  Міграція `20260722_tails2` (fresh-PG-proven, drift-clean): `profiles.phone/timezone` +
+  identity-таблиця `email_suppressions` (без tenant-RLS — scoped по email, як push/refresh-токени).
+  - **S9-06 · Profile.phone/timezone:** `updateProfileSchema` розширено; PATCH /profile валідує
+    timezone через `Intl.DateTimeFormat` (невідома зона → 400); нова `ContactDetailsSection`
+    (@workflo/app-core) — телефон + timezone-picker (`Intl.supportedValuesOf('timeZone')`),
+    змонтована в settings обох апок; поля протікають у /auth/me + gdprExport allow-list.
+  - **S12-05 · suppression/unsubscribe/bounce/DKIM (лишок inbound-рядка):**
+    HMAC-підписаний unsubscribe-токен без стану (`@workflo/notifications`) → no-auth роут
+    `/public/unsubscribe/:token` (GET HTML-підтвердження + POST one-click RFC 8058; scoped
+    form-urlencoded content-parser); broadcast-листи несуть `List-Unsubscribe` +
+    `List-Unsubscribe-Post` заголовки + футер-лінк; `notify()` пропускає email у suppression
+    (reason `suppressed`); inbound-полер: DSN/bounce-детект (multipart/report або mailer-daemon)
+    → suppress(bounce) без тікета, DKIM-fail із Authentication-Results → ⚠️ у нотифікації команди,
+    per-poll cap 200 (анти-мейлбомба).
+  - **S13-05 · calendar-integration відпусток:** read-side merge без dual-write —
+    GET /calendar/events повертає додатковий `leaves` (approved-відсутності команди у вікні,
+    лише для team-ролей; портальний клієнт не бачить); workspace місячна сітка малює read-only
+    чіпи відсутності по днях (діапазон розгортається клієнтом).
+  - Live-verified наживо: PATCH phone/tz + invalid-tz→400, unsubscribe GET(200)+POST-one-click(200)
+    - tamper→400 + suppression-рядки, calendar leaves (Петро Виконавець vacation 07-20→07-24, клієнт
+      бачить 0). Гейт turbo **37/37**, api **1052 passed**, +unit (unsubscribe-токен round-trip/tamper,
+      detectBounce, notify suppression-skip).
+
 - **АУДИТ r6 РЕМЕДІАЦІЯ (2026-07-12) — 10 багів delta-після-r5 закрито.** П'ять паралельних
   рецензентів (security/logic/DB/модульність/doc-drift) + пряма RLS-перевірка наживо. Загальний
   стан — здоровий (RLS повний, гроші коректні, delta без tech-debt). Виправлено: **H1** soft-delete

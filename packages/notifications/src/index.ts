@@ -84,3 +84,6 @@ export {
   type PushPayload,
 } from './adapters/PushAdapter.js'
 export { inQuietHours } from './notify.js'
+
+// S12-05 (хвіст): підписані unsubscribe-токени (API-роут відписки).
+export { makeUnsubscribeToken, verifyUnsubscribeToken, unsubscribeUrl } from './unsubscribe.js'

@@ -100,14 +100,14 @@ model CalendarAttendee {
 
 ## Endpoints
 
-| Method  | Path                               | Auth                       | Опис                                    |
-| ------- | ---------------------------------- | -------------------------- | --------------------------------------- |
-| `POST`  | `/calendar/events`                 | executor / owner           | Створити зустріч + запросити            |
-| `GET`   | `/calendar/events?from=&to=&type=` | any (свої + де запрошений) | Список для view                         |
-| `PATCH` | `/calendar/events/:id`             | creator / owner            | Редагувати (час, місце)                 |
-| `POST`  | `/calendar/events/:id/cancel`      | creator / owner            | Скасувати (+notify усім)                |
-| `POST`  | `/calendar/events/:id/respond`     | invitee                    | accept / decline                        |
-| `GET`   | `/calendar/view?from=&to=`         | any                        | Агрегований: events + deadlines + leave |
+| Method  | Path                               | Auth                       | Опис                                                |
+| ------- | ---------------------------------- | -------------------------- | --------------------------------------------------- |
+| `POST`  | `/calendar/events`                 | executor / owner           | Створити зустріч + запросити                        |
+| `GET`   | `/calendar/events?from=&to=&type=` | any (свої + де запрошений) | Список для view (+`leaves` для team-ролей — S13-05) |
+| `PATCH` | `/calendar/events/:id`             | creator / owner            | Редагувати (час, місце)                             |
+| `POST`  | `/calendar/events/:id/cancel`      | creator / owner            | Скасувати (+notify усім)                            |
+| `POST`  | `/calendar/events/:id/respond`     | invitee                    | accept / decline                                    |
+| `GET`   | `/calendar/view?from=&to=`         | any                        | Агрегований: events + deadlines + leave             |
 
 `can()`: `calendar.event.create/update/cancel/invite`. Політика: owner може зустріч з клієнтом; чи може executor самостійно — рішення (рекомендую так, з notify owner'у).
 
@@ -122,6 +122,17 @@ model CalendarAttendee {
 - **Reminder** — cron (модель як `C03 dueDateReminder`): за 1 год / 1 день до `startsAt`.
 
 ---
+
+## Відпустки у календарі ✅ ЗБУДОВАНО (S13-05, 2026-07-13)
+
+**Read-side merge без dual-write** — `GET /calendar/events` при заданих `from`+`to` додає до відповіді
+поле `leaves`: `approved`-відсутності команди, чиє вікно перетинає запит (`startDate<=to AND endDate>=from`),
+`{id, type, startDate, endDate, days, profile:{id,name}}`, cap 200. **Видимі лише team-ролям**
+(перевірка `user.agencyMemberships` містить активну агенцію) — портальний клієнт `leaves` не отримує
+(хто з команди відсутній — внутрішня інформація). Без `from`/`to` → `leaves:[]`. Dual-write у
+`CalendarEvent` свідомо не робимо: `reject`/`cancel` відсутності не потребували б синку, а source-of-truth
+лишається `leave_requests` (модуль 23). Workspace місячна сітка розгортає діапазон у чіпи по днях
+(read-only, іконка+ПІБ, стеля 62 дні/заявка).
 
 ## Aggregated calendar view
 

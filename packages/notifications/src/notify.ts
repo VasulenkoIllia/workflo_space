@@ -95,6 +95,12 @@ export interface NotifyDeps {
     list: (profileId: string) => Promise<PushSubscriptionRow[]>
     removeByEndpoint: (endpoint: string) => Promise<void>
   }
+  /**
+   * S12-05 (хвіст): suppression-список — true, якщо адреса відписалась/бounce'нулась.
+   * Email-канал тоді скіпається (reason 'suppressed'), включно з critical: hard-bounce
+   * адреса все одно не отримає. Не передано (юніт-тести) — перевірки нема.
+   */
+  emailSuppressed?: (email: string) => Promise<boolean>
 }
 
 /** S12-06: поточна година в Києві (крони проєкту теж Kyiv-anchored). */
@@ -252,13 +258,21 @@ export async function notify<E extends NotificationEvent>(
     if (quiet && NOISY.includes(channel)) {
       result = { channel, result: { status: 'skipped', reason: 'quiet_hours' } }
     } else if (channel === NotificationChannel.EMAIL) {
-      result = await dispatchEmail(
-        input.event,
-        recipient,
-        vars,
-        input.attachments,
-        input.emailOverrides?.[recipient.locale ?? 'uk']
-      )
+      // S12-05: suppression-список (bounce/unsubscribe) — адреса не отримує email.
+      const suppressed = deps.emailSuppressed
+        ? await deps.emailSuppressed(recipient.email).catch(() => false)
+        : false
+      if (suppressed) {
+        result = { channel, result: { status: 'skipped', reason: 'suppressed' } }
+      } else {
+        result = await dispatchEmail(
+          input.event,
+          recipient,
+          vars,
+          input.attachments,
+          input.emailOverrides?.[recipient.locale ?? 'uk']
+        )
+      }
     } else if (channel === NotificationChannel.TELEGRAM) {
       result = await dispatchTelegram(input.event, recipient, vars)
       if (
