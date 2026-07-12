@@ -11,9 +11,9 @@ import {
   renderClientMonthlyReportHtml,
 } from '@workflo/templates'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { nextDocumentNumber } from '../services/documentNumber.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../services/clientMonthlyReport.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron C-client_monthly_report (19-Г, раз на добу): агенціям з увімкненим
@@ -24,10 +24,6 @@ import { computeClientMonthlyNumbers, moneyLabel } from '../services/clientMonth
  * Без Chromium PDF деградує до HTML-вкладення (той самий патерн, що PDF-роут).
  */
 const INTERVAL_MS = 24 * 60 * 60 * 1000
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 const fmtDate = (d: Date): string => d.toLocaleDateString('uk-UA')
 
@@ -225,36 +221,11 @@ export async function runClientMonthlyReportOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await runClientMonthlyReportOnce(logger)
-  } catch (err) {
-    logger.error({ err }, 'clientMonthlyReport: run failed')
-    captureException(err, { scope: 'cron.clientMonthlyReport' })
-  } finally {
-    running = false
-  }
-}
-
-export function startClientMonthlyReportCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, 180_000)
-  bootTimer.unref()
-}
-
-export function stopClientMonthlyReportCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'clientMonthlyReport',
+  bootDelayMs: 180_000,
+  intervalMs: INTERVAL_MS,
+  run: (logger) => runClientMonthlyReportOnce(logger),
+})
+export const startClientMonthlyReportCron = cron.start
+export const stopClientMonthlyReportCron = cron.stop

@@ -2,7 +2,7 @@ import { Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
 /**
@@ -40,12 +40,8 @@ const SELECT = {
 } as const
 
 const testimonialsRoute: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireActiveAgency>[0] }): string {
-    const agencyId = requireActiveAgency(request.user)
-    if (!isAgencyOwner(request.user, agencyId)) {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Відгуки редагує лише власник', 403)
-    }
-    return agencyId
+  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
+    return requireOwnerAgency(request.user, 'Відгуки редагує лише власник')
   }
 
   // ── Публічний read для лендінга: лише published, featured перші ────────────────

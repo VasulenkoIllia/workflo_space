@@ -1,7 +1,7 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { dispatchNotification } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * S12-06 notify-digest (годинний тік, шле раз на добу о 8-й Kyiv): юзерам з
@@ -13,10 +13,6 @@ import { dispatchNotification } from '../services/notifications.js'
 const INTERVAL_MS = 60 * 60 * 1000
 const DIGEST_HOUR_KYIV = 8
 const MAX_ROWS = 30
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 function kyivHour(now: Date): number {
   return Number(
@@ -78,36 +74,11 @@ export async function runNotifyDigestOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await runNotifyDigestOnce(logger)
-  } catch (err) {
-    logger.error({ err }, 'notifyDigest: run failed')
-    captureException(err, { scope: 'cron.notifyDigest' })
-  } finally {
-    running = false
-  }
-}
-
-export function startNotifyDigestCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, 150_000)
-  bootTimer.unref()
-}
-
-export function stopNotifyDigestCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'notifyDigest',
+  bootDelayMs: 150_000,
+  intervalMs: INTERVAL_MS,
+  run: (logger) => runNotifyDigestOnce(logger),
+})
+export const startNotifyDigestCron = cron.start
+export const stopNotifyDigestCron = cron.stop

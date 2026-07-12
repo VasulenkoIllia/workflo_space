@@ -2,7 +2,7 @@ import { Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { generateBlogDraft } from '../../services/blogAi.js'
 
@@ -78,11 +78,8 @@ const FULL_SELECT = {
 } as const
 
 const cmsRoutes: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireActiveAgency>[0] }): void {
-    const agencyId = requireActiveAgency(request.user)
-    if (!isAgencyOwner(request.user, agencyId)) {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Контент редагує лише власник', 403)
-    }
+  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
+    return requireOwnerAgency(request.user, 'Контент редагує лише власник')
   }
 
   // ── List (усі, включно з чернетками) ─────────────────────────────────────────

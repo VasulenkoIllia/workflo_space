@@ -1,7 +1,7 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { dispatchNotification } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron (17-РОТАЦІЯ, спека §D): daily cross-tenant sweep — remind agency OWNERS about
@@ -13,10 +13,6 @@ import { dispatchNotification } from '../services/notifications.js'
 const DAY_MS = 24 * 60 * 60 * 1000
 const REMIND_BEFORE_MS = 7 * DAY_MS
 const REMIND_EVERY_MS = 7 * DAY_MS
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 export async function runCredentialsRotationOnce(
   logger: FastifyBaseLogger,
@@ -82,37 +78,11 @@ export async function runCredentialsRotationOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await runCredentialsRotationOnce(logger)
-  } catch (err) {
-    logger.error({ err }, 'credentialsRotation: run failed')
-    captureException(err, { scope: 'cron.credentialsRotation' })
-  } finally {
-    running = false
-  }
-}
-
-export function startCredentialsRotationCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  // First sweep ~2 min after boot, then daily.
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), DAY_MS)
-    intervalTimer.unref()
-  }, 120_000)
-  bootTimer.unref()
-}
-
-export function stopCredentialsRotationCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'credentialsRotation',
+  bootDelayMs: 120_000,
+  intervalMs: DAY_MS,
+  run: (logger) => runCredentialsRotationOnce(logger),
+})
+export const startCredentialsRotationCron = cron.start
+export const stopCredentialsRotationCron = cron.stop

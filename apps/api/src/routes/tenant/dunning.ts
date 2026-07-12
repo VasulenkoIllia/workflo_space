@@ -2,7 +2,7 @@ import { Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { DEFAULT_DUNNING_STEPS, parseDunningSteps } from '../../cron/dunning.js'
 import { writeAuditAsync } from '../../services/audit.js'
@@ -22,11 +22,7 @@ const stepsSchema = z
 const optOutSchema = z.object({ optOut: z.boolean() }).strict()
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Налаштування дунінгу змінює лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Налаштування дунінгу змінює лише власник')
 }
 
 const dunningRoute: FastifyPluginAsync = (fastify) => {

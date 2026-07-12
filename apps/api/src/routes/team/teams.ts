@@ -2,7 +2,7 @@ import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -72,12 +72,8 @@ const columnUpdateSchema = z
   .refine((d) => Object.keys(d).length > 0, { message: 'Порожній запит' })
 
 const teamsRoute: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireActiveAgency>[0] }): string {
-    const agencyId = requireActiveAgency(request.user)
-    if (!isAgencyOwner(request.user, agencyId)) {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Команди редагує лише власник', 403)
-    }
-    return agencyId
+  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
+    return requireOwnerAgency(request.user, 'Команди редагує лише власник')
   }
 
   // Колонки дошки налаштовує owner АБО manager (тімлід своєї дошки; дизайн canConfig=!exec)

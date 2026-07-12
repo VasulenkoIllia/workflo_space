@@ -1,9 +1,9 @@
 import { type Prisma, prisma, runWithSystemContext } from '@workflo/db'
 import { notify } from '@workflo/notifications'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { resolveEmailOverrides } from '../services/emailTemplates.js'
 import { buildNotifyDeps } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron C-dunning (05-Б, рішення власника 07.07): нагадування про оплату по
@@ -26,10 +26,6 @@ const INTERVAL_MS = 60 * 60 * 1000 // кроки «настають» протя
 const BOOT_DELAY_MS = 90 * 1000
 const BATCH = 300
 const DAY_MS = 24 * 60 * 60 * 1000
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 export function parseDunningSteps(raw: unknown): number[] {
   if (raw == null) return DEFAULT_DUNNING_STEPS
@@ -225,35 +221,16 @@ export async function runDunningOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
+const cron = makeCron({
+  name: 'dunning',
+  bootDelayMs: BOOT_DELAY_MS,
+  intervalMs: INTERVAL_MS,
+  run: async (logger) => {
     const res = await runDunningOnce(logger)
     if (res.markedOverdue > 0 || res.remindersSent > 0) {
       logger.info(res, 'dunning: run complete')
     }
-  } catch (err) {
-    captureException(err, { cron: 'dunning' })
-    logger.error({ err }, 'dunning: run failed')
-  } finally {
-    running = false
-  }
-}
-
-export function startDunningCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, BOOT_DELAY_MS)
-  bootTimer.unref()
-}
-
-export function stopDunningCron(): void {
-  if (bootTimer) clearTimeout(bootTimer)
-  if (intervalTimer) clearInterval(intervalTimer)
-  bootTimer = null
-  intervalTimer = null
-}
+  },
+})
+export const startDunningCron = cron.start
+export const stopDunningCron = cron.stop

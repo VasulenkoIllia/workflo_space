@@ -1,7 +1,7 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { dispatchNotification } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron C-calendar_reminder (24 MVP, кожні 15 хв): нагадування учасникам за ~1 год до
@@ -10,10 +10,6 @@ import { dispatchNotification } from '../services/notifications.js'
  */
 const INTERVAL_MS = 15 * 60 * 1000
 const BOOT_DELAY_MS = 60 * 1000
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 function fmtTime(d: Date, tz: string): string {
   try {
@@ -70,33 +66,14 @@ export async function runCalendarReminderOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
+const cron = makeCron({
+  name: 'calendarReminder',
+  bootDelayMs: BOOT_DELAY_MS,
+  intervalMs: INTERVAL_MS,
+  run: async (logger) => {
     const sent = await runCalendarReminderOnce(logger)
     if (sent > 0) logger.info({ sent }, 'calendar-reminder: run complete')
-  } catch (err) {
-    captureException(err, { cron: 'calendar_reminder' })
-    logger.error({ err }, 'calendar-reminder: run failed')
-  } finally {
-    running = false
-  }
-}
-
-export function startCalendarReminderCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, BOOT_DELAY_MS)
-  bootTimer.unref()
-}
-
-export function stopCalendarReminderCron(): void {
-  if (bootTimer) clearTimeout(bootTimer)
-  if (intervalTimer) clearInterval(intervalTimer)
-  bootTimer = null
-  intervalTimer = null
-}
+  },
+})
+export const startCalendarReminderCron = cron.start
+export const stopCalendarReminderCron = cron.stop

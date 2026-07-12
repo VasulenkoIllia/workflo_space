@@ -2,7 +2,7 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -31,11 +31,7 @@ const SELECT = {
 } as const
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Номенклатуру змінює лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Номенклатуру змінює лише власник')
 }
 
 const nomenclatureRoute: FastifyPluginAsync = (fastify) => {

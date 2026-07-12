@@ -1,9 +1,9 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { computeLeadSourceReport } from '../services/leadSourceReport.js'
 import { computeSlaReport } from '../services/slaReport.js'
 import { dispatchNotification } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron C-monthly_report (S11, раз на добу): агенціям з увімкненим monthlyReportEnabled
@@ -13,10 +13,6 @@ import { dispatchNotification } from '../services/notifications.js'
  * прийде на наступному прогоні (за минулий місяць) — зручно для перевірки.
  */
 const INTERVAL_MS = 24 * 60 * 60 * 1000
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 const isoDay = (d: Date): string => d.toISOString().slice(0, 10)
 
@@ -125,36 +121,11 @@ export async function runMonthlyReportOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await runMonthlyReportOnce(logger)
-  } catch (err) {
-    logger.error({ err }, 'monthlyReport: run failed')
-    captureException(err, { scope: 'cron.monthlyReport' })
-  } finally {
-    running = false
-  }
-}
-
-export function startMonthlyReportCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, 120_000)
-  bootTimer.unref()
-}
-
-export function stopMonthlyReportCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'monthlyReport',
+  bootDelayMs: 120_000,
+  intervalMs: INTERVAL_MS,
+  run: (logger) => runMonthlyReportOnce(logger),
+})
+export const startMonthlyReportCron = cron.start
+export const stopMonthlyReportCron = cron.stop

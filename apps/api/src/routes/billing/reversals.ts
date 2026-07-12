@@ -1,8 +1,7 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
@@ -31,11 +30,7 @@ const creditNoteSchema = z
   .strict()
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Операцію виконує лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Операцію виконує лише власник')
 }
 
 /** Resolve a company's member profileIds (fan-out target for client notifications). */

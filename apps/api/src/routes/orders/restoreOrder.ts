@@ -1,7 +1,7 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -13,11 +13,7 @@ import { writeAuditAsync } from '../../services/audit.js'
 const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Кошик доступний лише власнику', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Кошик доступний лише власнику')
 }
 
 const restoreOrderRoute: FastifyPluginAsync = (fastify) => {

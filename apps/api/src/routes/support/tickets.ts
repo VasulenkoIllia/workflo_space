@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
-import { dispatchNotification } from '../../services/notifications.js'
+import { agencyStaffIds, clientMemberIds, fanOut } from '../../services/recipients.js'
 import { publishTicketEvent } from '../../services/ticketBus.js'
 import {
   requireTicketParticipant,
@@ -113,20 +113,11 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
       })
 
       // Notify команду агенції (in-app; email-шаблону нема → пропуститься)
-      const staff = await withTenant((tx) =>
-        tx.agencyMember.findMany({
-          where: { agencyId, role: { in: ['owner', 'manager', 'executor'] } },
-          select: { profileId: true },
-        })
-      )
-      for (const s of staff) {
-        dispatchNotification(request.log, {
-          profileId: s.profileId,
-          event: 'support.new_ticket',
-          vars: { subject: body.subject, ticketId: ticket.id },
-          inApp: { title: 'Новий тікет підтримки', body: body.subject },
-        })
-      }
+      fanOut(request.log, await agencyStaffIds(agencyId), {
+        event: 'support.new_ticket',
+        vars: { subject: body.subject, ticketId: ticket.id },
+        inApp: { title: 'Новий тікет підтримки', body: body.subject },
+      })
       return reply.status(201).send({ success: true, data: { id: ticket.id } })
     }
   )
@@ -241,44 +232,22 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
         if (access.isInternal) {
           // команда відповіла → клієнту (учасники компанії, крім автора)
           if (ticket.companyId) {
-            const members = await withTenant((tx) =>
-              tx.companyMember.findMany({
-                where: { companyId: ticket.companyId ?? '', profileId: { not: request.user.sub } },
-                select: { profileId: true },
-              })
-            )
-            for (const m of members) {
-              dispatchNotification(request.log, {
-                profileId: m.profileId,
-                event: 'support.ticket_reply',
-                vars: { subject: ticket.subject, ticketId: ticket.id },
-                inApp: { title: 'Відповідь у тікеті', body: ticket.subject },
-              })
-            }
+            fanOut(request.log, await clientMemberIds(ticket.companyId, request.user.sub), {
+              event: 'support.ticket_reply',
+              vars: { subject: ticket.subject, ticketId: ticket.id },
+              inApp: { title: 'Відповідь у тікеті', body: ticket.subject },
+            })
           }
         } else {
           // клієнт відповів → призначеному виконавцю (або всій команді)
           const targets = ticket.assignedToId
             ? [ticket.assignedToId]
-            : (
-                await withTenant((tx) =>
-                  tx.agencyMember.findMany({
-                    where: {
-                      agencyId: access.agencyId,
-                      role: { in: ['owner', 'manager', 'executor'] },
-                    },
-                    select: { profileId: true },
-                  })
-                )
-              ).map((s) => s.profileId)
-          for (const profileId of targets) {
-            dispatchNotification(request.log, {
-              profileId,
-              event: 'support.ticket_reply',
-              vars: { subject: ticket.subject, ticketId: ticket.id },
-              inApp: { title: 'Клієнт відповів у тікеті', body: ticket.subject },
-            })
-          }
+            : await agencyStaffIds(access.agencyId)
+          fanOut(request.log, targets, {
+            event: 'support.ticket_reply',
+            vars: { subject: ticket.subject, ticketId: ticket.id },
+            inApp: { title: 'Клієнт відповів у тікеті', body: ticket.subject },
+          })
         }
       }
 
@@ -382,23 +351,14 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
 
       // Зміна статусу → сповіщення клієнту
       if (body.status !== undefined && body.status !== before.status && before.companyId) {
-        const members = await withTenant((tx) =>
-          tx.companyMember.findMany({
-            where: { companyId: before.companyId ?? '' },
-            select: { profileId: true },
-          })
-        )
-        for (const m of members) {
-          dispatchNotification(request.log, {
-            profileId: m.profileId,
-            event: 'support.ticket_status',
-            vars: { subject: before.subject, status: body.status, ticketId: before.id },
-            inApp: {
-              title: 'Статус тікета змінено',
-              body: `«${before.subject}» — ${STATUS_LABEL[body.status] ?? body.status}`,
-            },
-          })
-        }
+        fanOut(request.log, await clientMemberIds(before.companyId), {
+          event: 'support.ticket_status',
+          vars: { subject: before.subject, status: body.status, ticketId: before.id },
+          inApp: {
+            title: 'Статус тікета змінено',
+            body: `«${before.subject}» — ${STATUS_LABEL[body.status] ?? body.status}`,
+          },
+        })
       }
       return reply.send({ success: true, data: { ticket: updated } })
     }

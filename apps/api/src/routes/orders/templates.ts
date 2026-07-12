@@ -2,7 +2,7 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, OrderType, BillingType } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { slaDueDates } from '../../services/sla.js'
@@ -51,11 +51,7 @@ function assertTeam(user: AccessClaims): string {
 }
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Шаблони редагує лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Шаблони редагує лише власник')
 }
 
 const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {

@@ -46,6 +46,22 @@ export function isAgencyOwner(
 }
 
 /**
+ * R6 (аудит r6): активна агенція + owner-гейт одним викликом — 403 з доменним
+ * повідомленням, якщо користувач не власник. До цього ~20 роут-файлів тримали
+ * ідентичні локальні assertOwner-клозури, що різнились лише текстом помилки.
+ */
+export function requireOwnerAgency(
+  user: TenantClaims,
+  message = 'Доступно лише власнику агенції'
+): string {
+  const agencyId = requireActiveAgency(user)
+  if (!isAgencyOwner(user, agencyId)) {
+    throw new AppError(ApiErrorCode.FORBIDDEN, message, 403)
+  }
+  return agencyId
+}
+
+/**
  * Throw 403 unless the resource's agency is the caller's tenant. A null
  * `resourceAgencyId` is denied (a legacy / un-stamped row is invisible to every
  * tenant by design — safer to refuse than to leak).

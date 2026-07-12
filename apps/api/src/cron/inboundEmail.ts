@@ -1,6 +1,5 @@
-import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { inboundEmailConfig, pollInboundMailbox } from '../services/inboundEmail.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * S12-05 EMAIL-INBOUND полер: кожні ~2 хв читає UNSEEN зі спільної support-скриньки
@@ -10,48 +9,24 @@ import { inboundEmailConfig, pollInboundMailbox } from '../services/inboundEmail
  */
 const INTERVAL_MS = 2 * 60 * 1000
 
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
-
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
+const cron = makeCron({
+  name: 'inboundEmail',
+  bootDelayMs: 120_000,
+  intervalMs: INTERVAL_MS,
+  run: async (logger) => {
     const summary = await pollInboundMailbox(logger)
     if (summary.processed > 0) {
       logger.info(summary, 'inboundEmail: poll complete')
     }
-  } catch (err) {
-    logger.error({ err }, 'inboundEmail: poll failed')
-    captureException(err, { scope: 'cron.inboundEmail' })
-  } finally {
-    running = false
-  }
-}
+  },
+})
 
-export function startInboundEmailCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
+export function startInboundEmailCron(logger: Parameters<typeof cron.start>[0]): void {
   // Без креденшлів — не стартуємо взагалі (тихо, як VAPID-push).
   if (!inboundEmailConfig()) {
     logger.info('inboundEmail: INBOUND_IMAP_* не задані — полінг вимкнено')
     return
   }
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, 120_000)
-  bootTimer.unref()
+  cron.start(logger)
 }
-
-export function stopInboundEmailCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+export const stopInboundEmailCron = cron.stop

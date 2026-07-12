@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnnouncementBanner } from '@/components/AnnouncementBanner'
+import { AnnouncementBanner } from '@workflo/app-core'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppShell,

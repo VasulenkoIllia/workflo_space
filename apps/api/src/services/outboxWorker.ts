@@ -13,6 +13,7 @@ import { renderDocumentAttachmentById } from './documentRender.js'
 import { resolveEmailOverrides } from './emailTemplates.js'
 import { maybeAutoInvoiceOnDone } from './autoInvoice.js'
 import { buildNotifyDeps } from './notifications.js'
+import { agencyReviewerIds, clientMemberIds } from './recipients.js'
 import { type OutboxEventView, type OutboxHandler, processOutboxBatch } from './outbox.js'
 
 /**
@@ -190,23 +191,7 @@ async function deliverToRecipients<E extends NotificationEvent>(
   if (failed > 0) logger.warn({ delivered, failed, event }, 'outbox: partial notify delivery')
 }
 
-/** Members of the order's client company (people on the client portal), minus the actor. */
-async function clientMemberIds(companyId: string, excludeId: string): Promise<string[]> {
-  const rows = await prisma.companyMember.findMany({
-    where: { companyId, profileId: { not: excludeId } },
-    select: { profileId: true },
-  })
-  return rows.map((r) => r.profileId)
-}
-
-/** Agency owners + managers (triage / oversight), minus the actor. */
-async function agencyStaffIds(agencyId: string, excludeId: string): Promise<string[]> {
-  const rows = await prisma.agencyMember.findMany({
-    where: { agencyId, role: { in: ['owner', 'manager'] }, profileId: { not: excludeId } },
-    select: { profileId: true },
-  })
-  return rows.map((r) => r.profileId)
-}
+// R3 (аудит r6): аудиторії (clientMemberIds / agencyReviewerIds) — services/recipients.ts.
 
 /** Load the order + assert it belongs to the event's tenant; null → don't fan out. */
 async function loadOrderForEvent(
@@ -264,7 +249,7 @@ async function handleApprovalDecided(
   const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   await deliverToRecipients(
     logger,
-    await agencyStaffIds(order.agencyId, p.actorId),
+    await agencyReviewerIds(order.agencyId, p.actorId),
     'orders.approval_decided',
     {
       orderTitle: order.title,
@@ -292,7 +277,7 @@ async function handleOrderCreated(
   const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   await deliverToRecipients(
     logger,
-    await agencyStaffIds(order.agencyId, p.actorId),
+    await agencyReviewerIds(order.agencyId, p.actorId),
     'orders.created',
     { orderTitle: order.title, orderUrl: `${workspaceUrl}/orders/${p.orderId}` },
     { title: 'Нове замовлення', body: `«${order.title}» — нове замовлення` }
@@ -345,7 +330,7 @@ async function handleNewComment(logger: FastifyBaseLogger, event: OutboxEventVie
     select: { name: true },
   })
   const authorName = author?.name ?? 'Учасник'
-  const team = await agencyStaffIds(order.agencyId, p.authorId)
+  const team = await agencyReviewerIds(order.agencyId, p.authorId)
   const all = p.isInternal
     ? team
     : [...team, ...(order.companyId ? await clientMemberIds(order.companyId, p.authorId) : [])]

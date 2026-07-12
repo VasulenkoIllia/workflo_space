@@ -3,7 +3,7 @@ import { type DocumentRenderData, defaultContractSections } from '@workflo/templ
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { TEMPLATE_VARIABLES } from '../../services/documentTemplates.js'
@@ -39,11 +39,7 @@ const noteBodySchema = z
   })
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Шаблони документів змінює лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Шаблони документів змінює лише власник')
 }
 
 /** Типовий договір з {{токенами}} — стартова точка редактора. */

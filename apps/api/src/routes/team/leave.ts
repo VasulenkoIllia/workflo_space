@@ -6,6 +6,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
+import { agencyReviewerIds, fanOut } from '../../services/recipients.js'
 
 /**
  * S13-04/05 LEAVE: відсутності команди (дизайн calendar-plus WsLeaves).
@@ -203,23 +204,14 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
         metadata: { type: leave.type, days, from: input.startDate, to: input.endDate },
       })
       // owner-и та менеджери (крім самого заявника) отримують in-app
-      const reviewers = await withTenant((tx) =>
-        tx.agencyMember.findMany({
-          where: { agencyId, role: { in: ['owner', 'manager'] }, profileId: { not: user.sub } },
-          select: { profileId: true },
-        })
-      )
-      for (const r of reviewers) {
-        dispatchNotification(request.log, {
-          profileId: r.profileId,
-          event: 'team.leave_requested',
-          vars: { name: leave.profile.name, days: String(days) },
-          inApp: {
-            title: 'Нова заявка на відсутність',
-            body: `${leave.profile.name}: ${leave.type}, ${days} роб. дн. — на погодження.`,
-          },
-        })
-      }
+      fanOut(request.log, await agencyReviewerIds(agencyId, user.sub), {
+        event: 'team.leave_requested',
+        vars: { name: leave.profile.name, days: String(days) },
+        inApp: {
+          title: 'Нова заявка на відсутність',
+          body: `${leave.profile.name}: ${leave.type}, ${days} роб. дн. — на погодження.`,
+        },
+      })
       return reply.status(201).send({ success: true, data: { leave } })
     }
   )

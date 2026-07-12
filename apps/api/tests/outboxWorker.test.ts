@@ -6,18 +6,22 @@ const agencyMemberFindMany = vi.fn()
 const profileFindUnique = vi.fn()
 const notify = vi.fn().mockResolvedValue({ results: [], attempted: [] })
 
+const db = {
+  order: { findUnique: orderFindUnique },
+  // 18-Б mute-фільтр воркера — за замовчуванням ніхто не заглушений
+  conversationState: { findMany: vi.fn().mockResolvedValue([]) },
+  companyMember: { findMany: companyMemberFindMany },
+  agencyMember: { findMany: agencyMemberFindMany },
+  profile: { findUnique: profileFindUnique },
+  notificationSettings: { findUnique: vi.fn() },
+  notificationPreference: { updateMany: vi.fn() },
+  auditLog: { create: vi.fn() },
+}
+
 vi.mock('@workflo/db', () => ({
-  prisma: {
-    order: { findUnique: orderFindUnique },
-    // 18-Б mute-фільтр воркера — за замовчуванням ніхто не заглушений
-    conversationState: { findMany: vi.fn().mockResolvedValue([]) },
-    companyMember: { findMany: companyMemberFindMany },
-    agencyMember: { findMany: agencyMemberFindMany },
-    profile: { findUnique: profileFindUnique },
-    notificationSettings: { findUnique: vi.fn() },
-    notificationPreference: { updateMany: vi.fn() },
-    auditLog: { create: vi.fn() },
-  },
+  prisma: db,
+  // R3: аудиторії (recipients.ts) ходять через withTenant — роутимо в той самий дабл
+  withTenant: (fn: (tx: unknown) => unknown) => fn(db),
 }))
 vi.mock('@workflo/notifications', () => ({ notify }))
 

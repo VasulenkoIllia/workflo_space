@@ -11,7 +11,8 @@ vi.mock('@workflo/db', () => ({
   },
 }))
 
-const { fetchNbuRates, syncExchangeRates, msUntilUtc } = await import('../src/cron/exchangeRate.js')
+const { fetchNbuRates, syncExchangeRates } = await import('../src/cron/exchangeRate.js')
+const { msUntilUtc } = await import('../src/cron/makeCron.js')
 
 const logger = {
   info: vi.fn(),

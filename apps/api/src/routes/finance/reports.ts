@@ -1,7 +1,7 @@
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, pnlQuerySchema } from '@workflo/types'
+import { pnlQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import { computeHoursReport, hoursReportToCsv } from '../../services/hoursReport.js'
 import { computeLeadSourceReport } from '../../services/leadSourceReport.js'
 import { computeMomReport } from '../../services/momReport.js'
@@ -16,12 +16,8 @@ import { computeSlaReport } from '../../services/slaReport.js'
  */
 const reportsRoute: FastifyPluginAsync = (fastify) => {
   /** Owner-gate shared by every report route. */
-  function ownerAgency(user: Parameters<typeof requireActiveAgency>[0]): string {
-    const agencyId = requireActiveAgency(user)
-    if (!isAgencyOwner(user, agencyId)) {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції має доступ до звітів', 403)
-    }
-    return agencyId
+  function ownerAgency(user: Parameters<typeof requireOwnerAgency>[0]): string {
+    return requireOwnerAgency(user, 'Лише власник агенції має доступ до звітів')
   }
 
   // ── Hours plan-vs-actual (19, 12-ПЛАН-ФАКТ) ───────────────────────────────────
@@ -124,15 +120,7 @@ const reportsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const query = pnlQuerySchema.parse(request.query)
-      const user = request.user
-      const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції має доступ до фінансів',
-          403
-        )
-      }
+      const agencyId = ownerAgency(request.user)
       const pnl = await computePnl({ agencyId, from: query.from, to: query.to })
       return reply.send({ success: true, data: pnl })
     }
@@ -143,15 +131,7 @@ const reportsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const query = pnlQuerySchema.parse(request.query)
-      const user = request.user
-      const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції має доступ до фінансів',
-          403
-        )
-      }
+      const agencyId = ownerAgency(request.user)
       const pnl = await computePnl({ agencyId, from: query.from, to: query.to })
       return reply
         .header('content-type', 'text/csv; charset=utf-8')

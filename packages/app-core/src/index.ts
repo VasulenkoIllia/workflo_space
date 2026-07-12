@@ -29,3 +29,5 @@ export * from './OrderChatView.js'
 // Shared Settings sections — 2FA / sessions / linked accounts / notifications / telegram.
 export * from './SettingsSections.js'
 export * from './VaultTypedFields.js'
+// ANNOUNCEMENTS читацька сторона — банер + active/read хуки (R5, аудит r6).
+export * from './announcements.js'

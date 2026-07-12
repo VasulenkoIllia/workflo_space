@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
-/** ANNOUNCEMENTS (07-В): sticky-банер + owner-адмінка зі % прочитань. */
-export interface ActiveAnnouncement {
-  id: string
-  title: string
-  body: string
-  createdAt: string
-}
+/** ANNOUNCEMENTS (07-В): owner-адмінка зі % прочитань. Читацька сторона
+ * (банер + active/read хуки) — @workflo/app-core (R5, аудит r6). */
+export {
+  AnnouncementBanner,
+  useActiveAnnouncements,
+  useReadAnnouncement,
+  type ActiveAnnouncement,
+} from '@workflo/app-core'
 
 export type AnnouncementAudience = 'team' | 'clients' | 'all'
 
@@ -22,25 +23,6 @@ export interface AdminAnnouncement {
   readCount: number
   targetCount: number
   readPct: number | null
-}
-
-export function useActiveAnnouncements() {
-  return useQuery({
-    queryKey: ['announcements-active'],
-    queryFn: () =>
-      api
-        .get<{ announcements: ActiveAnnouncement[] }>('/announcements/active')
-        .then((r) => r.announcements),
-    staleTime: 60_000,
-  })
-}
-
-export function useReadAnnouncement() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.post(`/announcements/${id}/read`, {}),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['announcements-active'] }),
-  })
 }
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {

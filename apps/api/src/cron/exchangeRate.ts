@@ -1,10 +1,10 @@
 import { prisma } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
 import { captureException } from '../observability/sentry.js'
+import { makeCron, msUntilUtc, DAY_MS } from './makeCron.js'
 
 const NBU_URL = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json'
 const STALE_DAYS = 3
-const DAY_MS = 24 * 60 * 60 * 1000
 
 /** NBU returns UAH per 1 unit of `cc` (e.g. USD → 41.50). */
 export interface NbuRateRow {
@@ -113,51 +113,12 @@ export async function syncExchangeRates(
 // ── Scheduler (daily 06:10 UTC = 09:10 Kyiv) ─────────────────────────────────
 // Plain setTimeout→setInterval (no node-cron dep), mirroring the outbox worker.
 // Lifecycle owned by startWorkers(); never started in tests.
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let dailyTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
-/** ms from `now` until the next `HH:MM` UTC occurrence. */
-export function msUntilUtc(hour: number, minute: number, now: Date): number {
-  const next = new Date(now)
-  next.setUTCHours(hour, minute, 0, 0)
-  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1)
-  return next.getTime() - now.getTime()
-}
-
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return // never overlap a slow run with the next tick
-  running = true
-  try {
-    await syncExchangeRates(logger)
-  } catch (err) {
-    logger.error({ err }, 'exchangeRate: sync run failed')
-    captureException(err, { scope: 'cron.exchangeRate' })
-  } finally {
-    running = false
-  }
-}
-
-export function startExchangeRateCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || dailyTimer) return
-  const delay = msUntilUtc(6, 10, new Date())
-  bootTimer = setTimeout(() => {
-    bootTimer = null
-    void runOnce(logger)
-    dailyTimer = setInterval(() => void runOnce(logger), DAY_MS)
-    dailyTimer.unref()
-  }, delay)
-  bootTimer.unref()
-  logger.info({ delayMs: delay }, 'exchangeRate cron scheduled (06:10 UTC / 09:10 Kyiv)')
-}
-
-export function stopExchangeRateCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (dailyTimer) {
-    clearInterval(dailyTimer)
-    dailyTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'exchangeRate',
+  bootDelayMs: () => msUntilUtc(6, 10),
+  intervalMs: DAY_MS,
+  run: (logger) => syncExchangeRates(logger),
+})
+export const startExchangeRateCron = cron.start
+export const stopExchangeRateCron = cron.stop

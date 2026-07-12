@@ -2,7 +2,7 @@ import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, LoyaltyTier } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { resolveBroadcastRecipients } from '../../services/broadcast.js'
 import { enqueueOutbox } from '../../services/outbox.js'
@@ -40,23 +40,13 @@ const BROADCAST_SELECT = {
   createdAt: true,
 } as const
 
-function assertOwner(
-  user: { agencyMemberships: { agencyId: string; role: string }[] },
-  agencyId: string
-): void {
-  if (!isAgencyOwner(user as never, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Розсилки — лише власник агенції', 403)
-  }
-}
-
 const broadcastsRoute: FastifyPluginAsync = (fastify) => {
   // ── Список ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/workspace/broadcasts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const broadcasts = await withTenant((tx) =>
         tx.broadcast.findMany({
           where: { agencyId },
@@ -74,8 +64,7 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const input = bodySchema.parse(request.body)
       const broadcast = await withTenant((tx) =>
         tx.broadcast.create({
@@ -108,8 +97,7 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const input = bodySchema.parse(request.body)
       const updated = await withTenant((tx) =>
         tx.broadcast.updateMany({
@@ -140,8 +128,7 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const removed = await withTenant((tx) =>
         tx.broadcast.deleteMany({ where: { id: request.params.id, agencyId, status: 'draft' } })
       )
@@ -157,8 +144,7 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id/preview',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const b = await withTenant((tx) =>
         tx.broadcast.findFirst({
           where: { id: request.params.id, agencyId },
@@ -178,8 +164,7 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id/send',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireActiveAgency(request.user)
-      assertOwner(request.user, agencyId)
+      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
       const broadcast = await tenantTransaction(prisma, async (tx) => {
         // Атомарний claim: подвійний клік/двоє власників → рівно один send
         const claim = await tx.broadcast.updateMany({

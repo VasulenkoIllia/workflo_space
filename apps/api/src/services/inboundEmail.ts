@@ -1,6 +1,6 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { dispatchNotification } from './notifications.js'
+import { agencyStaffIds, fanOut } from './recipients.js'
 
 /**
  * S12-05 EMAIL-INBOUND: вхідний лист на спільну support-скриньку → тікет підтримки
@@ -302,27 +302,22 @@ export interface InboundPollSummary {
   skipped: number
 }
 
-/** Сповістити команду про новий/оновлений email-тікет (поза транзакцією, fire-and-forget). */
+/** Сповістити команду про новий/оновлений email-тікет (поза транзакцією, fire-and-forget).
+ * R3 (аудит r6): через recipients-хелпер — заразом закриває LOW «notifyTeamOfInbound
+ * читав agencyMember повз withTenant-конвенцію». */
 async function notifyTeamOfInbound(
   logger: FastifyBaseLogger,
   result: Extract<IngestResult, { status: 'created' | 'appended' }>
 ): Promise<void> {
-  const staff = await prisma.agencyMember.findMany({
-    where: { agencyId: result.agencyId, role: { in: ['owner', 'manager', 'executor'] } },
-    select: { profileId: true },
-  })
   const isNew = result.status === 'created'
-  for (const s of staff) {
-    dispatchNotification(logger, {
-      profileId: s.profileId,
-      event: isNew ? 'support.new_ticket' : 'support.ticket_reply',
-      vars: { subject: result.subject, ticketId: result.ticketId },
-      inApp: {
-        title: isNew ? 'Новий тікет з email' : 'Клієнт відповів (email)',
-        body: result.subject,
-      },
-    })
-  }
+  fanOut(logger, await agencyStaffIds(result.agencyId), {
+    event: isNew ? 'support.new_ticket' : 'support.ticket_reply',
+    vars: { subject: result.subject, ticketId: result.ticketId },
+    inApp: {
+      title: isNew ? 'Новий тікет з email' : 'Клієнт відповів (email)',
+      body: result.subject,
+    },
+  })
 }
 
 /**

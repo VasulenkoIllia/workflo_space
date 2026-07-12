@@ -1,7 +1,7 @@
 import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyBaseLogger } from 'fastify'
-import { dispatchNotification } from './notifications.js'
+import { agencyReviewerIds, fanOut } from './recipients.js'
 
 /**
  * R1 (аудит r6): бізнес-логіка переходу статусу замовлення, винесена з
@@ -169,47 +169,41 @@ export async function notifyAcceptanceTransition(
   const { order, actorId, kind, comment } = args
   const workspaceUrl = process.env.WORKSPACE_URL ?? 'https://work.workflo.space'
   const orderUrl = `${workspaceUrl}/orders/${order.id}`
-  const notifyOnce = (
-    ids: (string | null | undefined)[],
-    event: 'orders.submitted_for_acceptance' | 'orders.accepted' | 'orders.sent_back',
-    inApp: { title: string; body: string }
-  ) => {
-    const seen = new Set<string>()
-    for (const id of ids) {
-      if (!id || id === actorId || seen.has(id)) continue
-      seen.add(id)
-      dispatchNotification(logger, {
-        profileId: id,
-        event,
-        vars: { orderTitle: order.title, orderUrl },
-        inApp,
-      })
-    }
-  }
+  const vars = { orderTitle: order.title, orderUrl }
   const coIds = (order.coAssignees ?? []).map((c) => c.profileId)
   if (kind === 'submitted') {
     // здано на приймання → власники + тімліди агенції
-    const acceptors = await withTenant((tx) =>
-      tx.agencyMember.findMany({
-        where: { agencyId: order.agencyId, role: { in: ['owner', 'manager'] } },
-        select: { profileId: true },
-      })
-    )
-    notifyOnce(
-      acceptors.map((a) => a.profileId),
-      'orders.submitted_for_acceptance',
-      { title: 'Замовлення на прийманні', body: order.title }
+    fanOut(
+      logger,
+      await agencyReviewerIds(order.agencyId),
+      {
+        event: 'orders.submitted_for_acceptance',
+        vars,
+        inApp: { title: 'Замовлення на прийманні', body: order.title },
+      },
+      { excludeId: actorId }
     )
   } else if (kind === 'accepted') {
-    notifyOnce([order.submittedById, order.assigneeId, ...coIds], 'orders.accepted', {
-      title: 'Роботу прийнято',
-      body: order.title,
-    })
+    fanOut(
+      logger,
+      [order.submittedById, order.assigneeId, ...coIds],
+      { event: 'orders.accepted', vars, inApp: { title: 'Роботу прийнято', body: order.title } },
+      { excludeId: actorId }
+    )
   } else {
-    notifyOnce([order.submittedById, order.assigneeId, ...coIds], 'orders.sent_back', {
-      title: 'Повернено на доопрацювання',
-      body: comment ? `${order.title} — ${comment}` : order.title,
-    })
+    fanOut(
+      logger,
+      [order.submittedById, order.assigneeId, ...coIds],
+      {
+        event: 'orders.sent_back',
+        vars,
+        inApp: {
+          title: 'Повернено на доопрацювання',
+          body: comment ? `${order.title} — ${comment}` : order.title,
+        },
+      },
+      { excludeId: actorId }
+    )
   }
 }
 
@@ -248,20 +242,13 @@ export async function notifyUnblockedDependents(
         b.dependsOn.internalStatus !== 'cancelled'
     )
     if (stillBlocked) continue
-    const ids = [d.order.assigneeId, ...d.order.coAssignees.map((c) => c.profileId)]
-    const seen = new Set<string>()
-    for (const id of ids) {
-      if (!id || seen.has(id)) continue
-      seen.add(id)
-      dispatchNotification(logger, {
-        profileId: id,
-        event: 'orders.unblocked',
-        vars: { orderTitle: d.order.title },
-        inApp: {
-          title: 'Замовлення розблоковано',
-          body: `${d.order.title} — блокер «${order.title}» завершено, можна стартувати.`,
-        },
-      })
-    }
+    fanOut(logger, [d.order.assigneeId, ...d.order.coAssignees.map((c) => c.profileId)], {
+      event: 'orders.unblocked',
+      vars: { orderTitle: d.order.title },
+      inApp: {
+        title: 'Замовлення розблоковано',
+        body: `${d.order.title} — блокер «${order.title}» завершено, можна стартувати.`,
+      },
+    })
   }
 }

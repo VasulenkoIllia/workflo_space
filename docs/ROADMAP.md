@@ -150,9 +150,12 @@ webhooks + ApiKey беремо **лише коли система цілісна
   settlements/нотифай-фан-аути → `services/orderTransition.ts`, роут 419→245 рядків;
   ~~R2~~ ✅ (2026-07-12) `documents.ts` (688) розбито на `orderDocuments`/`contracts`/
   `companyDocuments` + `nextDocumentNumber` → `services/documentNumber.ts` (cron→route
-  inversion виправлено). Лишились: R3 `services/recipients.ts` (дедуп fan-out нотифікацій,
-  ~10 місць); R4 `scheduleCron` helper (~12 крон-файлів boilerplate); R5 `AnnouncementBanner`
-  → app-core (byte-identical дубль у двох апках, AR-42 drift); R6 `requireOwnerAgency` helper.
+  inversion виправлено); ~~R3~~ ✅ `services/recipients.ts` (аудиторії owner/reviewer/staff/
+  client + fanOut; заразом закрито LOW «notifyTeamOfInbound повз withTenant»); ~~R4~~ ✅
+  `cron/makeCron.ts` (13 крон-файлів без boilerplate, msUntilUtc/DAY_MS спільні;
+  recurringCharges — свідомо особливий); ~~R5~~ ✅ `AnnouncementBanner`+read-хуки → app-core
+  (shim-и за старими шляхами); ~~R6~~ ✅ `requireOwnerAgency` в auth/tenant.ts (20 файлів
+  делегують, доменні 403-меседжі збережено; pnl-гейт уніфіковано). **Рефактор-блок закрито.**
 - **LOW-hardening:** inbound per-poll cap (мейл-бомба); inbound DKIM-surface (ops, не код);
   `notifyTeamOfInbound` через withTenant (косметика конвенції).
 - **SaaS-era гейти (→ S14):** `blog_posts`/`testimonials`/`cms` під `isAgencyOwner`, а не

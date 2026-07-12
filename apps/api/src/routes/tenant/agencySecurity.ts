@@ -2,7 +2,7 @@ import { prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireOwnerAgency } from '../../auth/tenant.js'
 import type { AccessClaims } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { TFA_GRACE_MS } from '../../services/twoFactorPolicy.js'
@@ -17,11 +17,7 @@ import { TFA_GRACE_MS } from '../../services/twoFactorPolicy.js'
 const patchSchema = z.object({ requireTwoFactor: z.boolean() }).strict()
 
 function assertOwner(user: AccessClaims): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Політику безпеки змінює лише власник', 403)
-  }
-  return agencyId
+  return requireOwnerAgency(user, 'Політику безпеки змінює лише власник')
 }
 
 const agencySecurityRoute: FastifyPluginAsync = (fastify) => {

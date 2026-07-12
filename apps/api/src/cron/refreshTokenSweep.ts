@@ -1,6 +1,6 @@
 import { prisma } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
+import { makeCron, msUntilUtc, DAY_MS } from './makeCron.js'
 
 /**
  * AR-31 (audit 2026-06-11): refresh_tokens grew unboundedly — every rotation
@@ -12,7 +12,6 @@ import { captureException } from '../observability/sentry.js'
  */
 const REVOKED_RETENTION_DAYS = 7
 const EXPIRED_RETENTION_DAYS = 30
-const DAY_MS = 24 * 60 * 60 * 1000
 
 export interface SweepResult {
   deleted: number
@@ -37,50 +36,12 @@ export async function sweepRefreshTokens(
 }
 
 // ── Scheduler (daily 03:40 UTC) — same plain-timer pattern as exchangeRate ───
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let dailyTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
-function msUntilUtc(hour: number, minute: number, now: Date): number {
-  const next = new Date(now)
-  next.setUTCHours(hour, minute, 0, 0)
-  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1)
-  return next.getTime() - now.getTime()
-}
-
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await sweepRefreshTokens(logger)
-  } catch (err) {
-    logger.error({ err }, 'refreshTokenSweep: run failed')
-    captureException(err, { scope: 'cron.refreshTokenSweep' })
-  } finally {
-    running = false
-  }
-}
-
-export function startRefreshTokenSweepCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || dailyTimer) return
-  bootTimer = setTimeout(
-    () => {
-      void runOnce(logger)
-      dailyTimer = setInterval(() => void runOnce(logger), DAY_MS)
-      dailyTimer.unref()
-    },
-    msUntilUtc(3, 40, new Date())
-  )
-  bootTimer.unref()
-}
-
-export function stopRefreshTokenSweepCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (dailyTimer) {
-    clearInterval(dailyTimer)
-    dailyTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'refreshTokenSweep',
+  bootDelayMs: () => msUntilUtc(3, 40),
+  intervalMs: DAY_MS,
+  run: (logger) => sweepRefreshTokens(logger),
+})
+export const startRefreshTokenSweepCron = cron.start
+export const stopRefreshTokenSweepCron = cron.stop

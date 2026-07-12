@@ -1,7 +1,7 @@
 import { prisma, runWithSystemContext } from '@workflo/db'
 import type { FastifyBaseLogger } from 'fastify'
-import { captureException } from '../observability/sentry.js'
 import { dispatchNotification } from '../services/notifications.js'
+import { makeCron } from './makeCron.js'
 
 /**
  * Cron C-sla_check (S10-02, кожні 15 хв): активні замовлення з простроченим
@@ -10,10 +10,6 @@ import { dispatchNotification } from '../services/notifications.js'
  * повторні прогони його не дублюють (slaBreachedAt у where).
  */
 const INTERVAL_MS = 15 * 60 * 1000
-
-let bootTimer: ReturnType<typeof setTimeout> | null = null
-let intervalTimer: ReturnType<typeof setInterval> | null = null
-let running = false
 
 export async function runSlaCheckOnce(
   logger: FastifyBaseLogger,
@@ -79,36 +75,11 @@ export async function runSlaCheckOnce(
   })
 }
 
-async function runOnce(logger: FastifyBaseLogger): Promise<void> {
-  if (running) return
-  running = true
-  try {
-    await runSlaCheckOnce(logger)
-  } catch (err) {
-    logger.error({ err }, 'slaCheck: run failed')
-    captureException(err, { scope: 'cron.slaCheck' })
-  } finally {
-    running = false
-  }
-}
-
-export function startSlaCheckCron(logger: FastifyBaseLogger): void {
-  if (bootTimer || intervalTimer) return
-  bootTimer = setTimeout(() => {
-    void runOnce(logger)
-    intervalTimer = setInterval(() => void runOnce(logger), INTERVAL_MS)
-    intervalTimer.unref()
-  }, 90_000)
-  bootTimer.unref()
-}
-
-export function stopSlaCheckCron(): void {
-  if (bootTimer) {
-    clearTimeout(bootTimer)
-    bootTimer = null
-  }
-  if (intervalTimer) {
-    clearInterval(intervalTimer)
-    intervalTimer = null
-  }
-}
+const cron = makeCron({
+  name: 'slaCheck',
+  bootDelayMs: 90_000,
+  intervalMs: INTERVAL_MS,
+  run: (logger) => runSlaCheckOnce(logger),
+})
+export const startSlaCheckCron = cron.start
+export const stopSlaCheckCron = cron.stop

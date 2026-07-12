@@ -13,7 +13,7 @@ import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMonthlyReport.js'
 import { DOC_TYPE_LABEL } from '../../services/documentRender.js'
-import { dispatchNotification } from '../../services/notifications.js'
+import { agencyOwnerIds, fanOut } from '../../services/recipients.js'
 import { DOC_SELECT } from './shared.js'
 
 /**
@@ -119,23 +119,14 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
       })
 
       // In-app власникам агенції (без email-шаблону — notify пропустить email сам)
-      const owners = await withTenant((tx) =>
-        tx.agencyMember.findMany({
-          where: { agencyId: doc.agencyId, role: 'owner' },
-          select: { profileId: true },
-        })
-      )
-      for (const o of owners) {
-        dispatchNotification(request.log, {
-          profileId: o.profileId,
-          event: 'documents.accepted',
-          vars: { number: doc.number, fullName },
-          inApp: {
-            title: `Документ ${doc.number} прийнято`,
-            body: `${doc.company?.name ?? 'Клієнт'}: ${fullName} прийняв(ла) ${DOC_TYPE_LABEL[doc.type] ?? doc.type}.`,
-          },
-        })
-      }
+      fanOut(request.log, await agencyOwnerIds(doc.agencyId), {
+        event: 'documents.accepted',
+        vars: { number: doc.number, fullName },
+        inApp: {
+          title: `Документ ${doc.number} прийнято`,
+          body: `${doc.company?.name ?? 'Клієнт'}: ${fullName} прийняв(ла) ${DOC_TYPE_LABEL[doc.type] ?? doc.type}.`,
+        },
+      })
 
       return reply.send({
         success: true,
