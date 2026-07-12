@@ -112,6 +112,7 @@ export function ExecutorCardPage() {
               )}
               {rate.commissionPercent && <Row k="комісія" v={`${rate.commissionPercent}%`} />}
               {rate.zeroCostDefault && <Row k="собівартість" v="0 (zero-cost)" />}
+              {member.hireDate && <Row k="дата найму" v={formatDate(member.hireDate)} />}
               <Row
                 k="норма"
                 v={

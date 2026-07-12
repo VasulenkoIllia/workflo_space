@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { EmptyState, Icon } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   downloadFile,
+  fetchFileThumbUrl,
   useDeleteFile,
   useFiles,
   useUploadFile,
@@ -148,7 +149,7 @@ function FileRow({
         borderRadius: 8,
       }}
     >
-      <Icon name="file" size={16} />
+      {file.hasThumb ? <Thumb file={file} /> : <Icon name="file" size={16} />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -185,5 +186,38 @@ function FileRow({
         </button>
       )}
     </div>
+  )
+}
+
+/** S10-06ч: webp-прев'ю зображення (blob із auth → objectURL, revoke на unmount). */
+function Thumb({ file }: { file: OrderFileItem }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let revoked = false
+    let objUrl: string | null = null
+    fetchFileThumbUrl(file)
+      .then((u) => {
+        if (revoked) {
+          URL.revokeObjectURL(u)
+          return
+        }
+        objUrl = u
+        setUrl(u)
+      })
+      .catch(() => setFailed(true))
+    return () => {
+      revoked = true
+      if (objUrl) URL.revokeObjectURL(objUrl)
+    }
+  }, [file])
+
+  if (failed || !url) return <Icon name="file" size={16} />
+  return (
+    <img
+      src={url}
+      alt={file.filename}
+      style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 5, flexShrink: 0 }}
+    />
   )
 }

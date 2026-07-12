@@ -11,7 +11,18 @@ export const FILE_META_SELECT = {
   sha256: true,
   uploadedBy: true,
   createdAt: true,
+  // S10-06ч: наявність webp-прев'ю. Сам ключ у відповідь не віддаємо (внутрішній
+  // storage-key) — лише прапорець hasThumb через serializeFileMeta.
+  thumbKey: true,
 } as const
+
+/** DTO-серіалізація: прапорець прев'ю замість внутрішнього storage-ключа. */
+export function serializeFileMeta<T extends { thumbKey: string | null }>(
+  row: T
+): Omit<T, 'thumbKey'> & { hasThumb: boolean } {
+  const { thumbKey, ...rest } = row
+  return { ...rest, hasThumb: thumbKey != null }
+}
 
 export interface FileRow {
   id: string
@@ -22,6 +33,7 @@ export interface FileRow {
   mimeType: string
   sizeBytes: number
   sha256: string
+  thumbKey: string | null
   createdAt: Date
   deletedAt: Date | null
   // 03-чат leak-гард: файл, прив'язаний до internal-нотатки, лишається team-only —
@@ -56,6 +68,7 @@ export async function requireFileAccess(
         mimeType: true,
         sizeBytes: true,
         sha256: true,
+        thumbKey: true,
         createdAt: true,
         deletedAt: true,
         // leak-гард: чи це вкладення internal-нотатки (тоді клієнт його не бачить).

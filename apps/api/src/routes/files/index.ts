@@ -13,8 +13,9 @@ import type { FastifyPluginAsync } from 'fastify'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { getStorage } from '../../services/storage.js'
+import { isThumbnailable, makeThumbnail } from '../../services/imageThumbnail.js'
 import { requireOrderParticipant } from '../orders/access.js'
-import { FILE_META_SELECT, requireFileAccess } from './access.js'
+import { FILE_META_SELECT, requireFileAccess, serializeFileMeta } from './access.js'
 
 /** RFC 5987 Content-Disposition; always `attachment` (no inline render → no stored-XSS). */
 function attachmentDisposition(filename: string): string {
@@ -72,6 +73,22 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
       const key = buildOrderFileKey(access.agencyId, access.orderId, fileId, safeExt(part.filename))
       await getStorage().upload({ key, buffer, contentType: part.mimetype })
 
+      // S10-06ч: для зображень — best-effort webp-прев'ю (окремий blob поруч з
+      // оригіналом). Збій генерації/заливки не валить upload — просто без прев'ю.
+      let thumbKey: string | null = null
+      if (isThumbnailable(part.mimetype)) {
+        const thumb = await makeThumbnail(buffer)
+        if (thumb) {
+          const tKey = `${key}.thumb.webp`
+          try {
+            await getStorage().upload({ key: tKey, buffer: thumb, contentType: 'image/webp' })
+            thumbKey = tKey
+          } catch (err) {
+            request.log.warn({ err, fileId }, 'thumbnail upload failed (non-fatal)')
+          }
+        }
+      }
+
       let file
       try {
         file = await withTenant((tx) =>
@@ -86,15 +103,20 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
               mimeType: part.mimetype,
               sizeBytes: buffer.length,
               sha256: sha256Hex(buffer),
+              thumbKey,
             },
             select: FILE_META_SELECT,
           })
         )
       } catch (err) {
-        // DB insert failed after the blob landed → remove the orphan blob.
+        // DB insert failed after the blob landed → remove the orphan blob(s).
         await getStorage()
           .delete(key)
           .catch(() => undefined)
+        if (thumbKey)
+          await getStorage()
+            .delete(thumbKey)
+            .catch(() => undefined)
         throw err
       }
 
@@ -108,7 +130,7 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
         metadata: { fileId, sizeBytes: buffer.length, mimeType: part.mimetype },
       })
 
-      return reply.status(201).send({ success: true, data: { file } })
+      return reply.status(201).send({ success: true, data: { file: serializeFileMeta(file) } })
     }
   )
 
@@ -133,7 +155,7 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
           select: FILE_META_SELECT,
         })
       )
-      return reply.send({ success: true, data: { files } })
+      return reply.send({ success: true, data: { files: files.map(serializeFileMeta) } })
     }
   )
 
@@ -181,6 +203,32 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
         .header('Content-Disposition', attachmentDisposition(file.filename))
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, no-store')
+        .send(buffer)
+    }
+  )
+
+  // ── Serve thumbnail (webp, inline — sharp-перекодоване, тож XSS-безпечно) ──
+  fastify.get<{ Params: { id: string } }>(
+    '/files/:id/thumb',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { file } = await requireFileAccess(request, request.params.id)
+      if (!file.thumbKey) throw new AppError(ApiErrorCode.NOT_FOUND, 'Прев’ю недоступне', 404)
+
+      let buffer: Buffer
+      try {
+        buffer = await getStorage().read(file.thumbKey)
+      } catch (err) {
+        request.log.error({ err, fileId: file.id }, 'thumb blob read failed')
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Прев’ю недоступне', 404)
+      }
+
+      // Inline-рендер безпечний: прев'ю — растровий webp, перекодований sharp'ом
+      // (жодного оригінального SVG/HTML). Приватний кеш на годину.
+      return reply
+        .header('Content-Type', 'image/webp')
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, max-age=3600')
         .send(buffer)
     }
   )

@@ -38,6 +38,8 @@ export interface TeamMember {
   name: string
   email: string
   joinedAt: string
+  /** Дата найму (S13-04) — база accrual відпустки; null → рахується від joinedAt. */
+  hireDate: string | null
   /** weekly capacity norm (12-ПЛАН-ФАКТ); null → agency default in the hours report. */
   weeklyCapacityHours: number | null
   /** TEAM-BOARDS: команда члена (null = поза командами). */

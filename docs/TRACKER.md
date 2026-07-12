@@ -505,27 +505,27 @@ S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[
 
 ## SPRINT 9 — Auth & Security (повний)
 
-| ID    | Задача                                                                  | Модуль           | Статус |
-| ----- | ----------------------------------------------------------------------- | ---------------- | ------ |
-| S9-01 | 2FA TOTP (totpSecretEnc/backupCodes) + 2-step login challenge           | [01-auth]        | ⬜     |
-| S9-02 | Active sessions UI (refresh metadata) + reuse-detection + revoke        | [01-auth]        | ⬜     |
-| S9-03 | Google OAuth (OAuthAccount) + email-verify flow                         | [01-auth]        | ⬜     |
-| S9-04 | Credentials vault — envelope crypto + reveal/revoke/delete + rate-limit | [17-credentials] | ⬜     |
-| S9-05 | Credentials — 2FA-на-reveal + CredentialShare (scoped) + rotation-cron  | [17-credentials] | ⬜     |
-| S9-06 | GDPR data-export + Profile.timezone/phone                               | [13-settings]    | ⬜     |
-| S9-07 | Темна тема в Portal (підключити ThemeProvider + перемикач) ⬅backlog     | [13-settings]    | ⬜     |
+| ID    | Задача                                                                                                                                                                                                                                                | Модуль           | Статус |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------ |
+| S9-01 | 2FA TOTP (totpSecretEnc/backupCodes) + 2-step login challenge                                                                                                                                                                                         | [01-auth]        | ⬜     |
+| S9-02 | Active sessions UI (refresh metadata) + reuse-detection + revoke                                                                                                                                                                                      | [01-auth]        | ⬜     |
+| S9-03 | Google OAuth (OAuthAccount) + email-verify flow                                                                                                                                                                                                       | [01-auth]        | ⬜     |
+| S9-04 | Credentials vault — envelope crypto + reveal/revoke/delete + rate-limit                                                                                                                                                                               | [17-credentials] | ⬜     |
+| S9-05 | Credentials — 2FA-на-reveal + CredentialShare (scoped) + rotation-cron                                                                                                                                                                                | [17-credentials] | ⬜     |
+| S9-06 | ✅ **data-export ЗБУДОВАНО 12.07.2026** (GET /profile/export → JSON власних даних: профіль/settings/членства/сповіщення/тікет-повідомлення/відсутності; без секретів; кнопка в порталі /settings) ⬜ Profile.timezone/phone — GDPR data-export ⬅хвіст | [13-settings]    | ⬜     |
+| S9-07 | Темна тема в Portal (підключити ThemeProvider + перемикач) ⬅backlog                                                                                                                                                                                   | [13-settings]    | ⬜     |
 
 ## SPRINT 10 — Orders & Chat (повний)
 
-| ID     | Задача                                                                                                                                                    | Модуль      | Статус |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
-| S10-01 | OrderTag/Assignment + OrderTemplate                                                                                                                       | [02-orders] | ⬜     |
-| S10-02 | SlaPolicy + breach-cron + escalation                                                                                                                      | [02-orders] | ⬜     |
-| S10-03 | ✅ **ЗБУДОВАНО 11.07.2026** (DFS cycle-guard 409 + гейт старту + orders.unblocked + gantt-бари TimelineView) — OrderDependency (cycle-guard) + gantt-view | [02-orders] | ⬜     |
-| S10-04 | Chat — edit/delete (15-min) + CommentReaction + replyToId + read-receipts                                                                                 | [03-chat]   | ⬜     |
-| S10-05 | Chat-hub — mute/archive (ConversationState) + filters + @-mention picker                                                                                  | [18/03]     | ⬜     |
-| S10-06 | Files — sharp thumbnails (?variant) + S3StorageAdapter (R2)                                                                                               | [04-files]  | ⬜     |
-| S10-07 | Orders — soft-delete restore UI (admin, 30д вікно) + /restore ⬅backlog                                                                                    | [02-orders] | ⬜     |
+| ID     | Задача                                                                                                                                                                                                                        | Модуль      | Статус |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S10-01 | OrderTag/Assignment + OrderTemplate                                                                                                                                                                                           | [02-orders] | ⬜     |
+| S10-02 | SlaPolicy + breach-cron + escalation                                                                                                                                                                                          | [02-orders] | ⬜     |
+| S10-03 | ✅ **ЗБУДОВАНО 11.07.2026** (DFS cycle-guard 409 + гейт старту + orders.unblocked + gantt-бари TimelineView) — OrderDependency (cycle-guard) + gantt-view                                                                     | [02-orders] | ⬜     |
+| S10-04 | Chat — edit/delete (15-min) + CommentReaction + replyToId + read-receipts                                                                                                                                                     | [03-chat]   | ⬜     |
+| S10-05 | Chat-hub — mute/archive (ConversationState) + filters + @-mention picker                                                                                                                                                      | [18/03]     | ⬜     |
+| S10-06 | ✅ **sharp-мініатюри ЗБУДОВАНО 12.07.2026** (OrderFile.thumbKey + webp best-effort на upload + GET /files/:id/thumb inline + прев'ю у FilesTab) ⬜ S3StorageAdapter (R2) — Files — sharp thumbnails + S3StorageAdapter ⬅хвіст | [04-files]  | ⬜     |
+| S10-07 | Orders — soft-delete restore UI (admin, 30д вікно) + /restore ⬅backlog                                                                                                                                                        | [02-orders] | ⬜     |
 
 ## SPRINT 11 — Search + Reports + Admin (повний)
 

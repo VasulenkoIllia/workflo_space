@@ -33,6 +33,7 @@ function RateModal({ member, onClose }: { member: TeamMember; onClose: () => voi
   const [salary, setSalary] = useState(member.rate?.monthlySalary ?? '')
   const [commission, setCommission] = useState(member.rate?.commissionPercent ?? '')
   const [currency, setCurrency] = useState(member.rate?.currency ?? 'USD')
+  const [hireDate, setHireDate] = useState(member.hireDate ?? '')
 
   const invalid = !(Number(salary) > 0) && !(Number(commission) > 0)
 
@@ -41,6 +42,7 @@ function RateModal({ member, onClose }: { member: TeamMember; onClose: () => voi
     const body: RateInput = { executorId: member.profileId, currency }
     if (Number(salary) > 0) body.monthlySalary = Number(salary)
     if (Number(commission) > 0) body.commissionPercent = Number(commission)
+    if (hireDate) body.hireDate = hireDate
     setRate.mutate(body, { onSuccess: onClose })
   }
 
@@ -81,6 +83,12 @@ function RateModal({ member, onClose }: { member: TeamMember; onClose: () => voi
           value={currency}
           onChange={setCurrency}
           options={['USD', 'UAH', 'EUR'].map((c) => ({ value: c, label: c }))}
+        />
+        <Input
+          label="Дата найму (для нарахування відпустки)"
+          type="date"
+          value={hireDate}
+          onChange={(e) => setHireDate(e.target.value)}
         />
         {invalid && (
           <div style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>

@@ -25,6 +25,7 @@ export {
   usePostComment,
   markCommentsRead,
   fetchFileBlobUrl,
+  fetchFileThumbUrl,
   downloadFile,
   useCommentStream,
   type CommentAttachment,
@@ -132,6 +133,8 @@ export interface OrderFileItem {
   sha256: string
   uploadedBy: string
   createdAt: string
+  /** S10-06ч: чи є webp-прев'ю (зображення) — рендеримо мініатюру у списку. */
+  hasThumb: boolean
 }
 
 export interface TimeLog {

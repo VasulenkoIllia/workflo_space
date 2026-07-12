@@ -126,7 +126,7 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
           where: { agencyId, executorId, effectiveUntil: null },
           data: { effectiveUntil: now },
         })
-        return tx.executorRate.create({
+        const created = await tx.executorRate.create({
           data: {
             agencyId,
             executorId,
@@ -140,6 +140,16 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
           },
           select: RATE_SELECT,
         })
+        // hireDate — стаж для leave-accrual читається з AgencyMember.hireDate (S13-04),
+        // а форма ставки задає його тут. Дзеркалимо на member, інакше нарахування
+        // відпустки й далі падало б на createdAt (поле на ExecutorRate ніхто не читав).
+        if (input.hireDate) {
+          await tx.agencyMember.update({
+            where: { agencyId_profileId: { agencyId, profileId: executorId } },
+            data: { hireDate: new Date(input.hireDate) },
+          })
+        }
+        return created
       })
 
       writeAuditAsync(request.log, {

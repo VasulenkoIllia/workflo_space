@@ -143,6 +143,27 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **ХВОСТИ-ПАКЕТ (черга №2 — 4/4, черга закрита) — три дрібні фічі одним зрізом — ЗБУДОВАНО (2026-07-12).**
+  - **A · hireDate у команду (S13-04 хвіст):** знайдено латентний баг — форма ставки писала
+    `ExecutorRate.hireDate`, який accrual відпустки НЕ читав (він бере `AgencyMember.hireDate`),
+    тож найм ніколи не впливав на баланс. Фікс: rates POST дзеркалить дату в `AgencyMember.hireDate`
+    (джерело accrual); поле «Дата найму» в RateModal + показ на картці виконавця + `hireDate`
+    у ростері `/workspace/team`. Live-verify: POST rate → agency_members.hireDate = 2025-04-15.
+  - **B · мініатюри зображень (S10-06ч):** `OrderFile.thumbKey` (міграція `20260720`, fresh-PG-proven);
+    `services/imageThumbnail.ts` (sharp → webp ≤400px, best-effort — збій не валить upload; SVG
+    свідомо пропускаємо); upload генерує+зберігає прев'ю; `GET /files/:id/thumb` віддає inline
+    webp (XSS-безпечно — sharp перекодовує в растр); DTO несе `hasThumb` (не сам ключ); прев'ю
+    у FilesTab (blob із auth → objectURL). Live-verify: 1000×600 PNG → hasThumb=true → thumb 200
+    image/webp (валідний RIFF/WEBP).
+  - **C · GDPR-export профілю (S9-06):** `services/gdprExport.ts → buildProfileExport` (профіль +
+    settings + членства + свої сповіщення + свої тікет-повідомлення + відсутності; allow-list
+    без passwordHash/TOTP/секретів vault); `GET /profile/export` — JSON-attachment; кнопка
+    «Завантажити мої дані» в порталі /settings. Live-verify: export 200, усі ключі, **passwordHash
+    відсутній**.
+  - **Гейт:** turbo **37/37**, api **1043** (+8: hireDate 2, thumbnail 4, gdpr 2), drift-free,
+    fresh-PG-proven, наскрізний live-verify усіх трьох проти dev-БД з прибиранням тест-стану.
+  - **Черга №2 закрита (4/4):** bulk-розсилки · retention · email-inbound · хвости.
+
 - **EMAIL-INBOUND (S12-05, черга №2 — 3/4) — лист на support-скриньку → тікет — ЗБУДОВАНО (2026-07-12).**
   Механіка **graceful-off** (як VAPID-push): без `INBOUND_IMAP_*` env полер не стартує —
   фіча вмикається лише коли власник заведе скриньку. **Покрокова інструкція власнику —

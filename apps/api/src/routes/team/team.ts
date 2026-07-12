@@ -32,6 +32,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             profileId: true,
             role: true,
             createdAt: true,
+            hireDate: true, // стаж для leave-accrual (S13-04); задається у формі ставки
             weeklyCapacityHours: true,
             // TEAM-BOARDS: команда члена
             teamId: true,
@@ -68,6 +69,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
             name: m.profile.name,
             email: m.profile.email,
             joinedAt: m.createdAt,
+            hireDate: m.hireDate ? m.hireDate.toISOString().slice(0, 10) : null,
             weeklyCapacityHours: m.weeklyCapacityHours,
             teamId: m.teamId,
             team: m.team,

@@ -213,6 +213,17 @@ export async function fetchFileBlobUrl(file: { id: string }): Promise<string> {
   return URL.createObjectURL(await res.blob())
 }
 
+/** Blob-URL webp-прев'ю зображення (S10-06ч). Викликач revoke'ає. */
+export async function fetchFileThumbUrl(file: { id: string }): Promise<string> {
+  const token = getAccessToken()
+  const res = await fetch(`${API_URL}/files/${file.id}/thumb`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('fetch failed')
+  return URL.createObjectURL(await res.blob())
+}
+
 export async function downloadFile(file: { id: string; filename: string }): Promise<void> {
   const url = await fetchFileBlobUrl(file)
   const a = document.createElement('a')

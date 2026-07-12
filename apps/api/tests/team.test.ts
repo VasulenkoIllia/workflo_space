@@ -4,6 +4,7 @@ process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const memberFindUnique = vi.fn()
 const memberFindMany = vi.fn()
+const memberUpdate = vi.fn() // ХВОСТИ-A: rates POST дзеркалить hireDate у AgencyMember
 const rateFindMany = vi.fn()
 const rateFindFirst = vi.fn()
 const rateCreate = vi.fn()
@@ -29,7 +30,7 @@ vi.mock('@workflo/db', async (importOriginal) => {
   const Prisma = actual.Prisma
   Dec = (v: string | number) => new Prisma.Decimal(v)
   const prisma = {
-    agencyMember: { findUnique: memberFindUnique, findMany: memberFindMany },
+    agencyMember: { findUnique: memberFindUnique, findMany: memberFindMany, update: memberUpdate },
     executorRate: {
       findMany: rateFindMany,
       findFirst: rateFindFirst,
@@ -379,6 +380,60 @@ describe('executor rates', () => {
     // the previous open window was closed before the new row was created
     expect(rateUpdateMany.mock.calls[0][0].where.effectiveUntil).toBeNull()
     expect(rateUpdateMany.mock.calls[0][0].data.effectiveUntil).toBeInstanceOf(Date)
+    await app.close()
+  })
+
+  it('ХВОСТИ-A: hireDate дзеркалиться у AgencyMember (джерело accrual відпустки)', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateUpdateMany.mockResolvedValue({ count: 0 })
+    memberUpdate.mockResolvedValue({})
+    rateCreate.mockResolvedValue({
+      id: 'r3',
+      monthlySalary: Dec('2000.00'),
+      commissionPercent: Dec('0.00'),
+      currency: 'USD',
+      effectiveFrom: new Date(),
+      effectiveUntil: null,
+      hireDate: new Date('2025-03-01'),
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/executors/${EXEC_ID}/rates`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { monthlySalary: 2000, hireDate: '2025-03-01' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(memberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { agencyId_profileId: { agencyId: 'agency-1', profileId: EXEC_ID } },
+        data: { hireDate: new Date('2025-03-01') },
+      })
+    )
+    await app.close()
+  })
+
+  it('без hireDate — AgencyMember не оновлюється', async () => {
+    memberFindUnique.mockResolvedValue({ id: 'm1' })
+    rateUpdateMany.mockResolvedValue({ count: 0 })
+    rateCreate.mockResolvedValue({
+      id: 'r4',
+      monthlySalary: Dec('1000.00'),
+      commissionPercent: Dec('0.00'),
+      currency: 'USD',
+      effectiveFrom: new Date(),
+      effectiveUntil: null,
+      hireDate: null,
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/executors/${EXEC_ID}/rates`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { monthlySalary: 1000 },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(memberUpdate).not.toHaveBeenCalled()
     await app.close()
   })
 

@@ -1,7 +1,8 @@
-import { type Prisma, prisma } from '@workflo/db'
+import { type Prisma, prisma, withTenant } from '@workflo/db'
 import { updateProfileSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
+import { buildProfileExport } from '../../services/gdprExport.js'
 
 /** PATCH /profile — update own display name / language / theme / avatar. */
 const updateProfileRoute: FastifyPluginAsync = (fastify) => {
@@ -52,6 +53,26 @@ const updateProfileRoute: FastifyPluginAsync = (fastify) => {
         },
       },
     })
+  })
+
+  // GET /profile/export — GDPR-вивантаження власних даних (S9-06). JSON-attachment.
+  fastify.get('/profile/export', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const profileId = request.user.sub
+    // withTenant → tenant-таблиці (сповіщення/тікети/відсутності) у скоупі активної
+    // агенції; identity-таблиці (profile/settings) без RLS — читаються так само.
+    const data = await withTenant((tx) => buildProfileExport(tx as never, profileId, new Date()))
+    writeAuditAsync(request.log, {
+      actorId: profileId,
+      action: 'profile.exported',
+      resourceType: 'profile',
+      resourceId: profileId,
+      result: 'allowed',
+    })
+    return reply
+      .header('Content-Type', 'application/json; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="workflo-my-data.json"')
+      .header('Cache-Control', 'private, no-store')
+      .send(JSON.stringify(data, null, 2))
   })
 
   return Promise.resolve()
