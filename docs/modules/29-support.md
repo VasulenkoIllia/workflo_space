@@ -163,4 +163,27 @@ editedAt?, deletedAt?}` (дзеркалить OrderComment — author-relation �
   клієнт відкрив тікет → команда у черзі+нотиф → internal-нотатка + public-відповідь
   (клієнт бачить лише public) → клієнт відповів (open) → resolved. SSE в обох UI.
 - **Відкладено (P2):** SLA+breach-cron, chat-hub інтеграція, convert-to-order, категорії-CRUD,
-  canned-replies, KB, CSAT, email-джерело.
+  canned-replies, KB, CSAT, ~~email-джерело~~ (зроблено — див. UPDATE 12.07).
+
+## UPDATE (12.07.2026) — S12-05 EMAIL-INBOUND ✅ (реалізовано)
+
+Лист на спільну support-скриньку → тікет (джерело `source='email'`). **Graceful-off**: без
+`INBOUND_IMAP_*` env полер навіть не стартує (як VAPID-push) — фіча вмикається лише коли
+власник заведе скриньку. Покрокова інструкція власнику — [`../EMAIL_INBOUND_SETUP.md`](../EMAIL_INBOUND_SETUP.md).
+
+- **Міграція `20260719_inbound_email`:** `ticket_messages.sourceMessageId TEXT UNIQUE` — RFC
+  Message-ID листа-джерела. Дає ідемпотентність повторного полінгу + якір тредінгу. Нових
+  таблиць нема (RLS на `ticket_messages` уже FORCE).
+- **Маршрутизація** (`services/inboundEmail.ts → ingestInboundEmail`, чиста від IMAP-I/O, юніт-тести):
+  (1) дублікат Message-ID → skip; (2) `In-Reply-To`/`References` збігається з наявним
+  `sourceMessageId` → дописати у той тікет + reopen (як клієнт-відповідь); (3) новий тікет —
+  відправника резолвимо `email→Profile→CompanyMember→агенція`, `source='email'`; невідомий
+  відправник / без компанії → skip (спам не створює тікетів). Тема: зрізаємо `Re:`/`Fwd:`.
+- **Полер** (`cron/inboundEmail.ts`, ~2 хв, single-flight): динамічний import `imapflow`+`mailparser`
+  (без env бібліотеки не вантажаться), UNSEEN → parse → ingest у system-context-транзакції →
+  `\Seen` (навіть skip, щоб не крутити). Нотифікація команді — наявні `support.new_ticket` /
+  `support.ticket_reply` (поза транзакцією). P2002 (гонка) ловиться як duplicate.
+- **UI:** бейдж «📧 email» у workspace-черзі + рядок «Створено з email-скриньки» на деталі тікета
+  (нове поле `source` у `TICKET_SELECT`).
+- **Гейт:** +11 unit (`inboundEmail.test.ts`), turbo 37/37, drift-free, fresh-PG-proof. Live-verify —
+  graceful-off (без env крон мовчить); e2e з реальною скринькою — після кроку власника.

@@ -2499,17 +2499,20 @@ model Ticket {
 
 /// Повідомлення треду тікета — дзеркалить OrderComment (isInternal leak-guard + edit/delete + SSE).
 model TicketMessage {
-  id         String    @id @default(uuid())
-  agencyId   String
-  ticketId   String
-  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  authorId   String
-  author     Profile   @relation(fields: [authorId], references: [id])
-  content    String
-  isInternal Boolean   @default(false) // team-only нотатка (клієнт не бачить)
-  editedAt   DateTime? @db.Timestamptz(3)
-  deletedAt  DateTime? @db.Timestamptz(3)
-  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  id              String    @id @default(uuid())
+  agencyId        String
+  ticketId        String
+  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId        String
+  author          Profile   @relation(fields: [authorId], references: [id])
+  content         String
+  isInternal      Boolean   @default(false) // team-only нотатка (клієнт не бачить)
+  // S12-05 EMAIL-INBOUND: RFC Message-ID листа, що породив це повідомлення. @unique →
+  // ідемпотентність повторного полінгу; тредінг вхідних (In-Reply-To шукає цей ID).
+  sourceMessageId String?   @unique
+  editedAt        DateTime? @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([agencyId])
   @@index([ticketId, createdAt])

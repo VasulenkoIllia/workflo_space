@@ -19,6 +19,7 @@
 | Loyalty tier recalc (≈C16, без escalation)  | щодня                                                       | `cron/loyaltyRecalc.ts`     |
 | Refresh-token sweep (S5.5 AR-31)            | щодня 03:40 UTC                                             | `cron/refreshTokenSweep.ts` |
 | Outbox drain (не cron — фоновий loop)       | кожні 5 c                                                   | `services/outboxWorker.ts`  |
+| Email-inbound полер (S12-05, graceful-off)  | кожні ~2 хв — лише якщо задані `INBOUND_IMAP_*`             | `cron/inboundEmail.ts`      |
 | Daily DB backup + offsite-обвʼязка (AR-51)  | щодня 03:00 — інсталюється `scripts/install-backup-cron.sh` | `scripts/backup.sh`         |
 
 **НЕ існує (план на майбутні спринти):** pg_cron-джоби (C02/C05/C06/C17 — extension

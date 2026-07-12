@@ -48,6 +48,7 @@ const TICKET_SELECT = {
   category: true,
   priority: true,
   status: true,
+  source: true, // portal | email — бейдж джерела у workspace-черзі (S12-05)
   assignedToId: true,
   firstResponseAt: true,
   resolvedAt: true,

@@ -9,6 +9,7 @@ import { startDunningCron, stopDunningCron } from './dunning.js'
 import { startCalendarReminderCron, stopCalendarReminderCron } from './calendarReminder.js'
 import { startMonthlyReportCron, stopMonthlyReportCron } from './monthlyReport.js'
 import { startNotifyDigestCron, stopNotifyDigestCron } from './notifyDigest.js'
+import { startInboundEmailCron, stopInboundEmailCron } from './inboundEmail.js'
 import { startRecurringChargesCron, stopRecurringChargesCron } from './recurringCharges.js'
 import { startRefreshTokenSweepCron, stopRefreshTokenSweepCron } from './refreshTokenSweep.js'
 import { startTimerAutoStopCron, stopTimerAutoStopCron } from './timerAutoStop.js'
@@ -35,6 +36,7 @@ export function startCronJobs(logger: FastifyBaseLogger): void {
   startDunningCron(logger)
   startCalendarReminderCron(logger)
   startNotifyDigestCron(logger)
+  startInboundEmailCron(logger)
 }
 
 export function stopCronJobs(): void {
@@ -51,4 +53,5 @@ export function stopCronJobs(): void {
   stopDunningCron()
   stopCalendarReminderCron()
   stopNotifyDigestCron()
+  stopInboundEmailCron()
 }

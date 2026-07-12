@@ -151,6 +151,7 @@ function TicketRow({ t, active, onOpen }: { t: WsTicket; active: boolean; onOpen
         </span>
       </div>
       <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginTop: 3 }}>
+        {t.source === 'email' ? '📧 email · ' : ''}
         {t.company?.name ?? 'без компанії'} ·{' '}
         {t.category
           ? `${TICKET_CATEGORY_LABEL[t.category as TicketCategory] ?? t.category} · `
@@ -180,6 +181,14 @@ function TicketDetail({ id }: { id: string }) {
 
   return (
     <Card title={t.subject} aux={STATUS_META[t.status]?.label ?? t.status}>
+      {t.source === 'email' && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+        >
+          📧 Створено з email-скриньки
+        </div>
+      )}
       {/* Керування */}
       <div
         style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}

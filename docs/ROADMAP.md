@@ -143,6 +143,25 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
+- **EMAIL-INBOUND (S12-05, черга №2 — 3/4) — лист на support-скриньку → тікет — ЗБУДОВАНО (2026-07-12).**
+  Механіка **graceful-off** (як VAPID-push): без `INBOUND_IMAP_*` env полер не стартує —
+  фіча вмикається лише коли власник заведе скриньку. **Покрокова інструкція власнику —
+  [`EMAIL_INBOUND_SETUP.md`](EMAIL_INBOUND_SETUP.md)** (яку скриньку створити, IMAP-креденшли,
+  які env додати на сервер). Міграція `20260719_inbound_email` (`ticket_messages.sourceMessageId
+TEXT UNIQUE` — Message-ID: ідемпотентність полінгу + якір тредінгу; fresh-PG-proven).
+  Маршрутизація `services/inboundEmail.ts → ingestInboundEmail` (чиста від IMAP, юніт-тести):
+  дублікат Message-ID → skip · `In-Reply-To`/`References` збігається → дописати в тред + reopen ·
+  новий тікет — відправника резолвимо email→Profile→CompanyMember→агенція (`source='email'`);
+  невідомий/без компанії → skip (спам не робить тікетів); тема без `Re:`/`Fwd:`. Полер
+  `cron/inboundEmail.ts` (~2 хв, single-flight): динамічний import `imapflow`+`mailparser`
+  (без env не вантажаться), UNSEEN → parse → ingest у system-tx → `\Seen`; нотиф команді
+  наявними `support.new_ticket`/`support.ticket_reply`. UI: бейдж «📧 email» у workspace-черзі +
+  рядок на деталі тікета (`source` у TICKET_SELECT). Тести inboundEmail **11** (config graceful-off,
+  create/case-insensitive/Re-strip/порожнє тіло, thread+reopen, duplicate/unknown/no-company/no-message-id).
+  Live-verify проти dev-БД (реальний `ingestInboundEmail`): created (source=email, opener=клієнт) →
+  thread reopen resolved→open → duplicate skip → unknown skip → cleanup. Гейт turbo **37/37**,
+  api **1035**. E2E з реальною скринькою — після кроку власника (створити пошту + env).
+
 - **RETENTION (S11-07, черга №2 — 2/4) — аналітика життєвого циклу клієнтів — ЗБУДОВАНО (2026-07-11).**
   `services/retentionReport.ts` (life-time, без вікна дат; ліміти вибірок 2k компаній /
   10k подій): тір-розподіл (канонічний порядок LoyaltyTier) · **repeat rate** (% компаній

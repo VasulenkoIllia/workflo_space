@@ -15,6 +15,7 @@ export interface WsTicket {
   category: string | null
   priority: string
   status: string
+  source: string // portal | email | telegram
   assignedToId: string | null
   firstResponseAt: string | null
   resolvedAt: string | null
