@@ -41,6 +41,24 @@ export function useCreateNomenclature() {
   })
 }
 
+/** COV-UX-5: PATCH позиції (owner) — назва/КВЕД/ПДВ/активність. */
+export function useUpdateNomenclature() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string
+      name?: string
+      code?: string | null
+      vatRate?: number | null
+      isActive?: boolean
+    }) => api.patch(`/workspace/nomenclature/${id}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['nomenclature'] }),
+  })
+}
+
 export function useDeleteNomenclature() {
   const qc = useQueryClient()
   return useMutation({

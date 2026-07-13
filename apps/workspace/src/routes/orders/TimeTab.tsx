@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button, EmptyState, Icon, Input } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
-import { useCreateTimeLog, useDeleteTimeLog, useTimeLogs, type TimeLog } from '@/lib/orderDetail'
+import {
+  useCreateTimeLog,
+  useDeleteTimeLog,
+  useTimeLogs,
+  useUpdateTimeLog,
+  type TimeLog,
+} from '@/lib/orderDetail'
 import { formatElapsed, useActiveTimer, useStartTimer, useStopTimer } from '@/lib/timer'
 import { formatDate } from '@/lib/format'
 
@@ -20,6 +26,7 @@ export function TimeTab({ orderId }: { orderId: string }) {
   const { data, isLoading } = useTimeLogs(orderId)
   const create = useCreateTimeLog(orderId)
   const del = useDeleteTimeLog(orderId)
+  const update = useUpdateTimeLog(orderId)
 
   const [hours, setHours] = useState('')
   const [date, setDate] = useState(today())
@@ -103,6 +110,16 @@ export function TimeTab({ orderId }: { orderId: string }) {
               canDelete={t.executorId === myId}
               onDelete={() => del.mutate(t.id)}
               deleting={del.isPending && del.variables === t.id}
+              onSave={(input) =>
+                update.mutate(
+                  { logId: t.id, ...input },
+                  {
+                    onSuccess: () => toast.success('Запис оновлено'),
+                    onError: () => toast.error('Не вдалося оновити (період міг бути зафіксований)'),
+                  }
+                )
+              }
+              saving={update.isPending && update.variables?.logId === t.id}
             />
           ))
         )}
@@ -111,33 +128,92 @@ export function TimeTab({ orderId }: { orderId: string }) {
   )
 }
 
+/** COV-UX-5: inline-редагування запису (автор; бек морозить зафіксовані періоди). */
 function TimeRow({
   log,
   canDelete,
   onDelete,
   deleting,
+  onSave,
+  saving,
 }: {
   log: TimeLog
   canDelete: boolean
   onDelete: () => void
   deleting: boolean
+  onSave: (input: { hours?: number; comment?: string }) => void
+  saving: boolean
 }) {
+  const [editing, setEditing] = useState(false)
+  const [hours, setHours] = useState(String(log.hours))
+  const [comment, setComment] = useState(log.comment ?? '')
+
+  if (editing) {
+    const save = () => {
+      const h = Number(hours.replace(',', '.'))
+      if (!Number.isFinite(h) || h <= 0 || h > 24) {
+        toast.error('Години: число від 0 до 24')
+        return
+      }
+      onSave({ hours: h, comment: comment.trim() })
+      setEditing(false)
+    }
+    return (
+      <div className="wfp-timelog-row" style={{ gap: 8, alignItems: 'center' }}>
+        <span className="wfp-timelog-date">{formatDate(log.date)}</span>
+        <div style={{ width: 70 }}>
+          <Input inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} />
+        </div>
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <Input
+            value={comment}
+            placeholder="коментар"
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+          />
+        </div>
+        <Button size="sm" variant="primary" loading={saving} onClick={save}>
+          Зберегти
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          ✕
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <div className="wfp-timelog-row">
       <span className="wfp-timelog-date">{formatDate(log.date)}</span>
       <span className="wfp-timelog-hrs">{log.hours}h</span>
       <span className="wfp-timelog-desc">{log.comment || '—'}</span>
       {canDelete && (
-        <button
-          type="button"
-          className="wfp-iconbtn"
-          title="Видалити запис"
-          onClick={onDelete}
-          disabled={deleting}
-          style={{ marginLeft: 'auto' }}
-        >
-          <Icon name="close" size={13} />
-        </button>
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 4 }}>
+          <button
+            type="button"
+            className="wfp-iconbtn"
+            title="Редагувати запис"
+            onClick={() => {
+              setHours(String(log.hours))
+              setComment(log.comment ?? '')
+              setEditing(true)
+            }}
+          >
+            <Icon name="edit" size={13} />
+          </button>
+          <button
+            type="button"
+            className="wfp-iconbtn"
+            title="Видалити запис"
+            onClick={onDelete}
+            disabled={deleting}
+          >
+            <Icon name="close" size={13} />
+          </button>
+        </span>
       )}
     </div>
   )

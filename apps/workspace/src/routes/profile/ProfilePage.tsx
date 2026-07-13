@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   ContactDetailsSection,
+  DataExportSection,
   EmailChangeSection,
   PasswordSection,
   TwoFactorSection,
@@ -85,6 +86,8 @@ export function ProfilePage() {
       <div style={{ marginBottom: 16 }}>
         <TwoFactorSection app="workspace" />
       </div>
+
+      <DataExportSection cardStyle={{ marginBottom: 16 }} />
 
       <Card title="Заробіток">
         {payouts.isLoading ? (

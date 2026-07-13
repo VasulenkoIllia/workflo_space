@@ -17,7 +17,12 @@ import {
 } from '@/routes/settings/DocumentTemplatesSection'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { useCreateNomenclature, useDeleteNomenclature, useNomenclature } from '@/lib/nomenclature'
+import {
+  useCreateNomenclature,
+  useUpdateNomenclature,
+  useDeleteNomenclature,
+  useNomenclature,
+} from '@/lib/nomenclature'
 import { formatDate } from '@/lib/format'
 import {
   useCreateOrderTag,
@@ -368,9 +373,15 @@ function NomenclatureSection() {
   const { data, isLoading } = useNomenclature()
   const create = useCreateNomenclature()
   const remove = useDeleteNomenclature()
+  const update = useUpdateNomenclature()
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [vat, setVat] = useState('')
+  // COV-UX-5: inline-редагування позиції (PATCH існував, UI не було)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [eName, setEName] = useState('')
+  const [eCode, setECode] = useState('')
+  const [eVat, setEVat] = useState('')
 
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const items = data?.items ?? []
@@ -391,34 +402,117 @@ function NomenclatureSection() {
             // довідник порожній — додайте першу позицію
           </div>
         )}
-        {items.map((n) => (
-          <div key={n.id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
-            <span style={{ flex: 1, opacity: n.isActive ? 1 : 0.5 }}>
-              {n.name}
-              {!n.isActive && ' (неактивна)'}
-            </span>
-            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-              {n.code ?? ''}
-              {n.vatRate != null ? ` · ПДВ ${Number(n.vatRate)}%` : ''}
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() =>
-                remove.mutate(n.id, {
-                  onSuccess: (r) =>
-                    toast.success(
-                      r.outcome === 'deleted'
-                        ? 'Позицію видалено'
-                        : 'Позиція використовується в документах — деактивовано'
-                    ),
-                })
-              }
+        {items.map((n) =>
+          editId === n.id ? (
+            <div
+              key={n.id}
+              style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
             >
-              ✕
-            </Button>
-          </div>
-        ))}
+              <div style={{ flex: 2, minWidth: 180 }}>
+                <Input value={eName} onChange={(e) => setEName(e.target.value)} />
+              </div>
+              <div style={{ width: 90 }}>
+                <Input
+                  value={eCode}
+                  placeholder="КВЕД"
+                  onChange={(e) => setECode(e.target.value)}
+                />
+              </div>
+              <div style={{ width: 80 }}>
+                <Input
+                  value={eVat}
+                  inputMode="decimal"
+                  placeholder="ПДВ %"
+                  onChange={(e) => setEVat(e.target.value)}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                loading={update.isPending}
+                disabled={eName.trim().length < 3}
+                onClick={() =>
+                  update.mutate(
+                    {
+                      id: n.id,
+                      name: eName.trim(),
+                      code: eCode.trim() || null,
+                      vatRate: eVat.trim() === '' ? null : Number(eVat.replace(',', '.')),
+                    },
+                    {
+                      onSuccess: () => {
+                        setEditId(null)
+                        toast.success('Позицію оновлено')
+                      },
+                      onError: () => toast.error('Не вдалося оновити'),
+                    }
+                  )
+                }
+              >
+                Зберегти
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>
+                ✕
+              </Button>
+            </div>
+          ) : (
+            <div
+              key={n.id}
+              style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}
+            >
+              <span style={{ flex: 1, opacity: n.isActive ? 1 : 0.5 }}>
+                {n.name}
+                {!n.isActive && ' (неактивна)'}
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                {n.code ?? ''}
+                {n.vatRate != null ? ` · ПДВ ${Number(n.vatRate)}%` : ''}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditId(n.id)
+                  setEName(n.name)
+                  setECode(n.code ?? '')
+                  setEVat(n.vatRate != null ? String(Number(n.vatRate)) : '')
+                }}
+              >
+                ✎
+              </Button>
+              {!n.isActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    update.mutate(
+                      { id: n.id, isActive: true },
+                      { onSuccess: () => toast.success('Позицію активовано') }
+                    )
+                  }
+                >
+                  ↺
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  remove.mutate(n.id, {
+                    onSuccess: (r) =>
+                      toast.success(
+                        r.outcome === 'deleted'
+                          ? 'Позицію видалено'
+                          : 'Позиція використовується в документах — деактивовано'
+                      ),
+                  })
+                }
+              >
+                ✕
+              </Button>
+            </div>
+          )
+        )}
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div style={{ flex: 2, minWidth: 220 }}>

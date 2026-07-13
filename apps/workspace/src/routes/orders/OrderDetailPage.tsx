@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
@@ -25,6 +25,7 @@ import {
   useUpdateOrder,
   useAddDependency,
   useRemoveDependency,
+  useDeleteOrder,
   type UpdateOrderInput,
   type WorkspaceOrderDetail,
 } from '@/lib/orderDetail'
@@ -230,9 +231,56 @@ export function OrderDetailPage() {
           </Card>
 
           <ActivityCard orderId={order.id} />
+          <DangerCard orderId={order.id} title={order.title} />
         </aside>
       </div>
     </div>
+  )
+}
+
+/** COV-UX-1: видалення в кошик (30 днів) — кошик з restore існував, кнопки не було.
+ * Owner/manager; двокрокове підтвердження без модалки. */
+function DangerCard({ orderId, title }: { orderId: string; title: string }) {
+  const { isOwner, isManager } = useAuth()
+  const navigate = useNavigate()
+  const del = useDeleteOrder(orderId)
+  const [arming, setArming] = useState(false)
+  if (!isOwner && !isManager) return null
+  return (
+    <Card title="Небезпечна зона" style={{ marginBottom: 16 }}>
+      {arming ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            «{title}» піде в кошик на 30 днів (відновлення: Замовлення → Кошик). Точно?
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              size="sm"
+              variant="danger"
+              loading={del.isPending}
+              onClick={() =>
+                del.mutate(undefined, {
+                  onSuccess: () => {
+                    toast.success('Замовлення переміщено в кошик')
+                    navigate('/orders')
+                  },
+                  onError: () => toast.error('Не вдалося видалити'),
+                })
+              }
+            >
+              Так, видалити
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setArming(false)}>
+              Скасувати
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={() => setArming(true)}>
+          🗑 Видалити замовлення
+        </Button>
+      )}
+    </Card>
   )
 }
 

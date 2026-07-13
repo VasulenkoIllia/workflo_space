@@ -104,6 +104,12 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
               select: { id: true, title: true, description: true, status: true, position: true },
               orderBy: { position: 'asc' },
             },
+            // COV-UX-3: позиції кошторису — client-safe (це саме те, що клієнт погоджує);
+            // без них портал показував lump-sum без розбивки.
+            orderEstimateLines: {
+              select: { id: true, name: true, qty: true, unitPrice: true, position: true },
+              orderBy: { position: 'asc' },
+            },
           },
         })
       )
@@ -135,6 +141,12 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         approvalStatus: order.approvalStatus,
         approvalDecidedAt: order.approvalDecidedAt,
         approvalComment: order.approvalComment,
+        estimateLines: (order.orderEstimateLines ?? []).map((l) => ({
+          id: l.id,
+          name: l.name,
+          qty: num(l.qty),
+          unitPrice: num(l.unitPrice),
+        })),
       }
 
       if (!isInternal) {

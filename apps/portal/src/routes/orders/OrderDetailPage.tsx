@@ -94,6 +94,41 @@ export function OrderDetailPage() {
               </strong>
               . Погодьте, щоб команда почала роботу, або запросіть правки з коментарем.
             </div>
+            {order.estimateLines.length > 0 && (
+              <table
+                style={{
+                  marginTop: 10,
+                  borderCollapse: 'collapse',
+                  fontSize: 13,
+                  width: '100%',
+                  maxWidth: 460,
+                }}
+              >
+                <tbody>
+                  {order.estimateLines.map((l) => (
+                    <tr key={l.id} style={{ borderBottom: '1px solid var(--wf-border)' }}>
+                      <td style={{ padding: '4px 12px 4px 0' }}>{l.name}</td>
+                      <td
+                        className="wfp-mono"
+                        style={{
+                          padding: '4px 12px 4px 0',
+                          color: 'var(--wf-fg-muted)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {l.qty ?? 1} × {formatMoney(l.unitPrice)}
+                      </td>
+                      <td
+                        className="wfp-mono"
+                        style={{ padding: '4px 0', textAlign: 'right', whiteSpace: 'nowrap' }}
+                      >
+                        {formatMoney((l.qty ?? 1) * (l.unitPrice ?? 0))} {order.currency}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
             {decide.isError && !rejecting && (
               <div style={{ color: 'var(--wf-destructive)', fontSize: 12, marginTop: 6 }}>
                 Не вдалося — оновіть сторінку й спробуйте ще раз.

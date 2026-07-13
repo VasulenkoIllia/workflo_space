@@ -27,6 +27,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
   // 18-А: єдиний хаб розмов (клієнт → замовлення), unread-бейджі всередині
   { id: 'chats', label: 'Чати', icon: <Icon name="inbox" />, href: '/chats', roles: 'omx' },
+  // COV-UX-2: сторінка існувала з CAL-MVP, але в nav не була — досяжна лише прямим URL
+  {
+    id: 'calendar',
+    label: 'Календар',
+    icon: <Icon name="calendar" />,
+    href: '/calendar',
+    roles: 'omx',
+  },
   {
     id: 'support',
     label: 'Підтримка',

@@ -7,6 +7,8 @@ export type NotifCategory =
   | 'billing'
   | 'documents'
   | 'loyalty'
+  | 'support'
+  | 'calendar'
   | 'system'
   | 'auth'
 export type NotifChannel = 'in_app' | 'email' | 'telegram' | 'push'
@@ -27,6 +29,10 @@ export const NOTIF_CATEGORIES: { key: NotifCategory; label: string }[] = [
   { key: 'billing', label: 'Рахунки й оплати' },
   { key: 'documents', label: 'Документи' },
   { key: 'loyalty', label: 'Бонуси' },
+  // COV-UX-4: категорії існували в бекенд-матриці з першого дня, UI їх не показував —
+  // support.*/calendar.* події були прибиті до seed-дефолту без можливості вимкнути.
+  { key: 'support', label: 'Підтримка (тікети)' },
+  { key: 'calendar', label: 'Календар і зустрічі' },
   { key: 'system', label: 'Система' },
   { key: 'auth', label: 'Безпека' },
 ]

@@ -39,6 +39,14 @@ export interface OrderStage {
   position: number
 }
 
+/** COV-UX-3: позиція кошторису — те, що клієнт реально погоджує (не лише сума). */
+export interface EstimateLine {
+  id: string
+  name: string
+  qty: number | null
+  unitPrice: number | null
+}
+
 export interface OrderDetail {
   id: string
   title: string
@@ -52,6 +60,7 @@ export interface OrderDetail {
   createdAt: string
   updatedAt: string
   stages: OrderStage[]
+  estimateLines: EstimateLine[]
 }
 
 export interface ActivityItem {

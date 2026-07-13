@@ -201,6 +201,35 @@ export function useDeleteTimeLog(id: string) {
   })
 }
 
+/** COV-UX-5: PATCH запису часу (лише автор; бек морозить після фіксації періоду). */
+export function useUpdateTimeLog(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      logId,
+      ...input
+    }: {
+      logId: string
+      hours?: number
+      date?: string
+      comment?: string
+    }) => api.patch<{ log: TimeLog }>(`/orders/${id}/time-logs/${logId}`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: orderKeys.timeLogs(id) }),
+  })
+}
+
+/** COV-UX-1: soft-delete замовлення у кошик (30 днів; відновлення — /orders → Кошик). */
+export function useDeleteOrder(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete<{ id: string }>(`/orders/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['orders'] })
+      void qc.invalidateQueries({ queryKey: orderKeys.detail(id) })
+    },
+  })
+}
+
 /**
  * POST /workspace/orders/:id/submit-approval (02-А) — the team sends the estimate to the
  * client for approval (order → pending_approval). Re-submitting a rejected estimate resets

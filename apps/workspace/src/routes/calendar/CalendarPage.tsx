@@ -10,6 +10,7 @@ import {
   useCalendarView,
   useCancelEvent,
   useCreateEvent,
+  useUpdateEvent,
   type CalendarEventDto,
   type CreateEventInput,
 } from '@/lib/calendar'
@@ -486,12 +487,98 @@ function CreateEventModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** datetime-local значення з ISO (локальний час браузера). */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function EventDetailModal({ event, onClose }: { event: CalendarEventDto; onClose: () => void }) {
   const cancel = useCancelEvent()
+  const update = useUpdateEvent()
   const { user } = useAuth()
   const isOwner = user?.agencyMemberships?.some((m) => m.role === 'owner')
   const canManage = event.createdById === user?.profile.id || isOwner
   const RESP_LABEL = { pending: 'очікує', accepted: 'прийняв', declined: 'відхилив' }
+  // COV-UX-5: редагування (PATCH існував з CAL-MVP, UI не було)
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(event.title)
+  const [startsAt, setStartsAt] = useState(() => toLocalInput(event.startsAt))
+  const [endsAt, setEndsAt] = useState(() => toLocalInput(event.endsAt))
+  const [location, setLocation] = useState(event.location ?? '')
+
+  if (editing) {
+    const save = () => {
+      const s = new Date(startsAt)
+      const e = new Date(endsAt)
+      if (!(e.getTime() > s.getTime())) {
+        toast.error('Кінець має бути пізніше початку')
+        return
+      }
+      update.mutate(
+        {
+          id: event.id,
+          title: title.trim(),
+          startsAt: s.toISOString(),
+          endsAt: e.toISOString(),
+          location: location.trim() || undefined,
+        },
+        {
+          onSuccess: () => {
+            toast.success('Зустріч оновлено')
+            setEditing(false)
+          },
+          onError: () => toast.error('Не вдалося оновити'),
+        }
+      )
+    }
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title="Редагувати зустріч"
+        footer={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="ghost" onClick={() => setEditing(false)}>
+              Скасувати
+            </Button>
+            <Button
+              variant="primary"
+              loading={update.isPending}
+              disabled={title.trim().length < 2}
+              onClick={save}
+            >
+              Зберегти
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Input label="Назва" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Input
+              label="Початок"
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+            />
+            <Input
+              label="Кінець"
+              type="datetime-local"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+            />
+          </div>
+          <Input
+            label="Локація (необовʼязково)"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
+        </div>
+      </Modal>
+    )
+  }
 
   return (
     <Modal
@@ -501,20 +588,25 @@ function EventDetailModal({ event, onClose }: { event: CalendarEventDto; onClose
       aux={event.type === 'client_meeting' ? (event.company?.name ?? 'клієнт') : 'команда'}
       footer={
         canManage && !event.cancelledAt ? (
-          <Button
-            variant="danger"
-            loading={cancel.isPending}
-            onClick={() =>
-              cancel.mutate(event.id, {
-                onSuccess: () => {
-                  toast.success('Зустріч скасовано')
-                  onClose()
-                },
-              })
-            }
-          >
-            Скасувати зустріч
-          </Button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="ghost" onClick={() => setEditing(true)}>
+              Редагувати
+            </Button>
+            <Button
+              variant="danger"
+              loading={cancel.isPending}
+              onClick={() =>
+                cancel.mutate(event.id, {
+                  onSuccess: () => {
+                    toast.success('Зустріч скасовано')
+                    onClose()
+                  },
+                })
+              }
+            >
+              Скасувати зустріч
+            </Button>
+          </div>
         ) : null
       }
     >

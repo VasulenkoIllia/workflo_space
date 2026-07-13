@@ -33,3 +33,4 @@ export * from './VaultTypedFields.js'
 export * from './announcements.js'
 // S9-06 (хвіст): контактні дані профілю (телефон + часовий пояс).
 export * from './ContactDetailsSection.js'
+export * from './DataExportSection.js'

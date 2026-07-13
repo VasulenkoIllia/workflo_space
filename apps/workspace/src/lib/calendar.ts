@@ -90,6 +90,16 @@ export function useCreateEvent() {
   })
 }
 
+/** COV-UX-5: PATCH події (creator/owner) — назва/час/локація/лінк/опис. */
+export function useUpdateEvent() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Partial<CreateEventInput>) =>
+      api.patch(`/calendar/events/${id}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['calendar'] }),
+  })
+}
+
 export function useCancelEvent() {
   const qc = useQueryClient()
   return useMutation({
