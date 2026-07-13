@@ -24,7 +24,7 @@ import { ProjectsPage } from '@/routes/projects/ProjectsPage'
 import { SecretsPage } from '@/routes/secrets/SecretsPage'
 import { ChatsPage } from '@/routes/chats/ChatsPage'
 import { DocumentsPage } from '@/routes/documents/DocumentsPage'
-import { Placeholder } from '@/routes/Placeholder'
+import { CompanyPage } from '@/routes/company/CompanyPage'
 import { SupportPage } from '@/routes/support/SupportPage'
 import { CalendarPage } from '@/routes/calendar/CalendarPage'
 
@@ -61,15 +61,15 @@ export default function App() {
           <Route path="/team" element={<TeamPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/secrets" element={<SecretsPage />} />
+          {/* COV-PRT-1/2: /company — реальна сторінка; /documents — під гейт
+              (company-scoped дані; раніше fail-soft-ив порожнім списком) */}
+          <Route path="/company" element={<CompanyPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
         </Route>
-        <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/inbox" element={<InboxPage />} />
-        {/* design-v2 PORTAL_NAV destinations — Placeholder until their feature wave */}
-        <Route path="/company" element={<Placeholder title="Моя компанія" />} />
-        <Route path="/settings/integrations" element={<Placeholder title="Інтеграції" />} />
         <Route path="/" element={<Navigate to="/orders" replace />} />
       </Route>
 

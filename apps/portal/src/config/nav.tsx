@@ -28,12 +28,8 @@ export const PORTAL_NAV: SidebarNavEntry[] = [
 
   { group: 'Налаштування' },
   { id: 'secrets', label: 'Секрети', icon: <Icon name="lock" />, href: '/secrets' },
-  {
-    id: 'integrations',
-    label: 'Інтеграції',
-    icon: <Icon name="globe" />,
-    href: '/settings/integrations',
-  },
+  // «Інтеграції» приберано з nav до модуля 27 (рішення власника 07.07 — відкладено);
+  // COV-PRT-1: пункт вів на Placeholder «Розділ у розробці».
   {
     id: 'settings',
     label: 'Налаштування акаунта',
