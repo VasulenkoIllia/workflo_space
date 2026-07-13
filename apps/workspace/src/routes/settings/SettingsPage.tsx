@@ -220,15 +220,26 @@ function WorkflowSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['agency-workflow-settings'],
     queryFn: () =>
-      api.get<{ requireSignedContract: boolean; autoInvoiceOneTime: boolean }>(
-        '/workspace/agency/workflow-settings'
-      ),
+      api.get<{
+        requireSignedContract: boolean
+        autoInvoiceOneTime: boolean
+        vacationDaysPerYear: number
+        defaultApprovalMode: 'none' | 'upfront' | 'on_actuals'
+        defaultInvoiceApprover: 'client' | 'internal'
+      }>('/workspace/agency/workflow-settings'),
   })
   const patch = useMutation({
-    mutationFn: (body: { requireSignedContract?: boolean; autoInvoiceOneTime?: boolean }) =>
-      api.patch('/workspace/agency/workflow-settings', body),
+    mutationFn: (body: {
+      requireSignedContract?: boolean
+      autoInvoiceOneTime?: boolean
+      vacationDaysPerYear?: number
+      defaultApprovalMode?: 'none' | 'upfront' | 'on_actuals'
+      defaultInvoiceApprover?: 'client' | 'internal'
+    }) => api.patch('/workspace/agency/workflow-settings', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['agency-workflow-settings'] }),
   })
+  // COV-SET-1: квота вводиться з дебаунсом через локальний стан + явне збереження
+  const [vacDays, setVacDays] = useState<string | null>(null)
 
   if (isLoading) return <Skeleton style={{ height: 70 }} />
   if (!data) return null
@@ -285,6 +296,101 @@ function WorkflowSection() {
         // замовлення без проекту перейшло у «виконано» → чернетка рахунку (фікс = погоджена сума;
         погодинка = факт годин × ставка) + сповіщення «перевір і надішли». Клієнту нічого не летить
         автоматично.
+      </div>
+
+      {/* COV-SET-1: квота відпусток — accrual = квота × місяці стажу / 12 */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: 'flex-end',
+          marginTop: 16,
+          paddingTop: 14,
+          borderTop: '1px solid var(--wf-border)',
+        }}
+      >
+        <div style={{ width: 170 }}>
+          <Input
+            label="Відпустка, днів/рік"
+            inputMode="numeric"
+            value={vacDays ?? String(data.vacationDaysPerYear)}
+            onChange={(e) => setVacDays(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={
+            vacDays === null ||
+            !Number.isInteger(Number(vacDays)) ||
+            Number(vacDays) < 0 ||
+            Number(vacDays) > 365
+          }
+          loading={patch.isPending}
+          onClick={() =>
+            patch.mutate(
+              { vacationDaysPerYear: Number(vacDays) },
+              {
+                onSuccess: () => {
+                  setVacDays(null)
+                  toast.success('Квоту відпусток збережено')
+                },
+              }
+            )
+          }
+        >
+          Зберегти
+        </Button>
+      </div>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // баланс = квота × місяці стажу в поточному році / 12 (від дати найму)
+      </div>
+
+      {/* COV-SET-2: agency-дефолт каскаду погодження витрат (клієнт/проект можуть override) */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          marginTop: 16,
+          paddingTop: 14,
+          borderTop: '1px solid var(--wf-border)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <Select
+          label="Погодження витрат (дефолт)"
+          value={data.defaultApprovalMode}
+          disabled={patch.isPending}
+          onChange={(v) =>
+            patch.mutate(
+              { defaultApprovalMode: v as 'none' | 'upfront' | 'on_actuals' },
+              { onSuccess: () => toast.success('Збережено') }
+            )
+          }
+          options={[
+            { value: 'none', label: 'без погодження' },
+            { value: 'upfront', label: 'погодження до старту' },
+            { value: 'on_actuals', label: 'погодження по факту' },
+          ]}
+        />
+        <Select
+          label="Хто погоджує рахунки"
+          value={data.defaultInvoiceApprover}
+          disabled={patch.isPending}
+          onChange={(v) =>
+            patch.mutate(
+              { defaultInvoiceApprover: v as 'client' | 'internal' },
+              { onSuccess: () => toast.success('Збережено') }
+            )
+          }
+          options={[
+            { value: 'client', label: 'клієнт (у порталі)' },
+            { value: 'internal', label: 'команда (внутрішньо)' },
+          ]}
+        />
+      </div>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // дефолт агенції; для окремого клієнта — override у його картці, для проекту — у проекті
       </div>
     </Card>
   )
@@ -578,6 +684,8 @@ function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
   const [iban, setIban] = useState(initial?.iban ?? '')
   const [cryptoUsdt, setCryptoUsdt] = useState(initial?.cryptoUsdt ?? '')
   const [currency, setCurrency] = useState(initial?.invoiceCurrency ?? 'USD')
+  // COV-SET-3: поле існувало в схемі/валідації, форма його не рендерила (frozen USD)
+  const [bonusCcy, setBonusCcy] = useState(initial?.bonusCurrency ?? 'USD')
   const [terms, setTerms] = useState(initial?.paymentTermsDays?.toString() ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
 
@@ -588,6 +696,7 @@ function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
       iban: iban.trim() || null,
       cryptoUsdt: cryptoUsdt.trim() || null,
       invoiceCurrency: currency,
+      bonusCurrency: bonusCcy,
       paymentTermsDays: terms.trim() === '' ? null : Number(terms),
       notes: notes.trim() || null,
     }
@@ -624,6 +733,15 @@ function PaymentForm({ initial }: { initial: PaymentSettings | null }) {
             onChange={setCurrency}
             options={['USD', 'UAH', 'EUR'].map((c) => ({ value: c, label: c }))}
           />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Select
+            label="Валюта бонусів"
+            value={bonusCcy}
+            onChange={setBonusCcy}
+            options={['USD', 'UAH', 'EUR'].map((c) => ({ value: c, label: c }))}
+          />
+          <div />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
           <Input

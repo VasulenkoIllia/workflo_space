@@ -10,6 +10,7 @@ export interface PaymentSettings {
   notes: string | null
   invoiceCurrency: string | null
   paymentTermsDays: number | null
+  bonusCurrency: string | null
 }
 
 export interface PaymentSettingsInput {
@@ -20,6 +21,7 @@ export interface PaymentSettingsInput {
   notes?: string | null
   invoiceCurrency?: string
   paymentTermsDays?: number | null
+  bonusCurrency?: string
 }
 
 /** GET /admin/referral/settings — per-agency referral program config. */

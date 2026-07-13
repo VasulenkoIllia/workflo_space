@@ -261,6 +261,7 @@ export function ClientDetailPage() {
           <LoyaltySection companyId={id} />
           <MarginSection companyId={id} />
           <DunningToggleSection companyId={id} />
+          <ApprovalOverrideSection companyId={id} />
         </>
       )}
       {safeTab === 'docs' && <DocumentsSection companyId={id} />}
@@ -1213,6 +1214,84 @@ function DunningToggleSection({ companyId }: { companyId: string }) {
       <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
         // для усних домовленостей. Прострочення в системі позначається незалежно — вимикаються лише
         листи/сповіщення клієнту.
+      </div>
+    </Card>
+  )
+}
+
+/** COV-SET-2: per-company override каскаду погодження (поля 02-А отримали write-роут).
+ * null = успадкувати agency-дефолт із «Налаштування → Воркфлоу». */
+function ApprovalOverrideSection({ companyId }: { companyId: string }) {
+  const { isOwner } = useAuth()
+  const qc = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['company-approval', companyId],
+    queryFn: () =>
+      api.get<{ approvalMode: string | null; invoiceApprover: string | null }>(
+        `/workspace/companies/${companyId}/approval`
+      ),
+    enabled: isOwner,
+  })
+  const patch = useMutation({
+    mutationFn: (body: { approvalMode?: string | null; invoiceApprover?: string | null }) =>
+      api.patch(`/workspace/companies/${companyId}/approval`, body),
+    onSuccess: () => {
+      toast.success('Збережено')
+      void qc.invalidateQueries({ queryKey: ['company-approval', companyId] })
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
+  })
+
+  if (!isOwner) return null
+  if (isLoading) return <Skeleton style={{ height: 60, marginBottom: 20 }} />
+  if (!data) return null
+
+  const selStyle = {
+    background: 'var(--wf-surface)',
+    color: 'var(--wf-fg)',
+    border: '1px solid var(--wf-border)',
+    borderRadius: 'var(--wf-radius)',
+    padding: '8px 10px',
+    fontSize: 14,
+  } as const
+
+  return (
+    <Card title="Погодження витрат (override)" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            РЕЖИМ ПОГОДЖЕННЯ
+          </span>
+          <select
+            style={selStyle}
+            value={data.approvalMode ?? ''}
+            disabled={patch.isPending}
+            onChange={(e) => patch.mutate({ approvalMode: e.target.value || null })}
+          >
+            <option value="">— як в агенції —</option>
+            <option value="none">без погодження</option>
+            <option value="upfront">погодження до старту</option>
+            <option value="on_actuals">погодження по факту</option>
+          </select>
+        </label>
+        <label style={{ display: 'grid', gap: 4 }}>
+          <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+            ХТО ПОГОДЖУЄ РАХУНКИ
+          </span>
+          <select
+            style={selStyle}
+            value={data.invoiceApprover ?? ''}
+            disabled={patch.isPending}
+            onChange={(e) => patch.mutate({ invoiceApprover: e.target.value || null })}
+          >
+            <option value="">— як в агенції —</option>
+            <option value="client">клієнт (у порталі)</option>
+            <option value="internal">команда (внутрішньо)</option>
+          </select>
+        </label>
+      </div>
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 6 }}>
+        // порожньо = діє дефолт агенції; проект може мати власний override поверх цього
       </div>
     </Card>
   )
