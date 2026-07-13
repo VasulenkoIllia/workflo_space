@@ -403,37 +403,53 @@ function MemberTeamCell({ member, canEdit }: { member: TeamMember; canEdit: bool
   const { data: teams = [] } = useTeams()
   const setTeam = useSetMemberTeam()
   if (teams.length === 0) return null
+  // TEAM-ADMIN-1: бейдж тімліда — головного у підрозділі
+  const isLead =
+    !!member.teamId && teams.some((t) => t.id === member.teamId && t.leadId === member.profileId)
+  const leadBadge = isLead ? (
+    <span
+      className="wfp-mono"
+      title="тімлід підрозділу"
+      style={{ marginLeft: 6, fontSize: 10, color: 'var(--wf-accent)' }}
+    >
+      ★ лід
+    </span>
+  ) : null
   if (!canEdit) {
     return member.team ? (
       <span style={{ marginLeft: 8, color: member.team.color ?? 'var(--wf-fg-subtle)' }}>
         · {member.team.name}
+        {leadBadge}
       </span>
     ) : null
   }
   return (
-    <select
-      value={member.teamId ?? ''}
-      onChange={(e) =>
-        setTeam.mutate({ profileId: member.profileId, teamId: e.target.value || null })
-      }
-      className="wfp-mono"
-      title="Команда"
-      style={{
-        marginLeft: 8,
-        fontSize: 11,
-        padding: '1px 4px',
-        background: 'transparent',
-        border: '1px solid var(--wf-border)',
-        borderRadius: 4,
-        color: member.team?.color ?? 'var(--wf-fg-muted)',
-      }}
-    >
-      <option value="">без команди</option>
-      {teams.map((t) => (
-        <option key={t.id} value={t.id}>
-          {t.name}
-        </option>
-      ))}
-    </select>
+    <>
+      <select
+        value={member.teamId ?? ''}
+        onChange={(e) =>
+          setTeam.mutate({ profileId: member.profileId, teamId: e.target.value || null })
+        }
+        className="wfp-mono"
+        title="Команда"
+        style={{
+          marginLeft: 8,
+          fontSize: 11,
+          padding: '1px 4px',
+          background: 'transparent',
+          border: '1px solid var(--wf-border)',
+          borderRadius: 4,
+          color: member.team?.color ?? 'var(--wf-fg-muted)',
+        }}
+      >
+        <option value="">без команди</option>
+        {teams.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      {leadBadge}
+    </>
   )
 }

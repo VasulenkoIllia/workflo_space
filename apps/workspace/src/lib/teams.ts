@@ -17,6 +17,9 @@ export interface Team {
   name: string
   color: string | null
   position: number
+  // TEAM-ADMIN-1: тімлід підрозділу (член команди)
+  leadId: string | null
+  lead: { id: string; name: string } | null
   _count: { members: number; tasks: number }
   columns: TeamColumn[]
 }
@@ -45,8 +48,15 @@ export function useCreateTeam() {
 export function useUpdateTeam() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; name?: string; position?: number }) =>
-      api.patch<{ team: Team }>(`/workspace/teams/${id}`, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string
+      name?: string
+      position?: number
+      leadId?: string | null
+    }) => api.patch<{ team: Team }>(`/workspace/teams/${id}`, body),
     onSuccess: () => invalidate(qc),
   })
 }

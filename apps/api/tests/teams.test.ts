@@ -257,7 +257,8 @@ describe('TEAM-BOARDS /workspace/teams', () => {
     await app.close()
   })
 
-  it('executor НЕ налаштовує дошку (403), owner/manager — так', async () => {
+  it('executor-НЕ-лід не налаштовує дошку (403)', async () => {
+    teamFindFirst.mockResolvedValue({ id: TEAM_ID, leadId: 'someone-else' })
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'POST',
@@ -266,6 +267,64 @@ describe('TEAM-BOARDS /workspace/teams', () => {
       payload: { name: 'X', kind: 'todo' },
     })
     expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  // ── TEAM-ADMIN-1: тімлід підрозділу ─────────────────────────────────────────
+  it('owner призначає тімліда; не-член команди → 400', async () => {
+    teamFindFirst.mockResolvedValue({ id: TEAM_ID })
+    memberFindFirst.mockResolvedValueOnce(null) // лід не в цій команді
+    const { app, token } = await authed(OWNER)
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/teams/${TEAM_ID}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { leadId: PROFILE },
+    })
+    expect(bad.statusCode).toBe(400)
+
+    memberFindFirst.mockResolvedValueOnce({ id: 'am-1' }) // член команди
+    teamUpdate.mockResolvedValue({ id: TEAM_ID, name: 'Dev', leadId: PROFILE })
+    const ok = await app.inject({
+      method: 'PATCH',
+      url: `/workspace/teams/${TEAM_ID}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { leadId: PROFILE },
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(teamUpdate.mock.calls[0][0].data.leadId).toBe(PROFILE)
+    // валідація шукала члена САМЕ цієї команди
+    expect(memberFindFirst.mock.calls[1][0].where.teamId).toBe(TEAM_ID)
+    await app.close()
+  })
+
+  it('тімлід (executor) налаштовує колонки СВОЄЇ команди', async () => {
+    teamFindFirst.mockResolvedValue({ id: TEAM_ID, leadId: 'exec-1' })
+    colFindFirst.mockResolvedValue(null)
+    colCreate.mockResolvedValue({ id: 'col-1', name: 'QA', kind: 'in_progress', position: 0 })
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/workspace/teams/${TEAM_ID}/columns`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'QA', kind: 'in_progress' },
+    })
+    expect(res.statusCode).toBe(201)
+    await app.close()
+  })
+
+  it('executor бачить лише свою команду у списку (скоуп members.some)', async () => {
+    teamFindMany.mockResolvedValue([])
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/teams',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    // другий виклик findMany — власне список; перший — lazy-seed порожніх колонок
+    const listCall = teamFindMany.mock.calls[1][0]
+    expect(listCall.where.members).toEqual({ some: { profileId: 'exec-1' } })
     await app.close()
   })
 

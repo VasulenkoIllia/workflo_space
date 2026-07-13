@@ -82,6 +82,7 @@ model Profile {
   leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
   pushSubscriptions      PushSubscription[] // S12-03
   broadcastsCreated      Broadcast[]               @relation("BroadcastCreatedBy") // S12-07
+  ledTeams               Team[]                    @relation("TeamLead") // TEAM-ADMIN-1
 
   @@index([role])
   @@map("profiles")
@@ -1851,14 +1852,20 @@ model Team {
   name      String
   color     String? // hex-акцент таба (крапка wfb-board-dot)
   position  Int            @default(0)
+  // TEAM-ADMIN-1: тімлід підрозділу — головний у команді (мусить бути її членом;
+  // права: бачить підрозділ, налаштовує його дошку). SetNull — лід пішов, команда живе.
+  leadId    String?
+  lead      Profile?       @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
   createdAt DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt DateTime       @updatedAt @db.Timestamptz(3)
   members   AgencyMember[]
   tasks     InternalTask[]
   columns   TeamColumn[]
+  projects  Project[]
 
   @@unique([agencyId, name])
   @@index([agencyId])
+  @@index([leadId])
   @@map("teams")
 }
 
@@ -2340,6 +2347,9 @@ model Project {
   agency    Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
+  // TEAM-ADMIN-1: команда-виконавець проекту (клієнту НЕ віддається — портальні DTO без team)
+  teamId    String?
+  team      Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
   name      String // «Оренда», «Програмування», …
   type      String? // П8: вільний текст-категорія (довідник — на SaaS-фазі)
 
@@ -2388,6 +2398,7 @@ model Project {
   @@index([companyId])
   @@index([legalEntityId])
   @@index([nomenclatureId])
+  @@index([teamId])
   @@map("projects")
 }
 

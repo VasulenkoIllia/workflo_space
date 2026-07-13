@@ -16,10 +16,12 @@ import {
   type Team,
   useCreateColumn,
   useCreateTeam,
+  useUpdateTeam,
   useDeleteColumn,
   useDeleteTeam,
   useTeams,
 } from '@/lib/teams'
+import { useTeam } from '@/lib/payouts'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'todo', label: 'До роботи' },
@@ -90,10 +92,10 @@ export function TaskBoardPage() {
   const [teamTab, setTeamTab] = useState<string>('all')
   const [teamsEditor, setTeamsEditor] = useState(false)
   const [columnsEditor, setColumnsEditor] = useState(false)
-  const canConfig = isOwner || isManager
-
   const all = data?.tasks ?? []
   const activeTeam = teamTab === 'all' ? null : (teams.find((tm) => tm.id === teamTab) ?? null)
+  // TEAM-ADMIN-1: колонки своєї дошки налаштовує і ТІМЛІД активної команди
+  const canConfig = isOwner || isManager || (!!activeTeam && activeTeam.leadId === user?.profile.id)
   const tasks = teamTab === 'all' ? all : all.filter((t) => (t.teamId ?? null) === teamTab)
   const countFor = (teamId: string) => all.filter((t) => t.teamId === teamId).length
 
@@ -378,6 +380,45 @@ function tabStyle(active: boolean): React.CSSProperties {
   }
 }
 
+/** TEAM-ADMIN-1: селект тімліда підрозділу (owner; опції — лише члени команди). */
+function TeamLeadSelect({ team }: { team: Team }) {
+  const { data: rosterData } = useTeam()
+  const update = useUpdateTeam()
+  const options = (rosterData?.members ?? []).filter((m) => m.teamId === team.id)
+  return (
+    <select
+      value={team.leadId ?? ''}
+      disabled={update.isPending}
+      title="Тімлід підрозділу"
+      onChange={(e) =>
+        update.mutate(
+          { id: team.id, leadId: e.target.value || null },
+          {
+            onSuccess: () => toast.success(e.target.value ? 'Тімліда призначено' : 'Тімліда знято'),
+            onError: () => toast.error('Не вдалося (лід має бути членом команди)'),
+          }
+        )
+      }
+      style={{
+        background: 'var(--wf-surface)',
+        color: 'var(--wf-fg)',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        padding: '4px 6px',
+        fontSize: 12,
+        maxWidth: 150,
+      }}
+    >
+      <option value="">без тімліда</option>
+      {options.map((m) => (
+        <option key={m.profileId} value={m.profileId}>
+          ★ {m.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 /** TEAM-BOARDS: owner-редактор команд — додати/видалити (люди й задачі при
  * видаленні НЕ губляться: FK SetNull → «без команди», видно в «Усі»). */
 function TeamsEditorModal({ teams, onClose }: { teams: Team[]; onClose: () => void }) {
@@ -405,6 +446,8 @@ function TeamsEditorModal({ teams, onClose }: { teams: Team[]; onClose: () => vo
               }}
             />
             <span style={{ flex: 1 }}>{tm.name}</span>
+            {/* TEAM-ADMIN-1: тімлід — головний у підрозділі; лише з членів команди */}
+            <TeamLeadSelect team={tm} />
             <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
               {tm._count.members} люд · {tm._count.tasks} задач
             </span>

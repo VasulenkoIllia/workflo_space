@@ -8,7 +8,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
 
@@ -106,9 +106,27 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       }
       const q = boardQuerySchema.parse(request.query)
       const tasks = await withTenant(async (tx) => {
+        // TEAM-ADMIN-1: executor бачить дошку лише СВОЄЇ команди + задачі, призначені
+        // особисто йому (owner/manager — все). AND-иться з явними фільтрами, тож
+        // підставити чужий teamId у query не допоможе.
+        let executorScope: Record<string, unknown> = {}
+        if (agencyRole(user, agencyId) === 'executor') {
+          const me = await tx.agencyMember.findFirst({
+            where: { agencyId, profileId: user.sub },
+            select: { teamId: true },
+          })
+          executorScope = {
+            OR: [
+              ...(me?.teamId ? [{ teamId: me.teamId }] : []),
+              { assigneeId: user.sub },
+              { coAssignees: { some: { profileId: user.sub } } },
+            ],
+          }
+        }
         const rows = await tx.internalTask.findMany({
           where: {
             agencyId,
+            ...executorScope,
             ...(q.assigneeId ? { assigneeId: q.assigneeId } : {}),
             ...(q.status ? { status: q.status } : {}),
             // TEAM-BOARDS: 'none' → задачі поза командами; інакше — конкретна команда

@@ -13,8 +13,11 @@ import {
   useCompanies,
   useProject,
   useSetProjectLegalEntity,
+  useSetProjectTeam,
   type FinProject,
 } from '@/lib/projects'
+import { useTeams } from '@/lib/teams'
+import { toast } from 'sonner'
 import { ProjectModal } from './ProjectsPage'
 
 const MODEL_LABEL: Record<string, string> = {
@@ -65,6 +68,42 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
       </span>
       <span style={{ fontSize: 13, textAlign: 'right' }}>{v}</span>
     </div>
+  )
+}
+
+/** TEAM-ADMIN-1: команда-виконавець проекту — контекст «хто робить»; клієнт її не бачить. */
+function ProjectTeamCard({ project }: { project: FinProject }) {
+  const { data: teams = [] } = useTeams()
+  const setTeam = useSetProjectTeam(project.id)
+  if (teams.length === 0) return null
+  return (
+    <Card title="Команда">
+      <div
+        className="wfp-mono"
+        style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+      >
+        // підрозділ-виконавець проєкту · клієнту в порталі не показується
+      </div>
+      <select
+        value={project.teamId ?? ''}
+        onChange={(e) =>
+          setTeam.mutate(e.target.value || null, {
+            onSuccess: () => toast.success('Команду проєкту збережено'),
+            onError: () => toast.error('Не вдалося зберегти'),
+          })
+        }
+        disabled={setTeam.isPending}
+        style={controlStyle}
+      >
+        <option value="">— без команди —</option>
+        {teams.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+            {t.lead ? ` · лід: ${t.lead.name}` : ''}
+          </option>
+        ))}
+      </select>
+    </Card>
   )
 }
 
@@ -346,6 +385,7 @@ export function ProjectDetailPage() {
           {p.invoiceApprover && <Row k="Погоджує" v={APPROVER_LABEL[p.invoiceApprover]} />}
         </Card>
 
+        <ProjectTeamCard project={p} />
         <LegalEntityCard project={p} />
         <ProjectNomenclatureCard project={p} />
         <MarginCard project={p} />

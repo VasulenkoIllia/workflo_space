@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 export interface FinProject {
+  // TEAM-ADMIN-1: команда-виконавець проекту (клієнту не віддається)
+  teamId?: string | null
+  team?: { id: string; name: string } | null
   id: string
   companyId: string
   name: string
@@ -134,6 +137,16 @@ export function useProject(id: string) {
 }
 
 /** PATCH only the project's legal entity (20-Д selector). null → inherit agency default. */
+/** TEAM-ADMIN-1: призначити команду-виконавця проекту (null = зняти). */
+export function useSetProjectTeam(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (teamId: string | null) =>
+      api.patch<{ project: FinProject }>(`/workspace/projects/${id}`, { teamId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['fin-projects'] }),
+  })
+}
+
 export function useSetProjectLegalEntity(id: string) {
   const qc = useQueryClient()
   return useMutation({

@@ -48,6 +48,9 @@ const PROJECT_SELECT = {
   invoiceApprover: true,
   active: true,
   createdAt: true,
+  // TEAM-ADMIN-1: команда-виконавець (workspace-only; портальний select без team)
+  teamId: true,
+  team: { select: { id: true, name: true } },
 } satisfies Prisma.ProjectSelect
 
 type ProjectRow = Prisma.ProjectGetPayload<{ select: typeof PROJECT_SELECT }>
@@ -230,6 +233,14 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
             throw new AppError(ApiErrorCode.NOT_FOUND, 'Юр-особу не знайдено', 404)
           }
         }
+        // TEAM-ADMIN-1: команда мусить існувати в ЦЬОМУ тенанті
+        if (input.teamId) {
+          const team = await tx.team.findFirst({
+            where: { id: input.teamId, agencyId },
+            select: { id: true },
+          })
+          if (!team) throw new AppError(ApiErrorCode.NOT_FOUND, 'Команду не знайдено', 404)
+        }
         // П3 (P-7): linking a contract must reference a real `contract` Document of THIS
         // tenant + company — otherwise any UUID would unblock the charge gate.
         if (input.contractDocumentId) {
@@ -249,6 +260,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
           where: { id: existing.id },
           data: {
             ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
             ...(input.type !== undefined ? { type: input.type } : {}),
             ...(input.currency !== undefined ? { currency: input.currency } : {}),
             ...(input.abonAmount !== undefined ? { abonAmount: input.abonAmount } : {}),

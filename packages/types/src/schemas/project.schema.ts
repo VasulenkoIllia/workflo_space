@@ -141,7 +141,12 @@ export type CloseCycleInput = z.infer<typeof closeCycleSchema>
 
 /** PATCH /workspace/projects/:id — partial; `companyId`/`billingModel` are immutable here. */
 export const updateProjectSchema = z
-  .object({ ...baseShape, active: z.boolean().optional() })
+  .object({
+    ...baseShape,
+    active: z.boolean().optional(),
+    // TEAM-ADMIN-1: команда-виконавець проекту (null = зняти); клієнту не віддається
+    teamId: z.string().uuid().nullable().optional(),
+  })
   .partial()
   .strict()
   .superRefine((d, ctx) => {

@@ -31,6 +31,8 @@ const updateSchema = z
       .nullable()
       .optional(),
     position: z.number().int().min(0).max(10_000).optional(),
+    // TEAM-ADMIN-1: тімлід (null = зняти); мусить бути ЧЛЕНОМ цієї команди
+    leadId: z.string().uuid().nullable().optional(),
   })
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'Порожній запит' })
@@ -41,6 +43,9 @@ const TEAM_SELECT = {
   name: true,
   color: true,
   position: true,
+  // TEAM-ADMIN-1: тімлід підрозділу
+  leadId: true,
+  lead: { select: { id: true, name: true } },
   _count: { select: { members: true, tasks: true } },
   // TASK-COLUMNS: кастомні колонки дошки команди (kind = мапінг на канонічний статус)
   columns: {
@@ -76,14 +81,33 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     return requireOwnerAgency(request.user, 'Команди редагує лише власник')
   }
 
-  // Колонки дошки налаштовує owner АБО manager (тімлід своєї дошки; дизайн canConfig=!exec)
-  function assertBoardConfig(request: { user: Parameters<typeof requireActiveAgency>[0] }): string {
+  // TEAM-ADMIN-1: колонки дошки налаштовує owner/manager БУДЬ-ЯКОЇ команди
+  // або ТІМЛІД своєї (виконавець, чий profileId = team.leadId).
+  function boardConfigCtx(request: {
+    user: Parameters<typeof requireActiveAgency>[0] &
+      Parameters<typeof agencyRole>[0] & {
+        sub: string
+      }
+  }): {
+    agencyId: string
+    role: ReturnType<typeof agencyRole>
+    sub: string
+  } {
     const agencyId = requireActiveAgency(request.user)
-    const role = agencyRole(request.user as Parameters<typeof agencyRole>[0], agencyId)
-    if (role !== 'owner' && role !== 'manager') {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Дошку налаштовує власник або тімлід', 403)
-    }
-    return agencyId
+    return { agencyId, role: agencyRole(request.user, agencyId), sub: request.user.sub }
+  }
+
+  function assertLeadOrAbove(
+    ctx: { role: ReturnType<typeof agencyRole>; sub: string },
+    team: { leadId: string | null } | null
+  ): void {
+    if (ctx.role === 'owner' || ctx.role === 'manager') return
+    if (team && team.leadId === ctx.sub) return
+    throw new AppError(
+      ApiErrorCode.FORBIDDEN,
+      'Дошку команди налаштовує її тімлід, менеджер або власник',
+      403
+    )
   }
 
   // ── List (уся команда — таби дошки) ───────────────────────────────────────────
@@ -95,6 +119,11 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(request.user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
       }
+      // TEAM-ADMIN-1: executor бачить лише СВОЮ команду (лід — теж її член);
+      // owner/manager — всі підрозділи.
+      const viewerRole = agencyRole(request.user as Parameters<typeof agencyRole>[0], agencyId)
+      const scope =
+        viewerRole === 'executor' ? { members: { some: { profileId: request.user.sub } } } : {}
       const teams = await tenantTransaction(prisma, async (tx) => {
         // TASK-COLUMNS lazy-seed: команда без жодної колонки отримує 3 дефолтні (канонічні)
         const empty = await tx.team.findMany({
@@ -115,7 +144,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
           })
         }
         return tx.team.findMany({
-          where: { agencyId },
+          where: { agencyId, ...scope },
           orderBy: { position: 'asc' },
           select: TEAM_SELECT,
         })
@@ -184,12 +213,28 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
           if (dup)
             throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Команда з такою назвою вже є', 400)
         }
+        // TEAM-ADMIN-1: лід мусить бути членом САМЕ цієї команди — інакше «керівник
+        // збоку» без видимості власної дошки. Спочатку признач людину в команду.
+        if (body.leadId) {
+          const member = await tx.agencyMember.findFirst({
+            where: { agencyId, profileId: body.leadId, teamId: existing.id },
+            select: { id: true },
+          })
+          if (!member) {
+            throw new AppError(
+              ApiErrorCode.VALIDATION_ERROR,
+              'Тімлід має бути членом цієї команди — спершу додайте людину в команду',
+              400
+            )
+          }
+        }
         return tx.team.update({
           where: { id: existing.id },
           data: {
             ...(body.name !== undefined ? { name: body.name } : {}),
             ...(body.color !== undefined ? { color: body.color } : {}),
             ...(body.position !== undefined ? { position: body.position } : {}),
+            ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
           },
           select: TEAM_SELECT,
         })
@@ -229,14 +274,16 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertBoardConfig(request)
+      const ctx = boardConfigCtx(request)
+      const agencyId = ctx.agencyId
       const body = columnCreateSchema.parse(request.body)
       const column = await tenantTransaction(prisma, async (tx) => {
         const team = await tx.team.findFirst({
           where: { id: request.params.teamId, agencyId },
-          select: { id: true },
+          select: { id: true, leadId: true },
         })
         if (!team) throw new AppError(ApiErrorCode.NOT_FOUND, 'Команду не знайдено', 404)
+        assertLeadOrAbove(ctx, team)
         const dup = await tx.teamColumn.findFirst({
           where: { teamId: team.id, name: body.name },
           select: { id: true },
@@ -266,9 +313,15 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns/:columnId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertBoardConfig(request)
+      const ctx = boardConfigCtx(request)
+      const agencyId = ctx.agencyId
       const body = columnUpdateSchema.parse(request.body)
       const column = await tenantTransaction(prisma, async (tx) => {
+        const team = await tx.team.findFirst({
+          where: { id: request.params.teamId, agencyId },
+          select: { leadId: true },
+        })
+        assertLeadOrAbove(ctx, team)
         const existing = await tx.teamColumn.findFirst({
           where: { id: request.params.columnId, teamId: request.params.teamId, agencyId },
           select: { id: true, kind: true },
@@ -301,8 +354,14 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns/:columnId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertBoardConfig(request)
+      const ctx = boardConfigCtx(request)
+      const agencyId = ctx.agencyId
       await tenantTransaction(prisma, async (tx) => {
+        const team = await tx.team.findFirst({
+          where: { id: request.params.teamId, agencyId },
+          select: { leadId: true },
+        })
+        assertLeadOrAbove(ctx, team)
         const existing = await tx.teamColumn.findFirst({
           where: { id: request.params.columnId, teamId: request.params.teamId, agencyId },
           select: { id: true },
