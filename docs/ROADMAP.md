@@ -162,7 +162,29 @@ webhooks + ApiKey беремо **лише коли система цілісна
 - **SaaS-era гейти (→ S14):** `blog_posts`/`testimonials`/`cms` під `isAgencyOwner`, а не
   `platformAdmin` — при мульти-агенційному онбордингу окрема platform-admin роль; inbound
   потребує per-agency alias/mailbox для однозначного маршрутингу (зараз одна платформна скринька).
-- **Досі відкрито (r4):** `agency_members` RLS — app-шар гейтить, чекає RLS-flip фази.
+- **RLS:** полісі на 100% tenant-таблиць (вкл. `agency_members` — закрито 2026-07-10,
+  міграція `20260710_agency_members_rls`). Відкритим лишається лише **системний enforce-flip**
+  (`RLS_ENFORCED=true` + `workflo_app`-роль + `DATABASE_APP_URL`) — перед першим зовнішнім тенантом.
+
+## 🔬 Coverage-аудит (2026-07-13) — черга фіксів прогалин
+
+> Повний звіт — [`AUDIT_2026-07-13_coverage.md`](AUDIT_2026-07-13_coverage.md). Системний прохід
+> «бек ↔ фронт ↔ налаштування ↔ env» після ХВОСТИ-2. Ядро повне (нуль мертвих викликів, нуль
+> TODO); прогалини по краях. Фіксимо пакетами по черзі:
+>
+> 1. **COV-ENV** — `.env.example` розсинхрон з кодом: 3 мертві змінні (STORAGE*TYPE→STORAGE_DRIVER,
+>    JWT*_*TTL→JWT_EXPIRES_IN, OPENAI→ANTHROPIC_API_KEY) + ~13 відсутніх (VAPID, INBOUND_IMAP*_,
+>    ADMIN_EMAIL, API_PUBLIC_URL, UNSUBSCRIBE_SECRET, SMTP_FROM_NAME…).
+> 2. **COV-UX** — юзабіліті-пакет: кнопка видалення замовлення (кошик є, кнопки нема!) ·
+>    календар у nav workspace · кошторис клієнту на погодженні (зараз lump-sum) ·
+>    SUPPORT/CALENDAR у матрицю сповіщень · edit-UI для події/time-log/номенклатури ·
+>    GDPR-export у workspace · мертвий Placeholder.tsx.
+> 3. **COV-SET** — налаштування: квота відпусток (зараз hardcode 24!) · approval-каскад
+>    agency/company рівні · bonusCurrency у PaymentForm.
+> 4. **COV-PORTAL** — заглушки «Моя компанія»/«Інтеграції» в nav · `/documents` під CompanyGate.
+>
+> Дрібні сироти (WS-1…11) і свідомо відкладене (S7 i18n, S8 QA, S14 SaaS, інтеграції-27,
+> e2e-глибина, RLS-flip) — у звіті, не в цій черзі.
 
 ## ✅ Готово нещодавно (не брати вдруге)
 
