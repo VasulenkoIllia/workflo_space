@@ -156,8 +156,9 @@ webhooks + ApiKey беремо **лише коли система цілісна
   recurringCharges — свідомо особливий); ~~R5~~ ✅ `AnnouncementBanner`+read-хуки → app-core
   (shim-и за старими шляхами); ~~R6~~ ✅ `requireOwnerAgency` в auth/tenant.ts (20 файлів
   делегують, доменні 403-меседжі збережено; pnl-гейт уніфіковано). **Рефактор-блок закрито.**
-- **LOW-hardening:** inbound per-poll cap (мейл-бомба); inbound DKIM-surface (ops, не код);
-  `notifyTeamOfInbound` через withTenant (косметика конвенції).
+- ~~**LOW-hardening**~~ ✅ **закрито повністю:** inbound per-poll cap 200 + DKIM-surface —
+  у ХВОСТИ-2 (2026-07-13, див. «Готово нещодавно»); `notifyTeamOfInbound` через withTenant —
+  закрито R3 (recipients-хелпер).
 - **SaaS-era гейти (→ S14):** `blog_posts`/`testimonials`/`cms` під `isAgencyOwner`, а не
   `platformAdmin` — при мульти-агенційному онбордингу окрема platform-admin роль; inbound
   потребує per-agency alias/mailbox для однозначного маршрутингу (зараз одна платформна скринька).
