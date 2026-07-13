@@ -201,14 +201,36 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:-noreply@workflo.space}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Workflo}
       BOT_TOKEN: ${BOT_TOKEN:-}
       # Telegram account linking (S6-05/06): API mints deep links + verifies the bot's calls.
       BOT_LINK_SECRET: ${BOT_LINK_SECRET:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      BLOG_AI_MODEL: ${BLOG_AI_MODEL:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Web-push (VAPID, notify-канал PUSH): не задано → канал мовчки off.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:support@workflo.space}
+      # Inbound email→тікети (S12-05, docs/EMAIL_INBOUND_SETUP.md). Вмикати лише на
+      # ОДНОМУ середовищі — два полери однієї скриньки розтягнуть листи між базами.
+      INBOUND_IMAP_HOST: ${INBOUND_IMAP_HOST_STAGING:-}
+      INBOUND_IMAP_PORT: ${INBOUND_IMAP_PORT:-993}
+      INBOUND_IMAP_USER: ${INBOUND_IMAP_USER_STAGING:-}
+      INBOUND_IMAP_PASSWORD: ${INBOUND_IMAP_PASSWORD_STAGING:-}
+      INBOUND_IMAP_SECURE: ${INBOUND_IMAP_SECURE:-true}
+      INBOUND_IMAP_MAILBOX: ${INBOUND_IMAP_MAILBOX:-INBOX}
+      # Публічні лінки у листах (unsubscribe/рахунок) + HMAC-секрет відписки
+      # (fallback JWT_SECRET — але тоді він МУСИТЬ збігатись між api і worker).
+      API_PUBLIC_URL: ${API_PUBLIC_URL_STAGING:-https://dev-api.workflo.space}
+      UNSUBSCRIBE_SECRET: ${UNSUBSCRIBE_SECRET:-}
+      # Superadmin-allowlist (auth/can.ts, крос-тенант /admin/*). Порожньо → нікого.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       # INFRA-DR1: те саме, що в prod — файли на volume, інакше гинуть при recreate.
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       UPLOAD_DIR: /data/uploads
     volumes:
       - uploads_data:/data/uploads
