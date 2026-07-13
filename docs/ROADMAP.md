@@ -172,21 +172,32 @@ webhooks + ApiKey беремо **лише коли система цілісна
 > «бек ↔ фронт ↔ налаштування ↔ env» після ХВОСТИ-2. Ядро повне (нуль мертвих викликів, нуль
 > TODO); прогалини по краях. Фіксимо пакетами по черзі:
 >
-> 1. **COV-ENV** — `.env.example` розсинхрон з кодом: 3 мертві змінні (STORAGE*TYPE→STORAGE_DRIVER,
+> 1. ~~**COV-ENV**~~ ✅ (13.07) — `.env.example` розсинхрон з кодом: 3 мертві змінні (STORAGE*TYPE→STORAGE_DRIVER,
 >    JWT*_*TTL→JWT_EXPIRES_IN, OPENAI→ANTHROPIC_API_KEY) + ~13 відсутніх (VAPID, INBOUND_IMAP*_,
 >    ADMIN_EMAIL, API_PUBLIC_URL, UNSUBSCRIBE_SECRET, SMTP_FROM_NAME…).
-> 2. **COV-UX** — юзабіліті-пакет: кнопка видалення замовлення (кошик є, кнопки нема!) ·
+> 2. ~~**COV-UX**~~ ✅ (13.07) — юзабіліті-пакет: кнопка видалення замовлення (кошик є, кнопки нема!) ·
 >    календар у nav workspace · кошторис клієнту на погодженні (зараз lump-sum) ·
 >    SUPPORT/CALENDAR у матрицю сповіщень · edit-UI для події/time-log/номенклатури ·
 >    GDPR-export у workspace · мертвий Placeholder.tsx.
-> 3. **COV-SET** — налаштування: квота відпусток (зараз hardcode 24!) · approval-каскад
+> 3. ~~**COV-SET**~~ ✅ (13.07) — налаштування: квота відпусток (зараз hardcode 24!) · approval-каскад
 >    agency/company рівні · bonusCurrency у PaymentForm.
-> 4. **COV-PORTAL** — заглушки «Моя компанія»/«Інтеграції» в nav · `/documents` під CompanyGate.
+> 4. ~~**COV-PORTAL**~~ ✅ (13.07) — заглушки «Моя компанія»/«Інтеграції» в nav · `/documents` під CompanyGate.
 >
 > Дрібні сироти (WS-1…11) і свідомо відкладене (S7 i18n, S8 QA, S14 SaaS, інтеграції-27,
 > e2e-глибина, RLS-flip) — у звіті, не в цій черзі.
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **COV-фікси (2026-07-13) — всі 4 пакети coverage-аудиту закрито одним днем.**
+  ENV: `.env.example`+compose вирівняно з кодом (3 мертві змінні, ~13 відсутніх, worker-мапінги).
+  UX: кнопка видалення замовлення (+кошик-флоу цілий) · календар у nav · кошторис
+  клієнту при погодженні (estimateLines у clientView) · SUPPORT/CALENDAR у матриці
+  сповіщень · edit-UI події/time-log/номенклатури · GDPR-export у workspace (секція
+  → app-core) · мертві Placeholder-и. SET: квота відпусток у UI · approval-каскад
+  3/3 рівнів (agency-дефолт + company-override роут/UI) · bonusCurrency у формі.
+  PORTAL: «Моя компанія» — реальна сторінка · «Інтеграції» з nav геть (до модуля 27) ·
+  /documents під CompanyGate. Коміти: 31bbb6a (док+TRACKER), 15f58b2, 8559cc7,
+  45fecc3, 3513c99. Звіт: [`AUDIT_2026-07-13_coverage.md`](AUDIT_2026-07-13_coverage.md).
 
 - **ХВОСТИ-2 (2026-07-13) — три хвости збудованих зрізів одним зрізом, усі закриті до ✅.**
   Міграція `20260722_tails2` (fresh-PG-proven, drift-clean): `profiles.phone/timezone` +
