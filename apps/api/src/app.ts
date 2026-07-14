@@ -31,6 +31,7 @@ import tenantBrandingRoute from './routes/tenant/branding.js'
 import agencySecurityRoute from './routes/tenant/agencySecurity.js'
 import agencyReportsRoute from './routes/tenant/agencyReports.js'
 import agencyWorkflowRoute from './routes/tenant/agencyWorkflow.js'
+import opsSettingsRoute from './routes/tenant/opsSettings.js'
 import documentTemplatesRoute from './routes/tenant/documentTemplates.js'
 import emailTemplatesRoute from './routes/tenant/emailTemplates.js'
 import dunningRoute from './routes/tenant/dunning.js'
@@ -106,6 +107,7 @@ export function buildApp() {
   app.register(agencySecurityRoute)
   app.register(agencyReportsRoute)
   app.register(agencyWorkflowRoute)
+  app.register(opsSettingsRoute)
   app.register(documentTemplatesRoute)
   app.register(emailTemplatesRoute)
   app.register(dunningRoute)

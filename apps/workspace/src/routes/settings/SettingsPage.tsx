@@ -8,7 +8,7 @@ import {
   TelegramSection,
   TwoFactorSection,
 } from '@workflo/app-core'
-import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import {
   DocumentTemplatesSection,
@@ -23,7 +23,7 @@ import {
   useDeleteNomenclature,
   useNomenclature,
 } from '@/lib/nomenclature'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatDateTime } from '@/lib/format'
 import {
   useCreateOrderTag,
   useCreateOrderTemplate,
@@ -1206,50 +1206,259 @@ function LegalEntitiesSection() {
   )
 }
 
+/** DSN-3 (workspace-admin-settings.jsx): налаштування = 6-таб хаб замість
+ * плаского скролу 15 карток. + нові ops-таби: SMTP-статус/тест і крони-моніторинг. */
 export function SettingsPage() {
   const payment = usePaymentSettings()
   const referral = useReferralSettings()
   const { isOwner } = useAuth()
+  const [tab, setTab] = useState('account')
+
+  const items = isOwner
+    ? [
+        { id: 'account', label: 'Акаунт' },
+        { id: 'workflow', label: 'Воркфлоу' },
+        { id: 'templates', label: 'Шаблони й брендинг' },
+        { id: 'catalogs', label: 'Каталоги' },
+        { id: 'finance', label: 'Фінанси' },
+        { id: 'ops', label: 'SMTP · Крони' },
+      ]
+    : [{ id: 'account', label: 'Акаунт' }]
 
   return (
     <div>
       <div style={{ fontSize: 28, fontWeight: 600 }}>Налаштування</div>
       <div
         className="wfp-mono"
-        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 18 }}
+        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 14 }}
       >
-        // юр-особи, реквізити для оплати та реферальна програма
+        // {isOwner ? 'конфіг агенції · воркфлоу · шаблони · фінанси · ops' : 'акаунт'}
       </div>
 
-      <div style={{ display: 'grid', gap: 18 }}>
-        <TwoFactorSection app="workspace" />
-        {isOwner && <AgencySecuritySection />}
-        {isOwner && <EmailReportsSection />}
-        {isOwner && <WorkflowSection />}
-        {isOwner && <DunningSection />}
-        {isOwner && <NomenclatureSection />}
-        {isOwner && <DocumentTemplatesSection />}
-        {isOwner && <PdfBrandingSection />}
-        {isOwner && <EmailTemplatesSection />}
-        {isOwner && <OrderCatalogSection />}
-        {isOwner && <SlaPoliciesSection />}
-        <LinkedAccountsSection app="workspace" />
-        <SessionsSection />
-        <LegalEntitiesSection />
-        {payment.isLoading ? (
-          <Skeleton style={{ height: 200 }} />
-        ) : (
-          <PaymentForm initial={payment.data?.settings ?? null} />
+      <Tabs value={tab} onChange={setTab} items={items} />
+
+      <div style={{ display: 'grid', gap: 18, marginTop: 16 }}>
+        {tab === 'account' && (
+          <>
+            <TwoFactorSection app="workspace" />
+            <LinkedAccountsSection app="workspace" />
+            <SessionsSection />
+            <NotificationsSection />
+            <TelegramSection app="workspace" />
+          </>
         )}
-        {referral.isLoading ? (
-          <Skeleton style={{ height: 200 }} />
-        ) : referral.data ? (
-          <ReferralForm initial={referral.data} />
-        ) : null}
-        <NotificationsSection />
-        <TelegramSection app="workspace" />
+
+        {isOwner && tab === 'workflow' && (
+          <>
+            <AgencySecuritySection />
+            <WorkflowSection />
+            <DunningSection />
+            <SlaPoliciesSection />
+            <EmailReportsSection />
+          </>
+        )}
+
+        {isOwner && tab === 'templates' && (
+          <>
+            <EmailTemplatesSection />
+            <DocumentTemplatesSection />
+            <PdfBrandingSection />
+          </>
+        )}
+
+        {isOwner && tab === 'catalogs' && (
+          <>
+            <NomenclatureSection />
+            <OrderCatalogSection />
+          </>
+        )}
+
+        {isOwner && tab === 'finance' && (
+          <>
+            <LegalEntitiesSection />
+            {payment.isLoading ? (
+              <Skeleton style={{ height: 200 }} />
+            ) : (
+              <PaymentForm initial={payment.data?.settings ?? null} />
+            )}
+            {referral.isLoading ? (
+              <Skeleton style={{ height: 200 }} />
+            ) : referral.data ? (
+              <ReferralForm initial={referral.data} />
+            ) : null}
+          </>
+        )}
+
+        {isOwner && tab === 'ops' && (
+          <>
+            <SmtpSection />
+            <CronSection />
+          </>
+        )}
       </div>
     </div>
+  )
+}
+
+/** DSN-3: SMTP — санітизований env-стан + тест-лист собі. Конфіг лишається env-only. */
+function SmtpSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['smtp-status'],
+    queryFn: () =>
+      api.get<{
+        configured: boolean
+        host: string | null
+        port: number
+        secure: boolean
+        from: string
+        fromName: string
+        authUser: string | null
+        note: string
+      }>('/workspace/agency/smtp-status'),
+  })
+  const test = useMutation({
+    mutationFn: () => api.post<{ to: string; status: string }>('/workspace/agency/smtp-test', {}),
+    onSuccess: (r) =>
+      r.status === 'sent'
+        ? toast.success(`Тестовий лист надіслано на ${r.to}`)
+        : toast.error(`Не надіслано: ${r.status}`),
+    onError: () => toast.error('Не вдалося надіслати тест'),
+  })
+  if (isLoading) return <Skeleton style={{ height: 120 }} />
+  if (!data) return null
+  return (
+    <Card title="SMTP · вихідна пошта">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <StatusDot tone={data.configured ? 'success' : 'warning'} />
+        <span style={{ fontSize: 13 }}>
+          {data.configured ? 'SMTP налаштований' : 'SMTP не налаштований — листи не підуть'}
+        </span>
+      </div>
+      <div className="wfp-side">
+        <div className="wfp-side-row">
+          <div className="wfp-side-k">хост</div>
+          <div className="wfp-side-v">
+            {data.host ?? '—'}:{data.port}
+            {data.secure ? ' · TLS' : ''}
+          </div>
+        </div>
+        <div className="wfp-side-row">
+          <div className="wfp-side-k">від</div>
+          <div className="wfp-side-v">
+            {data.fromName} &lt;{data.from}&gt;
+          </div>
+        </div>
+        <div className="wfp-side-row">
+          <div className="wfp-side-k">auth</div>
+          <div className="wfp-side-v">{data.authUser ?? 'без авторизації'}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={test.isPending}
+          onClick={() => test.mutate()}
+        >
+          Надіслати тест собі
+        </Button>
+        <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+          // {data.note}
+        </span>
+      </div>
+    </Card>
+  )
+}
+
+/** DSN-3: крони — живий реєстр makeCron цього процесу (без окремої таблиці). */
+function CronSection() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['cron-status'],
+    queryFn: () =>
+      api.get<{
+        crons: {
+          name: string
+          intervalMs: number
+          startedAt: string | null
+          lastRunAt: string | null
+          lastDurationMs: number | null
+          lastError: string | null
+          runs: number
+        }[]
+        inline: boolean
+        note: string | null
+      }>('/workspace/agency/cron-status'),
+    refetchInterval: 30_000,
+  })
+  if (isLoading) return <Skeleton style={{ height: 160 }} />
+  if (!data) return null
+  const fmtInterval = (ms: number) =>
+    ms >= 3_600_000 ? `${Math.round(ms / 3_600_000)}год` : `${Math.round(ms / 60_000)}хв`
+  return (
+    <Card title={`Крони · ${data.crons.length}`}>
+      {data.note && (
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-warning, #f59e0b)', marginBottom: 10 }}
+        >
+          // {data.note}
+        </div>
+      )}
+      {data.crons.length === 0 ? (
+        <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+          // кронів у цьому процесі немає
+        </div>
+      ) : (
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Джоб</th>
+              <th>Інтервал</th>
+              <th>Останній прогін</th>
+              <th className="wfp-num">Тривалість</th>
+              <th className="wfp-num">Прогонів</th>
+              <th>Стан</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.crons.map((c) => (
+              <tr key={c.name}>
+                <td className="wfp-mono" style={{ fontSize: 12 }}>
+                  {c.name}
+                </td>
+                <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  {fmtInterval(c.intervalMs)}
+                </td>
+                <td className="wfp-mono" style={{ fontSize: 12 }}>
+                  {c.lastRunAt ? formatDateTime(c.lastRunAt) : 'ще не запускався'}
+                </td>
+                <td className="wfp-num wfp-mono" style={{ fontSize: 12 }}>
+                  {c.lastDurationMs != null ? `${c.lastDurationMs}мс` : '—'}
+                </td>
+                <td className="wfp-num wfp-mono" style={{ fontSize: 12 }}>
+                  {c.runs}
+                </td>
+                <td>
+                  {c.lastError ? (
+                    <span
+                      className="wfp-mono"
+                      style={{ fontSize: 11, color: 'var(--wf-destructive)' }}
+                      title={c.lastError}
+                    >
+                      ✗ помилка
+                    </span>
+                  ) : (
+                    <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-accent)' }}>
+                      ✓ ok
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   )
 }
 
