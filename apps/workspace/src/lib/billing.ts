@@ -53,12 +53,13 @@ export function useBillingOverview(enabled = true) {
 }
 
 /** Agency charges; pass approvalStatus='pending' for the «на погодженні» queue. */
-export function useWsCharges(approvalStatus?: 'pending' | 'approved' | 'rejected') {
+export function useWsCharges(approvalStatus?: 'pending' | 'approved' | 'rejected', enabled = true) {
   const qs = new URLSearchParams({ limit: '100' })
   if (approvalStatus) qs.set('approvalStatus', approvalStatus)
   return useQuery({
     queryKey: ['ws-billing', 'charges', approvalStatus ?? 'all'],
     queryFn: () => api.get<{ charges: WsCharge[] }>(`/workspace/billing/charges?${qs.toString()}`),
+    enabled,
   })
 }
 

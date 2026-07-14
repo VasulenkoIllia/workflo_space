@@ -4878,3 +4878,38 @@
   color: var(--wf-fg-muted);
 }
 .wfp-auth-foot a { color: var(--wf-accent); cursor: pointer; }
+
+/* ── DSN-1: dashboard overview panels (порт з design-v2 workspace-orders.css) ──
+   НЕ плутати з wfd-* документними класами вище — це dashboard-slice панелі. */
+.wfd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
+.wfd-panel {
+  border: 1px solid var(--wf-border); border-radius: 12px; overflow: hidden;
+  background: color-mix(in oklab, var(--wf-fg) 2%, transparent);
+}
+.wfd-panel-h {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 14px; border-bottom: 1px solid var(--wf-border);
+}
+.wfd-panel-t { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--wf-fg); }
+.wfd-panel-link {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;
+  background: none; border: none; color: var(--wf-fg-muted); transition: color .12s ease;
+}
+.wfd-panel-link:hover { color: var(--wf-accent); }
+.wfd-mini-row {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+  padding: 9px 14px; cursor: pointer; border-bottom: 1px solid color-mix(in oklab, var(--wf-border) 55%, transparent);
+  transition: background .1s ease;
+}
+.wfd-mini-row:last-child { border-bottom: none; }
+.wfd-mini-row:hover { background: color-mix(in oklab, var(--wf-fg) 3%, transparent); }
+.wfd-mini-id { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-accent); }
+.wfd-mini-title { font-size: 12.5px; color: var(--wf-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wfd-mini-client { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); }
+.wfd-mini-due { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); white-space: nowrap; }
+.wfd-mini-due[data-status="overdue"] { color: var(--wf-destructive); font-weight: 600; }
+.wfd-mini-due[data-status="done"] { color: var(--wf-success); }
+.wfd-mini-noone { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-subtle); border: 1.5px dashed var(--wf-border); }
+.wfd-empty { padding: 18px 14px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-subtle); }
+
+@media (max-width: 860px) { .wfd-grid { grid-template-columns: 1fr; } }

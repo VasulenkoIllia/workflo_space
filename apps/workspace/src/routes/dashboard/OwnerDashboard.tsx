@@ -1,17 +1,15 @@
 import { useNavigate } from 'react-router-dom'
-import { OrderInternalStatus } from '@workflo/types'
+import { OrderClientStatus, OrderInternalStatus } from '@workflo/types'
 import { EmptyState, Icon, Skeleton } from '@workflo/ui'
-import { Donut, type DonutSegment } from '@/components/Donut'
 import { useAuth } from '@/contexts/AuthContext'
-import { formatMoney } from '@/lib/format'
-import { useBillingOverview, num } from '@/lib/billing'
+import { formatDate, formatMoney } from '@/lib/format'
+import { useBillingOverview, useWsCharges, num } from '@/lib/billing'
 import { useUnansweredChats } from '@/lib/chats'
-import { useTeam } from '@/lib/payouts'
-import { usePnl, isoDay } from '@/lib/finance'
-import { catColor, catLabel } from '@/lib/expenseCategories'
-import { useOrders, countByStatus, type WorkspaceOrder } from '@/lib/orders'
+import { useLeads } from '@/lib/leads'
+import { usePayouts, useTeam } from '@/lib/payouts'
+import { useProjects, type FinProject } from '@/lib/projects'
+import { useOrders, type WorkspaceOrder } from '@/lib/orders'
 import { useMomReport, type MomReport } from '@/lib/reports'
-import { KanbanBoard } from '@/routes/orders/KanbanBoard'
 
 /** 19-Д: «+12%» / «−8%» / «—» — дельта MoM, зелений угору / червоний униз. */
 function MomDelta({ pct }: { pct: number | null }) {
@@ -73,53 +71,53 @@ function MomStrip({ mom }: { mom: MomReport }) {
   )
 }
 
-/** Owner home — agency-wide overview: finance KPIs + expense donut, then orders attention/board. */
+const ACTIVE_END: OrderInternalStatus[] = [OrderInternalStatus.DONE, OrderInternalStatus.CANCELLED]
+
+/** DSN-1 (workspace-screens.jsx): дашборд = вікно в дошку/замовлення, не другий канбан.
+ * Stats-стріп + 4 slice-панелі (Прострочені · На перевірці · Без виконавця · Абонплата) +
+ * owner-блок «Фінанси та клієнти» (4 action-items). Донат/канбан живуть у /finance та /orders. */
 export function OwnerDashboard() {
   const navigate = useNavigate()
   const { isOwner } = useAuth()
   const { data, isLoading, isError } = useOrders({})
-  const { data: unassigned, isError: unassignedErr } = useOrders({ assigneeId: 'none' })
-  // Finance widgets are owner-only (manager is finance-blocked) — gate the queries so a manager
-  // viewing this dashboard never fires the 403'd billing/pnl endpoints.
+  const { data: unassignedData, isError: unassignedErr } = useOrders({ assigneeId: 'none' })
+  // Фінанс-віджети — owner-only (manager finance-blocked): гейтимо запити, щоб не ловити 403.
   const overview = useBillingOverview(isOwner)
-  // Current-month P&L drives the net-profit/expense KPIs + the donut.
-  const monthFrom = (() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-  })()
-  const pnl = usePnl(monthFrom, isoDay(new Date()), isOwner)
-  // 19-Д: дельти MoM (owner-only endpoint)
   const mom = useMomReport(isOwner)
+  const pendingCharges = useWsCharges('pending', isOwner)
+  const projects = useProjects(isOwner)
+  const leads = useLeads()
+  const period = new Date().toISOString().slice(0, 7)
+  const payouts = usePayouts(isOwner ? period : '')
+
   const orders = data?.orders ?? []
-
   const o = overview.data
-  const p = pnl.data
-  const expenseSegs: DonutSegment[] = (p?.byCategory ?? [])
-    .map((c) => ({
-      label: catLabel(c.category),
-      value: num(c.amountUsd) ?? 0,
-      color: catColor(c.category),
-    }))
-    .filter((s) => s.value > 0)
-  const totalExpenses = expenseSegs.reduce((s, x) => s + x.value, 0)
-  const netProfit = num(p?.netProfitUsd) ?? 0
-  const clientDebt = num(o?.outstandingDebt) ?? 0
 
-  const queue = countByStatus(orders, [OrderInternalStatus.NEW, OrderInternalStatus.CLARIFICATION])
-  const inProgress = countByStatus(orders, [
-    OrderInternalStatus.IN_PROGRESS,
-    OrderInternalStatus.REVISION,
-  ])
-  const review = countByStatus(orders, [OrderInternalStatus.REVIEW])
-  const done = countByStatus(orders, [OrderInternalStatus.DONE])
-
-  const isActive = (o: WorkspaceOrder) =>
-    o.internalStatus !== OrderInternalStatus.DONE &&
-    o.internalStatus !== OrderInternalStatus.CANCELLED
+  const isActive = (x: WorkspaceOrder) =>
+    x.internalStatus != null && !ACTIVE_END.includes(x.internalStatus)
   const overdue = orders.filter(
-    (o) => isActive(o) && o.dueDate != null && new Date(o.dueDate).getTime() < Date.now()
+    (x) => isActive(x) && x.dueDate != null && new Date(x.dueDate).getTime() < Date.now()
   )
-  const unassignedCount = unassigned?.orders.length ?? 0
+  const inReview = orders.filter((x) => x.internalStatus === OrderInternalStatus.REVIEW)
+  const unassigned = (unassignedData?.orders ?? []).filter(isActive)
+  const inWork = orders.filter(isActive)
+  // «Очікують клієнта» = оцінка надіслана, клієнт ще не погодив (02-А)
+  const waitingClient = orders.filter((x) => x.clientStatus === OrderClientStatus.PENDING_APPROVAL)
+  // «Абонплата · авто» — активні цикл-проєкти (авто-нарахування за розкладом)
+  const abonProjects = (projects.data?.projects ?? []).filter(
+    (p) => p.active && p.nextCycleAt != null
+  )
+
+  // Action-items (owner)
+  const pendingList = isOwner ? (pendingCharges.data?.charges ?? []) : []
+  const pendingSum = pendingList.reduce((s, c) => s + (num(c.totalAmount ?? c.amount) ?? 0), 0)
+  const weekAgo = Date.now() - 7 * 86_400_000
+  const newLeads = (leads.data?.leads ?? []).filter(
+    (l) => new Date(l.createdAt).getTime() >= weekAgo
+  )
+  const payoutRows = payouts.data?.payouts ?? []
+  const payoutPending = payoutRows.filter((p) => p.status !== 'paid')
+  const payoutPendingSum = payoutPending.reduce((s, p) => s + (num(p.total) ?? 0), 0)
 
   return (
     <div>
@@ -127,194 +125,60 @@ export function OwnerDashboard() {
         <div className="wfp-ph-l">
           <h1 className="wfp-ph-h1">Огляд</h1>
           <div className="wfp-ph-sub">
-            // {data?.pagination.total ?? orders.length} замовлень · агенція
+            // зведення по агенції · {inWork.length} у роботі · {data?.pagination.total ?? '—'}{' '}
+            замовлень
+            {isOwner && o ? ` · виручка ${formatMoney(num(o.monthlyRevenueUsd))} за місяць` : ''}
           </div>
         </div>
         <div className="wfp-ph-r">
-          <button className="wfp-btn wfp-btn--primary" onClick={() => navigate('/orders')}>
+          <button className="wfp-btn" onClick={() => navigate('/orders')}>
             <Icon name="kanban" size={14} />
-            Усі замовлення
+            Замовлення
+          </button>
+          <button className="wfp-btn wfp-btn--primary" onClick={() => navigate('/board')}>
+            <Icon name="kanban" size={14} />
+            Дошка задач
           </button>
         </div>
       </div>
 
       <UnansweredChatsCard />
 
-      {isOwner && (
-        <>
-          {/* 19-Д: ±% MoM */}
-          {mom.data && <MomStrip mom={mom.data} />}
-
-          {/* ── Фінанси (design-v2 owner overview) ── */}
-          <div className="wfp-stats" style={{ marginBottom: 14 }}>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">дохід / місяць</div>
-              <div className="wfp-stat-v wfp-stat-v--accent">
-                {formatMoney(num(o?.monthlyRevenueUsd))}
-              </div>
-            </div>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">борг клієнтів</div>
-              <div className={`wfp-stat-v${clientDebt > 0 ? ' wfp-stat-v--warn' : ''}`}>
-                {formatMoney(clientDebt)}
-              </div>
-            </div>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">чистий · {p?.marginPct ?? '—'}%</div>
-              <div
-                className={`wfp-stat-v ${netProfit < 0 ? 'wfp-stat-v--warn' : 'wfp-stat-v--accent'}`}
-              >
-                {formatMoney(num(p?.netProfitUsd))}
-              </div>
-              <div className="wfp-stat-sub">цей місяць</div>
-            </div>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">витрати / місяць</div>
-              <div className="wfp-stat-v">{formatMoney(num(p?.expensesUsd))}</div>
-            </div>
+      {/* ── Stats-стріп (дизайн): у роботі · прострочено · очікують клієнта · виручка ── */}
+      <div className="wfp-stats" style={{ marginBottom: 14 }}>
+        <div className="wfp-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/board')}>
+          <div className="wfp-stat-k">у роботі</div>
+          <div className="wfp-stat-v wfp-stat-v--accent">{inWork.length}</div>
+          <div className="wfp-stat-sub">по всіх командах</div>
+        </div>
+        <div className="wfp-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
+          <div className="wfp-stat-k">прострочено</div>
+          <div className={`wfp-stat-v${overdue.length ? ' wfp-stat-v--warn' : ''}`}>
+            {overdue.length}
           </div>
-
-          <div
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}
-          >
-            <div className="wfp-card">
-              <div
-                className="wfp-mono"
-                style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
-              >
-                // витрати за категоріями · цей місяць
-              </div>
-              {pnl.isLoading ? (
-                <Skeleton style={{ height: 132 }} />
-              ) : expenseSegs.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>
-                  Витрат цього місяця немає.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-                  <Donut
-                    data={expenseSegs}
-                    centerValue={formatMoney(totalExpenses)}
-                    centerLabel="витрати"
-                  />
-                  <div style={{ display: 'grid', gap: 6, flex: 1 }}>
-                    {expenseSegs.map((s) => (
-                      <div
-                        key={s.label}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: 12,
-                        }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            style={{ width: 9, height: 9, borderRadius: 2, background: s.color }}
-                          />
-                          {s.label}
-                        </span>
-                        <span style={{ color: 'var(--wf-fg-muted)' }}>{formatMoney(s.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="wfp-card">
-              <div
-                className="wfp-mono"
-                style={{ fontSize: 10, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
-              >
-                // топ боржників
-              </div>
-              {!o || o.topDebtors.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>Боргів немає 🎉</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {o.topDebtors.map((d) => (
-                    <div
-                      key={d.companyId}
-                      style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}
-                    >
-                      <span
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {d.name}
-                      </span>
-                      <span style={{ color: 'var(--wf-warning)', fontWeight: 600 }}>
-                        {formatMoney(num(d.debt))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            className="wfp-mono"
-            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
-          >
-            // замовлення
-          </div>
-        </>
-      )}
-
-      <div className="wfp-stats" style={{ marginBottom: 20 }}>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">нових</div>
-          <div className="wfp-stat-v">{queue}</div>
           <div className="wfp-stat-sub">потребують уваги</div>
         </div>
         <div className="wfp-stat">
-          <div className="wfp-stat-k">в роботі</div>
-          <div className="wfp-stat-v wfp-stat-v--accent">{inProgress}</div>
+          <div className="wfp-stat-k">очікують клієнта</div>
+          <div className="wfp-stat-v">{waitingClient.length}</div>
+          <div className="wfp-stat-sub">
+            {waitingClient[0]?.title ? waitingClient[0].title.slice(0, 28) : '—'}
+          </div>
         </div>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">на рев’ю</div>
-          <div className="wfp-stat-v wfp-stat-v--warn">{review}</div>
-        </div>
-        <div className="wfp-stat">
-          <div className="wfp-stat-k">завершено</div>
-          <div className="wfp-stat-v">{done}</div>
-          <div className="wfp-stat-sub">за весь час</div>
-        </div>
+        {isOwner && (
+          <div className="wfp-stat">
+            <div className="wfp-stat-k">виручка · місяць</div>
+            <div className="wfp-stat-v">{formatMoney(num(o?.monthlyRevenueUsd))}</div>
+            <div className="wfp-stat-sub">
+              {mom.data ? <MomDelta pct={mom.data.pct.revenueUsd} /> : '—'} до минулого
+            </div>
+          </div>
+        )}
       </div>
 
-      {(overdue.length > 0 || unassignedCount > 0 || unassignedErr) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
-          <AttentionItem
-            icon="alert"
-            color="var(--wf-destructive)"
-            title="Прострочені дедлайни"
-            value={overdue.length}
-            hint={
-              overdue
-                .slice(0, 3)
-                .map((o) => o.title)
-                .join(' · ') || '—'
-            }
-          />
-          {(unassignedCount > 0 || unassignedErr) && (
-            <AttentionItem
-              icon="users"
-              color="var(--wf-fg-muted)"
-              title="Замовлення без виконавця"
-              // Don't silently coalesce a failed count to 0 — show that it couldn't load.
-              value={unassignedErr ? '—' : unassignedCount}
-              hint={unassignedErr ? 'не вдалося порахувати — оновіть' : 'потребують призначення'}
-              onClick={() => navigate('/orders')}
-            />
-          )}
-        </div>
-      )}
+      {isOwner && mom.data && <MomStrip mom={mom.data} />}
 
+      {/* ── Board-slices (дизайн wfd-grid): вікна в дошку, не другий канбан ── */}
       {isLoading ? (
         <Skeleton style={{ height: 320 }} />
       ) : isError ? (
@@ -323,31 +187,220 @@ export function OwnerDashboard() {
           title="Не вдалося завантажити замовлення"
           description="Спробуйте оновити сторінку."
         />
-      ) : orders.length === 0 ? (
-        <EmptyState
-          title="Ще немає замовлень"
-          description="Коли клієнти створять замовлення, вони зʼявляться тут."
-        />
       ) : (
-        <KanbanBoard orders={orders} doneCount={done} />
+        <div className="wfd-grid">
+          <SlicePanel
+            icon="alert"
+            color="var(--wf-destructive)"
+            title="Прострочені"
+            link="відкрити замовлення →"
+            onLink={() => navigate('/orders')}
+            empty="— все вчасно —"
+            rows={overdue}
+            onRow={(id) => navigate(`/orders/${id}`)}
+          />
+          <SlicePanel
+            icon="check"
+            color="var(--wf-warning)"
+            title="На перевірці / здача"
+            link="відкрити замовлення →"
+            onLink={() => navigate('/orders?status=review')}
+            empty="— порожньо —"
+            rows={inReview}
+            onRow={(id) => navigate(`/orders/${id}`)}
+          />
+          <SlicePanel
+            icon="users"
+            color="var(--wf-fg-muted)"
+            title="Без виконавця"
+            link="розподілити →"
+            onLink={() => navigate('/orders')}
+            empty={unassignedErr ? 'не вдалося порахувати — оновіть' : '— всі розподілені —'}
+            rows={unassigned}
+            onRow={(id) => navigate(`/orders/${id}`)}
+          />
+          <div className="wfd-panel">
+            <div className="wfd-panel-h">
+              <span className="wfd-panel-t">
+                <Icon name="bell" size={14} style={{ color: '#A78BFA' }} />
+                Абонплата · авто
+              </span>
+              <button className="wfd-panel-link" onClick={() => navigate('/projects')}>
+                відкрити проєкти →
+              </button>
+            </div>
+            {!isOwner ? (
+              <div className="wfd-empty">— фінанси доступні власнику —</div>
+            ) : abonProjects.length === 0 ? (
+              <div className="wfd-empty">— немає —</div>
+            ) : (
+              abonProjects.slice(0, 5).map((p) => <AbonRow key={p.id} project={p} />)
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Owner: «Фінанси та клієнти» — action items (дизайн) ── */}
+      {isOwner && (
+        <div style={{ marginTop: 24 }}>
+          <div
+            className="wfp-mono"
+            style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 10 }}
+          >
+            // фінанси та клієнти · action items
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <ActionItem
+              icon="receipt"
+              color="var(--wf-warning)"
+              title="Нарахування на погодженні"
+              value={pendingList.length}
+              tag={
+                pendingList.length
+                  ? `${formatMoney(pendingSum)} · чекають рішення клієнта`
+                  : 'все погоджено'
+              }
+              onClick={() => navigate('/billing')}
+            />
+            <ActionItem
+              icon="alert"
+              color="var(--wf-warning)"
+              title="Боржники"
+              value={o?.topDebtors.length ?? 0}
+              tag={
+                o && o.topDebtors.length
+                  ? `${o.topDebtors
+                      .slice(0, 3)
+                      .map((d) => d.name)
+                      .join(' + ')} · ${formatMoney(num(o.outstandingDebt))}`
+                  : 'боргів немає 🎉'
+              }
+              onClick={() => navigate('/billing')}
+            />
+            <ActionItem
+              icon="building"
+              color="var(--wf-accent)"
+              title="Нових лідів за тиждень"
+              value={newLeads.length}
+              tag={newLeads.length ? 'переглянути дошку лідів' : 'нових звернень не було'}
+              onClick={() => navigate('/leads')}
+            />
+            <ActionItem
+              icon="coins"
+              color="var(--wf-fg-muted)"
+              title={`Виплати · ${period}`}
+              value={formatMoney(payoutPendingSum)}
+              tag={
+                payoutPending.length
+                  ? `${payoutPending.length} нараховано · очікує підтвердження`
+                  : 'все виплачено'
+              }
+              onClick={() => navigate('/payouts')}
+            />
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
-function AttentionItem({
+/** Slice-панель дизайну: міні-рядки замовлень з дедлайном і виконавцем. */
+function SlicePanel({
+  icon,
+  color,
+  title,
+  link,
+  onLink,
+  empty,
+  rows,
+  onRow,
+}: {
+  icon: 'alert' | 'check' | 'users'
+  color: string
+  title: string
+  link: string
+  onLink: () => void
+  empty: string
+  rows: WorkspaceOrder[]
+  onRow: (id: string) => void
+}) {
+  return (
+    <div className="wfd-panel">
+      <div className="wfd-panel-h">
+        <span className="wfd-panel-t">
+          <Icon name={icon} size={14} style={{ color }} />
+          {title}
+        </span>
+        <button className="wfd-panel-link" onClick={onLink}>
+          {link}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="wfd-empty">{empty}</div>
+      ) : (
+        rows.slice(0, 5).map((r) => {
+          const over = r.dueDate != null && new Date(r.dueDate).getTime() < Date.now()
+          return (
+            <div
+              key={r.id}
+              className="wfd-mini-row"
+              data-status={over ? 'overdue' : 'wip'}
+              onClick={() => onRow(r.id)}
+            >
+              <span className="wfd-mini-id">#{r.id.slice(0, 6)}</span>
+              <span className="wfd-mini-title">{r.title}</span>
+              <span className="wfd-mini-due" data-status={over ? 'overdue' : 'wip'}>
+                {r.dueDate ? `${over ? '⚠ ' : ''}${formatDate(r.dueDate)}` : '—'}
+              </span>
+              {r.assignee ? (
+                <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                  {r.assignee.name.split(' ')[0]}
+                </span>
+              ) : (
+                <span className="wfd-mini-noone">?</span>
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+/** Рядок абон-проєкту: назва + наступний цикл (авто-нарахування). */
+function AbonRow({ project }: { project: FinProject }) {
+  const navigate = useNavigate()
+  return (
+    <div
+      className="wfd-mini-row"
+      data-status="wip"
+      onClick={() => navigate(`/projects/${project.id}`)}
+    >
+      <span className="wfd-mini-id">₴</span>
+      <span className="wfd-mini-title">{project.name}</span>
+      <span className="wfd-mini-due" data-status="wip">
+        цикл: {project.nextCycleAt ? formatDate(project.nextCycleAt) : '—'}
+      </span>
+      <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        {project.abonAmount ? formatMoney(num(project.abonAmount)) : ''}
+      </span>
+    </div>
+  )
+}
+
+function ActionItem({
   icon,
   color,
   title,
   value,
-  hint,
+  tag,
   onClick,
 }: {
-  icon: 'alert' | 'users' | 'receipt'
+  icon: 'alert' | 'users' | 'receipt' | 'building' | 'coins'
   color: string
   title: string
   value: number | string
-  hint: string
+  tag: string
   onClick?: () => void
 }) {
   return (
@@ -400,7 +453,7 @@ function AttentionItem({
             whiteSpace: 'nowrap',
           }}
         >
-          {hint}
+          {tag}
         </div>
       </div>
       <span

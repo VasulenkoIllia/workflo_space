@@ -38,10 +38,11 @@ export interface CompanyOption {
   currency: string
 }
 
-export function useProjects() {
+export function useProjects(enabled = true) {
   return useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get<{ projects: FinProject[] }>('/workspace/projects'),
+    enabled,
   })
 }
 
