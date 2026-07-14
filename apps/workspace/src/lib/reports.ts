@@ -169,3 +169,72 @@ export function useRetentionReport() {
     queryFn: () => api.get<RetentionReport>('/workspace/reports/retention'),
   })
 }
+
+// ── DSN-2: три нові зрізи 6-таб хабу звітів ──────────────────────────────────
+export interface DepartmentReportRow {
+  teamId: string
+  name: string
+  color: string | null
+  leadName: string | null
+  members: number
+  hours: number
+  tasksDone: number
+  tasksActive: number
+  avgCycleDays: number | null
+  utilizationPct: number | null
+}
+
+export function useDepartmentsReport(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: ['report-departments', from, to],
+    queryFn: () =>
+      api.get<{ departments: DepartmentReportRow[] }>(
+        `/workspace/reports/departments?from=${from}&to=${to}`
+      ),
+    enabled,
+  })
+}
+
+export interface TimesheetEntry {
+  id: string
+  date: string
+  hours: number
+  comment: string | null
+  executorId: string
+  executorName: string
+  orderId: string
+  orderTitle: string
+  companyName: string | null
+}
+
+export function useTimesheetReport(from: string, to: string, enabled = true) {
+  return useQuery({
+    queryKey: ['report-timesheet', from, to],
+    queryFn: () =>
+      api.get<{ entries: TimesheetEntry[] }>(`/workspace/reports/timesheet?from=${from}&to=${to}`),
+    enabled,
+  })
+}
+
+export interface AuditEvent {
+  id: string
+  createdAt: string
+  action: string
+  resourceType: string | null
+  resourceId: string | null
+  result: string
+  metadata: Record<string, unknown> | null
+  actorName: string
+  isSystem: boolean
+}
+
+export function useAuditReport(enabled = true) {
+  return useQuery({
+    queryKey: ['report-audit'],
+    queryFn: () =>
+      api.get<{ events: AuditEvent[]; counts: { total: number; user: number; system: number } }>(
+        '/workspace/reports/audit'
+      ),
+    enabled,
+  })
+}

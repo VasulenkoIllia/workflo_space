@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, EmptyState, Skeleton } from '@workflo/ui'
+import { Tabs, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
+import { formatDate, formatDateTime } from '@/lib/format'
 import {
   type HoursReport,
   type LeadSourceReport,
@@ -15,6 +16,9 @@ import {
   useRetentionReport,
   type RetentionReport,
   useSlaReport,
+  useAuditReport,
+  useDepartmentsReport,
+  useTimesheetReport,
 } from '@/lib/reports'
 import { type ExportTable } from '@/lib/exportTable'
 import { ExportButtons } from '@/components/ExportButtons'
@@ -633,6 +637,8 @@ function LeadSourcesSection({ from, to }: { from: string; to: string }) {
 }
 
 /** Звіти — hours plan-vs-actual (19, 12-ПЛАН-ФАКТ) + SLA + джерела лідів (S11). Owner-only (route-gated). */
+/** DSN-2 (workspace-reports.jsx): 6-таб хаб звітів. Наявні секції розкладено по
+ * табах; нові зрізи — Підрозділи · Timesheet · Audit log (owner-only роути). */
 export function ReportsPage() {
   const range = useMemo(() => {
     const d = new Date()
@@ -640,145 +646,502 @@ export function ReportsPage() {
   }, [])
   const [from, setFrom] = useState(range.from)
   const [to, setTo] = useState(range.to)
-  const { data, isLoading } = useHoursReport(from, to)
+  const [tab, setTab] = useState('overview')
+  const { data, isLoading } = useHoursReport(from, to, tab === 'executors')
 
   return (
     <div>
       <div className="wfp-ph">
         <div className="wfp-ph-l">
-          <div className="wfp-ph-sub">// години · план-факт</div>
+          <div className="wfp-ph-sub">// аналітика агенції · owner</div>
           <h1 className="wfp-ph-h1">Звіти</h1>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 20px' }}>
-        {dateInput(from, setFrom)}
-        <span className="wfp-mono" style={{ color: 'var(--wf-fg-muted)' }}>
-          —
-        </span>
-        {dateInput(to, setTo)}
-        <span style={{ marginLeft: 'auto' }}>
-          <ExportButtons
-            getTables={() => buildHoursTables(data as HoursReport)}
-            filename={`hours_${from}_${to}`}
-            disabled={!data || data.byOrder.length === 0}
-          />
-        </span>
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'overview', label: 'Огляд' },
+          { id: 'executors', label: 'Виконавці' },
+          { id: 'clients', label: 'Клієнти' },
+          { id: 'departments', label: 'Підрозділи' },
+          { id: 'timesheet', label: 'Timesheet' },
+          { id: 'audit', label: 'Audit log' },
+        ]}
+      />
 
-      <RevenueSection from={from} to={to} />
-      <SlaSection from={from} to={to} />
-      <LeadSourcesSection from={from} to={to} />
-      <RetentionSection />
+      {tab !== 'audit' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 20px' }}>
+          {dateInput(from, setFrom)}
+          <span className="wfp-mono" style={{ color: 'var(--wf-fg-muted)' }}>
+            —
+          </span>
+          {dateInput(to, setTo)}
+          {tab === 'executors' && (
+            <span style={{ marginLeft: 'auto' }}>
+              <ExportButtons
+                getTables={() => buildHoursTables(data as HoursReport)}
+                filename={`hours_${from}_${to}`}
+                disabled={!data || data.byOrder.length === 0}
+              />
+            </span>
+          )}
+        </div>
+      )}
 
-      {isLoading ? (
-        <Skeleton style={{ height: 280 }} />
-      ) : !data || (data.byOrder.length === 0 && data.byExecutor.length === 0) ? (
-        <EmptyState
-          title="Немає залогованих годин"
-          description="За обраний період ще немає записів часу."
-        />
-      ) : (
+      {tab === 'overview' && (
         <>
-          <div className="wfp-stats" style={{ marginBottom: 20 }}>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">оцінка (план)</div>
-              <div className="wfp-stat-v">{data.totals.estimatedHours} год</div>
-            </div>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">факт</div>
-              <div className="wfp-stat-v">{data.totals.loggedHours} год</div>
-            </div>
-            <div className="wfp-stat">
-              <div className="wfp-stat-k">відхилення</div>
-              <div className="wfp-stat-v" style={{ color: varianceColor(data.totals.variance) }}>
-                {fmtVar(data.totals.variance)}
-              </div>
-            </div>
-          </div>
-
-          <Card title="План-факт по замовленнях" style={{ marginBottom: 20 }}>
-            {data.byOrder.length === 0 ? (
-              <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-                // немає замовлень із залогованим часом
-              </div>
-            ) : (
-              <table className="wfp-table">
-                <thead>
-                  <tr>
-                    <th>Замовлення</th>
-                    <th>Проєкт</th>
-                    <th className="wfp-num">Оцінка</th>
-                    <th className="wfp-num">Факт</th>
-                    <th className="wfp-num">Відхилення</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.byOrder.map((o) => (
-                    <tr key={o.orderId}>
-                      <td>{o.title}</td>
-                      <td
-                        className="wfp-mono"
-                        style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}
-                      >
-                        {o.projectName ?? '—'}
-                      </td>
-                      <td className="wfp-num">{fmtH(o.estimatedHours)}</td>
-                      <td className="wfp-num">{o.loggedHours} год</td>
-                      <td className="wfp-num" style={{ color: varianceColor(o.variance) }}>
-                        {fmtVar(o.variance)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
-
-          <Card title="Години по виконавцях">
-            {data.byExecutor.length === 0 ? (
-              <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-                // немає записів
-              </div>
-            ) : (
-              <table className="wfp-table">
-                <thead>
-                  <tr>
-                    <th>Виконавець</th>
-                    <th className="wfp-num">Факт</th>
-                    <th className="wfp-num">Норма</th>
-                    <th className="wfp-num">Завантаження</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.byExecutor.map((e) => (
-                    <tr key={e.executorId}>
-                      <td>{e.name}</td>
-                      <td className="wfp-num">{e.loggedHours} год</td>
-                      <td className="wfp-num" style={{ color: 'var(--wf-fg-muted)' }}>
-                        {Math.round(e.capacityHours)} год
-                      </td>
-                      <td
-                        className="wfp-num"
-                        style={{
-                          color:
-                            e.utilizationPct == null
-                              ? 'var(--wf-fg-muted)'
-                              : e.utilizationPct > 100
-                                ? 'var(--wf-destructive)'
-                                : 'var(--wf-accent)',
-                        }}
-                      >
-                        {e.utilizationPct == null ? '—' : `${e.utilizationPct}%`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <RevenueSection from={from} to={to} />
+          <SlaSection from={from} to={to} />
+          <LeadSourcesSection from={from} to={to} />
         </>
       )}
+
+      {tab === 'clients' && <RetentionSection />}
+
+      {tab === 'executors' &&
+        (isLoading ? (
+          <Skeleton style={{ height: 280 }} />
+        ) : !data || (data.byOrder.length === 0 && data.byExecutor.length === 0) ? (
+          <EmptyState
+            title="Немає залогованих годин"
+            description="За обраний період ще немає записів часу."
+          />
+        ) : (
+          <>
+            <div className="wfp-stats" style={{ marginBottom: 20 }}>
+              <div className="wfp-stat">
+                <div className="wfp-stat-k">оцінка (план)</div>
+                <div className="wfp-stat-v">{data.totals.estimatedHours} год</div>
+              </div>
+              <div className="wfp-stat">
+                <div className="wfp-stat-k">факт</div>
+                <div className="wfp-stat-v">{data.totals.loggedHours} год</div>
+              </div>
+              <div className="wfp-stat">
+                <div className="wfp-stat-k">відхилення</div>
+                <div className="wfp-stat-v" style={{ color: varianceColor(data.totals.variance) }}>
+                  {fmtVar(data.totals.variance)}
+                </div>
+              </div>
+            </div>
+
+            <Card title="План-факт по замовленнях" style={{ marginBottom: 20 }}>
+              {data.byOrder.length === 0 ? (
+                <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  // немає замовлень із залогованим часом
+                </div>
+              ) : (
+                <table className="wfp-table">
+                  <thead>
+                    <tr>
+                      <th>Замовлення</th>
+                      <th>Проєкт</th>
+                      <th className="wfp-num">Оцінка</th>
+                      <th className="wfp-num">Факт</th>
+                      <th className="wfp-num">Відхилення</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byOrder.map((o) => (
+                      <tr key={o.orderId}>
+                        <td>{o.title}</td>
+                        <td
+                          className="wfp-mono"
+                          style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}
+                        >
+                          {o.projectName ?? '—'}
+                        </td>
+                        <td className="wfp-num">{fmtH(o.estimatedHours)}</td>
+                        <td className="wfp-num">{o.loggedHours} год</td>
+                        <td className="wfp-num" style={{ color: varianceColor(o.variance) }}>
+                          {fmtVar(o.variance)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
+
+            <Card title="Години по виконавцях">
+              {data.byExecutor.length === 0 ? (
+                <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  // немає записів
+                </div>
+              ) : (
+                <table className="wfp-table">
+                  <thead>
+                    <tr>
+                      <th>Виконавець</th>
+                      <th className="wfp-num">Факт</th>
+                      <th className="wfp-num">Норма</th>
+                      <th className="wfp-num">Завантаження</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byExecutor.map((e) => (
+                      <tr key={e.executorId}>
+                        <td>{e.name}</td>
+                        <td className="wfp-num">{e.loggedHours} год</td>
+                        <td className="wfp-num" style={{ color: 'var(--wf-fg-muted)' }}>
+                          {Math.round(e.capacityHours)} год
+                        </td>
+                        <td
+                          className="wfp-num"
+                          style={{
+                            color:
+                              e.utilizationPct == null
+                                ? 'var(--wf-fg-muted)'
+                                : e.utilizationPct > 100
+                                  ? 'var(--wf-destructive)'
+                                  : 'var(--wf-accent)',
+                          }}
+                        >
+                          {e.utilizationPct == null ? '—' : `${e.utilizationPct}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
+          </>
+        ))}
+
+      {tab === 'departments' && <DepartmentsTab from={from} to={to} />}
+      {tab === 'timesheet' && <TimesheetTab from={from} to={to} />}
+      {tab === 'audit' && <AuditTab />}
     </div>
+  )
+}
+
+/** DSN-2: агрегація по підрозділах — години · throughput · cycle · utilization. */
+function DepartmentsTab({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = useDepartmentsReport(from, to)
+  const rows = data?.departments ?? []
+  if (isLoading) return <Skeleton style={{ height: 220 }} />
+  if (rows.length === 0)
+    return (
+      <EmptyState
+        title="Підрозділів ще немає"
+        description="Створіть команди на «Дошці задач» або в «Команда → Підрозділи»."
+      />
+    )
+  const totalHours = rows.reduce((s, r) => s + r.hours, 0)
+  const totalDone = rows.reduce((s, r) => s + r.tasksDone, 0)
+  const cycles = rows.filter((r) => r.avgCycleDays != null)
+  const bottleneck = cycles.length
+    ? cycles.reduce((a, b) => ((a.avgCycleDays ?? 0) > (b.avgCycleDays ?? 0) ? a : b))
+    : null
+  return (
+    <>
+      <div className="wfp-stats" style={{ marginBottom: 20 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">підрозділів</div>
+          <div className="wfp-stat-v">{rows.length}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">throughput</div>
+          <div className="wfp-stat-v wfp-stat-v--accent">{totalDone}</div>
+          <div className="wfp-stat-sub">задач закрито за період</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">годин разом</div>
+          <div className="wfp-stat-v">{Math.round(totalHours)}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">bottleneck</div>
+          <div className={`wfp-stat-v${bottleneck ? ' wfp-stat-v--warn' : ''}`}>
+            {bottleneck?.name ?? '—'}
+          </div>
+          <div className="wfp-stat-sub">
+            {bottleneck?.avgCycleDays != null ? `cycle ${bottleneck.avgCycleDays}d` : ''}
+          </div>
+        </div>
+      </div>
+      <Card title="Підрозділи">
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Підрозділ</th>
+              <th>Тімлід</th>
+              <th className="wfp-num">Люди</th>
+              <th className="wfp-num">Години</th>
+              <th className="wfp-num">Закрито</th>
+              <th className="wfp-num">Активні</th>
+              <th className="wfp-num">Cycle</th>
+              <th className="wfp-num">Завантаження</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.teamId}>
+                <td>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 9,
+                      height: 9,
+                      borderRadius: 99,
+                      background: r.color ?? 'var(--wf-fg-muted)',
+                      marginRight: 8,
+                    }}
+                  />
+                  {r.name}
+                </td>
+                <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                  {r.leadName ? `★ ${r.leadName}` : '—'}
+                </td>
+                <td className="wfp-num">{r.members}</td>
+                <td className="wfp-num">
+                  {r.hours} год
+                  <span className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+                    {totalHours > 0 ? ` · ${Math.round((r.hours / totalHours) * 100)}%` : ''}
+                  </span>
+                </td>
+                <td className="wfp-num">{r.tasksDone}</td>
+                <td className="wfp-num">{r.tasksActive}</td>
+                <td
+                  className="wfp-num"
+                  style={{
+                    color:
+                      r.avgCycleDays != null && r.avgCycleDays > 12
+                        ? 'var(--wf-warning)'
+                        : undefined,
+                  }}
+                >
+                  {r.avgCycleDays != null ? `${r.avgCycleDays}d` : '—'}
+                </td>
+                <td
+                  className="wfp-num"
+                  style={{
+                    color:
+                      r.utilizationPct == null
+                        ? 'var(--wf-fg-muted)'
+                        : r.utilizationPct > 75
+                          ? 'var(--wf-warning)'
+                          : 'var(--wf-accent)',
+                  }}
+                >
+                  {r.utilizationPct != null ? `${r.utilizationPct}%` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </>
+  )
+}
+
+/** DSN-2: timesheet — стрічка записів часу, згрупована по днях з денними підсумками. */
+function TimesheetTab({ from, to }: { from: string; to: string }) {
+  const { data, isLoading } = useTimesheetReport(from, to)
+  const entries = data?.entries ?? []
+  if (isLoading) return <Skeleton style={{ height: 260 }} />
+  if (entries.length === 0)
+    return <EmptyState title="Записів немає" description="За обраний період час не логувався." />
+  const totalH = entries.reduce((s, e) => s + e.hours, 0)
+  const withComment = entries.filter((e) => e.comment && e.comment.trim() !== '').length
+  const days = [...new Set(entries.map((e) => e.date))]
+  return (
+    <>
+      <div className="wfp-stats" style={{ marginBottom: 20 }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">записів</div>
+          <div className="wfp-stat-v">{entries.length}</div>
+          <div className="wfp-stat-sub">за {days.length} днів</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">загальний час</div>
+          <div className="wfp-stat-v wfp-stat-v--accent">{Math.round(totalH * 10) / 10} год</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">з коментарями</div>
+          <div className="wfp-stat-v">
+            {withComment}/{entries.length}
+          </div>
+          <div className="wfp-stat-sub">
+            {Math.round((withComment / entries.length) * 100)}% — до спеки
+          </div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">середня сесія</div>
+          <div className="wfp-stat-v">{Math.round((totalH / entries.length) * 10) / 10} год</div>
+        </div>
+      </div>
+      <Card title="Timesheet">
+        <table className="wfp-table">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Виконавець</th>
+              <th>Задача</th>
+              <th>Клієнт</th>
+              <th>Коментар</th>
+              <th className="wfp-num">Год</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((day) => {
+              const dayRows = entries.filter((e) => e.date === day)
+              const dayTotal = dayRows.reduce((s, e) => s + e.hours, 0)
+              return dayRows
+                .map((e, i) => (
+                  <tr key={e.id}>
+                    <td className="wfp-mono" style={{ fontSize: 12 }}>
+                      {i === 0 ? formatDate(day) : ''}
+                    </td>
+                    <td>{e.executorName}</td>
+                    <td
+                      style={{
+                        maxWidth: 220,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {e.orderTitle}
+                    </td>
+                    <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+                      {e.companyName ?? 'внутр'}
+                    </td>
+                    <td
+                      className="wfp-mono"
+                      style={{
+                        fontSize: 12,
+                        color: e.comment ? 'var(--wf-fg-secondary)' : 'var(--wf-fg-subtle)',
+                        maxWidth: 260,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {e.comment || 'без коментаря'}
+                    </td>
+                    <td className="wfp-num">{e.hours}</td>
+                  </tr>
+                ))
+                .concat(
+                  <tr key={`${day}-total`}>
+                    <td
+                      colSpan={5}
+                      className="wfp-mono"
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--wf-fg-muted)',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      // {formatDate(day)} разом
+                    </td>
+                    <td className="wfp-num" style={{ fontWeight: 600 }}>
+                      {Math.round(dayTotal * 10) / 10}
+                    </td>
+                  </tr>
+                )
+            })}
+          </tbody>
+        </table>
+      </Card>
+    </>
+  )
+}
+
+/** DSN-2: audit log — журнал подій агенції (read-only, останні 200). */
+function AuditTab() {
+  const { data, isLoading } = useAuditReport()
+  const [q, setQ] = useState('')
+  if (isLoading) return <Skeleton style={{ height: 260 }} />
+  const events = data?.events ?? []
+  const needle = q.trim().toLowerCase()
+  const filtered = needle
+    ? events.filter(
+        (e) =>
+          e.action.toLowerCase().includes(needle) ||
+          e.actorName.toLowerCase().includes(needle) ||
+          (e.resourceType ?? '').toLowerCase().includes(needle)
+      )
+    : events
+  return (
+    <>
+      <div className="wfp-stats" style={{ margin: '12px 0 20px' }}>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">подій</div>
+          <div className="wfp-stat-v">{data?.counts.total ?? 0}</div>
+          <div className="wfp-stat-sub">останні 200</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">дії людей</div>
+          <div className="wfp-stat-v wfp-stat-v--accent">{data?.counts.user ?? 0}</div>
+        </div>
+        <div className="wfp-stat">
+          <div className="wfp-stat-k">system / cron</div>
+          <div className="wfp-stat-v">{data?.counts.system ?? 0}</div>
+        </div>
+      </div>
+      <Card title="Журнал подій">
+        <div style={{ marginBottom: 12, maxWidth: 320 }}>
+          <Input
+            placeholder="Шукати (actor / action / тип)…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+            // подій не знайдено
+          </div>
+        ) : (
+          <table className="wfp-table">
+            <thead>
+              <tr>
+                <th>Час</th>
+                <th>Актор</th>
+                <th>Дія</th>
+                <th>Обʼєкт</th>
+                <th>Результат</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 100).map((e) => (
+                <tr key={e.id}>
+                  <td className="wfp-mono" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                    {formatDateTime(e.createdAt)}
+                  </td>
+                  <td
+                    className="wfp-mono"
+                    style={{
+                      fontSize: 12,
+                      color: e.isSystem ? 'var(--wf-fg-muted)' : 'var(--wf-fg)',
+                    }}
+                  >
+                    {e.actorName}
+                  </td>
+                  <td className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-accent)' }}>
+                    {e.action}
+                  </td>
+                  <td className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                    {e.resourceType ?? '—'}
+                    {e.resourceId ? ` · ${e.resourceId.slice(0, 8)}` : ''}
+                  </td>
+                  <td
+                    className="wfp-mono"
+                    style={{
+                      fontSize: 11,
+                      color: e.result === 'allowed' ? 'var(--wf-accent)' : 'var(--wf-destructive)',
+                    }}
+                  >
+                    {e.result}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </>
   )
 }
