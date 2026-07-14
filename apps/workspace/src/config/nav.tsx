@@ -101,7 +101,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   },
 
   { group: 'Команда', roles: 'omx' },
-  { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'om' },
+  // TEAM-ADMIN-2: 'omx' — executor-ТІМЛІД бачить ростер свого підрозділу
+  { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'omx' },
   // S13-04: відсутності — заявки/баланс у всіх, погодження в owner/manager
   {
     id: 'leave',

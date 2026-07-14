@@ -8,6 +8,8 @@ const inviteCreate = vi.fn()
 const inviteUpdate = vi.fn()
 const inviteUpdateMany = vi.fn()
 const inviteFindUnique = vi.fn()
+const inviteFindMany = vi.fn()
+const inviteFindFirst = vi.fn()
 const profileFindUnique = vi.fn()
 const profileUpdate = vi.fn()
 const profileUpdateMany = vi.fn().mockResolvedValue({ count: 1 })
@@ -29,6 +31,8 @@ vi.mock('@workflo/db', () => ({
       update: inviteUpdate,
       updateMany: inviteUpdateMany,
       findUnique: inviteFindUnique,
+      findMany: inviteFindMany,
+      findFirst: inviteFindFirst,
     },
     profile: {
       findUnique: profileFindUnique,
@@ -127,6 +131,103 @@ describe('POST /workspace/team/invite (executor)', () => {
     })
     expect(res.statusCode).toBe(403)
     expect(inviteCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+// ── TEAM-ADMIN-2: керування pending-запрошеннями ──────────────────────────────
+describe('workspace/team/invites (list/resend/cancel)', () => {
+  const TX = {
+    invite: {
+      findMany: inviteFindMany,
+      findFirst: inviteFindFirst,
+      update: inviteUpdate,
+      updateMany: inviteUpdateMany,
+    },
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(TX))
+    auditLogCreate.mockResolvedValue({})
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('GET: список pending з expired-прапорцем', async () => {
+    inviteFindMany.mockResolvedValue([
+      {
+        id: 'inv-1',
+        email: 'a@b.com',
+        createdAt: new Date('2026-07-01'),
+        expiresAt: new Date('2020-01-01'), // минуле → expired
+        invitedBy: { name: 'Admin' },
+      },
+    ])
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/team/invites',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json().data.invites
+    expect(body[0].expired).toBe(true)
+    expect(body[0].invitedByName).toBe('Admin')
+    // лише живі: usedAt null у where
+    expect(inviteFindMany.mock.calls[0][0].where.usedAt).toBeNull()
+    await app.close()
+  })
+
+  it('resend: продовжує TTL і шле лист; невідомий id → 404', async () => {
+    inviteFindFirst.mockResolvedValueOnce({ id: 'inv-1' })
+    inviteUpdate.mockResolvedValue({
+      id: 'inv-1',
+      email: 'a@b.com',
+      token: 'tok-1',
+      expiresAt: new Date(Date.now() + 1000),
+    })
+    profileFindUnique.mockResolvedValue({ name: 'Admin' })
+    const app = buildApp()
+    await app.ready()
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/workspace/team/invites/inv-1/resend',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      payload: {},
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(notifyRecipient).toHaveBeenCalledOnce()
+
+    inviteFindFirst.mockResolvedValueOnce(null)
+    const nf = await app.inject({
+      method: 'POST',
+      url: '/workspace/team/invites/ghost/resend',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      payload: {},
+    })
+    expect(nf.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('cancel: usedAt=now; вже використане → 404', async () => {
+    inviteUpdateMany.mockResolvedValueOnce({ count: 1 })
+    const app = buildApp()
+    await app.ready()
+    const ok = await app.inject({
+      method: 'DELETE',
+      url: '/workspace/team/invites/inv-1',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(inviteUpdateMany.mock.calls[0][0].data.usedAt).toBeInstanceOf(Date)
+
+    inviteUpdateMany.mockResolvedValueOnce({ count: 0 })
+    const nf = await app.inject({
+      method: 'DELETE',
+      url: '/workspace/team/invites/inv-1',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+    })
+    expect(nf.statusCode).toBe(404)
     await app.close()
   })
 })

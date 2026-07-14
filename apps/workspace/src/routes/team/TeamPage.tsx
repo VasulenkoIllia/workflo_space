@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
+import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
-import { useSetMemberTeam, useTeams } from '@/lib/teams'
+import { useCreateTeam, useSetMemberTeam, useTeams, useUpdateTeam, type Team } from '@/lib/teams'
 import { api } from '@/lib/api'
 import {
   num,
+  usePayouts,
   useSetCapacity,
   useSetRate,
   useSetRole,
@@ -26,33 +27,389 @@ const ROLE_LABEL: Record<string, string> = {
   executor: 'виконавець',
 }
 
-/** Owner — agency team: invite executors + roster; усі правки учасника — в EditMemberModal. */
+/** TEAM-ADMIN-2 (дизайн workspace-admin.jsx): «Адмін · команда» — KPI-стріп +
+ * таби Підрозділи · Команда-ролі · Permissions(→S14) · Запрошення. Owner/manager —
+ * повний екран; executor-ТІМЛІД — read-only ростер свого підрозділу; решта — 403-стан. */
 export function TeamPage() {
-  const [email, setEmail] = useState('')
-  const { isOwner } = useAuth()
+  const { user, isOwner, isManager } = useAuth()
+  const myId = user?.profile.id
   const { data, isLoading } = useTeam()
+  const { data: teams = [] } = useTeams()
+  const [tab, setTab] = useState('members')
   const [editing, setEditing] = useState<TeamMember | null>(null)
+  const [search, setSearch] = useState('')
   const members = data?.members ?? []
+  const isAdmin = isOwner || isManager
+
+  // Тімлід-скоуп: executor бачить лише свій підрозділ (teams вже скоуплені беком)
+  const myLeadTeam = !isAdmin ? (teams.find((t) => t.leadId === myId) ?? null) : null
+
+  if (!isAdmin) {
+    if (!myLeadTeam) {
+      return (
+        <EmptyState
+          title="Розділ доступний керівництву"
+          description="Ростер команди бачать власник, менеджери й тімліди підрозділів."
+        />
+      )
+    }
+    const unit = members.filter((m) => m.teamId === myLeadTeam.id)
+    return (
+      <div style={{ maxWidth: 880 }}>
+        <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>
+          Підрозділ · {myLeadTeam.name}
+        </div>
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 24 }}
+        >
+          // ви тімлід · {unit.length} у підрозділі · компенсації видимі лише власнику
+        </div>
+        <Card title="Склад підрозділу">
+          <div style={{ display: 'grid', gap: 2 }}>
+            {unit.map((m) => (
+              <MemberRow key={m.profileId} member={m} canEdit={false} onEdit={() => {}} />
+            ))}
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  const q = search.trim().toLowerCase()
+  const filtered = q
+    ? members.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+    : members
+
+  return (
+    <div style={{ maxWidth: 980 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Адмін · команда</div>
+          <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+            // {isOwner ? 'owner' : 'manager'} · підрозділи, ролі, доступи
+          </div>
+        </div>
+        <Button variant="primary" onClick={() => setTab('invites')}>
+          + Запросити члена
+        </Button>
+      </div>
+
+      <TeamKpiStrip members={members} />
+
+      <Tabs
+        value={tab}
+        onChange={(t) => {
+          if (t === 'permissions') {
+            toast.info('Permissions-матриця — у SaaS-фазі (S14, custom roles)')
+            return
+          }
+          setTab(t)
+        }}
+        items={[
+          { id: 'departments', label: 'Підрозділи' },
+          { id: 'members', label: 'Команда · ролі' },
+          { id: 'permissions', label: 'Permissions 🔒' },
+          { id: 'invites', label: 'Запрошення' },
+        ]}
+      />
+
+      <div style={{ marginTop: 16 }}>
+        {tab === 'departments' && (
+          <DepartmentsTab teams={teams} members={members} canEdit={isOwner} />
+        )}
+
+        {tab === 'members' && (
+          <Card title="Склад команди">
+            <div style={{ marginBottom: 12, maxWidth: 320 }}>
+              <Input
+                placeholder="Шукати по імені, email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {isLoading ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <Skeleton style={{ height: 40 }} />
+                <Skeleton style={{ height: 40 }} />
+              </div>
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                title={q ? 'Нікого не знайдено' : 'Поки лише ви'}
+                description={q ? 'Змініть запит.' : 'Запросіть виконавців у табі «Запрошення».'}
+              />
+            ) : (
+              <div style={{ display: 'grid', gap: 2 }}>
+                {filtered.map((m) => (
+                  <div key={m.profileId}>
+                    <MemberRow member={m} canEdit={isOwner} onEdit={setEditing} />
+                    <ReportsToLine member={m} teams={teams} members={members} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {tab === 'invites' && <InvitesTab />}
+      </div>
+
+      {editing && <EditMemberModal member={editing} onClose={() => setEditing(null)} />}
+    </div>
+  )
+}
+
+/** KPI-стріп (дизайн): команда N · payroll поточного місяця · pending-інвайти · середня rate. */
+function TeamKpiStrip({ members }: { members: TeamMember[] }) {
+  const period = new Date().toISOString().slice(0, 7)
+  const payouts = usePayouts(period)
+  const { data: invitesData } = useInvites()
+  const owners = members.filter((m) => m.role === 'owner').length
+  const managers = members.filter((m) => m.role === 'manager').length
+  const executors = members.filter((m) => m.role === 'executor').length
+  const rates = members
+    .map((m) => (m.rate?.hourlyRate ? Number(m.rate.hourlyRate) : null))
+    .filter((r): r is number => r != null && r > 0)
+  const avgRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null
+  const payrollTotal = (payouts.data?.payouts ?? []).reduce((s, p) => s + (num(p.total) ?? 0), 0)
+  const pending = (invitesData?.invites ?? []).length
+
+  const tile = (k: string, v: string, sub: string) => (
+    <div style={{ flex: 1, minWidth: 150, padding: '12px 14px' }}>
+      <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+        {k}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 600, margin: '2px 0' }}>{v}</div>
+      <div className="wfp-mono" style={{ fontSize: 10, color: 'var(--wf-fg-muted)' }}>
+        {sub}
+      </div>
+    </div>
+  )
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        border: '1px solid var(--wf-border)',
+        borderRadius: 'var(--wf-radius)',
+        marginBottom: 16,
+      }}
+    >
+      {tile(
+        'команда',
+        String(members.length),
+        `${owners} owner · ${managers} managers · ${executors} executors`
+      )}
+      {tile(
+        `payroll · ${period}`,
+        payrollTotal ? `$${Math.round(payrollTotal)}` : '—',
+        'нараховано'
+      )}
+      {tile('запрошень pending', String(pending), 'чекають accept')}
+      {tile('середня rate', avgRate != null ? `$${avgRate}/h` : '—', 'по команді')}
+    </div>
+  )
+}
+
+/** «звітує: …» — computed-ієрархія: член → тімлід підрозділу → власник (reportsTo-поля нема). */
+function ReportsToLine({
+  member,
+  teams,
+  members,
+}: {
+  member: TeamMember
+  teams: Team[]
+  members: TeamMember[]
+}) {
+  const ownerMember = members.find((m) => m.role === 'owner')
+  const team = member.teamId ? teams.find((t) => t.id === member.teamId) : null
+  let text: string
+  if (member.role === 'owner') text = 'вершина ієрархії'
+  else if (team?.lead && team.leadId !== member.profileId) text = `звітує: ${team.lead.name}`
+  else text = ownerMember ? `звітує: ${ownerMember.name}` : 'звітує: власнику'
+  return (
+    <div
+      className="wfp-mono"
+      style={{ fontSize: 10, color: 'var(--wf-fg-subtle)', padding: '0 8px 8px 46px' }}
+    >
+      ↳ {text}
+    </div>
+  )
+}
+
+/** Таб «Підрозділи»: картки команд з лідом (★) і складом + створення підрозділу. */
+function DepartmentsTab({
+  teams,
+  members,
+  canEdit,
+}: {
+  teams: Team[]
+  members: TeamMember[]
+  canEdit: boolean
+}) {
+  const create = useCreateTeam()
+  const update = useUpdateTeam()
+  const [name, setName] = useState('')
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: 16,
+        }}
+      >
+        {teams.map((t) => {
+          const unit = members.filter((m) => m.teamId === t.id)
+          return (
+            <Card key={t.id} title={t.name}>
+              <div
+                className="wfp-mono"
+                style={{
+                  fontSize: 11,
+                  color: t.color ?? 'var(--wf-fg-muted)',
+                  marginBottom: 10,
+                }}
+              >
+                ● {unit.length} {unit.length === 1 ? 'член' : 'членів'}
+                {t.lead ? ` · лід: ${t.lead.name}` : ' · без тімліда'}
+              </div>
+              {unit.map((m) => (
+                <div
+                  key={m.profileId}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
+                >
+                  <Avatar name={m.name} size={22} />
+                  <span style={{ fontSize: 13, flex: 1 }}>{m.name}</span>
+                  {t.leadId === m.profileId && (
+                    <span
+                      className="wfp-mono"
+                      title="тімлід підрозділу"
+                      style={{ fontSize: 10, color: 'var(--wf-accent)' }}
+                    >
+                      ★ лід
+                    </span>
+                  )}
+                </div>
+              ))}
+              {canEdit && (
+                <div style={{ marginTop: 10 }}>
+                  <Select
+                    label="Тімлід"
+                    value={t.leadId ?? ''}
+                    disabled={update.isPending}
+                    onChange={(v) =>
+                      update.mutate(
+                        { id: t.id, leadId: v || null },
+                        {
+                          onSuccess: () =>
+                            toast.success(v ? 'Тімліда призначено' : 'Тімліда знято'),
+                          onError: () => toast.error('Лід має бути членом команди'),
+                        }
+                      )
+                    }
+                    options={[
+                      { value: '', label: 'без тімліда' },
+                      ...unit.map((m) => ({ value: m.profileId, label: `★ ${m.name}` })),
+                    ]}
+                  />
+                </div>
+              )}
+            </Card>
+          )
+        })}
+      </div>
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 8, maxWidth: 380 }}>
+          <Input
+            placeholder="Новий підрозділ, напр. «QA»"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            disabled={name.trim().length === 0}
+            onClick={() =>
+              create.mutate(name.trim(), {
+                onSuccess: () => {
+                  setName('')
+                  toast.success('Підрозділ створено')
+                },
+              })
+            }
+          >
+            Створити
+          </Button>
+        </div>
+      )}
+      <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+        // членів у підрозділ призначайте в табі «Команда · ролі»; дошку підрозділу тімлід
+        налаштовує на «Дошці задач»
+      </div>
+    </div>
+  )
+}
+
+// ── TEAM-ADMIN-2: запрошення — список pending + resend/cancel ────────────────
+interface PendingInvite {
+  id: string
+  email: string
+  createdAt: string
+  expiresAt: string
+  invitedByName: string
+  expired: boolean
+}
+
+function useInvites() {
+  return useQuery({
+    queryKey: ['team-invites'],
+    queryFn: () => api.get<{ invites: PendingInvite[] }>('/workspace/team/invites'),
+  })
+}
+
+function InvitesTab() {
+  const qc = useQueryClient()
+  const { data, isLoading } = useInvites()
+  const [email, setEmail] = useState('')
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ['team-invites'] })
 
   const invite = useMutation({
     mutationFn: (value: string) => api.post('/workspace/team/invite', { email: value }),
     onSuccess: () => {
-      toast.success('Запрошення виконавцю надіслано')
+      toast.success('Запрошення надіслано')
       setEmail('')
+      invalidate()
+    },
+  })
+  const resend = useMutation({
+    mutationFn: (id: string) => api.post(`/workspace/team/invites/${id}/resend`, {}),
+    onSuccess: () => {
+      toast.success('Запрошення повторно надіслано')
+      invalidate()
+    },
+  })
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.delete(`/workspace/team/invites/${id}`),
+    onSuccess: () => {
+      toast.success('Запрошення скасовано')
+      invalidate()
     },
   })
 
+  const invites = data?.invites ?? []
   return (
-    <div style={{ maxWidth: 880 }}>
-      <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Команда</div>
-      <div
-        className="wfp-mono"
-        style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 24 }}
-      >
-        // {members.length} {members.length === 1 ? 'учасник' : 'учасників'} · виконавці агенції
-      </div>
-
-      <Card title="Запросити виконавця" style={{ marginBottom: 16 }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <Card title="Запросити виконавця">
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}>
             <Input
@@ -72,30 +429,61 @@ export function TeamPage() {
             Запросити
           </Button>
         </div>
+        <div
+          className="wfp-mono"
+          style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginTop: 8 }}
+        >
+          // запрошення дійсне 7 днів; неприйняте можна повторити або скасувати нижче
+        </div>
       </Card>
 
-      <Card title="Склад команди">
+      <Card title={`Очікують прийняття · ${invites.length}`}>
         {isLoading ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <Skeleton style={{ height: 40 }} />
-            <Skeleton style={{ height: 40 }} />
-            <Skeleton style={{ height: 40 }} />
-          </div>
-        ) : members.length === 0 ? (
-          <EmptyState
-            title="Поки лише ви"
-            description="Запросіть виконавців вище — вони зʼявляться тут після прийняття."
-          />
+          <Skeleton style={{ height: 60 }} />
+        ) : invites.length === 0 ? (
+          <EmptyState title="Немає pending-запрошень" description="Всі запрошення прийняті." />
         ) : (
-          <div style={{ display: 'grid', gap: 2 }}>
-            {members.map((m) => (
-              <MemberRow key={m.profileId} member={m} canEdit={isOwner} onEdit={setEditing} />
-            ))}
-          </div>
+          invites.map((i) => (
+            <div
+              key={i.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 0',
+                borderBottom: '1px solid var(--wf-border)',
+                fontSize: 13,
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {i.email}
+              </span>
+              <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                від {i.invitedByName} · до {formatDate(i.expiresAt)}
+                {i.expired && (
+                  <span style={{ color: 'var(--wf-warning, #f59e0b)' }}> · прострочене</span>
+                )}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={resend.isPending && resend.variables === i.id}
+                onClick={() => resend.mutate(i.id)}
+              >
+                Resend
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={cancel.isPending && cancel.variables === i.id}
+                onClick={() => cancel.mutate(i.id)}
+              >
+                Cancel
+              </Button>
+            </div>
+          ))
         )}
       </Card>
-
-      {editing && <EditMemberModal member={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }
