@@ -148,6 +148,8 @@ test.describe('smoke', () => {
     if (info.project.name === 'workspace') {
       await test.step('workspace /settings → create legal entity', async () => {
         await gotoInApp(page, '/settings')
+        // DSN-3: налаштування — 6-таб хаб; юр-особи живуть у табі «Фінанси»
+        await page.getByRole('tab', { name: 'Фінанси' }).click()
         await page.getByRole('button', { name: '+ Додати юр-особу' }).click()
         // Scope to the dialog: buttons render with bracket decoration ("[ Додати ]"),
         // and "+ Додати юр-особу" also contains "Додати" — the dialog disambiguates.
