@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
-import { requireTeamOrder } from './access.js'
+import { assertTeamScope, requireTeamOrder } from './access.js'
 import { requirePermission } from '../../auth/permissions.js'
 
 /**
@@ -49,6 +49,8 @@ const coAssigneesRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
       }
       assertSameTenant(user, order.agencyId)
+      // тімлід (team) — лише замовлення свого підрозділу
+      await assertTeamScope(request, order.id, order.agencyId, 'orders.assign')
       const body = putSchema.parse(request.body)
       // головного не дублюємо у співвиконавцях
       const wanted = [...new Set(body.profileIds)].filter((id) => id !== order.assigneeId)

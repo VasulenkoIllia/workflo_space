@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { assertTeamScope } from './access.js'
 import { requirePermission } from '../../auth/permissions.js'
 
 /**
@@ -32,6 +33,8 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
       assertSameTenant(user, order.agencyId)
 
       await requirePermission(request, 'orders.assign')
+      // тімлід (team) — лише замовлення свого підрозділу
+      await assertTeamScope(request, order.id, order.agencyId, 'orders.assign')
 
       if (input.assigneeId) {
         // Validate against the ORDER's agency (the resource), not the actor's active

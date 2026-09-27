@@ -1,24 +1,27 @@
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
+import { ApiErrorCode, AppError, type PermissionKey } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
 import { getPermissions, orderScopeWhere } from '../../auth/permissions.js'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 
 /**
- * PERM-4: скоуп команди — замовлення має покриватися правом `orders.view` (all — будь-яке;
- * team — підрозділ тімліда; own — призначене мені чи моя задача). Непокрите → 404, щоб не
- * світити існування (як для клієнта чужої компанії).
+ * PERM-4: скоуп команди — замовлення має покриватися правом `key` (за замовчуванням
+ * `orders.view`; all — будь-яке; team — підрозділ тімліда; own — призначене мені чи моя
+ * задача). Непокрите → 404, щоб не світити існування (як для клієнта чужої компанії).
+ * Для дій зі скоупом (напр. `orders.assign` = team) передавайте ключ дії — інакше рівень
+ * `team` фактично стає `all` (security-review 27.09).
  */
 export async function assertTeamScope(
   request: FastifyRequest,
   orderId: string,
-  orderAgencyId: string
+  orderAgencyId: string,
+  key: PermissionKey = 'orders.view'
 ): Promise<void> {
   const notFound = new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
   const snap = await getPermissions(request)
   if (!snap || snap.agencyId !== orderAgencyId) throw notFound
-  const where = orderScopeWhere(snap, snap.levels['orders.view'], request.user.sub)
+  const where = orderScopeWhere(snap, snap.levels[key], request.user.sub)
   if (where === null) throw notFound
   if (Object.keys(where).length === 0) return
   const visible = await withTenant((tx) => tx.order.count({ where: { id: orderId, ...where } }))

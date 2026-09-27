@@ -11,6 +11,12 @@ export interface PermissionData {
   leadTeamIds: string[]
   /** Підрозділ людини (AgencyMember.teamId) — для рівня `team`. */
   teamId: string | null
+  /**
+   * Актуальна роль з БД (security-review 27.09): зміна ролі / видалення з агенції діє за
+   * ≤30 с, а не після спливу access-токена. null — більше не член агенції; undefined —
+   * джерело не знає ролі (юніт-моки) → резолвер бере роль із токена.
+   */
+  role?: 'owner' | 'manager' | 'executor' | null
   /** Відхилення матриці ролей агенції (усі ролі — таблиця крихітна). */
   roleRows: { role: PermissionRole; permission: string; level: PermissionLevel }[]
   /** Персональні гранти/відкликання цієї людини. */
@@ -25,7 +31,7 @@ export async function fetchPermissionData(
     prisma.team.findMany({ where: { agencyId, leadId: profileId }, select: { id: true } }),
     prisma.agencyMember.findUnique({
       where: { agencyId_profileId: { agencyId, profileId } },
-      select: { teamId: true },
+      select: { teamId: true, role: true },
     }),
     prisma.agencyRolePermission.findMany({
       where: { agencyId },
@@ -39,6 +45,7 @@ export async function fetchPermissionData(
   return {
     leadTeamIds: leadTeams.map((t) => t.id),
     teamId: member?.teamId ?? null,
+    role: member?.role ?? null,
     roleRows,
     memberRows,
   }

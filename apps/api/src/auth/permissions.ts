@@ -15,8 +15,9 @@ import { agencyRole, type AccessClaims } from './tokens.js'
 
 /**
  * PERM-1: ефективні права людини в АКТИВНІЙ агенції. Резолвимо на запит (не в JWT) —
- * відкликання діє за ≤30 с (TTL кешу), а не після спливу access-токена. Роль — з токена
- * (зміна ролі й так відкликає сесії); матриця/персональні права/тімлідство — з БД.
+ * відкликання діє за ≤30 с (TTL кешу), а не після спливу access-токена. Роль, матриця,
+ * персональні права й тімлідство — з БД (роль із токена — лише щоб знайти членство; зміна
+ * ролі чи видалення з агенції діє за ≤30 с — security-review 27.09).
  * Каталог і дефолти — @workflo/types `PERMISSIONS`.
  */
 export interface PermissionSnapshot {
@@ -31,6 +32,18 @@ export interface PermissionSnapshot {
 const TTL_MS = 30_000
 const cache = new Map<string, { at: number; snap: PermissionSnapshot }>()
 const perRequest = new WeakMap<FastifyRequest, Promise<PermissionSnapshot | null>>()
+
+/** Обмеження памʼяті процесу: при переповненні — викинути протухлі, далі найстаріші. */
+const MAX_ENTRIES = 5_000
+function sweep(): void {
+  const now = Date.now()
+  for (const [k, v] of cache) if (now - v.at >= TTL_MS) cache.delete(k)
+  // Map зберігає порядок вставки → перші записи найстаріші
+  for (const k of cache.keys()) {
+    if (cache.size < MAX_ENTRIES) break
+    cache.delete(k)
+  }
+}
 
 /** Повне очищення кешу (тести; зміна ролі через адмінку — для надійності). */
 export function clearPermissionCache(): void {
@@ -54,12 +67,15 @@ async function load(
   user: Pick<AccessClaims, 'sub' | 'agencyMemberships'>,
   agencyId: string
 ): Promise<PermissionSnapshot | null> {
-  const role = agencyRole(user, agencyId)
-  if (!role) return null // не член агенції (клієнт порталу) — агентських прав нема
-  const key = `${agencyId}:${user.sub}:${role}`
+  const tokenRole = agencyRole(user, agencyId)
+  if (!tokenRole) return null // не член агенції (клієнт порталу) — агентських прав нема
+  const key = `${agencyId}:${user.sub}:${tokenRole}`
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < TTL_MS) return hit.snap
   const data = await fetchPermissionData(agencyId, user.sub)
+  // Роль із БД переважає токен; null — людину прибрали з агенції → прав нема
+  const role = data.role === undefined ? tokenRole : data.role
+  if (!role) return null
   const isLead = role === 'executor' && data.leadTeamIds.length > 0
   const snap: PermissionSnapshot = {
     agencyId,
@@ -74,6 +90,7 @@ async function load(
       memberRows: data.memberRows,
     }),
   }
+  if (cache.size >= MAX_ENTRIES) sweep()
   cache.set(key, { at: Date.now(), snap })
   return snap
 }

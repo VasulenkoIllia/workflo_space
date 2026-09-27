@@ -131,3 +131,55 @@ describe('PERM-4 скоуп замовлень виконавця (дефолт 
     await app.close()
   })
 })
+
+// security-review 27.09: тімлід (orders.assign = team) не призначає на замовлення чужого
+// підрозділу; роль береться з БД (пониження/видалення діє без чекання спливу токена).
+describe('PERM-4 скоуп orders.assign тімліда + роль із БД', () => {
+  const LEAD = { ...EXECUTOR, sub: 'lead-1' }
+  const LEAD_DATA = { ...DEFAULTS, leadTeamIds: ['team-a'], teamId: 'team-a' }
+
+  it.each([
+    ['PATCH', '/orders/o-9/assign', { assigneeId: '00000000-0000-4000-8000-000000000002' }],
+    ['PUT', '/orders/o-9/assignees', { profileIds: ['exec-2'] }],
+  ])('%s %s на замовлення іншого підрозділу → 404', async (method, url, payload) => {
+    vi.mocked(fetchPermissionData).mockResolvedValue(LEAD_DATA)
+    orderFindUnique.mockResolvedValue({
+      id: 'o-9',
+      agencyId: 'agency-1',
+      title: 'Чуже',
+      assigneeId: 'exec-3',
+      deletedAt: null,
+    })
+    orderCount.mockResolvedValue(0) // не в підрозділі team-a
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: method as 'PATCH' | 'PUT',
+      url,
+      payload,
+      headers: { authorization: `Bearer ${app.jwt.sign(LEAD as never)}` },
+    })
+    await app.close()
+    expect(res.statusCode).toBe(404)
+    const where = orderCount.mock.calls[0][0].where
+    expect(JSON.stringify(where)).toContain('team-a')
+  })
+
+  it('менеджера понижено до виконавця в БД — токен ще «manager», але ліди вже 403', async () => {
+    vi.mocked(fetchPermissionData).mockResolvedValue({ ...DEFAULTS, role: 'executor' })
+    const MANAGER = {
+      ...EXECUTOR,
+      sub: 'mgr-1',
+      agencyMemberships: [{ agencyId: 'agency-1', role: 'manager' }],
+    }
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/leads',
+      headers: { authorization: `Bearer ${app.jwt.sign(MANAGER as never)}` },
+    })
+    await app.close()
+    expect(res.statusCode).toBe(403)
+  })
+})

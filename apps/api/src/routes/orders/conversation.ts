@@ -3,7 +3,7 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { writeAuditAsync } from '../../services/audit.js'
-import { requireOrderParticipant, requireTeamOrder } from './access.js'
+import { assertTeamScope, requireOrderParticipant, requireTeamOrder } from './access.js'
 import { getPermissions, orderScopeWhere, requirePermission } from '../../auth/permissions.js'
 
 /**
@@ -110,6 +110,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { orderId, agencyId } = await requireTeamOrder(request, request.params.id)
       await requirePermission(request, 'orders.assign') // PERM-4: відповідальний за тред
+      await assertTeamScope(request, orderId, agencyId, 'orders.assign')
       const { profileId } = chatOwnerSchema.parse(request.body)
 
       if (profileId !== null) {
