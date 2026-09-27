@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { OrderInternalStatus, type CompanyPermissionKey } from '@workflo/types'
+import type { CompanyPermissionKey } from '@workflo/types'
 import { api } from '@/lib/api'
-import { useOrders, type WorkspaceOrder } from './orders'
 import { useCompanies } from './projects'
 
 /** GET /workspace/clients/:id/members — client (company) member roster (28-Б «Люди»).
@@ -146,66 +145,78 @@ export interface ClientRow {
   loyaltyTier: string | null
   total: number
   active: number
-  totalValue: number
+  /** null — без billing.view (сум не показуємо). */
+  totalValue: number | null
+  debt: number | null
+  lastActivityAt: string | null
 }
 
-interface OrderSummary {
-  companyId: string
-  total: number
-  active: number
-  totalValue: number
+export interface ClientRisk {
+  id: 'debt' | 'stale' | 'churn'
+  tone: 'bad' | 'warn' | 'muted'
+  label: string
+  hint: string
 }
 
-const ACTIVE = (o: WorkspaceOrder) =>
-  o.internalStatus !== OrderInternalStatus.DONE &&
-  o.internalStatus !== OrderInternalStatus.CANCELLED
+const DAY_MS = 86_400_000
+/** Тиша довше за це при відкритих замовленнях — привід зателефонувати. */
+export const STALE_DAYS = 14
 
-export function summariseClients(orders: WorkspaceOrder[]): OrderSummary[] {
-  const map = new Map<string, OrderSummary>()
-  for (const o of orders) {
-    const c = map.get(o.companyId) ?? { companyId: o.companyId, total: 0, active: 0, totalValue: 0 }
-    c.total += 1
-    if (ACTIVE(o)) c.active += 1
-    c.totalValue += o.totalAmount ?? 0
-    map.set(o.companyId, c)
+/**
+ * DSN-7 (design-v2 workspace-clients.jsx · 28-Г): прапорці ризику з РЕАЛЬНИХ агрегатів —
+ * борг (з billing.view), тиша по відкритих замовленнях, ризик відтоку (1 замовлення, тір new).
+ */
+export function clientRisks(c: ClientRow, now = Date.now()): ClientRisk[] {
+  const r: ClientRisk[] = []
+  if (c.debt != null && c.debt > 0) {
+    r.push({
+      id: 'debt',
+      tone: 'warn',
+      label: `борг ${Math.round(c.debt).toLocaleString('uk-UA')}`,
+      hint: 'неоплачені замовлення',
+    })
   }
-  return [...map.values()]
+  if (c.active > 0 && c.lastActivityAt) {
+    const days = Math.floor((now - new Date(c.lastActivityAt).getTime()) / DAY_MS)
+    if (days >= STALE_DAYS) {
+      r.push({
+        id: 'stale',
+        tone: days >= 30 ? 'bad' : 'warn',
+        label: `тиша ${days}д`,
+        hint: 'по відкритих замовленнях давно не було руху',
+      })
+    }
+  }
+  // рівно одне (завершене) замовлення й нічого відкритого; новий клієнт без замовлень — не ризик
+  if (c.total === 1 && (c.loyaltyTier === 'new' || c.loyaltyTier == null) && c.active === 0) {
+    r.push({ id: 'churn', tone: 'muted', label: 'ризик відтоку', hint: 'одне замовлення й тиша' })
+  }
+  return r
 }
 
+/** Реєстр клієнтів агенції з агрегатами бекенду (GET /workspace/companies). */
 export function useClients(enabled = true) {
-  const orders = useOrders({ limit: 100 })
   const companies = useCompanies(enabled)
-  const clients = useMemo<ClientRow[]>(() => {
-    const sById = new Map(summariseClients(orders.data?.orders ?? []).map((s) => [s.companyId, s]))
-    const comps = companies.data?.companies ?? []
-    // Registry = all agency companies, enriched with order activity. If the companies
-    // endpoint is unavailable, fall back to the order-derived list (id-keyed names).
-    const base: ClientRow[] = comps.length
-      ? comps.map((c) => {
-          const s = sById.get(c.id)
-          return {
-            companyId: c.id,
-            name: c.name,
-            loyaltyTier: c.loyaltyTier,
-            total: s?.total ?? 0,
-            active: s?.active ?? 0,
-            totalValue: s?.totalValue ?? 0,
-          }
-        })
-      : [...sById.values()].map((s) => ({
-          companyId: s.companyId,
-          name: `Клієнт · ${s.companyId.slice(0, 8)}`,
-          loyaltyTier: null,
-          total: s.total,
-          active: s.active,
-          totalValue: s.totalValue,
+  const clients = useMemo<ClientRow[]>(
+    () =>
+      (companies.data?.companies ?? [])
+        .map((c) => ({
+          companyId: c.id,
+          name: c.name,
+          loyaltyTier: c.loyaltyTier,
+          total: c.ordersTotal ?? 0,
+          active: c.ordersActive ?? 0,
+          totalValue: c.totalValue ?? null,
+          debt: c.debt ?? null,
+          lastActivityAt: c.lastActivityAt ?? null,
         }))
-    return base.sort((a, b) => b.active - a.active || b.total - a.total)
-  }, [orders.data, companies.data])
-
+        .sort((a, b) => b.active - a.active || b.total - a.total),
+    [companies.data]
+  )
   return {
     clients,
-    isLoading: orders.isLoading || companies.isLoading,
-    isError: orders.isError || companies.isError,
+    isLoading: companies.isLoading,
+    isError: companies.isError,
+    refetch: companies.refetch,
   }
 }

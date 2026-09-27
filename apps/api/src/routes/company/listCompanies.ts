@@ -1,3 +1,4 @@
+import type { Prisma } from '@workflo/db'
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { createClientCompanySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
@@ -21,19 +22,83 @@ const listCompaniesRoute: FastifyPluginAsync = (fastify) => {
       // PERM-2: реєстр клієнтів — clients.view (менеджер теж); тір/валюта — з billing.view
       await requireAnyPermission(request, ['clients.view', 'orders.create', 'leads.manage'])
       const showMoney = await hasPermission(request, 'billing.view')
-      const companies = await withTenant((tx) =>
-        tx.company.findMany({
-          where: { agencyId },
-          select: { id: true, name: true, slug: true, loyaltyTier: true, currency: true },
-          orderBy: { name: 'asc' },
-        })
-      )
+      const { companies, all, open, debts } = await withTenant(async (tx) => {
+        const [companies, all, open] = await Promise.all([
+          tx.company.findMany({
+            where: { agencyId },
+            select: { id: true, name: true, slug: true, loyaltyTier: true, currency: true },
+            orderBy: { name: 'asc' },
+          }),
+          // DSN-7: реальні агрегати по ВСІХ замовленнях (раніше фронт рахував з останніх 100)
+          tx.order.groupBy({
+            by: ['companyId'],
+            where: { agencyId, deletedAt: null, companyId: { not: null } },
+            _count: { _all: true },
+            _sum: { totalAmount: true },
+            _max: { updatedAt: true },
+          }),
+          tx.order.groupBy({
+            by: ['companyId'],
+            where: {
+              agencyId,
+              deletedAt: null,
+              companyId: { not: null },
+              internalStatus: { notIn: ['done', 'cancelled'] },
+            },
+            _count: { _all: true },
+          }),
+        ])
+        // Борг — те саме визначення, що в Білінгу/«Звітах» (DEDUP C5), лише з billing.view
+        const debts = showMoney
+          ? await tx.$queryRaw<{ companyId: string; debt: Prisma.Decimal }[]>`
+              SELECT o."companyId" AS "companyId",
+                     SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) AS "debt"
+              FROM "orders" o
+              LEFT JOIN (
+                SELECT "orderId", SUM("amount") AS paid
+                FROM "payments" WHERE "status" = 'confirmed'
+                GROUP BY "orderId"
+              ) p ON p."orderId" = o."id"
+              LEFT JOIN (
+                SELECT pay."orderId", SUM(r."amount") AS refunded
+                FROM "payment_refunds" r
+                JOIN "payments" pay ON pay."id" = r."paymentId"
+                WHERE pay."status" = 'confirmed'
+                GROUP BY pay."orderId"
+              ) pr ON pr."orderId" = o."id"
+              WHERE o."agencyId" = ${agencyId}
+                AND o."paidAt" IS NULL
+                AND o."totalAmount" IS NOT NULL
+                AND o."deletedAt" IS NULL
+                AND o."companyId" IS NOT NULL
+              GROUP BY o."companyId"
+              HAVING SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) > 0
+            `
+          : []
+        return { companies, all, open, debts }
+      })
+      const allBy = new Map(all.map((r) => [r.companyId, r]))
+      const openBy = new Map(open.map((r) => [r.companyId, r._count._all]))
+      const debtBy = new Map(debts.map((d) => [d.companyId, Number(d.debt)]))
       return reply.send({
         success: true,
         data: {
-          companies: showMoney
-            ? companies
-            : companies.map((c) => ({ ...c, loyaltyTier: null, currency: null })),
+          companies: companies.map((c) => {
+            const a = allBy.get(c.id)
+            const stats = {
+              ordersTotal: a?._count._all ?? 0,
+              ordersActive: openBy.get(c.id) ?? 0,
+              lastActivityAt: a?._max.updatedAt ?? null,
+            }
+            return showMoney
+              ? {
+                  ...c,
+                  ...stats,
+                  totalValue: Number(a?._sum.totalAmount ?? 0),
+                  debt: debtBy.get(c.id) ?? 0,
+                }
+              : { ...c, loyaltyTier: null, currency: null, ...stats, totalValue: null, debt: null }
+          }),
         },
       })
     }

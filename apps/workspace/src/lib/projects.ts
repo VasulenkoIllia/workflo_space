@@ -36,6 +36,12 @@ export interface CompanyOption {
   slug: string
   loyaltyTier: string
   currency: string
+  /** DSN-7: агрегати по всіх замовленнях клієнта (бек). Сума/борг — null без billing.view. */
+  ordersTotal?: number
+  ordersActive?: number
+  lastActivityAt?: string | null
+  totalValue?: number | null
+  debt?: number | null
 }
 
 export function useProjects(enabled = true) {

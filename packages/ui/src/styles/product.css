@@ -5020,3 +5020,21 @@
 .wfw-adj-preview .v { font-size: 18px; font-weight: 700; color: var(--wf-fg); }
 
 @media (max-width: 900px) { .wfw-hero { grid-template-columns: 1fr; } }
+
+/* ─── Clients list · attention + risk pills — port of design-v2 workspace-client360.css (DSN-7) ─── */
+.wfc-attention { margin: 18px 0; padding: 14px 16px; border: 1px solid color-mix(in oklab, var(--wf-warning) 35%, var(--wf-border)); border-radius: 12px; background: color-mix(in oklab, var(--wf-warning) 6%, transparent); }
+.wfc-attention-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.wfc-attention-t { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--wf-fg); }
+.wfc-attention-cnt { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); }
+.wfc-attention-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.wfc-attention-card { padding: 11px 13px; border: 1px solid var(--wf-border); border-left-width: 3px; border-radius: 9px; background: var(--wf-surface); cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+.wfc-attention-card[data-tone="bad"] { border-left-color: var(--wf-destructive); }
+.wfc-attention-card[data-tone="warn"] { border-left-color: var(--wf-warning); }
+.wfc-attention-card:hover { box-shadow: 0 4px 14px -6px color-mix(in oklab, var(--wf-fg) 30%, transparent); }
+.wfc-attention-card-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wfc-attention-name { font-size: 13.5px; font-weight: 600; color: var(--wf-fg); }
+.wfc-attention-risks { display: flex; flex-wrap: wrap; gap: 5px; }
+.wfc-risk { display: inline-flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+.wfc-risk[data-tone="bad"] { color: var(--wf-destructive); background: color-mix(in oklab, var(--wf-destructive) 14%, transparent); }
+.wfc-risk[data-tone="warn"] { color: color-mix(in oklab, var(--wf-warning) 55%, var(--wf-fg)); background: color-mix(in oklab, var(--wf-warning) 16%, transparent); }
+.wfc-risk[data-tone="muted"] { color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 8%, transparent); }
