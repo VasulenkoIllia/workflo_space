@@ -6,7 +6,6 @@ import {
   NotificationsSection,
   SessionsSection,
   TelegramSection,
-  TwoFactorSection,
 } from '@workflo/app-core'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
@@ -1209,9 +1208,10 @@ function LegalEntitiesSection() {
 /** DSN-3 (workspace-admin-settings.jsx): налаштування = 6-таб хаб замість
  * плаского скролу 15 карток. + нові ops-таби: SMTP-статус/тест і крони-моніторинг. */
 export function SettingsPage() {
-  const payment = usePaymentSettings()
-  const referral = useReferralSettings()
   const { isOwner } = useAuth()
+  // ROLE-NAV: /settings відкрито всім ролям (таб «Акаунт») — owner-дані не запитуємо в інших
+  const payment = usePaymentSettings(isOwner)
+  const referral = useReferralSettings(isOwner)
   const [tab, setTab] = useState('account')
 
   const items = isOwner
@@ -1232,7 +1232,10 @@ export function SettingsPage() {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 14 }}
       >
-        // {isOwner ? 'конфіг агенції · воркфлоу · шаблони · фінанси · ops' : 'акаунт'}
+        //{' '}
+        {isOwner
+          ? 'конфіг агенції · воркфлоу · шаблони · фінанси · ops'
+          : 'сповіщення · Telegram · сесії · привʼязані акаунти'}
       </div>
 
       <Tabs value={tab} onChange={setTab} items={items} />
@@ -1240,7 +1243,7 @@ export function SettingsPage() {
       <div style={{ display: 'grid', gap: 18, marginTop: 16 }}>
         {tab === 'account' && (
           <>
-            <TwoFactorSection app="workspace" />
+            {/* 2FA — у «Профілі» (безпека й особисте), тут не дублюємо (аудит C8) */}
             <LinkedAccountsSection app="workspace" />
             <SessionsSection />
             <NotificationsSection />

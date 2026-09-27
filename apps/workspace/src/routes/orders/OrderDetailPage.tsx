@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
+import {
+  ALLOWED_ORDER_TRANSITIONS,
+  BillingType,
+  OrderInternalStatus,
+  canRoleTransitionOrder,
+  isAcceptanceTransition,
+} from '@workflo/types'
 import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import {
   CONTACT_CHANNEL_LABEL,
@@ -59,6 +65,7 @@ export function OrderDetailPage() {
   const { id = '' } = useParams()
   const { data: order, isLoading, isError } = useOrder(id)
   const { data: timeData } = useTimeLogs(id)
+  const { isOwner } = useAuth()
   useCommentStream(id) // keep live chat updates flowing regardless of the active tab
   const [tab, setTab] = useState('chat')
 
@@ -173,9 +180,14 @@ export function OrderDetailPage() {
                   <div className="wfp-side-row">
                     <div className="wfp-side-k">проєкт</div>
                     <div className="wfp-side-v">
-                      <Link to={`/projects/${order.project.id}`} className="wfp-link">
-                        {order.project.name}
-                      </Link>
+                      {/* D8: /projects/:id — owner-only; іншим ролям — просто назва */}
+                      {isOwner ? (
+                        <Link to={`/projects/${order.project.id}`} className="wfp-link">
+                          {order.project.name}
+                        </Link>
+                      ) : (
+                        order.project.name
+                      )}
                     </div>
                   </div>
                 )}
@@ -327,7 +339,7 @@ function SpecTab({
   orderId: string
   estimateEditable: boolean
 }) {
-  const { isManager } = useAuth()
+  const { isManager, isOwner } = useAuth()
   const { data: est, isLoading, isError } = useProjectEstimate(project?.id, !isManager)
 
   if (!project) {
@@ -362,9 +374,15 @@ function SpecTab({
       title="Специфікація"
       aux={`${est.totalHours} год`}
       actions={
-        <Link to={`/projects/${project.id}`} className="wfp-link wfp-mono" style={{ fontSize: 12 }}>
-          проєкт →
-        </Link>
+        isOwner ? (
+          <Link
+            to={`/projects/${project.id}`}
+            className="wfp-link wfp-mono"
+            style={{ fontSize: 12 }}
+          >
+            проєкт →
+          </Link>
+        ) : undefined
       }
     >
       {est.includedHoursCap != null && (
@@ -758,9 +776,19 @@ function ApprovalCard({ order }: { order: WorkspaceOrderDetail }) {
 
 function StatusControl({ orderId, current }: { orderId: string; current: OrderInternalStatus }) {
   const transition = useTransitionStatus(orderId)
+  const { role } = useAuth()
   const [target, setTarget] = useState<OrderInternalStatus | ''>('')
   const [reason, setReason] = useState('')
-  const options = ALLOWED_ORDER_TRANSITIONS[current] ?? []
+  const all = ALLOWED_ORDER_TRANSITIONS[current] ?? []
+  // ROLE-NAV (аудит D9/C3): лише переходи, які бекенд дозволить цій ролі; здача (→review) і
+  // приймання/повернення — ОДНЕ місце, картка «Приймання», тут не дублюємо.
+  const canAccept = role === 'owner' || role === 'manager'
+  const options = all.filter(
+    (to) =>
+      to !== OrderInternalStatus.REVIEW &&
+      !isAcceptanceTransition(current, to) &&
+      canRoleTransitionOrder(role ?? 'executor', current, to, { canAccept })
+  )
   // Pausing / cancelling should carry a reason (→ onHoldReason / cancelledReason).
   const needsReason =
     target === OrderInternalStatus.ON_HOLD || target === OrderInternalStatus.CANCELLED
@@ -783,7 +811,11 @@ function StatusControl({ orderId, current }: { orderId: string; current: OrderIn
   if (options.length === 0) {
     return (
       <div className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-        // фінальний статус
+        {all.length === 0
+          ? '// фінальний статус'
+          : role === 'executor'
+            ? '// статус веде керівництво · здача — у картці «Приймання»'
+            : '// здача й приймання — у картці «Приймання»'}
       </div>
     )
   }
@@ -1179,21 +1211,23 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
             // всі задачі виконані — можна здавати на приймання
           </span>
         )}
-        {status === OrderInternalStatus.IN_PROGRESS && (isExecutor || isAcceptor) && (
-          <Button
-            size="sm"
-            variant="primary"
-            loading={transition.isPending}
-            onClick={() =>
-              transition.mutate(
-                { status: OrderInternalStatus.REVIEW },
-                { onSuccess: () => toast.success('Здано на приймання') }
-              )
-            }
-          >
-            Здати на приймання
-          </Button>
-        )}
+        {/* C3: здача — лише тут (і після доопрацювання теж), не в шапці-StatusControl */}
+        {(status === OrderInternalStatus.IN_PROGRESS || status === OrderInternalStatus.REVISION) &&
+          (isExecutor || isAcceptor) && (
+            <Button
+              size="sm"
+              variant="primary"
+              loading={transition.isPending}
+              onClick={() =>
+                transition.mutate(
+                  { status: OrderInternalStatus.REVIEW },
+                  { onSuccess: () => toast.success('Здано на приймання') }
+                )
+              }
+            >
+              Здати на приймання
+            </Button>
+          )}
         {inReview && isExecutor && (
           <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
             очікує приймання від керівника

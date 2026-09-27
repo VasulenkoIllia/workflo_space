@@ -67,7 +67,7 @@ export default function App() {
         <Route
           path="/settings"
           element={
-            <RoleRoute allow={['owner']}>
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
               <SettingsPage />
             </RoleRoute>
           }
@@ -142,7 +142,7 @@ export default function App() {
         <Route
           path="/team"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
               <TeamPage />
             </RoleRoute>
           }

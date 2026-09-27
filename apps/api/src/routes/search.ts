@@ -49,7 +49,9 @@ const searchRoute: FastifyPluginAsync = (fastify) => {
       const owner = isAgencyOwner(user, agencyId)
       const manager = isAgencyManager(user, agencyId)
       const canClients = owner || manager
-      const canProjects = owner || (!manager && isInternalTeam(user)) // internal-non-manager
+      // ROLE-NAV (аудит D8): фін-проєкти (/projects/:id) — owner-only екран; виконавцю ⌘K
+      // віддавав проєкти, клік вів у редирект. Проєкти в пошуку — лише власнику.
+      const canProjects = owner
 
       const data = await withTenant(async (tx) => {
         const orders = await tx.$queryRaw<

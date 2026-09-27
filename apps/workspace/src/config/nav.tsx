@@ -101,7 +101,7 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   },
 
   { group: 'Команда', roles: 'omx' },
-  // TEAM-ADMIN-2: 'omx' — executor-ТІМЛІД бачить ростер свого підрозділу
+  // TEAM-ADMIN-2 + ROLE-NAV: 'omx' — виконавець бачить свій підрозділ (read-only)
   { id: 'team', label: 'Команда', icon: <Icon name="users" />, href: '/team', roles: 'omx' },
   // S13-04: відсутності — заявки/баланс у всіх, погодження в owner/manager
   {
@@ -114,13 +114,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
 
   { group: 'Акаунт', roles: 'omx' },
   { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile', roles: 'omx' },
-  // Settings = owner config (payment requisites + referral program); owner-only.
+  // Settings: owner — конфіг агенції (6 табів); інші ролі — таб «Акаунт» (сповіщення,
+  // Telegram, сесії). ROLE-NAV (аудит D6): раніше owner-only → нікому більше ніде.
   {
     id: 'settings',
     label: 'Налаштування',
     icon: <Icon name="settings" />,
     href: '/settings',
-    roles: 'o',
+    roles: 'omx',
   },
 ]
 

@@ -2,8 +2,10 @@ import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
+  canRoleTransitionOrder,
   canTransitionOrder,
   INTERNAL_TO_CLIENT_STATUS,
+  isAcceptanceTransition,
   OrderClientStatus,
   OrderInternalStatus,
   transitionOrderStatusSchema,
@@ -80,11 +82,6 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
-      // Гейти старту (02-А погодження → S10-03 блокери → 02-В аванс → 06-договір).
-      if (to === OrderInternalStatus.IN_PROGRESS) {
-        await assertStartGates(order)
-      }
-
       const isInternal = isInternalTeam(user)
       const isReopen = from === OrderInternalStatus.DONE && to === OrderInternalStatus.REVISION
       const isCompanyOwner =
@@ -99,12 +96,29 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       const isAcceptor = role === 'owner' || role === 'manager'
       const enteringDone = to === OrderInternalStatus.DONE
       const sendingBack = from === OrderInternalStatus.REVIEW && to === OrderInternalStatus.REVISION
-      if ((enteringDone || sendingBack) && !isAcceptor) {
+      if (isAcceptanceTransition(from, to) && !isAcceptor) {
         throw new AppError(
           ApiErrorCode.FORBIDDEN,
-          'Приймання роботи доступне лише власнику або тімліду',
+          'Приймання роботи доступне лише власнику або менеджеру',
           403
         )
+      }
+      // ROLE-NAV (рішення 27.09): виконавець не триажить, не ставить на паузу, не скасовує.
+      if (
+        role === 'executor' &&
+        !canRoleTransitionOrder('executor', from, to, { canAccept: false })
+      ) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Цей перехід доступний власнику або менеджеру',
+          403
+        )
+      }
+
+      // Гейти старту (02-А погодження → S10-03 блокери → 02-В аванс → 06-договір) — ПІСЛЯ
+      // перевірок прав (ROLE-NAV): неавторизованому не віддаємо деталі гейтів.
+      if (to === OrderInternalStatus.IN_PROGRESS) {
+        await assertStartGates(order)
       }
 
       // Unchecked-варіант: дозволяє FK-скаляри submittedById/acceptedById (ПРИЙМАННЯ).

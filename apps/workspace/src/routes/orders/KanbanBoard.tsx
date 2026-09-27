@@ -1,6 +1,8 @@
 import { useRef, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { canRoleTransitionOrder } from '@workflo/types'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   KANBAN_COLUMNS,
   INTERNAL_STATUS_META,
@@ -24,6 +26,7 @@ export function KanbanBoard({
   doneCount?: number
 }) {
   const navigate = useNavigate()
+  const { role } = useAuth()
   const transition = useTransitionStatus()
   const byCol = groupByColumn(orders)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -42,6 +45,17 @@ export function KanbanBoard({
     if (!target) {
       toast.error(`«${card.title}» не можна перемістити сюди`, {
         description: 'Такий перехід статусу недопустимий за робочим процесом.',
+      })
+      return
+    }
+    // ROLE-NAV (аудит D9): не шлемо запит, який бекенд відхилить 403 для цієї ролі
+    const canAccept = role === 'owner' || role === 'manager'
+    if (
+      card.internalStatus &&
+      !canRoleTransitionOrder(role ?? 'executor', card.internalStatus, target, { canAccept })
+    ) {
+      toast.error(`«${card.title}» — цей перехід доступний керівництву`, {
+        description: 'Здати роботу можна в картці «Приймання» на сторінці замовлення.',
       })
       return
     }

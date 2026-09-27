@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
@@ -23,6 +24,8 @@ import {
  * усіх + чергу погодження (approve / reject з причиною).
  */
 export function LeavePage() {
+  const { user, isOwner } = useAuth()
+  const myId = user?.profile.id
   const { data, isLoading } = useLeaves()
   const balance = useLeaveBalance()
   const decide = useDecideLeave()
@@ -100,26 +103,35 @@ export function LeavePage() {
           <div style={{ display: 'grid', gap: 2 }}>
             {pending.map((l) => (
               <LeaveRow key={l.id} l={l} showName>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  loading={decide.isPending && decide.variables?.id === l.id}
-                  onClick={() =>
-                    decide.mutate(
-                      { id: l.id, action: 'approve' },
-                      {
-                        onSuccess: () => toast.success('Погоджено'),
-                        onError: (err) =>
-                          toast.error(err instanceof ApiError ? err.message : 'Не вдалося'),
+                {/* D16: менеджер не погоджує власну заявку (бек 403) — погоджує owner */}
+                {l.profileId === myId && !isOwner ? (
+                  <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
+                    погоджує власник
+                  </span>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      loading={decide.isPending && decide.variables?.id === l.id}
+                      onClick={() =>
+                        decide.mutate(
+                          { id: l.id, action: 'approve' },
+                          {
+                            onSuccess: () => toast.success('Погоджено'),
+                            onError: (err) =>
+                              toast.error(err instanceof ApiError ? err.message : 'Не вдалося'),
+                          }
+                        )
                       }
-                    )
-                  }
-                >
-                  Погодити
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setRejecting(l)}>
-                  Відхилити
-                </Button>
+                    >
+                      Погодити
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setRejecting(l)}>
+                      Відхилити
+                    </Button>
+                  </>
+                )}
               </LeaveRow>
             ))}
           </div>

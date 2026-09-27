@@ -31,10 +31,12 @@ export interface ReferralSettings {
   employeeReferralPercent: number
 }
 
-export function usePaymentSettings() {
+/** `enabled` — owner-only дані: для інших ролей не робимо запит (ROLE-NAV: /settings для всіх). */
+export function usePaymentSettings(enabled = true) {
   return useQuery({
     queryKey: ['ws-settings', 'payment'],
     queryFn: () => api.get<{ settings: PaymentSettings | null }>('/workspace/settings/payment'),
+    enabled,
   })
 }
 
@@ -47,10 +49,11 @@ export function useSavePaymentSettings() {
   })
 }
 
-export function useReferralSettings() {
+export function useReferralSettings(enabled = true) {
   return useQuery({
     queryKey: ['ws-settings', 'referral'],
     queryFn: () => api.get<ReferralSettings>('/admin/referral/settings'),
+    enabled,
   })
 }
 

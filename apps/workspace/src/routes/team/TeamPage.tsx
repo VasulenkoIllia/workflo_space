@@ -41,34 +41,47 @@ export function TeamPage() {
   const members = data?.members ?? []
   const isAdmin = isOwner || isManager
 
-  // Тімлід-скоуп: executor бачить лише свій підрозділ (teams вже скоуплені беком)
-  const myLeadTeam = !isAdmin ? (teams.find((t) => t.leadId === myId) ?? null) : null
+  // ROLE-NAV (аудит D1): виконавець бачить СВІЙ підрозділ read-only (тімлід — з позначкою).
+  // teams уже скоуплені беком; підрозділ — той, де він лід, інакше той, де він учасник.
+  const me = members.find((m) => m.profileId === myId)
+  const myTeam = !isAdmin
+    ? (teams.find((t) => t.leadId === myId) ?? teams.find((t) => t.id === me?.teamId) ?? null)
+    : null
 
   if (!isAdmin) {
-    if (!myLeadTeam) {
+    if (isLoading) return <Skeleton style={{ height: 220 }} />
+    if (!myTeam) {
       return (
         <EmptyState
-          title="Розділ доступний керівництву"
-          description="Ростер команди бачать власник, менеджери й тімліди підрозділів."
+          title="Вас ще не додано до підрозділу"
+          description="Щойно власник або менеджер додасть вас у команду — тут зʼявиться її склад."
         />
       )
     }
-    const unit = members.filter((m) => m.teamId === myLeadTeam.id)
+    const isLead = myTeam.leadId === myId
+    const unit = members.filter((m) => m.teamId === myTeam.id)
     return (
       <div style={{ maxWidth: 880 }}>
         <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>
-          Підрозділ · {myLeadTeam.name}
+          Підрозділ · {myTeam.name}
         </div>
         <div
           className="wfp-mono"
           style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 24 }}
         >
-          // ви тімлід · {unit.length} у підрозділі · компенсації видимі лише власнику
+          // {isLead ? 'ви тімлід' : 'ваш підрозділ'} · {unit.length} у підрозділі · компенсації
+          видимі лише власнику
         </div>
         <Card title="Склад підрозділу">
           <div style={{ display: 'grid', gap: 2 }}>
             {unit.map((m) => (
-              <MemberRow key={m.profileId} member={m} canEdit={false} onEdit={() => {}} />
+              <MemberRow
+                key={m.profileId}
+                member={m}
+                canEdit={false}
+                onEdit={() => {}}
+                cardLink={false}
+              />
             ))}
           </div>
         </Card>
@@ -492,10 +505,13 @@ function MemberRow({
   member,
   canEdit,
   onEdit,
+  cardLink = true,
 }: {
   member: TeamMember
   canEdit: boolean
   onEdit: (m: TeamMember) => void
+  /** KPI-картка `/team/:id` — лише для керівництва (ROLE-NAV D1: інакше редирект у нікуди) */
+  cardLink?: boolean
 }) {
   const rate = member.rate
 
@@ -514,14 +530,18 @@ function MemberRow({
         <Avatar name={member.name} size={28} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <Link
-              to={`/team/${member.profileId}`}
-              className="wfp-link"
-              style={{ color: 'inherit' }}
-              title="KPI-картка виконавця"
-            >
-              {member.name}
-            </Link>
+            {cardLink ? (
+              <Link
+                to={`/team/${member.profileId}`}
+                className="wfp-link"
+                style={{ color: 'inherit' }}
+                title="KPI-картка виконавця"
+              >
+                {member.name}
+              </Link>
+            ) : (
+              member.name
+            )}
           </div>
           <div
             className="wfp-mono"

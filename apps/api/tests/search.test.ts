@@ -88,7 +88,7 @@ describe('GET /workspace/search', () => {
     await app.close()
   })
 
-  it('executor: без клієнтів/лідів (2 запити — orders + projects)', async () => {
+  it('executor: лише замовлення — без клієнтів/лідів/проєктів (ROLE-NAV D8)', async () => {
     const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
@@ -96,7 +96,8 @@ describe('GET /workspace/search', () => {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(res.statusCode).toBe(200)
-    expect(queryRaw).toHaveBeenCalledTimes(2)
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    expect(res.json().data.projects).toEqual([])
     await app.close()
   })
 

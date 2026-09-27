@@ -752,6 +752,28 @@ describe('PATCH /orders/:id/status', () => {
   })
 
   // ПРИЙМАННЯ РОБОТИ: гейт ролей — приймати (→done) може лише owner/manager.
+  it('ROLE-NAV: executor CANNOT cancel / put on hold / triage new — 403, no write', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    for (const [from, to] of [
+      ['in_progress', 'cancelled'],
+      ['in_progress', 'on_hold'],
+      ['new', 'in_progress'],
+      ['new', 'estimating'],
+    ] as const) {
+      orderUpdateMany.mockClear()
+      orderFindUnique.mockResolvedValue({ ...base, internalStatus: from })
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/status',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: to, comment: 'x' },
+      })
+      expect(res.statusCode, `${from} → ${to}`).toBe(403)
+      expect(orderUpdateMany).not.toHaveBeenCalled()
+    }
+    await app.close()
+  })
+
   it('executor CANNOT accept (review → done) — 403', async () => {
     orderFindUnique.mockResolvedValue({ ...base, internalStatus: 'review' })
     const { app, token } = await authed(EXECUTOR)

@@ -225,9 +225,12 @@ export function OwnerDashboard() {
                 <Icon name="bell" size={14} style={{ color: '#A78BFA' }} />
                 Абонплата · авто
               </span>
-              <button className="wfd-panel-link" onClick={() => navigate('/projects')}>
-                відкрити проєкти →
-              </button>
+              {/* D8: /projects — owner-only маршрут; менеджеру лінк вів у редирект */}
+              {isOwner && (
+                <button className="wfd-panel-link" onClick={() => navigate('/projects')}>
+                  відкрити проєкти →
+                </button>
+              )}
             </div>
             {!isOwner ? (
               <div className="wfd-empty">— фінанси доступні власнику —</div>

@@ -78,6 +78,40 @@ export function canTransitionOrder(from: OrderInternalStatus, to: OrderInternalS
   return ALLOWED_ORDER_TRANSITIONS[from]?.includes(to) ?? false
 }
 
+/**
+ * ROLE-NAV (рішення власника 27.09.2026): ВИКОНАВЕЦЬ береться за роботу, уточнює і здає —
+ * не триажить нове, не ставить на паузу, не скасовує. Приймання (→done, review→revision) —
+ * лише той, хто має право приймати (owner / manager; тімлід своєї команди — MANAGER-OPS).
+ * Спільне для бекенду (403) і UI (показуємо лише доступні переходи).
+ */
+export const EXECUTOR_ORDER_TARGETS: readonly OrderInternalStatus[] = [
+  OrderInternalStatus.CLARIFICATION,
+  OrderInternalStatus.IN_PROGRESS,
+  OrderInternalStatus.REVIEW,
+]
+
+export function isAcceptanceTransition(
+  from: OrderInternalStatus,
+  to: OrderInternalStatus
+): boolean {
+  return (
+    to === OrderInternalStatus.DONE ||
+    (from === OrderInternalStatus.REVIEW && to === OrderInternalStatus.REVISION)
+  )
+}
+
+export function canRoleTransitionOrder(
+  role: 'owner' | 'manager' | 'executor',
+  from: OrderInternalStatus,
+  to: OrderInternalStatus,
+  opts: { canAccept: boolean }
+): boolean {
+  if (!canTransitionOrder(from, to)) return false
+  if (isAcceptanceTransition(from, to)) return opts.canAccept
+  if (role !== 'executor') return true
+  return from !== OrderInternalStatus.NEW && EXECUTOR_ORDER_TARGETS.includes(to)
+}
+
 // ============================================================================
 // Loyalty (% discount tiers, see modules/10-loyalty.md)
 // ============================================================================

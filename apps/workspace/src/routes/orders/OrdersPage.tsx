@@ -64,7 +64,11 @@ export function OrdersPage() {
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const debounced = useDebounce(search, 300)
-  const [statusF, setStatusF] = useState('')
+  // D13: дашборд лінкує /orders?status=review — фільтр ініціалізуємо з URL
+  const [statusF, setStatusF] = useState(() => {
+    const st = params.get('status') ?? ''
+    return st in INTERNAL_STATUS_META ? st : ''
+  })
   const [clientF, setClientF] = useState('')
   const [execF, setExecF] = useState('')
 
