@@ -15,11 +15,36 @@ export interface ClientProject {
   paymentTermsDays: number | null
   active: boolean
   createdAt: string
+  /** DSN-5: наступне продовження циклу (null — ручний цикл) */
+  nextCycleAt: string | null
+  /** DSN-5: поточний білінг-цикл + години по замовленнях проєкту за нього */
+  cycle: { from: string; to: string; hoursUsed: number }
 }
 
 export function usePortalProjects() {
   return useQuery({
     queryKey: ['portal-projects'],
     queryFn: () => api.get<{ projects: ClientProject[] }>('/portal/projects'),
+  })
+}
+
+/** DSN-5: позиції кошторису проєкту — «що входить» у модалці деталей. */
+export interface ProjectEstimateLine {
+  id: string
+  name: string
+  hours: string
+  amount: string | null
+}
+
+export function usePortalProjectEstimate(projectId: string | null) {
+  return useQuery({
+    queryKey: ['portal-project-estimate', projectId],
+    queryFn: () =>
+      api
+        .get<{
+          estimate: { lines: ProjectEstimateLine[]; totalHours: string }
+        }>(`/portal/projects/${projectId}/estimate-lines`)
+        .then((r) => r.estimate),
+    enabled: projectId != null,
   })
 }

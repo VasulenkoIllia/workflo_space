@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const projectFindMany = vi.fn()
+const timeLogAggregate = vi.fn() // DSN-5: години поточного циклу
 let Dec: (v: string | number) => unknown
 
 vi.mock('@workflo/db', async (importOriginal) => {
@@ -10,7 +11,10 @@ vi.mock('@workflo/db', async (importOriginal) => {
     Prisma: { Decimal: new (v: string | number) => unknown }
   }
   Dec = (v: string | number) => new actual.Prisma.Decimal(v)
-  const prisma = { project: { findMany: projectFindMany } }
+  const prisma = {
+    project: { findMany: projectFindMany },
+    timeLog: { aggregate: timeLogAggregate },
+  }
   return {
     prisma,
     Prisma: actual.Prisma,
@@ -59,8 +63,10 @@ describe('GET /portal/projects — client reads own projects', () => {
         paymentTermsDays: 7,
         active: true,
         createdAt: new Date('2026-01-01T00:00:00Z'),
+        nextCycleAt: null,
       },
     ])
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('12.5') } })
     const { app, token } = await authed(CLIENT)
     const res = await app.inject({
       method: 'GET',
@@ -77,6 +83,14 @@ describe('GET /portal/projects — client reads own projects', () => {
       abonAmount: '5000.00',
       includedHoursCap: '20.00',
     })
+    // DSN-5: години поточного циклу (якоря нема → календарний місяць) по замовленнях проєкту
+    expect(projects[0].cycle.hoursUsed).toBe(12.5)
+    expect(projects[0].nextCycleAt).toBeNull()
+    const aggArg = timeLogAggregate.mock.calls[0]![0] as {
+      where: { order: { projectId: string }; date: { gte: Date; lt: Date } }
+    }
+    expect(aggArg.where.order.projectId).toBe('pr1')
+    expect(aggArg.where.date.gte.getUTCDate()).toBe(1)
     // client-safe: internal fields are NOT exposed
     expect(projects[0]).not.toHaveProperty('legalEntityId')
     expect(projects[0]).not.toHaveProperty('advanceGatePct')

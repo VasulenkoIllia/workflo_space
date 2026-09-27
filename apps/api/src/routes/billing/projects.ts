@@ -14,6 +14,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { currentCycleWindow } from '../../services/projectCycle.js'
 import { closeProjectCycle } from '../../services/recurringCharges.js'
 
 /**
@@ -412,7 +413,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
 
   // ── Portal: the client's read-only view of their own projects (#6) ────────────
   // Client-safe subset of the billing terms they agreed to — no internal fields
-  // (legal entity, contract doc, advance gate, approver, cycle anchors).
+  // (legal entity, contract doc, advance gate, approver). nextCycleAt (дата продовження)
+  // клієнт і так бачить у /portal/summary — DSN-5 віддає його й тут + години циклу.
   const CLIENT_PROJECT_SELECT = {
     id: true,
     name: true,
@@ -426,6 +428,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     paymentTermsDays: true,
     active: true,
     createdAt: true,
+    nextCycleAt: true,
   } satisfies Prisma.ProjectSelect
 
   fastify.get(
@@ -444,14 +447,31 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       if (!can(user, 'billing.view', { agencyId, companyId })) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до білінгу', 403)
       }
-      const rows = await withTenant((tx) =>
-        tx.project.findMany({
+      const now = new Date()
+      const { rows, cycleHours } = await withTenant(async (tx) => {
+        const rows = await tx.project.findMany({
           where: { agencyId, companyId },
           orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
           select: CLIENT_PROJECT_SELECT,
         })
-      )
-      const projects = rows.map((p) => ({
+        // DSN-5: години ПОТОЧНОГО циклу по замовленнях проєкту (retainer hours-bar). Вікна
+        // різні per-проєкт → по агрегату на проєкт; проєктів у компанії одиниці.
+        const cycleHours = await Promise.all(
+          rows.map(async (p) => {
+            const w = currentCycleWindow(p.billingCycle, p.nextCycleAt, now)
+            const agg = await tx.timeLog.aggregate({
+              _sum: { hours: true },
+              where: {
+                order: { projectId: p.id, deletedAt: null },
+                date: { gte: w.from, lt: w.to },
+              },
+            })
+            return { window: w, hours: Number(agg._sum.hours ?? 0) }
+          })
+        )
+        return { rows, cycleHours }
+      })
+      const projects = rows.map((p, i) => ({
         id: p.id,
         name: p.name,
         type: p.type,
@@ -464,6 +484,12 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
         paymentTermsDays: p.paymentTermsDays,
         active: p.active,
         createdAt: p.createdAt.toISOString(),
+        nextCycleAt: p.nextCycleAt ? p.nextCycleAt.toISOString() : null,
+        cycle: {
+          from: cycleHours[i]!.window.from.toISOString(),
+          to: cycleHours[i]!.window.to.toISOString(),
+          hoursUsed: Math.round(cycleHours[i]!.hours * 100) / 100,
+        },
       }))
       return reply.send({ success: true, data: { projects } })
     }

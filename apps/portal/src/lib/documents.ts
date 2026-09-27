@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { OrderClientStatus } from '@workflo/types'
 import { API_URL, api, getAccessToken } from '@/lib/api'
 
 export type DocumentType =
@@ -8,6 +9,7 @@ export type DocumentType =
   | 'specification'
   | 'reconciliation_act'
   | 'contract'
+  | 'monthly_report' // 19-Г: company-scoped, без замовлення
 export type DocumentStatus = 'draft' | 'generated' | 'sent' | 'accepted' // 06-ПІДПИС
 
 export interface OrderDocument {
@@ -28,7 +30,13 @@ export interface OrderDocument {
 
 /** 06-SEND: документ у зведеному списку порталу (/documents) — з замовленням або без. */
 export interface PortalDocument extends OrderDocument {
-  order: { id: string; title: string } | null
+  // DSN-5: статус/оплата замовлення — групування «По замовленнях» + inline «Оплатити»
+  order: {
+    id: string
+    title: string
+    clientStatus: OrderClientStatus
+    paidAt: string | null
+  } | null
 }
 
 /** 06-SEND: усі надіслані/прийняті документи компаній клієнта. */
@@ -41,9 +49,27 @@ export function usePortalDocuments() {
 }
 
 /** 06-SEND: відкриття будь-якого документа зі зведеного списку. */
-export async function openPortalDocument(doc: PortalDocument): Promise<void> {
+/** Віддати blob: відкрити в новій вкладці або (DSN-5 «Завантажити») зберегти файлом. */
+function deliverBlob(blob: Blob, filename: string, download: boolean): void {
+  const blobUrl = URL.createObjectURL(blob)
+  if (download) {
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    a.click()
+  } else {
+    window.open(blobUrl, '_blank')
+  }
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+}
+
+export async function openPortalDocument(
+  doc: PortalDocument,
+  opts: { download?: boolean } = {}
+): Promise<void> {
+  const download = opts.download === true
   if (doc.signedExternally) {
-    if (doc.storedAs) return openStoredFile(doc)
+    if (doc.storedAs) return openStoredFile(doc, download)
     if (doc.externalUrl) {
       window.open(doc.externalUrl, '_blank', 'noopener')
       return
@@ -59,21 +85,17 @@ export async function openPortalDocument(doc: PortalDocument): Promise<void> {
     credentials: 'include',
   })
   if (!res.ok) throw new Error('Не вдалося відкрити документ')
-  const blobUrl = URL.createObjectURL(await res.blob())
-  window.open(blobUrl, '_blank')
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+  deliverBlob(await res.blob(), `${doc.number}.pdf`, download)
 }
 
-async function openStoredFile(doc: PortalDocument): Promise<void> {
+async function openStoredFile(doc: PortalDocument, download: boolean): Promise<void> {
   const token = getAccessToken()
   const res = await fetch(`${API_URL}/documents/${doc.id}/file`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: 'include',
   })
   if (!res.ok) throw new Error('Не вдалося відкрити файл')
-  const blobUrl = URL.createObjectURL(await res.blob())
-  window.open(blobUrl, '_blank')
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+  deliverBlob(await res.blob(), doc.storedAs ?? doc.number, download)
 }
 
 export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -83,6 +105,7 @@ export const DOC_TYPE_LABEL: Record<DocumentType, string> = {
   specification: 'Специфікація',
   reconciliation_act: 'Акт звірки',
   contract: 'Договір',
+  monthly_report: 'Місячний звіт',
 }
 
 export const DOC_STATUS_LABEL: Record<DocumentStatus, string> = {
@@ -100,6 +123,7 @@ export const DOC_TYPE_CODE: Record<DocumentType, string> = {
   specification: 'SPC',
   reconciliation_act: 'REC',
   contract: 'CTR',
+  monthly_report: 'RPT',
 }
 
 /** Status → `.wfp-badge--{cls}` tone (design DOC_STATUS map). */

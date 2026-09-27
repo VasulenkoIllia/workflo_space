@@ -325,6 +325,28 @@ describe('GET /portal/documents (06-SEND, зведений список кліє
     expect(empty.statusCode).toBe(200)
     expect(empty.json().data.documents).toEqual([])
     expect(db.document.findMany).not.toHaveBeenCalled()
+
+    // DSN-5: кілька компаній → лише АКТИВНА (документи не змішуються між компаніями)
+    db.document.findMany.mockClear()
+    db.document.findMany.mockResolvedValue([])
+    const multi = app.jwt.sign({
+      ...CLIENT,
+      activeCompanyId: 'company-2',
+      memberships: [
+        { companyId: 'company-1', role: 'owner' },
+        { companyId: 'company-2', role: 'member' },
+      ],
+    })
+    await app.inject({
+      method: 'GET',
+      url: '/portal/documents',
+      headers: { authorization: `Bearer ${multi}` },
+    })
+    const multiWhere = db.document.findMany.mock.calls[0][0].where
+    expect(multiWhere.companyId).toEqual({ in: ['company-2'] })
+    // select тягне статус/оплату замовлення для групування
+    const sel = db.document.findMany.mock.calls[0][0].select
+    expect(sel.order.select).toMatchObject({ clientStatus: true, paidAt: true })
     await app.close()
   })
 })

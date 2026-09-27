@@ -33,11 +33,19 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
       if (companyIds.length === 0) {
         return reply.send({ success: true, data: { documents: [] } })
       }
+      // DSN-5: скоуп на АКТИВНУ компанію (як замовлення/білінг порталу) — інакше при кількох
+      // компаніях документи змішувались; без активної — усі свої (back-compat).
+      const active = request.user.activeCompanyId
+      const scope = active && companyIds.includes(active) ? [active] : companyIds
       const documents = await withTenant((tx) =>
         tx.document.findMany({
-          where: { companyId: { in: companyIds }, status: { in: ['sent', 'accepted'] } },
+          where: { companyId: { in: scope }, status: { in: ['sent', 'accepted'] } },
           orderBy: { generatedAt: 'desc' },
-          select: { ...DOC_SELECT, order: { select: { id: true, title: true } } },
+          // DSN-5: статус/оплата замовлення — для групування «По замовленнях» + inline «Оплатити»
+          select: {
+            ...DOC_SELECT,
+            order: { select: { id: true, title: true, clientStatus: true, paidAt: true } },
+          },
           take: 200,
         })
       )
