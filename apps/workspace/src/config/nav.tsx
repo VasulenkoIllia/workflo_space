@@ -142,14 +142,6 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     href: '/content',
     perm: ['content.manage'],
   },
-  // 07-В: оголошення агенції (sticky-банер команді/клієнтам)
-  {
-    id: 'announcements',
-    label: 'Оголошення',
-    icon: <Icon name="bell" />,
-    href: '/announcements',
-    perm: ['announcements.manage'],
-  },
 
   { group: 'Команда', roles: 'omx' },
   // TEAM-ADMIN-2 + ROLE-NAV: 'omx' — виконавець бачить свій підрозділ (read-only)
@@ -165,6 +157,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
 
   { group: 'Акаунт', roles: 'omx' },
   { id: 'profile', label: 'Профіль', icon: <Icon name="users" />, href: '/profile', roles: 'omx' },
+  // DSN-7: хаб сповіщень (оголошення/розсилки, дайджест, пороги — за правами; канали й тест — усім)
+  {
+    id: 'notifications',
+    label: 'Сповіщення',
+    icon: <Icon name="bell" />,
+    href: '/notifications',
+    roles: 'omx',
+  },
   // Settings: owner — конфіг агенції (6 табів); інші ролі — таб «Акаунт» (сповіщення,
   // Telegram, сесії). ROLE-NAV (аудит D6): раніше owner-only → нікому більше ніде.
   {

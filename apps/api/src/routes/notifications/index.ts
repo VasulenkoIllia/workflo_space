@@ -4,6 +4,7 @@ import broadcastsRoute from './broadcasts.js'
 import notificationsRoute from './notifications.js'
 import pushRoute from './push.js'
 import unsubscribeRoute from './unsubscribe.js'
+import testNotificationRoute from './testNotification.js'
 
 /** In-app notification feed (read + mark-read) + 07-В оголошення + S12-03 web push. */
 const notificationRoutes: FastifyPluginAsync = async (fastify) => {
@@ -13,6 +14,7 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(broadcastsRoute)
   // no-auth (token-only) відписка — S12-05 хвіст
   await fastify.register(unsubscribeRoute)
+  await fastify.register(testNotificationRoute)
 }
 
 export default notificationRoutes

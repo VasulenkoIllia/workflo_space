@@ -1,12 +1,8 @@
 import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  LinkedAccountsSection,
-  NotificationsSection,
-  SessionsSection,
-  TelegramSection,
-} from '@workflo/app-core'
+import { LinkedAccountsSection, SessionsSection } from '@workflo/app-core'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import {
@@ -128,7 +124,7 @@ function AgencySecuritySection() {
 
 /** S11 (owner-only): тумблер «місячний звіт на email» — cron шле власникам дайджест
  * за попередній місяць (замовлення/гроші/ліди/SLA). */
-function EmailReportsSection() {
+export function EmailReportsSection() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['agency-report-settings'],
@@ -1233,7 +1229,7 @@ export function SettingsPage() {
         //{' '}
         {isOwner
           ? 'конфіг агенції · воркфлоу · шаблони · фінанси · ops'
-          : 'сповіщення · Telegram · сесії · привʼязані акаунти'}
+          : 'сесії · привʼязані акаунти'}
       </div>
 
       <Tabs value={tab} onChange={setTab} items={items} />
@@ -1244,8 +1240,13 @@ export function SettingsPage() {
             {/* 2FA — у «Профілі» (безпека й особисте), тут не дублюємо (аудит C8) */}
             <LinkedAccountsSection app="workspace" />
             <SessionsSection />
-            <NotificationsSection />
-            <TelegramSection app="workspace" />
+            {/* DSN-7: матриця каналів і Telegram — у хабі «Сповіщення» */}
+            <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
+              // канали сповіщень, Telegram і тест доставки —{' '}
+              <Link to="/notifications?tab=matrix" className="wfp-link">
+                «Сповіщення» →
+              </Link>
+            </div>
           </>
         )}
 
@@ -1255,8 +1256,7 @@ export function SettingsPage() {
             {isOwner && <AgencySecuritySection />}
             <WorkflowSection />
             {can('billing.manage') && <DunningSection />}
-            <SlaPoliciesSection />
-            <EmailReportsSection />
+            {/* DSN-7: дайджест і пороги відповіді — у хабі «Сповіщення» */}
           </>
         )}
 
@@ -1671,7 +1671,7 @@ const SLA_PRIORITIES = [
   { value: 'low', label: 'Низький' },
 ] as const
 
-function SlaPoliciesSection() {
+export function SlaPoliciesSection() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['sla-policies'],

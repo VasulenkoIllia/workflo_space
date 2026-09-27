@@ -35,7 +35,8 @@ const AUDIENCE_LABEL: Record<AnnouncementAudience, string> = {
   all: 'усі',
 }
 
-export function AnnouncementsPage() {
+/** embedded — вкладка хабу «Сповіщення» (DSN-7): без власного заголовка сторінки. */
+export function AnnouncementsPage({ embedded = false }: { embedded?: boolean }) {
   const { data: items = [], isLoading } = useAnnouncementsAdmin()
   const update = useUpdateAnnouncement()
   const del = useDeleteAnnouncement()
@@ -45,7 +46,9 @@ export function AnnouncementsPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div>
-          <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Оголошення</div>
+          {!embedded && (
+            <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Оголошення</div>
+          )}
           <div
             className="wfp-mono"
             style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 20 }}

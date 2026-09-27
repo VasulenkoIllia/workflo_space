@@ -21,7 +21,7 @@ import { FinancePage } from '@/routes/finance/FinancePage'
 import { MarginPage } from '@/routes/margin/MarginPage'
 import { ReportsPage } from '@/routes/reports/ReportsPage'
 import { ContentPage } from '@/routes/content/ContentPage'
-import { AnnouncementsPage } from '@/routes/announcements/AnnouncementsPage'
+import { NotificationsHubPage } from '@/routes/notifications/NotificationsHubPage'
 import { LeavePage } from '@/routes/leave/LeavePage'
 import { ExecutorCardPage } from '@/routes/team/ExecutorCardPage'
 import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
@@ -215,12 +215,10 @@ export default function App() {
         />
         <Route
           path="/announcements"
-          element={
-            <PermRoute any={['announcements.manage']}>
-              <AnnouncementsPage />
-            </PermRoute>
-          }
+          element={<Navigate to="/notifications?tab=announce" replace />}
         />
+        {/* DSN-7: хаб сповіщень — адмін-таби за правами, «Мої канали»/«Тест» — усім */}
+        <Route path="/notifications" element={<NotificationsHubPage />} />
         <Route
           path="/team/:profileId"
           element={

@@ -53,3 +53,12 @@ export const updateNotificationPreferencesSchema = z.object({
     .min(1)
     .max(42), // 7 categories × 6 channels ceiling
 })
+
+/**
+ * DSN-7 · хаб «Сповіщення» → «Тест»: перевірка каналу доставки собі (design-v2
+ * workspace-notify.jsx NfTest). Портал і workspace — однаково.
+ */
+export const testNotificationSchema = z
+  .object({ channel: z.enum(['email', 'telegram', 'in_app']) })
+  .strict()
+export type TestNotificationInput = z.infer<typeof testNotificationSchema>
