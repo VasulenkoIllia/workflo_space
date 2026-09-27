@@ -279,6 +279,10 @@ export function ProjectDetailPage() {
   const { data, isLoading, isError } = useProject(id)
   const companies = useCompanies()
   const [editing, setEditing] = useState(false)
+  // DSN-7 (design-v2 workspace-project360.jsx): перспектива «Агенція ⇄ Клієнт» — як проєкт
+  // виглядає в порталі (без маржі, юр-особи, номенклатури, команди, налаштувань погодження)
+  const [view, setView] = useState<'agency' | 'client'>('agency')
+  const { can } = useAuth()
 
   if (isLoading) return <Skeleton style={{ height: 320 }} />
   if (isError || !data) {
@@ -297,8 +301,13 @@ export function ProjectDetailPage() {
   }
 
   const p = data.project
+  const stats = data.stats
   const companyName = companies.data?.companies.find((c) => c.id === p.companyId)?.name ?? '—'
   const isFixed = p.billingModel === 'fixed_monthly_advance'
+  const clientView = view === 'client'
+  const cap = num(p.includedHoursCap)
+  const used = stats?.cycle.hoursUsed ?? 0
+  const pct = cap ? Math.min(Math.round((used / cap) * 100), 100) : 0
 
   return (
     <div>
@@ -353,9 +362,110 @@ export function ProjectDetailPage() {
             // {companyName} · {MODEL_LABEL[p.billingModel]} · {CYCLE_LABEL[p.billingCycle]}
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-          Редагувати
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div className="wpj-viewseg" title="Перемкнути перспективу">
+            <button
+              type="button"
+              data-on={view === 'agency' || undefined}
+              onClick={() => setView('agency')}
+            >
+              Агенція
+            </button>
+            <button
+              type="button"
+              data-on={view === 'client' || undefined}
+              onClick={() => setView('client')}
+            >
+              Клієнт
+            </button>
+          </div>
+          {!clientView && can('projects.manage') && (
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              Редагувати
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {clientView && (
+        <div className="wpj-clientbanner">
+          <div>
+            Перегляд <strong>очима клієнта</strong> — так проєкт виглядає в порталі. Сховано: маржа,
+            юр-особа, номенклатура, команда й налаштування погодження.
+          </div>
+        </div>
+      )}
+
+      {/* DSN-7: KPI-hero (design-v2 PjOverview) */}
+      <div className="wfc-kpis" style={{ marginBottom: 18 }}>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">{isFixed ? 'Абонплата' : 'Ставка'}</div>
+          <div className="wfc-kpi-v wfc-kpi-v--accent">
+            {formatMoney(num(isFixed ? p.abonAmount : p.clientHourlyRate))}
+            <span style={{ fontSize: 13, color: 'var(--wf-fg-subtle)', fontWeight: 400 }}>
+              {' '}
+              {p.currency}
+              {isFixed ? '/міс' : '/год'}
+            </span>
+          </div>
+          <div className="wfc-kpi-sub">{MODEL_LABEL[p.billingModel]}</div>
+        </div>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">{cap ? 'Години циклу' : 'Відпрацьовано за цикл'}</div>
+          <div className="wfc-kpi-v">
+            {used}
+            <span style={{ fontSize: 14, color: 'var(--wf-fg-subtle)', fontWeight: 400 }}>
+              {cap ? ` / ${cap}` : ' год'}
+            </span>
+          </div>
+          {cap ? (
+            <div className="wfc-bar">
+              <div
+                className="wfc-bar-fill"
+                data-tone={used / cap > 0.9 ? 'bad' : used / cap > 0.8 ? 'warn' : undefined}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          ) : (
+            <div className="wfc-kpi-sub">
+              {stats ? `${formatDate(stats.cycle.from)} – ${formatDate(stats.cycle.to)}` : ''}
+            </div>
+          )}
+        </div>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">Наступний білінг</div>
+          <div className="wfc-kpi-v" style={{ fontSize: 19 }}>
+            {stats?.nextCycleAt ? formatDate(stats.nextCycleAt) : 'вручну'}
+          </div>
+          <div className="wfc-kpi-sub">{CYCLE_LABEL[p.billingCycle]}</div>
+        </div>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">Договір</div>
+          <div className="wfc-kpi-v" style={{ fontSize: 19 }}>
+            {p.contractDocumentId ? '✓ є' : '— немає'}
+          </div>
+          <div className="wfc-kpi-sub">
+            {p.contractDocumentId ? 'привʼязаний до проєкту' : 'додайте в «Документи» клієнта'}
+          </div>
+        </div>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">Відкриті замовлення</div>
+          <div className="wfc-kpi-v">{stats?.openOrders ?? '—'}</div>
+          <div className="wfc-kpi-sub">
+            <Link to={`/clients/${p.companyId}`} className="wfp-link">
+              замовлення клієнта →
+            </Link>
+          </div>
+        </div>
+        <div className="wfc-kpi">
+          <div className="wfc-kpi-k">Клієнт</div>
+          <div className="wfc-kpi-v" style={{ fontSize: 19 }}>
+            <Link to={`/clients/${p.companyId}`} className="wfp-link">
+              {companyName}
+            </Link>
+          </div>
+          <div className="wfc-kpi-sub">з {formatDate(p.createdAt)}</div>
+        </div>
       </div>
 
       <div
@@ -380,15 +490,23 @@ export function ProjectDetailPage() {
             k="Строк оплати"
             v={p.paymentTermsDays != null ? `${p.paymentTermsDays} дн` : 'успадковано'}
           />
-          <Row k="Погодження" v={p.approvalMode ? MODE_LABEL[p.approvalMode] : 'успадковано'} />
-          {p.invoiceApprover && <Row k="Погоджує" v={APPROVER_LABEL[p.invoiceApprover]} />}
+          {!clientView && (
+            <Row k="Погодження" v={p.approvalMode ? MODE_LABEL[p.approvalMode] : 'успадковано'} />
+          )}
+          {!clientView && p.invoiceApprover && (
+            <Row k="Погоджує" v={APPROVER_LABEL[p.invoiceApprover]} />
+          )}
         </Card>
 
-        <ProjectTeamCard project={p} />
-        <LegalEntityCard project={p} />
-        <ProjectNomenclatureCard project={p} />
-        <MarginCard project={p} />
-        {p.billingCycle === 'manual' && <CloseCycleCard id={p.id} />}
+        {!clientView && (
+          <>
+            <ProjectTeamCard project={p} />
+            <LegalEntityCard project={p} />
+            <ProjectNomenclatureCard project={p} />
+            <MarginCard project={p} />
+            {p.billingCycle === 'manual' && <CloseCycleCard id={p.id} />}
+          </>
+        )}
       </div>
 
       <ProjectChargesCard project={p} />

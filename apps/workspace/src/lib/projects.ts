@@ -137,10 +137,18 @@ export function useSaveProject() {
 }
 
 /** GET /workspace/projects/:id — single project for the detail screen. */
+/** DSN-7: KPI-hero проєкту 360 — поточний цикл, наступний білінг (після «зараз»), відкриті. */
+export interface ProjectStats {
+  cycle: { from: string; to: string; hoursUsed: number }
+  nextCycleAt: string | null
+  openOrders: number
+}
+
 export function useProject(id: string) {
   return useQuery({
     queryKey: ['projects', id],
-    queryFn: () => api.get<{ project: FinProject }>(`/workspace/projects/${id}`),
+    queryFn: () =>
+      api.get<{ project: FinProject; stats?: ProjectStats }>(`/workspace/projects/${id}`),
     enabled: id !== '',
   })
 }

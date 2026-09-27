@@ -127,7 +127,43 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       if (!project) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
       }
-      return reply.send({ success: true, data: { project: toDto(project, showMoney) } })
+      // DSN-7 (project-360 KPI-hero): поточний цикл (години по замовленнях проєкту) і
+      // відкриті замовлення — та сама логіка вікна, що в порталі (currentCycleWindow).
+      const w = currentCycleWindow(project.billingCycle, project.nextCycleAt, new Date())
+      const [agg, openOrders] = await withTenant((tx) =>
+        Promise.all([
+          tx.timeLog.aggregate({
+            _sum: { hours: true },
+            where: {
+              order: { projectId: project.id, deletedAt: null },
+              date: { gte: w.from, lt: w.to },
+            },
+          }),
+          tx.order.count({
+            where: {
+              projectId: project.id,
+              deletedAt: null,
+              internalStatus: { notIn: ['done', 'cancelled'] },
+            },
+          }),
+        ])
+      )
+      return reply.send({
+        success: true,
+        data: {
+          project: toDto(project, showMoney),
+          stats: {
+            cycle: {
+              from: w.from.toISOString(),
+              to: w.to.toISOString(),
+              hoursUsed: Math.round(Number(agg._sum.hours ?? 0) * 100) / 100,
+            },
+            nextCycleAt:
+              project.nextCycleAt && project.billingCycle !== 'manual' ? w.to.toISOString() : null,
+            openOrders,
+          },
+        },
+      })
     }
   )
 

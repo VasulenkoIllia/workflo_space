@@ -5163,3 +5163,25 @@
   .wfcal-day-view { grid-template-columns: 1fr; }
 }
 
+
+/* ─── Project 360 · KPI hero + perspective toggle — port of design-v2 workspace-client360.css / workspace-project360.css (DSN-7) ─── */
+.wfc-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.wfc-kpi { border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-surface); padding: 14px 16px; }
+.wfc-kpi-k { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wf-fg-subtle); }
+.wfc-kpi-v { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-top: 6px; line-height: 1; }
+.wfc-kpi-v--accent { color: var(--wf-accent); }
+.wfc-kpi-v--warn { color: var(--wf-warning); }
+.wfc-kpi-sub { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); margin-top: 7px; }
+
+/* progress bar */
+.wfc-bar { height: 6px; border-radius: 999px; background: var(--wf-subtle); overflow: hidden; margin-top: 9px; }
+.wfc-bar-fill { height: 100%; border-radius: 999px; background: var(--wf-accent); }
+.wfc-bar-fill[data-tone="warn"] { background: var(--wf-warning); }
+.wfc-bar-fill[data-tone="bad"]  { background: var(--wf-destructive); }
+.wpj-viewseg { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 9px; padding: 3px; gap: 3px; background: var(--wf-surface); }
+.wpj-viewseg button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 12px; color: var(--wf-fg-secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.wpj-viewseg button[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); font-weight: 500; }
+
+/* client-view banner */
+.wpj-clientbanner { display: flex; align-items: center; gap: 11px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--wf-accent); border-radius: 11px; background: var(--wf-accent-soft); font-size: 13px; color: var(--wf-fg-secondary); line-height: 1.5; }
+@media (max-width: 900px) { .wfc-kpis { grid-template-columns: repeat(2, 1fr); } }

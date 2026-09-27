@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const projectFindMany = vi.fn()
+const projectFindFirst = vi.fn()
+const orderCount = vi.fn()
 const timeLogAggregate = vi.fn() // DSN-5: години поточного циклу
 let Dec: (v: string | number) => unknown
 
@@ -12,7 +14,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
   }
   Dec = (v: string | number) => new actual.Prisma.Decimal(v)
   const prisma = {
-    project: { findMany: projectFindMany },
+    project: { findMany: projectFindMany, findFirst: projectFindFirst },
+    order: { count: orderCount },
     timeLog: { aggregate: timeLogAggregate },
   }
   return {
@@ -23,6 +26,10 @@ vi.mock('@workflo/db', async (importOriginal) => {
   }
 })
 vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
+vi.mock('../src/saas/limits.js', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
+  moduleEnabled: vi.fn().mockResolvedValue(true),
+}))
 
 const { buildApp } = await import('../src/app.js')
 
@@ -151,5 +158,47 @@ describe('GET /portal/projects — client reads own projects', () => {
     const res = await app.inject({ method: 'GET', url: '/portal/projects' })
     expect(res.statusCode).toBe(401)
     await app.close()
+  })
+})
+
+describe('DSN-7 GET /workspace/projects/:id — KPI-статистика проєкту 360', () => {
+  it('години поточного циклу, відкриті замовлення, наступний білінг після «зараз»', async () => {
+    projectFindFirst.mockResolvedValue({
+      id: 'pr9',
+      agencyId: AGENCY,
+      companyId: COMPANY,
+      name: 'Супровід',
+      billingModel: 'fixed_monthly_advance',
+      billingCycle: 'monthly_day_n',
+      nextCycleAt: new Date('2020-03-01T00:00:00Z'), // протухлий якір
+      currency: 'USD',
+      abonAmount: Dec('300'),
+      active: true,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: Dec('7.25') } })
+    orderCount.mockResolvedValue(2)
+    const OWNER = {
+      sub: 'o1',
+      email: 'o@e.com',
+      role: 'owner' as const,
+      activeAgencyId: AGENCY,
+      activeCompanyId: null,
+      agencyMemberships: [{ agencyId: AGENCY, role: 'owner' as const }],
+      memberships: [],
+    }
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/projects/pr9',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    await app.close()
+    expect(res.statusCode).toBe(200)
+    const { stats } = res.json().data
+    expect(stats.cycle.hoursUsed).toBe(7.25)
+    expect(stats.openOrders).toBe(2)
+    expect(new Date(stats.nextCycleAt).getTime()).toBeGreaterThan(Date.now())
+    expect(orderCount.mock.calls[0][0].where).toMatchObject({ projectId: 'pr9', deletedAt: null })
   })
 })
