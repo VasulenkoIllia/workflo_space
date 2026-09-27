@@ -14,6 +14,7 @@ import {
   type CalendarEventDto,
   type CreateEventInput,
 } from '@/lib/calendar'
+import { DayView, WeekView } from './TimeGridViews'
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
 const MONTHS = [
@@ -56,11 +57,33 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })
 }
 
+type View = 'month' | 'week' | 'day'
+const VIEW_LABEL: Record<View, string> = { month: 'Місяць', week: 'Тиждень', day: 'День' }
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+function addDays(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
+}
+function mondayOf(d: Date) {
+  return addDays(startOfDay(d), -((d.getDay() + 6) % 7))
+}
+
 export function CalendarPage() {
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth())
-  const { from, to } = useMemo(() => monthRange(year, month), [year, month])
+  // DSN-7: Місяць · Тиждень · День (design-v2 workspace-calendar.jsx)
+  const [view, setView] = useState<View>('month')
+  const [anchor, setAnchor] = useState(() => startOfDay(now))
+  const year = anchor.getFullYear()
+  const month = anchor.getMonth()
+  const weekStart = mondayOf(anchor)
+  const { from, to } = useMemo(() => {
+    if (view === 'month') return monthRange(year, month)
+    const start = view === 'week' ? mondayOf(anchor) : startOfDay(anchor)
+    const end = addDays(start, view === 'week' ? 7 : 1)
+    return { from: start.toISOString(), to: end.toISOString() }
+  }, [view, anchor, year, month])
   const { data: items, isLoading } = useCalendarView(from, to)
   const { data: eventsData } = useCalendarEvents(from, to)
   const events = eventsData?.events
@@ -102,10 +125,29 @@ export function CalendarPage() {
     return { date: d, iso: d.toISOString().slice(0, 10), inMonth: d.getUTCMonth() === month }
   })
 
-  const shift = (delta: number) => {
-    const m = month + delta
-    setYear(year + Math.floor(m / 12))
-    setMonth(((m % 12) + 12) % 12)
+  const shift = (delta: number) =>
+    setAnchor(
+      view === 'month'
+        ? new Date(year, month + delta, 1)
+        : addDays(anchor, delta * (view === 'week' ? 7 : 1))
+    )
+  const periodLabel =
+    view === 'month'
+      ? `${MONTHS[month]} ${year}`
+      : view === 'week'
+        ? `${weekStart.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })} – ${addDays(
+            weekStart,
+            6
+          ).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+        : anchor.toLocaleDateString('uk-UA', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })
+  const openDay = (d: Date) => {
+    setAnchor(startOfDay(d))
+    setView('day')
   }
   const selectedEvent = events?.find((e) => e.id === selected) ?? null
 
@@ -134,26 +176,50 @@ export function CalendarPage() {
         <Button size="sm" variant="ghost" onClick={() => shift(-1)}>
           ←
         </Button>
-        <div style={{ fontWeight: 600, minWidth: 160, textAlign: 'center' }}>
-          {MONTHS[month]} {year}
-        </div>
+        <div style={{ fontWeight: 600, minWidth: 160, textAlign: 'center' }}>{periodLabel}</div>
         <Button size="sm" variant="ghost" onClick={() => shift(1)}>
           →
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            setYear(now.getFullYear())
-            setMonth(now.getMonth())
-          }}
-        >
+        <Button size="sm" variant="ghost" onClick={() => setAnchor(startOfDay(new Date()))}>
           Сьогодні
         </Button>
+        <div className="wfcal-views" role="tablist">
+          {(['month', 'week', 'day'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              className="wfcal-view"
+              data-on={view === v || undefined}
+              onClick={() => setView(v)}
+              style={{ border: 0, font: 'inherit' }}
+            >
+              {VIEW_LABEL[v]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
         <Skeleton style={{ height: 400 }} />
+      ) : view === 'week' ? (
+        <WeekView
+          days={Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))}
+          events={events ?? []}
+          items={items ?? []}
+          leaves={leaves ?? []}
+          onSelect={setSelected}
+          onOpenDay={openDay}
+        />
+      ) : view === 'day' ? (
+        <DayView
+          day={anchor}
+          events={events ?? []}
+          items={items ?? []}
+          leaves={leaves ?? []}
+          onOpen={setSelected}
+        />
       ) : (
         <Card>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
@@ -186,17 +252,28 @@ export function CalendarPage() {
                     opacity: c.inMonth ? 1 : 0.5,
                   }}
                 >
-                  <div
+                  <button
+                    type="button"
                     className="wfp-mono"
+                    title="Відкрити день"
+                    onClick={() =>
+                      openDay(
+                        new Date(c.date.getUTCFullYear(), c.date.getUTCMonth(), c.date.getUTCDate())
+                      )
+                    }
                     style={{
                       fontSize: 11,
                       color: isToday ? 'var(--wf-accent)' : 'var(--wf-fg-muted)',
                       fontWeight: isToday ? 700 : 400,
                       marginBottom: 3,
+                      background: 'none',
+                      border: 0,
+                      padding: 0,
+                      cursor: 'pointer',
                     }}
                   >
                     {c.date.getUTCDate()}
-                  </div>
+                  </button>
                   <div style={{ display: 'grid', gap: 2 }}>
                     {(dayItems ?? []).slice(0, 3).map((it) => (
                       <button
