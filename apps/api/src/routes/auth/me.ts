@@ -2,6 +2,7 @@ import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { loadAgencyMemberships } from '../../auth/memberships.js'
+import { loadPermissionSnapshot } from '../../auth/permissions.js'
 import { twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /**
@@ -60,6 +61,12 @@ const meRoute: FastifyPluginAsync = (fastify) => {
       : (agencyMemberships[0]?.agencyId ?? null)
     const agencyRole = agencyMemberships.find((m) => m.agencyId === activeAgencyId)?.role ?? null
 
+    // PERM-1: ефективні права в активній агенції — фронт гейтить меню/маршрути/кнопки ними
+    // (бек однаково перевіряє кожен роут). permissionRole: owner|manager|lead|executor.
+    const perms = activeAgencyId
+      ? await loadPermissionSnapshot({ sub: profileId, agencyMemberships }, activeAgencyId)
+      : null
+
     // 2FA-POLICY: banner/forced-setup state for the frontends (fresh on every /me).
     const twoFactorSetup = await twoFactorSetupState(profileId, agencyMemberships)
 
@@ -89,6 +96,12 @@ const meRoute: FastifyPluginAsync = (fastify) => {
         activeAgencyId,
         agencyRole,
         agencyMemberships,
+        ...(perms
+          ? {
+              permissionRole: perms.role === 'executor' && perms.isLead ? 'lead' : perms.role,
+              permissions: perms.levels,
+            }
+          : {}),
         ...(twoFactorSetup.required ? { twoFactorSetup } : {}),
         // 01-Д: тимчасовий пароль → банер «змініть пароль»
         ...(profile.mustChangePassword ? { mustChangePassword: true } : {}),

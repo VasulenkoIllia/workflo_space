@@ -1,6 +1,7 @@
 import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { invalidatePermissions } from '../../auth/permissions.js'
 import { z } from 'zod'
 import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
@@ -239,6 +240,8 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
           select: TEAM_SELECT,
         })
       })
+      // PERM-1: тімлід = колонка `lead` матриці → зміна ліда міняє права
+      if (body.leadId !== undefined) invalidatePermissions(agencyId)
       return reply.send({ success: true, data: { team } })
     }
   )
@@ -257,6 +260,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
         if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Команду не знайдено', 404)
         await tx.team.delete({ where: { id: existing.id } })
       })
+      invalidatePermissions(agencyId) // PERM-1: лід видаленої команди втрачає `lead`
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
         agencyId,
@@ -395,7 +399,18 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
           if (!team) throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Команду не знайдено', 400)
         }
         await tx.agencyMember.update({ where: { id: member.id }, data: { teamId } })
+        // Лід, переведений з підрозділу (або прибраний), більше не лід старої команди —
+        // інакше зберігав би права на її дошку (аудит PERM, «застарілий Team.leadId»).
+        await tx.team.updateMany({
+          where: {
+            agencyId,
+            leadId: request.params.profileId,
+            ...(teamId ? { id: { not: teamId } } : {}),
+          },
+          data: { leadId: null },
+        })
       })
+      invalidatePermissions(agencyId) // PERM-1: підрозділ/тімлідство змінились
       return reply.send({ success: true, data: { profileId: request.params.profileId, teamId } })
     }
   )

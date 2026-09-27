@@ -1,0 +1,114 @@
+import {
+  ApiErrorCode,
+  AppError,
+  levelAtLeast,
+  permissionDef,
+  resolvePermissions,
+  type PermissionKey,
+  type PermissionLevel,
+  type PermissionMap,
+} from '@workflo/types'
+import type { FastifyRequest } from 'fastify'
+import { fetchPermissionData } from './permissionStore.js'
+import { agencyRole, type AccessClaims } from './tokens.js'
+
+/**
+ * PERM-1: ефективні права людини в АКТИВНІЙ агенції. Резолвимо на запит (не в JWT) —
+ * відкликання діє за ≤30 с (TTL кешу), а не після спливу access-токена. Роль — з токена
+ * (зміна ролі й так відкликає сесії); матриця/персональні права/тімлідство — з БД.
+ * Каталог і дефолти — @workflo/types `PERMISSIONS`.
+ */
+export interface PermissionSnapshot {
+  agencyId: string
+  role: 'owner' | 'manager' | 'executor'
+  isLead: boolean
+  leadTeamIds: string[]
+  teamId: string | null
+  levels: PermissionMap
+}
+
+const TTL_MS = 30_000
+const cache = new Map<string, { at: number; snap: PermissionSnapshot }>()
+const perRequest = new WeakMap<FastifyRequest, Promise<PermissionSnapshot | null>>()
+
+/** Скинути кеш агенції (після зміни матриці/персональних прав/тімліда). */
+export function invalidatePermissions(agencyId: string): void {
+  for (const k of cache.keys()) if (k.startsWith(`${agencyId}:`)) cache.delete(k)
+}
+
+/** Знімок прав людини в конкретній агенції (для /auth/me — зі свіжими членствами з БД). */
+export async function loadPermissionSnapshot(
+  user: Pick<AccessClaims, 'sub' | 'agencyMemberships'>,
+  agencyId: string
+): Promise<PermissionSnapshot | null> {
+  return load(user, agencyId)
+}
+
+async function load(
+  user: Pick<AccessClaims, 'sub' | 'agencyMemberships'>,
+  agencyId: string
+): Promise<PermissionSnapshot | null> {
+  const role = agencyRole(user, agencyId)
+  if (!role) return null // не член агенції (клієнт порталу) — агентських прав нема
+  const key = `${agencyId}:${user.sub}:${role}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.snap
+  const data = await fetchPermissionData(agencyId, user.sub)
+  const isLead = role === 'executor' && data.leadTeamIds.length > 0
+  const snap: PermissionSnapshot = {
+    agencyId,
+    role,
+    isLead,
+    leadTeamIds: data.leadTeamIds,
+    teamId: data.teamId,
+    levels: resolvePermissions({
+      agencyRole: role,
+      isLead,
+      roleRows: data.roleRows,
+      memberRows: data.memberRows,
+    }),
+  }
+  cache.set(key, { at: Date.now(), snap })
+  return snap
+}
+
+/** Права поточного користувача в його активній агенції (мемо на запит). null — не агенція. */
+export function getPermissions(request: FastifyRequest): Promise<PermissionSnapshot | null> {
+  let p = perRequest.get(request)
+  if (!p) {
+    const agencyId = request.user.activeAgencyId
+    p = agencyId ? load(request.user, agencyId) : Promise.resolve(null)
+    perRequest.set(request, p)
+  }
+  return p
+}
+
+/** Рівень права (none, якщо не член агенції). */
+export async function permissionLevel(
+  request: FastifyRequest,
+  key: PermissionKey
+): Promise<PermissionLevel> {
+  const snap = await getPermissions(request)
+  return snap?.levels[key] ?? 'none'
+}
+
+/**
+ * Гард: 403, якщо рівень права нижчий за `min` (дефолт — будь-який, крім none).
+ * Повертає знімок (рівень + підрозділ/тімлідство для скоупу own/team у хендлері).
+ */
+export async function requirePermission(
+  request: FastifyRequest,
+  key: PermissionKey,
+  min: PermissionLevel = 'own'
+): Promise<PermissionSnapshot & { level: PermissionLevel }> {
+  const snap = await getPermissions(request)
+  const level = snap?.levels[key] ?? 'none'
+  if (!snap || level === 'none' || !levelAtLeast(level, min)) {
+    throw new AppError(
+      ApiErrorCode.FORBIDDEN,
+      `Недостатньо прав: ${permissionDef(key).label.toLowerCase()}`,
+      403
+    )
+  }
+  return { ...snap, level }
+}

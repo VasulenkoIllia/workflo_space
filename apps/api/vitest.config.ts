@@ -7,7 +7,9 @@ import { defineConfig } from 'vitest/config'
  * до 2 воркерів; локально лишаємо дефолт — швидкість важливіша.
  */
 export default defineConfig({
-  test: process.env.CI
-    ? { poolOptions: { threads: { maxThreads: 2, minThreads: 1 } } }
-    : {},
+  test: {
+    // PERM-1: сховище прав → «чисті дефолти» в юніт-тестах (мокнутий Prisma без таблиць прав)
+    setupFiles: ['./tests/setup/permissionStore.mock.ts'],
+    ...(process.env.CI ? { poolOptions: { threads: { maxThreads: 2, minThreads: 1 } } } : {}),
+  },
 })

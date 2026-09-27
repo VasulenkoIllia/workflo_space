@@ -9,6 +9,7 @@ const teamCreate = vi.fn()
 const teamUpdate = vi.fn()
 const teamDelete = vi.fn()
 const teamAggregate = vi.fn()
+const teamUpdateMany = vi.fn() // PERM-1: зняття застарілого ліда при переведенні
 const memberFindFirst = vi.fn()
 const memberUpdate = vi.fn()
 const colFindFirst = vi.fn()
@@ -28,6 +29,7 @@ const db = {
     update: teamUpdate,
     delete: teamDelete,
     aggregate: teamAggregate,
+    updateMany: teamUpdateMany,
   },
   agencyMember: { findFirst: memberFindFirst, update: memberUpdate },
   teamColumn: {
@@ -100,6 +102,7 @@ beforeEach(() => {
   teamAggregate.mockResolvedValue({ _max: { position: null } })
   colAggregate.mockResolvedValue({ _max: { position: null } })
   colCreateMany.mockResolvedValue({ count: 0 })
+  teamUpdateMany.mockResolvedValue({ count: 0 })
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -207,6 +210,11 @@ describe('TEAM-BOARDS /workspace/teams', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(memberUpdate.mock.calls[0][0].data.teamId).toBeNull()
+    // PERM-1: знятий з команди перестає бути лідом будь-якої команди (застарілий leadId)
+    expect(teamUpdateMany).toHaveBeenCalledWith({
+      where: { agencyId: 'agency-1', leadId: PROFILE },
+      data: { leadId: null },
+    })
     await app.close()
   })
 

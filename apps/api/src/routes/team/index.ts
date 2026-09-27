@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import executorKpiRoute from './executorKpi.js'
 import leaveRoute from './leave.js'
 import payoutsRoute from './payouts.js'
+import permissionsRoute from './permissions.js'
 import ratesRoute from './rates.js'
 import teamRoute from './team.js'
 import teamsRoute from './teams.js'
@@ -18,6 +19,7 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(ratesRoute)
   await fastify.register(payoutsRoute)
   await fastify.register(leaveRoute)
+  await fastify.register(permissionsRoute) // PERM-1: матриця прав + персональні права
 }
 
 export default teamRoutes

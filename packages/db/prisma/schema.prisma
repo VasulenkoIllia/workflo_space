@@ -80,6 +80,7 @@ model Profile {
   commentReactions       CommentReaction[] // S10
   leaveRequests          LeaveRequest[]            @relation("LeaveProfile") // S13-04
   leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
+  agencyPermissions      AgencyMemberPermission[]  @relation("MemberPermissionProfile") // PERM-1
   pushSubscriptions      PushSubscription[] // S12-03
   broadcastsCreated      Broadcast[]               @relation("BroadcastCreatedBy") // S12-07
   ledTeams               Team[]                    @relation("TeamLead") // TEAM-ADMIN-1
@@ -1615,6 +1616,42 @@ model LeaveRequest {
   @@map("leave_requests")
 }
 
+// PERM-1 ПРАВА ДОСТУПУ (рішення власника 27.09.2026): каталог прав і дефолти ролей живуть у
+// коді (@workflo/types PERMISSIONS / ROLE_PERMISSION_DEFAULTS). У БД — лише ВІДХИЛЕННЯ від
+// дефолтів: для ролі агенції (редагована матриця) і для конкретної людини (персональний
+// грант/відкликання). owner — завжди все (не редагується). `permission` — рядковий ключ
+// каталогу (валідує застосунок): нове право не потребує міграції.
+// Резолюція: персональне → рольове → дефолт ролі → none. lead = executor, що є Team.leadId.
+model AgencyRolePermission {
+  id          String          @id @default(uuid())
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  role        PermissionRole
+  permission  String
+  level       PermissionLevel
+  updatedById String? // plain Profile id (конвенція проєкту) — хто змінив
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, role, permission])
+  @@map("agency_role_permissions")
+}
+
+model AgencyMemberPermission {
+  id          String          @id @default(uuid())
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile         @relation("MemberPermissionProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  permission  String
+  level       PermissionLevel
+  updatedById String?
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, profileId, permission])
+  @@index([profileId])
+  @@map("agency_member_permissions")
+}
+
 // TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
 // agencyId, як BlogPost) — редагує owner через /content, лендінг читає published.
 model Testimonial {
@@ -1811,6 +1848,8 @@ model Agency {
   announcements        Announcement[] // 07-В (11.07)
   announcementReads    AnnouncementRead[]
   leaveRequests        LeaveRequest[] // S13-04 (11.07)
+  rolePermissions      AgencyRolePermission[] // PERM-1 (27.09): відхилення матриці ролей
+  memberPermissions    AgencyMemberPermission[] // PERM-1: персональні гранти/відкликання
   orderDependencies    OrderDependency[] // S10-03 (11.07)
   broadcasts           Broadcast[] // S12-07 (11.07)
   leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
@@ -2042,6 +2081,21 @@ enum InvoiceApprover {
 enum BillingType {
   fixed
   hourly
+}
+
+// PERM-1: рівень доступу — none · own (лише призначене/своє) · team (свій підрозділ) · all.
+enum PermissionLevel {
+  none
+  own
+  team
+  all
+}
+
+// PERM-1: ролі з редагованою матрицею (owner — завжди все, не редагується).
+enum PermissionRole {
+  manager
+  lead
+  executor
 }
 
 // DSN-4: категорія заявки клієнта (портал /orders/new) — таксономія з design-v2.

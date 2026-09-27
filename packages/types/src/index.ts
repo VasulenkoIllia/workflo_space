@@ -1,4 +1,5 @@
 export * from './constants.js'
+export * from './permissions.js'
 export * from './dto.js'
 export * from './enums.js'
 export * from './errors.js'
