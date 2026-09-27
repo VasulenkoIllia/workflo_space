@@ -224,7 +224,7 @@ export default function App() {
         <Route
           path="/team/:profileId"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
               <ExecutorCardPage />
             </RoleRoute>
           }

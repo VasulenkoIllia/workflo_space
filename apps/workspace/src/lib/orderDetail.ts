@@ -88,6 +88,8 @@ export interface WorkspaceOrderDetail {
   blockedBy?: OrderDependencyRef[]
   blocks?: OrderDependencyRef[]
   isBlocked?: boolean
+  /** PERM-3: що глядач може з цим замовленням (сервер рахує з урахуванням підрозділу) */
+  viewerCan?: { accept: boolean; reconcile: boolean; settlePayouts: boolean }
   /** DSN-4: анкета клієнта з порталу (побажання при заявці; порожня для workspace-замовлень) */
   intake?: OrderIntake
 }

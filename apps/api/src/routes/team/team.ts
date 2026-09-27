@@ -5,6 +5,12 @@ import { z } from 'zod'
 import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import {
+  getPermissions,
+  invalidatePermissions,
+  myTeamMemberIds,
+  requirePermission,
+} from '../../auth/permissions.js'
 
 const capacitySchema = z.object({
   weeklyCapacityHours: z.number().int().min(0).max(168).nullable(),
@@ -21,8 +27,12 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
     if (!isInternalTeam(user)) {
       throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
     }
-    // Compensation is owner-only — an executor must not see teammates' salaries.
-    const canSeeRates = isAgencyOwner(user, agencyId)
+    // PERM-3: компенсації — payouts.view_team (all — усім; team — свого підрозділу; своя — завжди)
+    const snap = await getPermissions(request)
+    const ratesLevel = snap?.levels['payouts.view_team'] ?? 'none'
+    const teamIds = ratesLevel === 'team' && snap ? new Set(await myTeamMemberIds(snap)) : null
+    const canSeeRatesOf = (profileId: string) =>
+      profileId === user.sub || ratesLevel === 'all' || (teamIds?.has(profileId) ?? false)
 
     const { members, rates } = await withTenant(async (tx) => {
       const [members, rates] = await Promise.all([
@@ -62,7 +72,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
       success: true,
       data: {
         members: members.map((m) => {
-          const rate = canSeeRates ? rateByExec.get(m.profileId) : undefined
+          const rate = canSeeRatesOf(m.profileId) ? rateByExec.get(m.profileId) : undefined
           return {
             profileId: m.profileId,
             role: m.role,
@@ -96,9 +106,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
       const input = capacitySchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції', 403)
-      }
+      await requirePermission(request, 'team.departments')
       const updated = await withTenant(async (tx) => {
         const member = await tx.agencyMember.findUnique({
           where: { agencyId_profileId: { agencyId, profileId: request.params.id } },
@@ -166,6 +174,7 @@ const teamRoute: FastifyPluginAsync = (fastify) => {
         result: 'allowed',
         metadata: { role: input.role },
       })
+      invalidatePermissions(agencyId) // PERM-3: роль = колонка матриці прав
       return reply.send({ success: true, data: { member: updated } })
     }
   )

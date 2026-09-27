@@ -3,7 +3,7 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { agencyRole } from '../../auth/tokens.js'
+import { coversMember, getPermissions } from '../../auth/permissions.js'
 
 /**
  * 12-В KPI-картка виконавця: GET /workspace/executors/:profileId/kpi?from&to.
@@ -35,10 +35,17 @@ const executorKpiRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      const role = agencyRole(user, agencyId)
-      if (role !== 'owner' && role !== 'manager') {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'KPI-картка — для власника/тімліда', 403)
+      // PERM-3: team.kpi (all — будь-кого; team — тімлід свого підрозділу); свою — кожен.
+      // Нетто-виручка по виконавцю — лише з finance.view (менеджер — без грошей).
+      const snap = await getPermissions(request)
+      const self = request.params.profileId === user.sub
+      if (
+        !snap ||
+        (!self && !(await coversMember(snap, snap.levels['team.kpi'], request.params.profileId)))
+      ) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'KPI-картка — для керівництва й тімліда', 403)
       }
+      const showRevenue = snap.levels['finance.view'] !== 'none'
       const q = querySchema.parse(request.query)
       const def = monthBounds(new Date())
       const from = q.from ? new Date(q.from) : def.from
@@ -131,7 +138,7 @@ const executorKpiRoute: FastifyPluginAsync = (fastify) => {
           to: to.toISOString(),
           hoursLogged: Number(hoursAgg._sum.hours ?? 0),
           hoursAccepted: Number(acceptedAgg._sum.payableHours ?? 0),
-          revenueUsd: revenue.toFixed(2),
+          revenueUsd: showRevenue ? revenue.toFixed(2) : null,
           activeOrders,
           tasksDone,
           onTimePct: onTimeBase > 0 ? Math.round((onTime / onTimeBase) * 100) : null,

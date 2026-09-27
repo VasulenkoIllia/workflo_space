@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
 
 /**
  * PERM-1: юніт-тести мокають `@workflo/db` без таблиць прав → глобально підміняємо сховище
@@ -16,4 +16,11 @@ vi.mock('../../src/auth/permissionStore.js', async (importOriginal) => {
       memberRows: [],
     })),
   }
+})
+
+// Кеш прав (TTL 30 с) не має переживати тест: інакше знімок одного тесту (напр. тімлід)
+// підхопить наступний з тим самим користувачем.
+beforeEach(async () => {
+  const { clearPermissionCache } = await import('../../src/auth/permissions.js')
+  clearPermissionCache()
 })

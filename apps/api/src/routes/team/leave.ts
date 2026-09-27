@@ -1,12 +1,18 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
 import { agencyReviewerIds, fanOut } from '../../services/recipients.js'
+import {
+  coversMember,
+  getPermissions,
+  myTeamMemberIds,
+  type PermissionSnapshot,
+} from '../../auth/permissions.js'
 
 /**
  * S13-04/05 LEAVE: відсутності команди (дизайн calendar-plus WsLeaves).
@@ -133,9 +139,33 @@ async function computeBalance(
   })
 }
 
-/** owner/manager вирішують заявки (MOD-4: team-mgmt менеджеру дозволений). */
-function isReviewer(role: string | null): boolean {
-  return role === 'owner' || role === 'manager'
+const LEAVE_STATUSES = new Set(['pending', 'approved', 'rejected', 'cancelled'])
+
+/** PERM-3: рішення по заявці — leave.approve (all — будь-чия; team — свого підрозділу).
+ *  Спершу право (403 до будь-якого читання), потім скоуп цілі. Власну заявку погоджує/
+ *  відхиляє лише власник агенції (самопогодження неможливе). */
+async function requireLeaveReviewer(request: FastifyRequest): Promise<PermissionSnapshot> {
+  const snap = await getPermissions(request)
+  if (!snap || snap.levels['leave.approve'] === 'none') {
+    throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав: погоджувати відсутності', 403)
+  }
+  return snap
+}
+
+async function assertCoversTarget(
+  request: FastifyRequest,
+  snap: PermissionSnapshot,
+  targetProfileId: string
+): Promise<void> {
+  if (targetProfileId === request.user.sub) {
+    if (snap.role !== 'owner') {
+      throw new AppError(ApiErrorCode.FORBIDDEN, 'Власну заявку погоджує власник', 403)
+    }
+    return
+  }
+  if (!(await coversMember(snap, snap.levels['leave.approve'], targetProfileId))) {
+    throw new AppError(ApiErrorCode.FORBIDDEN, 'Заявка не з вашого підрозділу', 403)
+  }
 }
 
 const leaveRoute: FastifyPluginAsync = (fastify) => {
@@ -226,15 +256,27 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
-      const role = agencyRole(user, agencyId)
-      const reviewer = isReviewer(role)
-      const profileId = reviewer ? request.query.profileId : user.sub
+      // PERM-3: all — усі заявки; team — свого підрозділу + свої; none — лише свої
+      const snap = await getPermissions(request)
+      const level = snap?.levels['leave.approve'] ?? 'none'
+      const reviewer = level !== 'none'
       const status = request.query.status
+      if (status && !LEAVE_STATUSES.has(status)) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Невідомий статус заявки', 400)
+      }
+      const scope =
+        level === 'all'
+          ? request.query.profileId
+            ? { profileId: request.query.profileId }
+            : {}
+          : level === 'team' && snap
+            ? { profileId: { in: [user.sub, ...(await myTeamMemberIds(snap))] } }
+            : { profileId: user.sub }
       const leaves = await withTenant((tx) =>
         tx.leaveRequest.findMany({
           where: {
             agencyId,
-            ...(profileId ? { profileId } : {}),
+            ...scope,
             ...(status ? { status: status as never } : {}),
           },
           orderBy: { createdAt: 'desc' },
@@ -256,10 +298,12 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternalTeam(user)) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
       }
-      const role = agencyRole(user, agencyId)
       const target = request.query.profileId ?? user.sub
-      if (target !== user.sub && !isReviewer(role)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Чужий баланс — лише owner/manager', 403)
+      if (target !== user.sub) {
+        const snap = await getPermissions(request)
+        if (!snap || !(await coversMember(snap, snap.levels['leave.approve'], target))) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Чужий баланс — за правом погодження', 403)
+        }
       }
       const balance = await computeBalance(agencyId, target, new Date())
       if (!balance) throw new AppError(ApiErrorCode.NOT_FOUND, 'Члена команди не знайдено', 404)
@@ -274,10 +318,13 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      const role = agencyRole(user, agencyId)
-      if (!isReviewer(role)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Погоджують owner або менеджер', 403)
-      }
+      const reviewer = await requireLeaveReviewer(request)
+      const target = await prisma.leaveRequest.findFirst({
+        where: { id: request.params.id, agencyId },
+        select: { profileId: true },
+      })
+      if (!target) throw new AppError(ApiErrorCode.NOT_FOUND, 'Заявку не знайдено', 404)
+      await assertCoversTarget(request, reviewer, target.profileId)
       const now = new Date()
       const leave = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.leaveRequest.findFirst({
@@ -285,10 +332,6 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
           select: { id: true, profileId: true, type: true, days: true, status: true },
         })
         if (!existing) throw new AppError(ApiErrorCode.NOT_FOUND, 'Заявку не знайдено', 404)
-        // self-approve: менеджер не погоджує власну заявку (owner — може)
-        if (existing.profileId === user.sub && role !== 'owner') {
-          throw new AppError(ApiErrorCode.FORBIDDEN, 'Власну заявку погоджує owner', 403)
-        }
         // audit-M3: серіалізуємо погодження per-profile (як rates.ts для вікон ставок),
         // інакше двоє рев'юерів апрувлять дві РІЗНІ pending-заявки одночасно й сумарно
         // пробивають баланс — обидва читають balance до коміту одне одного.
@@ -355,11 +398,16 @@ const leaveRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      const role = agencyRole(user, agencyId)
-      if (!isReviewer(role)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Погоджують owner або менеджер', 403)
-      }
       const { reason } = rejectSchema.parse(request.body)
+      // PERM-3 (аудит): відхилення тепер з тими ж правилами, що погодження — раніше менеджер
+      // міг відхилити власну заявку (не було self-check).
+      const reviewer = await requireLeaveReviewer(request)
+      const target = await prisma.leaveRequest.findFirst({
+        where: { id: request.params.id, agencyId },
+        select: { profileId: true },
+      })
+      if (!target) throw new AppError(ApiErrorCode.NOT_FOUND, 'Заявку не знайдено', 404)
+      await assertCoversTarget(request, reviewer, target.profileId)
       const now = new Date()
       const leave = await tenantTransaction(prisma, async (tx) => {
         const claim = await tx.leaveRequest.updateMany({

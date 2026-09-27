@@ -31,7 +31,7 @@ const ROLE_LABEL: Record<string, string> = {
  * таби Підрозділи · Команда-ролі · Permissions(→S14) · Запрошення. Owner/manager —
  * повний екран; executor-ТІМЛІД — read-only ростер свого підрозділу; решта — 403-стан. */
 export function TeamPage() {
-  const { user, isOwner, isManager } = useAuth()
+  const { user, isOwner, isManager, can } = useAuth()
   const myId = user?.profile.id
   const { data, isLoading } = useTeam()
   const { data: teams = [] } = useTeams()
@@ -80,7 +80,7 @@ export function TeamPage() {
                 member={m}
                 canEdit={false}
                 onEdit={() => {}}
-                cardLink={false}
+                cardLink={isLead && can('team.kpi')}
               />
             ))}
           </div>
@@ -110,12 +110,18 @@ export function TeamPage() {
             // {isOwner ? 'owner' : 'manager'} · підрозділи, ролі, доступи
           </div>
         </div>
-        <Button variant="primary" onClick={() => setTab('invites')}>
-          + Запросити члена
-        </Button>
+        {can('team.invite') && (
+          <Button variant="primary" onClick={() => setTab('invites')}>
+            + Запросити члена
+          </Button>
+        )}
       </div>
 
-      <TeamKpiStrip members={members} />
+      <TeamKpiStrip
+        members={members}
+        showMoney={can('payouts.view_team', 'all')}
+        showInvites={can('team.invite')}
+      />
 
       <Tabs
         value={tab}
@@ -130,13 +136,13 @@ export function TeamPage() {
           { id: 'departments', label: 'Підрозділи' },
           { id: 'members', label: 'Команда · ролі' },
           { id: 'permissions', label: 'Permissions 🔒' },
-          { id: 'invites', label: 'Запрошення' },
+          ...(can('team.invite') ? [{ id: 'invites', label: 'Запрошення' }] : []),
         ]}
       />
 
       <div style={{ marginTop: 16 }}>
         {tab === 'departments' && (
-          <DepartmentsTab teams={teams} members={members} canEdit={isOwner} />
+          <DepartmentsTab teams={teams} members={members} canEdit={can('team.departments')} />
         )}
 
         {tab === 'members' && (
@@ -180,10 +186,19 @@ export function TeamPage() {
 }
 
 /** KPI-стріп (дизайн): команда N · payroll поточного місяця · pending-інвайти · середня rate. */
-function TeamKpiStrip({ members }: { members: TeamMember[] }) {
+function TeamKpiStrip({
+  members,
+  showMoney,
+  showInvites,
+}: {
+  members: TeamMember[]
+  /** PERM-3: payroll/ставки — лише з payouts.view_team=all (менеджер без фінансів) */
+  showMoney: boolean
+  showInvites: boolean
+}) {
   const period = new Date().toISOString().slice(0, 7)
-  const payouts = usePayouts(period)
-  const { data: invitesData } = useInvites()
+  const payouts = usePayouts(showMoney ? period : '')
+  const { data: invitesData } = useInvites(showInvites)
   const owners = members.filter((m) => m.role === 'owner').length
   const managers = members.filter((m) => m.role === 'manager').length
   const executors = members.filter((m) => m.role === 'executor').length
@@ -221,13 +236,14 @@ function TeamKpiStrip({ members }: { members: TeamMember[] }) {
         String(members.length),
         `${owners} owner · ${managers} managers · ${executors} executors`
       )}
-      {tile(
-        `payroll · ${period}`,
-        payrollTotal ? `$${Math.round(payrollTotal)}` : '—',
-        'нараховано'
-      )}
-      {tile('запрошень pending', String(pending), 'чекають accept')}
-      {tile('середня rate', avgRate != null ? `$${avgRate}/h` : '—', 'по команді')}
+      {showMoney &&
+        tile(
+          `payroll · ${period}`,
+          payrollTotal ? `$${Math.round(payrollTotal)}` : '—',
+          'нараховано'
+        )}
+      {showInvites && tile('запрошень pending', String(pending), 'чекають accept')}
+      {showMoney && tile('середня rate', avgRate != null ? `$${avgRate}/h` : '—', 'по команді')}
     </div>
   )
 }
@@ -383,10 +399,11 @@ interface PendingInvite {
   expired: boolean
 }
 
-function useInvites() {
+function useInvites(enabled = true) {
   return useQuery({
     queryKey: ['team-invites'],
     queryFn: () => api.get<{ invites: PendingInvite[] }>('/workspace/team/invites'),
+    enabled,
   })
 }
 

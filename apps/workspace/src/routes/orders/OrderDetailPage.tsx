@@ -1061,7 +1061,9 @@ function DependenciesCard({ order }: { order: WorkspaceOrderDetail }) {
 function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
   const a = order.acceptance
   const { isOwner, isManager, isExecutor } = useAuth()
-  const isAcceptor = isOwner || isManager
+  // PERM-3: сервер рахує з урахуванням підрозділу (тімлід — лише свого)
+  const isAcceptor = order.viewerCan?.accept ?? (isOwner || isManager)
+  const canSettle = order.viewerCan?.settlePayouts ?? isOwner
   const transition = useTransitionStatus(order.id)
   const reconcile = useReconcileOrder(order.id)
   const [editing, setEditing] = useState(false)
@@ -1090,10 +1092,15 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
     reconcile.mutate(
       {
         billableHours: hourly ? (billable.trim() === '' ? null : Number(billable)) : undefined,
-        settlements: a.executors.map((e) => ({
-          profileId: e.profileId,
-          payableHours: Number(payable[e.profileId] ?? e.payableHours),
-        })),
+        // PERM-3: години до виплати — лише з payouts.manage (інакше не шлемо, 403 не буде)
+        ...(canSettle
+          ? {
+              settlements: a.executors.map((e) => ({
+                profileId: e.profileId,
+                payableHours: Number(payable[e.profileId] ?? e.payableHours),
+              })),
+            }
+          : {}),
       },
       {
         onSuccess: () => {
@@ -1144,7 +1151,7 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {e.name}
               </span>
-              {editing ? (
+              {editing && canSettle ? (
                 <input
                   type="number"
                   min={0}

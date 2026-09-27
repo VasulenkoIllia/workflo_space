@@ -12,7 +12,7 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
+import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import {
   assertStartGates,
@@ -21,6 +21,7 @@ import {
   notifyUnblockedDependents,
 } from '../../services/orderTransition.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { coversOrder, getPermissions } from '../../auth/permissions.js'
 
 /**
  * PATCH /orders/:id/status — internal status transition, validated against the
@@ -60,7 +61,7 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
             coAssignees: { select: { profileId: true } },
             // 02-В advance gate (hourly_prepaid only): needs the project's model + the
             // client's money-account balance. contractRequired — 06-ДОГОВІР-2 каскад.
-            project: { select: { billingModel: true, contractRequired: true } },
+            project: { select: { billingModel: true, contractRequired: true, teamId: true } },
             company: { select: { moneyBalance: true } },
           },
         })
@@ -92,20 +93,36 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
 
       // ПРИЙМАННЯ РОБОТИ (07.07): приймати (→done) і повертати на доопрацювання (review→revision)
       // може лише owner або manager(тімлід). Виконавець тільки здає (in_progress→review).
-      const role = agencyRole(user, order.agencyId)
-      const isAcceptor = role === 'owner' || role === 'manager'
+      // PERM-3: приймання — orders.accept (all — будь-яке; team — тімлід свого підрозділу)
+      const snap = isInternal ? await getPermissions(request) : null
+      const isAcceptor =
+        snap != null &&
+        (await coversOrder(
+          snap,
+          snap.levels['orders.accept'],
+          {
+            assigneeId: order.assigneeId,
+            coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profileId),
+            projectTeamId: order.project?.teamId ?? null,
+          },
+          user.sub
+        ))
       const enteringDone = to === OrderInternalStatus.DONE
       const sendingBack = from === OrderInternalStatus.REVIEW && to === OrderInternalStatus.REVISION
       if (isAcceptanceTransition(from, to) && !isAcceptor) {
         throw new AppError(
           ApiErrorCode.FORBIDDEN,
-          'Приймання роботи доступне лише власнику або менеджеру',
+          'Приймання роботи — власнику, менеджеру або тімліду підрозділу',
           403
         )
       }
-      // ROLE-NAV (рішення 27.09): виконавець не триажить, не ставить на паузу, не скасовує.
+      // ROLE-NAV → PERM-3: керівні переходи (триаж нового, пауза, скасування) — orders.status;
+      // без нього лише робочі (уточнити / взяти в роботу / здати). Приймання — вище (orders.accept).
+      const managesStatus = snap?.levels['orders.status'] === 'all'
       if (
-        role === 'executor' &&
+        isInternal &&
+        !managesStatus &&
+        !isAcceptanceTransition(from, to) &&
         !canRoleTransitionOrder('executor', from, to, { canAccept: false })
       ) {
         throw new AppError(

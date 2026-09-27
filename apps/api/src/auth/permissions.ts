@@ -1,3 +1,4 @@
+import { prisma } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -30,6 +31,11 @@ export interface PermissionSnapshot {
 const TTL_MS = 30_000
 const cache = new Map<string, { at: number; snap: PermissionSnapshot }>()
 const perRequest = new WeakMap<FastifyRequest, Promise<PermissionSnapshot | null>>()
+
+/** Повне очищення кешу (тести; зміна ролі через адмінку — для надійності). */
+export function clearPermissionCache(): void {
+  cache.clear()
+}
 
 /** Скинути кеш агенції (після зміни матриці/персональних прав/тімліда). */
 export function invalidatePermissions(agencyId: string): void {
@@ -136,4 +142,58 @@ export async function requireAnyPermission(
     `Недостатньо прав: ${keys.map((k) => permissionDef(k).label.toLowerCase()).join(' або ')}`,
     403
   )
+}
+
+/**
+ * PERM-3: скоуп рівня для дії над ЛЮДИНОЮ (KPI, відсутності, ставки): `all` — будь-хто;
+ * `team` — член підрозділу, де я тімлід; інакше — ні. Самого себе не покриває (self —
+ * окреме правило роуту).
+ */
+export async function coversMember(
+  snap: PermissionSnapshot,
+  level: PermissionLevel,
+  profileId: string
+): Promise<boolean> {
+  if (level === 'all') return true
+  if (level !== 'team' || snap.leadTeamIds.length === 0) return false
+  const member = await prisma.agencyMember.findFirst({
+    where: { agencyId: snap.agencyId, profileId, teamId: { in: snap.leadTeamIds } },
+    select: { id: true },
+  })
+  return member != null
+}
+
+/** Члени підрозділів, де я тімлід (для списків рівня `team`). */
+export async function myTeamMemberIds(snap: PermissionSnapshot): Promise<string[]> {
+  if (snap.leadTeamIds.length === 0) return []
+  const rows = await prisma.agencyMember.findMany({
+    where: { agencyId: snap.agencyId, teamId: { in: snap.leadTeamIds } },
+    select: { profileId: true },
+  })
+  return rows.map((r) => r.profileId)
+}
+
+/**
+ * PERM-3/4: чи покриває рівень права КОНКРЕТНЕ замовлення. all — будь-яке; team — замовлення
+ * підрозділу, де я тімлід (проєкт закріплений за підрозділом АБО головний виконавець у ньому);
+ * own — я головний виконавець чи співвиконавець.
+ */
+export async function coversOrder(
+  snap: PermissionSnapshot,
+  level: PermissionLevel,
+  order: {
+    assigneeId: string | null
+    coAssigneeIds?: readonly string[]
+    projectTeamId?: string | null
+  },
+  userId: string
+): Promise<boolean> {
+  if (level === 'all') return true
+  const mine = order.assigneeId === userId || (order.coAssigneeIds ?? []).includes(userId)
+  if (level === 'own') return mine
+  if (level !== 'team') return false
+  if (mine) return true
+  if (order.projectTeamId && snap.leadTeamIds.includes(order.projectTeamId)) return true
+  if (!order.assigneeId) return false
+  return coversMember(snap, 'team', order.assigneeId)
 }

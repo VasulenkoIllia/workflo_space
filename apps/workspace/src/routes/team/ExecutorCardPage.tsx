@@ -85,7 +85,8 @@ export function ExecutorCardPage() {
           >
             <Kpi k="залоговано" v={`${kpi.hoursLogged} год`} />
             <Kpi k="прийнято (оплатні)" v={`${kpi.hoursAccepted} год`} accent />
-            <Kpi k="нетто-виручка" v={`$${kpi.revenueUsd}`} />
+            {/* PERM-3: нетто-виручка — лише з finance.view (менеджер/тімлід без грошей) */}
+            {kpi.revenueUsd != null && <Kpi k="нетто-виручка" v={`$${kpi.revenueUsd}`} />}
             <Kpi k="активні замовлення" v={String(kpi.activeOrders)} />
             <Kpi k="задач закрито" v={String(kpi.tasksDone)} />
             <Kpi

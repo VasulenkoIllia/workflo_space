@@ -71,6 +71,8 @@ vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
 vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
 
 const { buildApp } = await import('../src/app.js')
+const { fetchPermissionData } = await import('../src/auth/permissionStore.js')
+const { invalidatePermissions } = await import('../src/auth/permissions.js')
 
 const AGENCY = 'agency-1'
 const OWNER = {
@@ -99,6 +101,7 @@ async function authed(claims: object) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  invalidatePermissions('agency-1') // кеш прав між тестами
   teamAggregate.mockResolvedValue({ _max: { position: null } })
   colAggregate.mockResolvedValue({ _max: { position: null } })
   colCreateMany.mockResolvedValue({ count: 0 })
@@ -307,6 +310,13 @@ describe('TEAM-BOARDS /workspace/teams', () => {
   })
 
   it('тімлід (executor) налаштовує колонки СВОЄЇ команди', async () => {
+    // PERM-3: тімлідство резолвер прав бере зі сховища (колонка `lead` → boards.configure=team)
+    vi.mocked(fetchPermissionData).mockResolvedValueOnce({
+      leadTeamIds: [TEAM_ID],
+      teamId: TEAM_ID,
+      roleRows: [],
+      memberRows: [],
+    })
     teamFindFirst.mockResolvedValue({ id: TEAM_ID, leadId: 'exec-1' })
     colFindFirst.mockResolvedValue(null)
     colCreate.mockResolvedValue({ id: 'col-1', name: 'QA', kind: 'in_progress', position: 0 })

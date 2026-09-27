@@ -1,6 +1,7 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { coversOrder, getPermissions } from '../../auth/permissions.js'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 
@@ -87,7 +88,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
                 coAssignees: { select: { profileId: true } },
               },
             },
-            project: { select: { id: true, name: true, billingModel: true } },
+            project: { select: { id: true, name: true, billingModel: true, teamId: true } },
             tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
             // S10-03: залежності — блокери цього замовлення + кого блокує воно
             blockedBy: {
@@ -235,11 +236,27 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         executors,
       }
 
+      // PERM-3: що глядач може з цим замовленням (UI не показує кнопок, що дали б 403).
+      const snap = await getPermissions(request)
+      const scopeOrder = {
+        assigneeId: order.assignee?.id ?? null,
+        coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profile.id),
+        projectTeamId: order.project?.teamId ?? null,
+      }
+      const viewerCan = {
+        accept:
+          snap != null &&
+          (await coversOrder(snap, snap.levels['orders.accept'], scopeOrder, user.sub)),
+        reconcile: snap?.levels['orders.reconcile'] === 'all',
+        settlePayouts: snap?.levels['payouts.manage'] === 'all',
+      }
+
       return reply.send({
         success: true,
         data: {
           order: {
             ...clientView,
+            viewerCan,
             internalStatus: order.internalStatus,
             type: order.type,
             billingType: order.billingType,
@@ -252,7 +269,13 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             company: order.company,
             assignee: order.assignee,
             coAssignees: order.coAssignees.map((c) => c.profile),
-            project: order.project,
+            project: order.project
+              ? {
+                  id: order.project.id,
+                  name: order.project.name,
+                  billingModel: order.project.billingModel,
+                }
+              : null,
             tags: order.tags.map((t) => t.tag),
             firstResponseDueAt: order.firstResponseDueAt,
             resolutionDueAt: order.resolutionDueAt,

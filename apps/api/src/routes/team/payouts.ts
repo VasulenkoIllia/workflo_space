@@ -1,10 +1,10 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, generatePayoutSchema, payoutQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { PAYOUT_SELECT, generatePayout, payoutDto } from '../../services/payout.js'
+import { getPermissions, myTeamMemberIds, requirePermission } from '../../auth/permissions.js'
 
 /**
  * Executor payouts (S5-04). Generation is idempotent (one row per executor+period);
@@ -20,13 +20,7 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
       const input = generatePayoutSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може формувати виплати',
-          403
-        )
-      }
+      await requirePermission(request, 'payouts.manage')
 
       const payouts = await tenantTransaction(prisma, async (tx) => {
         const executorIds = input.executorId
@@ -67,13 +61,17 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
       const query = payoutQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      // Payouts are finance data — internal team, but NOT a manager (20-А: finance НІ).
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
-      // Compensation is owner-only across the team (same principle as GET /workspace/team):
-      // a non-owner sees ONLY their own payouts — profile «Заробіток» rides this scope.
-      const ownScope = isAgencyOwner(user, agencyId) ? {} : { executorId: user.sub }
+      // PERM-3: свої виплати бачить КОЖЕН член команди (профіль «Заробіток», менеджер теж);
+      // чужі — за payouts.view_team (all — усі; team — підрозділи, де я тімлід).
+      const snap = await getPermissions(request)
+      if (!snap) throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      const teamLevel = snap.levels['payouts.view_team']
+      const ownScope =
+        teamLevel === 'all'
+          ? {}
+          : teamLevel === 'team'
+            ? { executorId: { in: [user.sub, ...(await myTeamMemberIds(snap))] } }
+            : { executorId: user.sub }
       const rows = await withTenant((tx) =>
         tx.executorPayout.findMany({
           where: { agencyId, ...ownScope, ...(query.period ? { period: query.period } : {}) },
@@ -92,13 +90,7 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може затверджувати виплати',
-          403
-        )
-      }
+      await requirePermission(request, 'payouts.manage')
 
       const payout = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.executorPayout.findUnique({
@@ -137,13 +129,7 @@ const payoutsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може позначати виплати',
-          403
-        )
-      }
+      await requirePermission(request, 'payouts.manage')
 
       const payout = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.executorPayout.findUnique({

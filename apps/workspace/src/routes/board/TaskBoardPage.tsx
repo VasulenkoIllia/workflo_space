@@ -79,7 +79,7 @@ function OrderHoursBar({ order }: { order: BoardTask['order'] }) {
  * agency's orders, grouped by status. Drag a card between columns to move it (reuses the
  * per-order PATCH). Filter to «мої». */
 export function TaskBoardPage() {
-  const { user, isOwner, isManager } = useAuth()
+  const { user, can } = useAuth()
   const myId = user?.profile.id
   const [mine, setMine] = useState(false)
   const { data, isLoading } = useAllTasks(mine && myId ? { assigneeId: myId } : {})
@@ -95,7 +95,10 @@ export function TaskBoardPage() {
   const all = data?.tasks ?? []
   const activeTeam = teamTab === 'all' ? null : (teams.find((tm) => tm.id === teamTab) ?? null)
   // TEAM-ADMIN-1: колонки своєї дошки налаштовує і ТІМЛІД активної команди
-  const canConfig = isOwner || isManager || (!!activeTeam && activeTeam.leadId === user?.profile.id)
+  // PERM-3: boards.configure — all: будь-яка дошка; team: дошка підрозділу, де я тімлід
+  const canConfig =
+    can('boards.configure', 'all') ||
+    (can('boards.configure', 'team') && !!activeTeam && activeTeam.leadId === user?.profile.id)
   const tasks = teamTab === 'all' ? all : all.filter((t) => (t.teamId ?? null) === teamTab)
   const countFor = (teamId: string) => all.filter((t) => t.teamId === teamId).length
 
@@ -193,7 +196,7 @@ export function TaskBoardPage() {
             {tm.name} <span style={{ opacity: 0.6 }}>{countFor(tm.id)}</span>
           </button>
         ))}
-        {isOwner && (
+        {can('team.departments') && (
           <button
             type="button"
             className="wfp-mono"

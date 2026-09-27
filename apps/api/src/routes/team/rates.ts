@@ -2,9 +2,9 @@ import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createExecutorRateSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { coversMember, getPermissions, requirePermission } from '../../auth/permissions.js'
 
 const zeroCostSchema = z.object({ zeroCostDefault: z.boolean() })
 
@@ -70,10 +70,12 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      // Salary history is private: the owner sees anyone's, an executor only their own.
+      // PERM-3: свою історію ставок бачить кожен; чужу — payouts.view_team (all / свій підрозділ)
+      const snap = await getPermissions(request)
       if (
-        !isInternalTeam(user) ||
-        (!isAgencyOwner(user, agencyId) && request.params.id !== user.sub)
+        !snap ||
+        (request.params.id !== user.sub &&
+          !(await coversMember(snap, snap.levels['payouts.view_team'], request.params.id)))
       ) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до ставок виконавця', 403)
       }
@@ -96,13 +98,7 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
       const input = createExecutorRateSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може змінювати ставки',
-          403
-        )
-      }
+      await requirePermission(request, 'payouts.manage')
       const executorId = request.params.id
       const now = new Date()
 
@@ -174,13 +170,7 @@ const ratesRoute: FastifyPluginAsync = (fastify) => {
       const input = zeroCostSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може змінювати ставки',
-          403
-        )
-      }
+      await requirePermission(request, 'payouts.manage')
       const executorId = request.params.id
       const now = new Date()
 

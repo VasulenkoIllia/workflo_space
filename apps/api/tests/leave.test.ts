@@ -349,6 +349,8 @@ describe('approve/reject/cancel — гейти і клейми', () => {
       payload: {},
     })
     expect(noReason.statusCode).toBe(400)
+    // PERM-3: перед рішенням читаємо заявку (скоуп/self-check) — чужа заявка
+    db.leaveRequest.findFirst.mockResolvedValue({ profileId: 'exec-1' })
     db.leaveRequest.updateMany.mockResolvedValue({ count: 1 })
     db.leaveRequest.findFirstOrThrow.mockResolvedValue(
       leaveRow({ status: 'rejected', rejectReason: 'Перетин з дедлайном' })

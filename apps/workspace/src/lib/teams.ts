@@ -122,7 +122,7 @@ export interface ExecutorKpi {
   to: string
   hoursLogged: number
   hoursAccepted: number
-  revenueUsd: string
+  revenueUsd: string | null
   activeOrders: number
   tasksDone: number
   onTimePct: number | null

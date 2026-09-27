@@ -2,8 +2,8 @@ import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, reconcileOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { agencyRole } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * ПРИЙМАННЯ РОБОТИ — звірка годин (рішення власника 07.07). Owner/manager коригує:
@@ -30,11 +30,9 @@ const reconciliationRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
       }
       assertSameTenant(user, order.agencyId)
-      // Приймати/коригувати години може лише owner або manager (тімлід).
-      const role = agencyRole(user, order.agencyId)
-      if (role !== 'owner' && role !== 'manager') {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Звірку годин робить owner або тімлід', 403)
-      }
+      // PERM-3: білабельні години (що виставляємо клієнту) — orders.reconcile; години ДО
+      // ВИПЛАТИ виконавцям — фінанси, payouts.manage (менеджер без фінансів їх не рухає).
+      await requirePermission(request, 'orders.reconcile')
       if (!RECONCILABLE.has(order.internalStatus)) {
         throw new AppError(
           ApiErrorCode.CONFLICT,
@@ -43,6 +41,7 @@ const reconciliationRoute: FastifyPluginAsync = (fastify) => {
         )
       }
       const body = reconcileOrderSchema.parse(request.body)
+      if (body.settlements !== undefined) await requirePermission(request, 'payouts.manage')
 
       // Валідація співвиконавців: усі — члени агенції.
       const wantedIds = [...new Set((body.settlements ?? []).map((s) => s.profileId))]

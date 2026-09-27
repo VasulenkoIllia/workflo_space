@@ -1,9 +1,14 @@
 import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
-import { invalidatePermissions } from '../../auth/permissions.js'
+import type { PermissionLevel } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import {
+  invalidatePermissions,
+  permissionLevel,
+  requirePermission,
+} from '../../auth/permissions.js'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 
@@ -78,32 +83,35 @@ const columnUpdateSchema = z
   .refine((d) => Object.keys(d).length > 0, { message: 'Порожній запит' })
 
 const teamsRoute: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
-    return requireOwnerAgency(request.user, 'Команди редагує лише власник')
+  /** PERM-3: підрозділи (створення, склад, тімліди) — право team.departments. */
+  async function assertOwner(request: FastifyRequest): Promise<string> {
+    const agencyId = requireActiveAgency(request.user)
+    await requirePermission(request, 'team.departments')
+    return agencyId
   }
 
   // TEAM-ADMIN-1: колонки дошки налаштовує owner/manager БУДЬ-ЯКОЇ команди
   // або ТІМЛІД своєї (виконавець, чий profileId = team.leadId).
-  function boardConfigCtx(request: {
-    user: Parameters<typeof requireActiveAgency>[0] &
-      Parameters<typeof agencyRole>[0] & {
-        sub: string
-      }
-  }): {
+  async function boardConfigCtx(request: FastifyRequest): Promise<{
     agencyId: string
-    role: ReturnType<typeof agencyRole>
+    level: PermissionLevel
     sub: string
-  } {
+  }> {
     const agencyId = requireActiveAgency(request.user)
-    return { agencyId, role: agencyRole(request.user, agencyId), sub: request.user.sub }
+    return {
+      agencyId,
+      level: await permissionLevel(request, 'boards.configure'),
+      sub: request.user.sub,
+    }
   }
 
+  // PERM-3: boards.configure — all: будь-яка дошка; team: дошка підрозділу, де я тімлід
   function assertLeadOrAbove(
-    ctx: { role: ReturnType<typeof agencyRole>; sub: string },
+    ctx: { level: PermissionLevel; sub: string },
     team: { leadId: string | null } | null
   ): void {
-    if (ctx.role === 'owner' || ctx.role === 'manager') return
-    if (team && team.leadId === ctx.sub) return
+    if (ctx.level === 'all') return
+    if (ctx.level === 'team' && team && team.leadId === ctx.sub) return
     throw new AppError(
       ApiErrorCode.FORBIDDEN,
       'Дошку команди налаштовує її тімлід, менеджер або власник',
@@ -159,7 +167,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const body = createSchema.parse(request.body)
       const team = await tenantTransaction(prisma, async (tx) => {
         const dup = await tx.team.findFirst({
@@ -198,7 +206,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const body = updateSchema.parse(request.body)
       const team = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.team.findFirst({
@@ -251,7 +259,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.team.findFirst({
           where: { id: request.params.id, agencyId },
@@ -278,7 +286,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const ctx = boardConfigCtx(request)
+      const ctx = await boardConfigCtx(request)
       const agencyId = ctx.agencyId
       const body = columnCreateSchema.parse(request.body)
       const column = await tenantTransaction(prisma, async (tx) => {
@@ -317,7 +325,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns/:columnId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const ctx = boardConfigCtx(request)
+      const ctx = await boardConfigCtx(request)
       const agencyId = ctx.agencyId
       const body = columnUpdateSchema.parse(request.body)
       const column = await tenantTransaction(prisma, async (tx) => {
@@ -358,7 +366,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/teams/:teamId/columns/:columnId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const ctx = boardConfigCtx(request)
+      const ctx = await boardConfigCtx(request)
       const agencyId = ctx.agencyId
       await tenantTransaction(prisma, async (tx) => {
         const team = await tx.team.findFirst({
@@ -383,7 +391,7 @@ const teamsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/executors/:profileId/team',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const { teamId } = memberTeamSchema.parse(request.body)
       await tenantTransaction(prisma, async (tx) => {
         const member = await tx.agencyMember.findFirst({

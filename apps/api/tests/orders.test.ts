@@ -109,6 +109,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     outboxEvent: { create: outboxCreate },
     agencyMember: {
       findUnique: agencyMemberFindUnique,
+      // PERM-3: coversMember — чи виконавець у підрозділі тімліда (null = ні)
+      findFirst: vi.fn().mockResolvedValue(null),
       // ПРИЙМАННЯ: submit-нотифікація шле власникам/тімлідам
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -830,6 +832,57 @@ describe('PATCH /orders/:id/status', () => {
     expect(res.statusCode).toBe(200)
     // штампуємо acceptedById у data
     expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBe('owner-1')
+    await app.close()
+  })
+
+  it('PERM-3: тімлід приймає замовлення СВОГО підрозділу; чужого — 403', async () => {
+    const { fetchPermissionData } = await import('../src/auth/permissionStore.js')
+    const leadData = { leadTeamIds: ['team-dev'], teamId: 'team-dev', roleRows: [], memberRows: [] }
+    vi.mocked(fetchPermissionData).mockResolvedValue(leadData)
+    orderUpdateMany.mockResolvedValue({ count: 1 })
+    orderFindUniqueOrThrow.mockResolvedValue({
+      id: 'order-1',
+      internalStatus: 'done',
+      clientStatus: 'completed',
+      onHoldReason: null,
+      cancelledReason: null,
+      updatedAt: new Date(),
+    })
+    const { app, token } = await authed(EXECUTOR)
+    // чужий підрозділ (проєкт за іншою командою, виконавець не в моїй) → 403
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      internalStatus: 'review',
+      project: { teamId: 'team-design' },
+    })
+    const foreign = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(foreign.statusCode).toBe(403)
+    expect(orderUpdateMany).not.toHaveBeenCalled()
+    // проєкт закріплений за моїм підрозділом → приймаю
+    orderFindUnique.mockResolvedValue({
+      ...base,
+      internalStatus: 'review',
+      project: { teamId: 'team-dev' },
+    })
+    const own = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/status',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: 'done' },
+    })
+    expect(own.statusCode).toBe(200)
+    expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBe('exec-1')
+    vi.mocked(fetchPermissionData).mockResolvedValue({
+      leadTeamIds: [],
+      teamId: null,
+      roleRows: [],
+      memberRows: [],
+    })
     await app.close()
   })
 
