@@ -33,6 +33,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     perm: ['orders.view'],
   },
   { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
+  // design-v2: «Проєкти» — у «Робота» (раніше «Фін-проєкти» у Фінансах)
+  {
+    id: 'projects',
+    label: 'Проєкти',
+    icon: <Icon name="list" />,
+    href: '/projects',
+    perm: ['projects.view'],
+  },
   // 18-А: єдиний хаб розмов (клієнт → замовлення), unread-бейджі всередині
   { id: 'chats', label: 'Чати', icon: <Icon name="inbox" />, href: '/chats', roles: 'omx' },
   // COV-UX-2: сторінка існувала з CAL-MVP, але в nav не була — досяжна лише прямим URL
@@ -70,6 +78,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   // Credentials vault (17-ГЛОБАЛ + 17-SHARE): owner = all; executor = їхні розшарені секрети.
   { id: 'vault', label: 'Секрети', icon: <Icon name="lock" />, href: '/vault', roles: 'ox' },
 
+  // DEDUP C9 (design-v2 WORKSPACE_NAV): Фінанси · Аналітика · Сайт і контент — замість
+  // однієї групи на 10 пунктів
   { group: 'Фінанси' },
   {
     id: 'billing',
@@ -79,12 +89,28 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     perm: ['billing.view'],
   },
   {
-    id: 'projects',
-    label: 'Фін-проєкти',
-    icon: <Icon name="list" />,
-    href: '/projects',
-    perm: ['projects.view'],
+    id: 'payouts',
+    label: 'Виплати',
+    icon: <Icon name="users" />,
+    href: '/payouts',
+    perm: ['payouts.manage', 'payouts.view_team'],
   },
+  {
+    id: 'services',
+    label: 'Каталог послуг',
+    icon: <Icon name="star" />,
+    href: '/services',
+    perm: ['settings.catalogs'],
+  },
+  {
+    id: 'admin-wallet',
+    label: 'Бонусні гаманці',
+    icon: <Icon name="coins" />,
+    href: '/admin-wallet',
+    perm: ['billing.view'],
+  },
+
+  { group: 'Аналітика' },
   {
     id: 'finance',
     label: 'P&L і витрати',
@@ -106,20 +132,8 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     href: '/reports',
     perm: ['reports.ops', 'finance.view', 'reports.audit'],
   },
-  {
-    id: 'payouts',
-    label: 'Виплати',
-    icon: <Icon name="users" />,
-    href: '/payouts',
-    perm: ['payouts.manage', 'payouts.view_team'],
-  },
-  {
-    id: 'services',
-    label: 'Каталог послуг',
-    icon: <Icon name="star" />,
-    href: '/services',
-    perm: ['settings.catalogs'],
-  },
+
+  { group: 'Сайт і контент' },
   // S7-05 міні-CMS: блог + кейси лендінга (owner)
   {
     id: 'content',
@@ -135,13 +149,6 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
     icon: <Icon name="bell" />,
     href: '/announcements',
     perm: ['announcements.manage'],
-  },
-  {
-    id: 'admin-wallet',
-    label: 'Бонусні гаманці',
-    icon: <Icon name="coins" />,
-    href: '/admin-wallet',
-    perm: ['billing.view'],
   },
 
   { group: 'Команда', roles: 'omx' },

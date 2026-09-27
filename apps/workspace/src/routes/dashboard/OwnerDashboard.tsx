@@ -282,7 +282,7 @@ export function OwnerDashboard() {
                       .join(' + ')} · ${formatMoney(num(o.outstandingDebt))}`
                   : 'боргів немає 🎉'
               }
-              onClick={() => navigate('/billing')}
+              onClick={() => navigate('/billing?hub=debtors')}
             />
             <ActionItem
               icon="building"

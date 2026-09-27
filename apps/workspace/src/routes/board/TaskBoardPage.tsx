@@ -11,17 +11,7 @@ import {
   useMoveTaskToColumn,
   useSetTaskTeam,
 } from '@/lib/tasks'
-import {
-  type ColumnKind,
-  type Team,
-  useCreateColumn,
-  useCreateTeam,
-  useUpdateTeam,
-  useDeleteColumn,
-  useDeleteTeam,
-  useTeams,
-} from '@/lib/teams'
-import { useTeam } from '@/lib/payouts'
+import { type ColumnKind, type Team, useCreateColumn, useDeleteColumn, useTeams } from '@/lib/teams'
 import { AddTaskModal } from './AddTaskModal'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
@@ -91,7 +81,6 @@ export function TaskBoardPage() {
   // TEAM-BOARDS: таби команд ('all' = агрегатна «Усі», як у дизайні workspace-board.jsx)
   const { data: teams = [] } = useTeams()
   const [teamTab, setTeamTab] = useState<string>('all')
-  const [teamsEditor, setTeamsEditor] = useState(false)
   const [columnsEditor, setColumnsEditor] = useState(false)
   const [adding, setAdding] = useState(false)
   // CORE-FLOWS (D3): створення задач — tasks.manage (тімлід — у своєму підрозділі)
@@ -205,16 +194,16 @@ export function TaskBoardPage() {
             {tm.name} <span style={{ opacity: 0.6 }}>{countFor(tm.id)}</span>
           </button>
         ))}
+        {/* DEDUP C1: підрозділи керуються в одному місці — «Команда → Підрозділи» */}
         {can('team.departments') && (
-          <button
-            type="button"
+          <Link
+            to="/team?tab=departments"
             className="wfp-mono"
-            onClick={() => setTeamsEditor(true)}
-            style={{ ...tabStyle(false), opacity: 0.7 }}
-            title="Керувати командами"
+            style={{ ...tabStyle(false), opacity: 0.7, textDecoration: 'none' }}
+            title="Створити / перейменувати / видалити підрозділ, призначити тімліда"
           >
-            ⚙ команди
-          </button>
+            ⚙ підрозділи →
+          </Link>
         )}
         {canConfig && activeTeam && (
           <button
@@ -391,7 +380,6 @@ export function TaskBoardPage() {
           onClose={() => setAdding(false)}
         />
       )}
-      {teamsEditor && <TeamsEditorModal teams={teams} onClose={() => setTeamsEditor(false)} />}
       {columnsEditor && activeTeam && (
         <ColumnsEditorModal team={activeTeam} onClose={() => setColumnsEditor(false)} />
       )}
@@ -409,117 +397,6 @@ function tabStyle(active: boolean): React.CSSProperties {
     color: active ? 'var(--wf-fg)' : 'var(--wf-fg-muted)',
     cursor: 'pointer',
   }
-}
-
-/** TEAM-ADMIN-1: селект тімліда підрозділу (owner; опції — лише члени команди). */
-function TeamLeadSelect({ team }: { team: Team }) {
-  const { data: rosterData } = useTeam()
-  const update = useUpdateTeam()
-  const options = (rosterData?.members ?? []).filter((m) => m.teamId === team.id)
-  return (
-    <select
-      value={team.leadId ?? ''}
-      disabled={update.isPending}
-      title="Тімлід підрозділу"
-      onChange={(e) =>
-        update.mutate(
-          { id: team.id, leadId: e.target.value || null },
-          {
-            onSuccess: () => toast.success(e.target.value ? 'Тімліда призначено' : 'Тімліда знято'),
-            onError: () => toast.error('Не вдалося (лід має бути членом команди)'),
-          }
-        )
-      }
-      style={{
-        background: 'var(--wf-surface)',
-        color: 'var(--wf-fg)',
-        border: '1px solid var(--wf-border)',
-        borderRadius: 'var(--wf-radius)',
-        padding: '4px 6px',
-        fontSize: 12,
-        maxWidth: 150,
-      }}
-    >
-      <option value="">без тімліда</option>
-      {options.map((m) => (
-        <option key={m.profileId} value={m.profileId}>
-          ★ {m.name}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-/** TEAM-BOARDS: owner-редактор команд — додати/видалити (люди й задачі при
- * видаленні НЕ губляться: FK SetNull → «без команди», видно в «Усі»). */
-function TeamsEditorModal({ teams, onClose }: { teams: Team[]; onClose: () => void }) {
-  const create = useCreateTeam()
-  const del = useDeleteTeam()
-  const [name, setName] = useState('')
-
-  return (
-    <Modal open title="Команди" onClose={onClose}>
-      <div style={{ display: 'grid', gap: 10 }}>
-        {teams.length === 0 && (
-          <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-fg-muted)' }}>
-            // команд ще немає — додай першу
-          </div>
-        )}
-        {teams.map((tm) => (
-          <div key={tm.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 99,
-                background: tm.color ?? 'var(--wf-fg-muted)',
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ flex: 1 }}>{tm.name}</span>
-            {/* TEAM-ADMIN-1: тімлід — головний у підрозділі; лише з членів команди */}
-            <TeamLeadSelect team={tm} />
-            <span className="wfp-mono" style={{ fontSize: 11, color: 'var(--wf-fg-muted)' }}>
-              {tm._count.members} люд · {tm._count.tasks} задач
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                if (!window.confirm(`Видалити команду «${tm.name}»? Люди й задачі лишаться.`))
-                  return
-                del.mutate(tm.id, { onSuccess: () => toast.success('Команду видалено') })
-              }}
-            >
-              ✕
-            </Button>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Назва команди, напр. «Dev»"
-          />
-          <Button
-            variant="primary"
-            loading={create.isPending}
-            disabled={name.trim().length === 0}
-            onClick={() =>
-              create.mutate(name.trim(), {
-                onSuccess: () => {
-                  setName('')
-                  toast.success('Команду створено')
-                },
-              })
-            }
-          >
-            + Додати
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
 }
 
 const KIND_LABEL: Record<ColumnKind, string> = {

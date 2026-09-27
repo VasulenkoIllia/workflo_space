@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { formatDate, formatMoney } from '@/lib/format'
@@ -671,7 +672,12 @@ function CreatePaymentModal({ onClose }: { onClose: () => void }) {
 
 export function BillingPage() {
   const overview = useBillingOverview()
-  const [hub, setHub] = useState<'charges' | 'payments' | 'debtors'>('charges')
+  // DEDUP C5: дебітори — джерело правди тут; дашборд і «Звіти» ведуть сюди (?hub=debtors)
+  const [params] = useSearchParams()
+  const initialHub = params.get('hub')
+  const [hub, setHub] = useState<'charges' | 'payments' | 'debtors'>(
+    initialHub === 'payments' || initialHub === 'debtors' ? initialHub : 'charges'
+  )
   const [chargeFilter, setChargeFilter] = useState<'pending' | 'all'>('pending')
   const charges = useWsCharges(chargeFilter === 'pending' ? 'pending' : undefined)
   const payments = useWsPayments()

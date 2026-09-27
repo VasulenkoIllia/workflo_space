@@ -1,12 +1,19 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { PermissionsTab } from './PermissionsTab'
 import { useAuth } from '@/contexts/AuthContext'
-import { useCreateTeam, useSetMemberTeam, useTeams, useUpdateTeam, type Team } from '@/lib/teams'
+import {
+  useCreateTeam,
+  useDeleteTeam,
+  useSetMemberTeam,
+  useTeams,
+  useUpdateTeam,
+  type Team,
+} from '@/lib/teams'
 import { api } from '@/lib/api'
 import {
   num,
@@ -36,7 +43,9 @@ export function TeamPage() {
   const myId = user?.profile.id
   const { data, isLoading } = useTeam()
   const { data: teams = [] } = useTeams()
-  const [tab, setTab] = useState('members')
+  // DEDUP C1: дошка веде сюди через ?tab=departments
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState(params.get('tab') ?? 'members')
   const [editing, setEditing] = useState<TeamMember | null>(null)
   const [search, setSearch] = useState('')
   const members = data?.members ?? []
@@ -284,6 +293,7 @@ function DepartmentsTab({
 }) {
   const create = useCreateTeam()
   const update = useUpdateTeam()
+  const del = useDeleteTeam()
   const [name, setName] = useState('')
 
   return (
@@ -349,6 +359,21 @@ function DepartmentsTab({
                       ...unit.map((m) => ({ value: m.profileId, label: `★ ${m.name}` })),
                     ]}
                   />
+                  <button
+                    type="button"
+                    className="wfp-link"
+                    style={{ fontSize: 12, color: 'var(--wf-destructive)', marginTop: 10 }}
+                    disabled={del.isPending}
+                    onClick={() => {
+                      if (
+                        !window.confirm(`Видалити підрозділ «${t.name}»? Люди й задачі лишаться.`)
+                      )
+                        return
+                      del.mutate(t.id, { onSuccess: () => toast.success('Підрозділ видалено') })
+                    }}
+                  >
+                    видалити підрозділ
+                  </button>
                 </div>
               )}
             </Card>

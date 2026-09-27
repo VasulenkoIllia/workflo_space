@@ -1220,7 +1220,8 @@ export function SettingsPage() {
     { id: 'account', label: 'Акаунт' },
     ...(canSettings ? [{ id: 'workflow', label: 'Воркфлоу' }] : []),
     ...(canSettings ? [{ id: 'templates', label: 'Шаблони й брендинг' }] : []),
-    ...(can('settings.catalogs') ? [{ id: 'catalogs', label: 'Каталоги' }] : []),
+    // DEDUP C7: «Каталог послуг» (ціни) — окремий пункт меню; тут номенклатура документів і теги
+    ...(can('settings.catalogs') ? [{ id: 'catalogs', label: 'Номенклатура й теги' }] : []),
     ...(canLegal || canSettings ? [{ id: 'finance', label: 'Фінанси' }] : []),
     ...(canSettings ? [{ id: 'ops', label: 'SMTP · Крони' }] : []),
   ]

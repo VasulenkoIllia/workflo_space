@@ -43,10 +43,13 @@ const overviewRoute: FastifyPluginAsync = (fastify) => {
             where: { agencyId, status: 'confirmed' },
             _sum: { amountUsd: true },
           }),
-          // Outstanding per company = Σ(order.total − confirmed payments) over unpaid, priced orders.
+          // Outstanding per company = Σ(order.total − confirmed payments + refunds) over unpaid,
+          // priced orders. DEDUP C5: ТЕ САМЕ визначення, що й дебіторка у звіті виручки
+          // (services/revenueReport.ts, HIGH-2: нетто-оплата = confirmed − refunds) — раніше
+          // Білінг/дашборд ігнорували повернення й розходились зі «Звітами».
           tx.$queryRaw<DebtRow[]>`
             SELECT o."companyId" AS "companyId", c."name" AS "name",
-                   SUM(o."totalAmount" - COALESCE(p.paid, 0)) AS "debt"
+                   SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) AS "debt"
             FROM "orders" o
             JOIN "companies" c ON c."id" = o."companyId"
             LEFT JOIN (
@@ -54,13 +57,20 @@ const overviewRoute: FastifyPluginAsync = (fastify) => {
               FROM "payments" WHERE "status" = 'confirmed'
               GROUP BY "orderId"
             ) p ON p."orderId" = o."id"
+            LEFT JOIN (
+              SELECT pay."orderId", SUM(r."amount") AS refunded
+              FROM "payment_refunds" r
+              JOIN "payments" pay ON pay."id" = r."paymentId"
+              WHERE pay."status" = 'confirmed'
+              GROUP BY pay."orderId"
+            ) pr ON pr."orderId" = o."id"
             WHERE o."agencyId" = ${agencyId}
               AND o."paidAt" IS NULL
               AND o."totalAmount" IS NOT NULL
               AND o."deletedAt" IS NULL
               AND o."companyId" IS NOT NULL
             GROUP BY o."companyId", c."name"
-            HAVING SUM(o."totalAmount" - COALESCE(p.paid, 0)) > 0
+            HAVING SUM(o."totalAmount" - COALESCE(p.paid, 0) + COALESCE(pr.refunded, 0)) > 0
             ORDER BY "debt" DESC
           `,
         ])

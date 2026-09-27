@@ -408,7 +408,10 @@ function RevenueSection({ from, to }: { from: string; to: string }) {
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', margin: '4px 0 6px' }}
       >
-        // дебіторка (поточний стан, не залежить від періоду)
+        // дебіторка (поточний стан, не залежить від періоду) ·{' '}
+        <Link to="/billing?hub=debtors" className="wfp-link">
+          усі дебітори й нагадування — Білінг →
+        </Link>
       </div>
       {data.debtors.length === 0 ? (
         <div className="wfp-mono" style={{ fontSize: 12, color: 'var(--wf-accent)' }}>
@@ -655,7 +658,8 @@ export function ReportsPage() {
     ...(canOps || canFin || can('leads.manage') ? [{ id: 'overview', label: 'Огляд' }] : []),
     ...(canOps ? [{ id: 'executors', label: 'Виконавці' }] : []),
     ...(canFin ? [{ id: 'clients', label: 'Клієнти' }] : []),
-    ...(canOps ? [{ id: 'departments', label: 'Підрозділи' }] : []),
+    // DEDUP C2: аналітика ≠ оргструктура («Команда → Підрозділи»)
+    ...(canOps ? [{ id: 'departments', label: 'Продуктивність підрозділів' }] : []),
     ...(canOps ? [{ id: 'timesheet', label: 'Timesheet' }] : []),
     ...(can('reports.audit') ? [{ id: 'audit', label: 'Audit log' }] : []),
   ]
@@ -829,7 +833,7 @@ function DepartmentsTab({ from, to }: { from: string; to: string }) {
     return (
       <EmptyState
         title="Підрозділів ще немає"
-        description="Створіть команди на «Дошці задач» або в «Команда → Підрозділи»."
+        description="Створіть підрозділи в «Команда → Підрозділи»."
       />
     )
   const totalHours = rows.reduce((s, r) => s + r.hours, 0)
@@ -864,7 +868,7 @@ function DepartmentsTab({ from, to }: { from: string; to: string }) {
           </div>
         </div>
       </div>
-      <Card title="Підрозділи">
+      <Card title="Продуктивність підрозділів">
         <table className="wfp-table">
           <thead>
             <tr>

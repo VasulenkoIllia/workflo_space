@@ -27,7 +27,8 @@ export function DashboardPage() {
     <div>
       <div className="wfp-ph">
         <div className="wfp-ph-l">
-          <h1 className="wfp-ph-h1">Мої задачі</h1>
+          {/* DEDUP C4: тут замовлення (задачі — «Дошка задач» → «лише мої») */}
+          <h1 className="wfp-ph-h1">Мої замовлення</h1>
           <div className="wfp-ph-sub">// {orders.length} призначено вам</div>
         </div>
       </div>
@@ -56,7 +57,7 @@ export function DashboardPage() {
       ) : isError ? (
         <EmptyState
           glyph="// error"
-          title="Не вдалося завантажити задачі"
+          title="Не вдалося завантажити замовлення"
           description="Спробуйте оновити сторінку."
         />
       ) : orders.length === 0 ? (
