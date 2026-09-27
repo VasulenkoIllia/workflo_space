@@ -1,9 +1,10 @@
 import { sendEmail } from '@workflo/notifications'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { cronRegistry } from '../../cron/makeCron.js'
 import { prisma } from '@workflo/db'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * DSN-3 (workspace-admin-settings.jsx): ops-таби налаштувань.
@@ -17,7 +18,8 @@ const opsSettingsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/smtp-status',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      requireOwnerAgency(request.user, 'Налаштування доступні лише власнику')
+      requireActiveAgency(request.user)
+      await requirePermission(request, 'settings.manage')
       const host = process.env.SMTP_HOST ?? null
       return reply.send({
         success: true,
@@ -42,7 +44,8 @@ const opsSettingsRoute: FastifyPluginAsync = (fastify) => {
       config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      requireOwnerAgency(request.user, 'Налаштування доступні лише власнику')
+      requireActiveAgency(request.user)
+      await requirePermission(request, 'settings.manage')
       const me = await prisma.profile.findUnique({
         where: { id: request.user.sub },
         select: { email: true, name: true },
@@ -66,7 +69,8 @@ const opsSettingsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/cron-status',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      requireOwnerAgency(request.user, 'Налаштування доступні лише власнику')
+      requireActiveAgency(request.user)
+      await requirePermission(request, 'settings.manage')
       const crons = [...cronRegistry.values()].sort((a, b) => a.name.localeCompare(b.name))
       return reply.send({
         success: true,

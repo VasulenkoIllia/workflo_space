@@ -1,11 +1,12 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { PermissionKey } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { EDITABLE_EMAIL_EVENTS } from '../../services/emailTemplates.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 08-EMAIL (owner): override теми/вступу бізнес-листів, окремо uk/en. Обидва поля
@@ -27,8 +28,14 @@ const putSchema = z
     message: 'Потрібно передати хоча б одну локаль',
   })
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Email-шаблони змінює лише власник')
+/** PERM-5: право `settings.manage` (раніше owner-only; власник має завжди). */
+async function assertOwner(
+  request: FastifyRequest,
+  key: PermissionKey = 'settings.manage'
+): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, key)
+  return agencyId
 }
 
 const emailTemplatesRoute: FastifyPluginAsync = (fastify) => {
@@ -36,7 +43,7 @@ const emailTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/email-templates',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const templates = await withTenant((tx) =>
         tx.emailTemplate.findMany({
           where: { agencyId },
@@ -54,7 +61,7 @@ const emailTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/email-templates/:event',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const event = request.params.event
       if (!EDITABLE_SET.has(event)) {
         throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Цей лист не редагується', 400)
@@ -102,7 +109,7 @@ const emailTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/email-templates/:event',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       await withTenant((tx) =>
         tx.emailTemplate.deleteMany({ where: { agencyId, event: request.params.event } })
       )

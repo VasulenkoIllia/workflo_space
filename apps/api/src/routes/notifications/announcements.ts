@@ -1,10 +1,11 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * ANNOUNCEMENTS (07-В, Фаза B, 11.07): оголошення агенції. Owner створює/публікує/архівує;
@@ -59,8 +60,11 @@ async function audienceCounts(agencyId: string): Promise<{ team: number; clients
 }
 
 const announcementsRoute: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
-    return requireOwnerAgency(request.user, 'Оголошення керує лише власник')
+  /** PERM-5: право `announcements.manage` (раніше owner-only). */
+  async function assertOwner(request: FastifyRequest): Promise<string> {
+    const agencyId = requireActiveAgency(request.user)
+    await requirePermission(request, 'announcements.manage')
+    return agencyId
   }
 
   // ── Owner-адмінка: список з % прочитань ────────────────────────────────────────
@@ -68,7 +72,7 @@ const announcementsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/announcements',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const [rows, counts] = await Promise.all([
         withTenant((tx) =>
           tx.announcement.findMany({
@@ -102,7 +106,7 @@ const announcementsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/announcements',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const body = createSchema.parse(request.body)
       const announcement = await withTenant((tx) =>
         tx.announcement.create({
@@ -128,7 +132,7 @@ const announcementsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/announcements/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const body = updateSchema.parse(request.body)
       const announcement = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.announcement.findFirst({
@@ -160,7 +164,7 @@ const announcementsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/announcements/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.announcement.findFirst({
           where: { id: request.params.id, agencyId },

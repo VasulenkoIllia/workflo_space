@@ -1,10 +1,11 @@
 import { prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { PermissionKey } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 06-ПІДПИС: воркфлоу-налаштування агенції. requireSignedContract — «без прийнятого
@@ -37,8 +38,14 @@ const companyApprovalSchema = z
     message: 'Порожній запит',
   })
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Воркфлоу-налаштування змінює лише власник')
+/** PERM-5: право `settings.manage` (раніше owner-only; власник має завжди). */
+async function assertOwner(
+  request: FastifyRequest,
+  key: PermissionKey = 'settings.manage'
+): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, key)
+  return agencyId
 }
 
 const agencyWorkflowRoute: FastifyPluginAsync = (fastify) => {
@@ -46,7 +53,7 @@ const agencyWorkflowRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/workflow-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const agency = await prisma.agency.findUnique({
         where: { id: agencyId },
         select: {
@@ -66,7 +73,7 @@ const agencyWorkflowRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/workflow-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = patchSchema.parse(request.body)
 
       const agency = await prisma.agency.update({
@@ -116,7 +123,7 @@ const agencyWorkflowRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/companies/:companyId/approval',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request, 'clients.manage')
       const company = await withTenant((tx) =>
         tx.company.findFirst({
           where: { id: request.params.companyId, agencyId },
@@ -132,7 +139,7 @@ const agencyWorkflowRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/companies/:companyId/approval',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request, 'clients.manage')
       const body = companyApprovalSchema.parse(request.body)
       const updated = await withTenant((tx) =>
         tx.company.updateMany({

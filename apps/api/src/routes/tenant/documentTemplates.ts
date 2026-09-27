@@ -1,13 +1,14 @@
 import { prisma, withTenant } from '@workflo/db'
 import { type DocumentRenderData, defaultContractSections } from '@workflo/templates'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { PermissionKey } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { TEMPLATE_VARIABLES } from '../../services/documentTemplates.js'
 import { getStorage } from '../../services/storage.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 06-А: шаблони документів (owner). Один шаблон на тип; нема рядка = системний.
@@ -38,8 +39,14 @@ const noteBodySchema = z
     message: 'Порожній шаблон — видаліть його замість збереження',
   })
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Шаблони документів змінює лише власник')
+/** PERM-5: право `settings.manage` (раніше owner-only; власник має завжди). */
+async function assertOwner(
+  request: FastifyRequest,
+  key: PermissionKey = 'settings.manage'
+): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, key)
+  return agencyId
 }
 
 /** Типовий договір з {{токенами}} — стартова точка редактора. */
@@ -63,7 +70,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/document-templates',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const templates = await withTenant((tx) =>
         tx.documentTemplate.findMany({
           where: { agencyId },
@@ -85,7 +92,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/document-templates/:type',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const type = request.params.type as (typeof TEMPLATE_TYPES)[number]
       if (!TEMPLATE_TYPES.includes(type)) {
         throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Невідомий тип документа', 400)
@@ -120,7 +127,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/document-templates/:type',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       await withTenant((tx) =>
         tx.documentTemplate.deleteMany({ where: { agencyId, type: request.params.type as never } })
       )
@@ -142,7 +149,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/pdf-branding',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const agency = await prisma.agency.findUnique({
         where: { id: agencyId },
         select: { pdfLogoKey: true, pdfAccentColor: true },
@@ -159,7 +166,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/pdf-branding',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
 
       let accentColor: string | null | undefined
       let removeLogo = false
@@ -245,7 +252,7 @@ const documentTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/pdf-branding/logo',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const agency = await prisma.agency.findUnique({
         where: { id: agencyId },
         select: { pdfLogoKey: true },

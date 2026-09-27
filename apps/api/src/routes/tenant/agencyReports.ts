@@ -1,10 +1,11 @@
 import { prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { PermissionKey } from '@workflo/types'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S11 scheduled email-звіти: owner-тумблер «місячний звіт на email». Cron
@@ -32,8 +33,14 @@ const SETTINGS_SELECT = {
   clientMonthlyReportLastSentAt: true,
 } as const
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Налаштування звітів змінює лише власник')
+/** PERM-5: право `settings.manage` (раніше owner-only; власник має завжди). */
+async function assertOwner(
+  request: FastifyRequest,
+  key: PermissionKey = 'settings.manage'
+): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, key)
+  return agencyId
 }
 
 const agencyReportsRoute: FastifyPluginAsync = (fastify) => {
@@ -41,7 +48,7 @@ const agencyReportsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/report-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const agency = await prisma.agency.findUnique({
         where: { id: agencyId },
         select: SETTINGS_SELECT,
@@ -55,7 +62,7 @@ const agencyReportsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/report-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const input = patchSchema.parse(request.body)
 
       const agency = await prisma.agency.update({

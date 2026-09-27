@@ -64,7 +64,7 @@ describe('PERM-1 resolvePermissions', () => {
   it('рівень клемпиться до дозволених для права', () => {
     expect(clampLevel('billing.view', 'team')).toBe('none') // BIN: лише none/all
     expect(clampLevel('orders.accept', 'own')).toBe('none') // TEAMED
-    expect(clampLevel('vault.access', 'team')).toBe('own') // OWNED
+    expect(clampLevel('time.view_team', 'own')).toBe('none') // TEAMED без own
     expect(clampLevel('orders.view', 'team')).toBe('team')
   })
 

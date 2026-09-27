@@ -1,9 +1,10 @@
 import { Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
@@ -40,8 +41,11 @@ const SELECT = {
 } as const
 
 const testimonialsRoute: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
-    return requireOwnerAgency(request.user, 'Відгуки редагує лише власник')
+  /** PERM-5: право `content.manage` (раніше owner-only). */
+  async function assertOwner(request: FastifyRequest): Promise<string> {
+    const agencyId = requireActiveAgency(request.user)
+    await requirePermission(request, 'content.manage')
+    return agencyId
   }
 
   // ── Публічний read для лендінга: лише published, featured перші ────────────────
@@ -67,7 +71,7 @@ const testimonialsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/content/testimonials',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const testimonials = await prisma.testimonial.findMany({
         orderBy: [{ published: 'asc' }, { featured: 'desc' }, { position: 'asc' }],
         select: SELECT,
@@ -81,7 +85,7 @@ const testimonialsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/content/testimonials',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       const body = createSchema.parse(request.body)
       const testimonial = await prisma.testimonial.create({
         data: {
@@ -113,7 +117,7 @@ const testimonialsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/content/testimonials/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const body = updateSchema.parse(request.body)
       try {
         const testimonial = await prisma.testimonial.update({
@@ -136,7 +140,7 @@ const testimonialsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/content/testimonials/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request)
+      const agencyId = await assertOwner(request)
       try {
         await prisma.testimonial.delete({ where: { id: request.params.id } })
       } catch (e) {

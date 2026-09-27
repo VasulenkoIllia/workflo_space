@@ -32,7 +32,6 @@ export function levelAtLeast(level: PermissionLevel, min: PermissionLevel): bool
 const BIN = ['none', 'all'] as const satisfies readonly PermissionLevel[]
 const SCOPED = ['none', 'own', 'team', 'all'] as const satisfies readonly PermissionLevel[]
 const TEAMED = ['none', 'team', 'all'] as const satisfies readonly PermissionLevel[]
-const OWNED = ['none', 'own', 'all'] as const satisfies readonly PermissionLevel[]
 
 export interface PermissionDef {
   key: string
@@ -213,14 +212,7 @@ export const PERMISSIONS = [
     levels: BIN,
     defaults: d('all', 'none', 'none'),
   },
-  {
-    key: 'vault.access',
-    area: 'Клієнти',
-    label: 'Секрети клієнтів',
-    hint: 'own — лише розшарені особисто',
-    levels: OWNED,
-    defaults: d('none', 'own', 'own'),
-  },
+
   {
     key: 'support.handle',
     area: 'Клієнти',

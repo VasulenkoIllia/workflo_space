@@ -1,10 +1,11 @@
 import { Prisma, prisma } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { generateBlogDraft } from '../../services/blogAi.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S7-05 МІНІ-CMS (рішення власника 10.07): керування блогом + кейсами з workspace
@@ -78,8 +79,11 @@ const FULL_SELECT = {
 } as const
 
 const cmsRoutes: FastifyPluginAsync = (fastify) => {
-  function assertOwner(request: { user: Parameters<typeof requireOwnerAgency>[0] }): string {
-    return requireOwnerAgency(request.user, 'Контент редагує лише власник')
+  /** PERM-5: право `content.manage` (раніше owner-only). */
+  async function assertOwner(request: FastifyRequest): Promise<string> {
+    const agencyId = requireActiveAgency(request.user)
+    await requirePermission(request, 'content.manage')
+    return agencyId
   }
 
   // ── List (усі, включно з чернетками) ─────────────────────────────────────────
@@ -87,7 +91,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const posts = await prisma.blogPost.findMany({
         orderBy: [{ published: 'asc' }, { updatedAt: 'desc' }],
         select: LIST_SELECT,
@@ -101,7 +105,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const post = await prisma.blogPost.findUnique({
         where: { id: request.params.id },
         select: FULL_SELECT,
@@ -116,7 +120,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const body = createSchema.parse(request.body)
       try {
         const post = await prisma.blogPost.create({
@@ -160,7 +164,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const body = updateSchema.parse(request.body)
       try {
         const post = await prisma.blogPost.update({
@@ -186,7 +190,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts/:id/publish',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const { published } = publishSchema.parse(request.body)
       const existing = await prisma.blogPost.findUnique({
         where: { id: request.params.id },
@@ -210,7 +214,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
     '/workspace/content/posts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       try {
         await prisma.blogPost.delete({ where: { id: request.params.id } })
       } catch (e) {
@@ -239,7 +243,7 @@ const cmsRoutes: FastifyPluginAsync = (fastify) => {
       config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      assertOwner(request)
+      await assertOwner(request)
       const body = generateSchema.parse(request.body)
       const draft = await generateBlogDraft(body.topic, body.type)
       return reply.send({ success: true, data: { draft } })

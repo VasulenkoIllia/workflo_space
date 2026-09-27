@@ -2,10 +2,11 @@ import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, LoyaltyTier } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { resolveBroadcastRecipients } from '../../services/broadcast.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S12-07 BULK-РОЗСИЛКИ (owner-only): лист сегменту клієнтів. Флоу: чернетка →
@@ -46,7 +47,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const broadcasts = await withTenant((tx) =>
         tx.broadcast.findMany({
           where: { agencyId },
@@ -64,7 +66,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const input = bodySchema.parse(request.body)
       const broadcast = await withTenant((tx) =>
         tx.broadcast.create({
@@ -97,7 +100,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const input = bodySchema.parse(request.body)
       const updated = await withTenant((tx) =>
         tx.broadcast.updateMany({
@@ -128,7 +132,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const removed = await withTenant((tx) =>
         tx.broadcast.deleteMany({ where: { id: request.params.id, agencyId, status: 'draft' } })
       )
@@ -144,7 +149,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id/preview',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const b = await withTenant((tx) =>
         tx.broadcast.findFirst({
           where: { id: request.params.id, agencyId },
@@ -164,7 +170,8 @@ const broadcastsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/broadcasts/:id/send',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Розсилки — лише власник агенції')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'broadcasts.manage')
       const broadcast = await tenantTransaction(prisma, async (tx) => {
         // Атомарний claim: подвійний клік/двоє власників → рівно один send
         const claim = await tx.broadcast.updateMany({
