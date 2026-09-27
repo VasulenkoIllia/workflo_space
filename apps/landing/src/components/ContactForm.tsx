@@ -61,9 +61,12 @@ export function ContactForm() {
       <div className="wf-tm-contact-form-h">// напишіть задачу</div>
       {CONTACT_PAGE.fields.map((fld) => (
         <div className="wf-tm-field" key={fld.id}>
-          <label className="wf-tm-field-label">{fld.label}</label>
+          <label className="wf-tm-field-label" htmlFor={`cf-${fld.id}`}>
+            {fld.label}
+          </label>
           {fld.type === 'textarea' ? (
             <textarea
+              id={`cf-${fld.id}`}
               className="wf-tm-field-input wf-tm-field-textarea"
               placeholder={fld.placeholder}
               rows={4}
@@ -89,6 +92,7 @@ export function ContactForm() {
             </div>
           ) : fld.type === 'select' ? (
             <select
+              id={`cf-${fld.id}`}
               className="wf-tm-field-input"
               value={vals[fld.id] ?? ''}
               onChange={(e) => set(fld.id, e.target.value)}
@@ -99,6 +103,7 @@ export function ContactForm() {
             </select>
           ) : (
             <input
+              id={`cf-${fld.id}`}
               className="wf-tm-field-input"
               placeholder={fld.placeholder}
               required

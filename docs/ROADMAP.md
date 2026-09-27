@@ -242,7 +242,7 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 - [x] **DSN-8** ✅ (27.09) (M): /cases/:slug деталь + project/company-деталі (зараз dangling-якорі
       з homepage!) + бренд-404/500 + /terms + /privacy + контакт-форма (select типу + чипи).
-- [ ] **DSN-9 = S7-03 i18n** (L): UA/EN + hreflang + тогл + Lighthouse≥90 — закриває S7.
+- [x] **DSN-9 = S7-03 i18n** ✅ (27.09) (L): UA/EN + hreflang + тогл + Lighthouse≥90 — закриває S7.
 
 **Backend-blocked / окремі рішення власника (НЕ в цій черзі):** лояльність 5-tier
 (silver — міграція enum), реферали-воронка (стадії не трекаються), амендменти
@@ -251,6 +251,15 @@ wallet top-up (платіжний шлюз), booking-сторінка, mobile-sh
 Permissions-матриця + white-label + landing-CMS (S14).
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **DSN-9 (2026-09-27) — i18n лендінгу, закриває S7.** `/en` — англійська головна (копія з
+  design-v2 data.js + EN-біо партнерів), перемикач ua/en у статус-барі (окремі URL), hreflang
+  uk ↔ en + x-default у `<head>` і sitemap, `<html lang="en">` для /en. Lighthouse (mobile, prod-
+  збірка): Performance 98–99 · Accessibility 94–96 · Best Practices 96–100 · SEO 100 (/, /en,
+  /cases/:slug, /partners/:slug, /contact, /terms). Виправлено по ходу: відсутня іконка сайту
+  (404 у консолі), SSG профілів партнерів (метадані в head), підписи полів форми контакту.
+  Внутрішні сторінки (послуги, кейси, блог, юр-сторінки) — поки лише UA; відгуки з API — лише
+  на UA-головній.
 
 - **DSN-8 (2026-09-27) — лендінг.** Мертві якорі на головній (#project-…, #company-…) →
   `/cases/:slug` (деталь кейса: impact, факти, related, CTA; тіло з CMS case_study за тим самим

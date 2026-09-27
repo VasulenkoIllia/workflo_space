@@ -132,12 +132,12 @@ function useTypewriter(lines: string[], enabled: boolean) {
 
 /** Cases — git-log-styled proof cards (design: TerminalCases). Partner-chip + per-case
  * read-more → /cases/:slug (DSN-8). */
-function CasesSection({ items }: { items: LandingContent['cases'] }) {
+function CasesSection({ items, ui }: { items: LandingContent['cases']; ui: LandingContent['ui'] }) {
   return (
     <section className="wf-tm-section" id="work" data-screen-label="work">
       <TermDivider section="work" cmd="git log --by-partner --oneline" />
       <div className="wf-tm-output">
-        <p className="wf-tm-section-intro">// {items.length} публічних кейсів · цифри реальні</p>
+        <p className="wf-tm-section-intro">{ui.casesIntro.replace('{n}', String(items.length))}</p>
         <div className="wf-tm-case-grid">
           {items.map((c) => {
             const hero = splitMetric(c.metrics[0] ?? '')
@@ -228,14 +228,22 @@ function ProcessSection({ items }: { items: LandingContent['process'] }) {
 }
 
 /** Partners — company cards (design: TerminalPartners). Cards link to /partners/:slug (DSN-8). */
-function PartnersSection({ partners }: { partners: LandingContent['partners'] }) {
+function PartnersSection({
+  partners,
+  ui,
+}: {
+  partners: LandingContent['partners']
+  ui: LandingContent['ui']
+}) {
   const totalProjects = partners.reduce((n, p) => n + p.projectsCount, 0)
   return (
     <section className="wf-tm-section" id="partners" data-screen-label="partners">
       <TermDivider section="partners" cmd="ls -la ~/partners" />
       <div className="wf-tm-output">
         <p className="wf-tm-section-intro">
-          // {partners.length} партнерів · {totalProjects} проєктів · довгострокові партнерства
+          {ui.partnersIntro
+            .replace('{n}', String(partners.length))
+            .replace('{p}', String(totalProjects))}
         </p>
         <div className="wf-tm-partner-grid">
           {partners.map((c) => (
@@ -254,7 +262,7 @@ function PartnersSection({ partners }: { partners: LandingContent['partners'] })
               <div className="wf-tm-partner-card-foot">
                 <span className="wf-tm-partner-card-stat">
                   <span className="wf-tm-accent">{c.projectsCount}</span>{' '}
-                  {c.projectsCount === 1 ? 'проєкт' : 'проєкти'}
+                  {c.projectsCount === 1 ? ui.projectOne : ui.projectMany}
                 </span>
                 <span className="wf-tm-sb-sep">·</span>
                 <span>since {c.since}</span>
@@ -372,23 +380,23 @@ function SpotlightSection({ spotlight }: { spotlight: LandingContent['spotlight'
   )
 }
 
-const ABOUT_ROWS: [string, string][] = [
+const aboutRows = (ui: LandingContent['ui']): [string, string][] => [
   ['user', 'illia'],
   ['location', 'lutsk, ua'],
   ['since', '2018'],
-  ['focus', 'автоматизація для команд, що виросли з Excel'],
+  ['focus', ui.whoFocus],
   ['stack', 'TypeScript · Python · React · Postgres · LLMs'],
-  ['status', 'available · приймаю проєкти Q3 2026'],
+  ['status', ui.whoStatus],
 ]
 
 /** About — profile rows + "why" prose (design: TerminalAbout). */
-function AboutSection({ about }: { about: string[] }) {
+function AboutSection({ about, ui }: { about: string[]; ui: LandingContent['ui'] }) {
   return (
     <section className="wf-tm-section" id="who" data-screen-label="who">
       <TermDivider section="who" cmd="whoami && cat ~/profile.md" />
       <div className="wf-tm-output">
         <div className="wf-tm-profile">
-          {ABOUT_ROWS.map(([k, v]) => (
+          {aboutRows(ui).map(([k, v]) => (
             <div key={k} className="wf-tm-profile-row">
               <span className="wf-tm-profile-key">{k}</span>
               <span className="wf-tm-profile-val">{v}</span>
@@ -400,7 +408,7 @@ function AboutSection({ about }: { about: string[] }) {
           <div className="wf-tm-about-body">
             {about.map((p, i) => {
               if (p === '') return <div key={`sp-${i}`} style={{ height: 6 }} />
-              const isEmph = p === 'Я роблю так, щоб цього не було.'
+              const isEmph = p === ui.aboutEmph
               return (
                 <p key={`${i}-${p.slice(0, 12)}`} className={isEmph ? 'wf-tm-emph' : ''}>
                   {isEmph && <span className="wf-tm-emph-prefix">{'>>>'}</span>}
@@ -416,7 +424,11 @@ function AboutSection({ about }: { about: string[] }) {
 }
 
 /** Contact — form (→ POST /content/contact) + direct channels (design: TerminalContact). */
-function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
+function ContactSection({
+  contact,
+}: {
+  contact: LandingContent['contact'] & { ui: LandingContent['ui'] }
+}) {
   const [form, setForm] = useState({ name: '', contact: '', message: '' })
   const [website, setWebsite] = useState('') // honeypot — humans never fill it
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -450,7 +462,7 @@ function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
       : state === 'sending'
         ? '...'
         : state === 'error'
-          ? 'помилка — ще раз'
+          ? contact.ui.formRetry
           : `${contact.send} →`
 
   return (
@@ -511,9 +523,7 @@ function ContactSection({ contact }: { contact: LandingContent['contact'] }) {
             onChange={(e) => setWebsite(e.target.value)}
             style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
           />
-          {state === 'error' && (
-            <div className="wf-tm-form-err">// не вдалося надіслати — напишіть напряму нижче</div>
-          )}
+          {state === 'error' && <div className="wf-tm-form-err">{contact.ui.formSendError}</div>}
           <div className="wf-tm-form-row wf-tm-form-row--submit">
             <button
               type="submit"
@@ -631,11 +641,13 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
 
   useEffect(() => {
     const tick = () =>
-      setClock(new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }))
+      setClock(
+        new Date().toLocaleTimeString(c.ui.clockLocale, { hour: '2-digit', minute: '2-digit' })
+      )
     tick()
     const id = setInterval(tick, 30000)
     return () => clearInterval(id)
-  }, [])
+  }, [c.ui.clockLocale])
 
   const setThemePersist = (t: 'light' | 'dark') => {
     setTheme(t)
@@ -738,15 +750,16 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
               </div>
             </section>
 
-            <PartnersSection partners={c.partners} />
-            <CasesSection items={c.cases} />
+            <PartnersSection partners={c.partners} ui={c.ui} />
+            <CasesSection items={c.cases} ui={c.ui} />
             <ScaleSection scale={c.scale} />
             <ServicesSection items={c.services} />
             <ProcessSection items={c.process} />
             <SpotlightSection spotlight={c.spotlight} />
-            <TestimonialsSection />
-            <AboutSection about={c.about} />
-            <ContactSection contact={c.contact} />
+            {/* відгуки приходять з API лише українською — на EN не показуємо */}
+            {c.locale === 'uk' && <TestimonialsSection />}
+            <AboutSection about={c.about} ui={c.ui} />
+            <ContactSection contact={{ ...c.contact, ui: c.ui }} />
           </div>
 
           {/* Status bar */}
@@ -765,14 +778,23 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
             <div className="wf-tm-statusbar-right">
               {/* DSN-8: юридичні сторінки */}
               <a href="/terms" className="wf-tm-sb-link">
-                умови
+                {c.ui.terms}
               </a>
               <span className="wf-tm-sb-sep">·</span>
               <a href="/privacy" className="wf-tm-sb-link">
-                приватність
+                {c.ui.privacy}
               </a>
               <span className="wf-tm-sb-sep">·</span>
-              <span>ua</span>
+              {/* DSN-9: перемикач мови — окремі URL (/ і /en) для hreflang */}
+              <div className="wf-tm-sb-toggle" role="group" aria-label="Мова / Language">
+                <a href="/" hrefLang="uk" data-on={c.locale === 'uk'} className="wf-tm-sb-link">
+                  ua
+                </a>
+                <span>/</span>
+                <a href="/en" hrefLang="en" data-on={c.locale === 'en'} className="wf-tm-sb-link">
+                  en
+                </a>
+              </div>
               <span className="wf-tm-sb-sep">·</span>
               <div className="wf-tm-sb-toggle">
                 <button data-on={theme === 'light'} onClick={() => setThemePersist('light')}>

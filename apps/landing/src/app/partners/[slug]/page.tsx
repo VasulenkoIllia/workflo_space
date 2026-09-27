@@ -8,6 +8,11 @@ import { UA } from '@/data/content'
  * мертвий якір #company-…; тепер — профіль партнера (hero · about · CTA).
  */
 
+/** Профілі статичні (контент лендінгу) → SSG: метадані в <head>, без рендеру на запит. */
+export function generateStaticParams() {
+  return UA.partners.map((p) => ({ slug: p.slug }))
+}
+
 function findPartner(slug: string) {
   return UA.partners.find((p) => p.slug === slug) ?? null
 }

@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   title: 'workflo.space — автоматизації для команд, що виросли з Excel',
   description:
     'Ілля з Луцька будує автоматизації для команд, що виросли з Excel. Telegram-боти, AI-агенти, інтеграції, кастомні CRM. 6 років у продуктовій розробці.',
-  alternates: { canonical: '/' },
+  // DSN-9: hreflang — українська за замовчуванням, EN — /en
+  alternates: { canonical: '/', languages: { uk: '/', en: '/en', 'x-default': '/' } },
   openGraph: {
     title: 'workflo.space — автоматизації для команд',
     description:

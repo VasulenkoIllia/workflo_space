@@ -30,6 +30,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@workflo/landing", "dev"],
       "port": 3000
+    },
+    {
+      "name": "landing-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workflo/landing", "exec", "next", "start", "-p", "3005"],
+      "port": 3005
     }
   ]
 }

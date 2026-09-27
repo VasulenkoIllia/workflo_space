@@ -23,7 +23,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: now,
     changeFrequency: 'weekly' as const,
     priority: path === '' ? 1 : 0.7,
+    // DSN-9: головна має EN-версію
+    ...(path === '' ? { alternates: { languages: { uk: `${SITE}/`, en: `${SITE}/en` } } } : {}),
   }))
+  const enHome = {
+    url: `${SITE}/en`,
+    lastModified: now,
+    changeFrequency: 'weekly' as const,
+    priority: 0.9,
+    alternates: { languages: { uk: `${SITE}/`, en: `${SITE}/en` } },
+  }
   const serviceRoutes = SERVICES.map((s) => ({
     url: `${SITE}/services/${s.slug}`,
     lastModified: now,
@@ -52,5 +61,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: 'monthly' as const,
     priority: 0.4,
   }))
-  return [...staticRoutes, ...serviceRoutes, ...caseRoutes, ...partnerRoutes, ...blogRoutes]
+  return [...staticRoutes, enHome, ...serviceRoutes, ...caseRoutes, ...partnerRoutes, ...blogRoutes]
 }
