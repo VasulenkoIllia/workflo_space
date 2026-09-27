@@ -341,25 +341,27 @@ export function BillingPage() {
 
   const s = summary.data
   const debt = num(s.debt) ?? 0
-  const balance = num(s.moneyBalance) ?? 0
+  const bonusBalance = walletNum(wallet.data?.bonusBalance) ?? 0
   const chargeList = charges.data?.charges ?? []
   const paymentList = payments.data?.payments ?? []
   const pendingCount = chargeList.filter((c) => c.approvalStatus === 'pending').length
 
   return (
     <div>
-      <div style={{ fontSize: 28, fontWeight: 600 }}>Фінанси</div>
+      {/* DEDUP C11: заголовок = пункт меню (design-v2 portal-client-p1 PortalBillingProjects) */}
+      <div style={{ fontSize: 28, fontWeight: 600 }}>Рахунки й борг</div>
       <div
         className="wfp-mono"
         style={{ fontSize: 11, color: 'var(--wf-fg-muted)', marginBottom: 18 }}
       >
-        // рахунки, платежі та реквізити
+        // рахунки, борг та оплати
       </div>
 
       <div className="wfp-stats" style={{ marginBottom: 18 }}>
         <Stat k="до сплати" v={`${formatMoney(debt)}`} tone={debt > 0 ? 'warn' : undefined} />
         <Stat k="сплачено всього" v={formatMoney(num(s.totalPaid))} />
-        <Stat k="баланс рахунку" v={formatMoney(balance)} tone={balance < 0 ? 'warn' : 'accent'} />
+        {/* грошовий баланс і рух коштів — у «Гаманці»; тут бонуси, як у дизайні */}
+        <Stat k="бонусний баланс" v={formatMoney(bonusBalance)} tone="accent" />
         <Stat
           k={`лояльність · −${s.discountPercent}%`}
           v={TIER_LABEL[s.loyaltyTier] ?? s.loyaltyTier}

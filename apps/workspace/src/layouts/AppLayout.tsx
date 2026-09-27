@@ -14,7 +14,7 @@ import {
 import { SidebarUserMenu } from '@/components/SidebarUserMenu'
 import { TimerBar } from '@/components/TimerBar'
 import { BellDropdown, TwoFactorSection } from '@workflo/app-core'
-import { refreshAccessToken } from '@/lib/api'
+import { api, refreshAccessToken } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
 import { navVisibleForRole, activeNavId, WORKSPACE_NAV } from '@/config/nav'
@@ -30,8 +30,17 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function AppLayout() {
   const { user, role, isOwner, logout, can } = useAuth()
+  // D17: до повноцінного i18n (DSN-9) інтерфейс лише UA — скидаємо збережене «en»
   const { locale, setLocale } = useI18n()
+  useEffect(() => {
+    if (locale !== 'uk') setLocale('uk')
+  }, [locale, setLocale])
   const { theme, setTheme } = useTheme()
+  // C12: тема з топбару зберігається на сервері, як і з налаштувань (інакше «злітала»)
+  const cycleTheme = (t: ThemeMode) => {
+    setTheme(t)
+    void api.patch('/profile', { theme: t }).catch(() => undefined)
+  }
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -194,26 +203,13 @@ export function AppLayout() {
               <button
                 type="button"
                 className="wfp-iconbtn"
-                onClick={() => setTheme(nextTheme[theme])}
+                onClick={() => cycleTheme(nextTheme[theme])}
                 title={themeTitle[theme]}
                 style={{ width: 'auto', padding: '0 8px', fontSize: 14 }}
               >
                 {themeGlyph[theme]}
               </button>
-              <button
-                type="button"
-                className="wfp-iconbtn"
-                onClick={() => setLocale(locale === 'uk' ? 'en' : 'uk')}
-                title="Змінити мову"
-                style={{
-                  width: 'auto',
-                  padding: '0 8px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                }}
-              >
-                {locale.toUpperCase()}
-              </button>
+              {/* D17: перемикач UA/EN прибрано до i18n (DSN-9) — він нічого не перекладав */}
             </>
           }
         />

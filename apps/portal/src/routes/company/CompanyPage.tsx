@@ -1,14 +1,13 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Avatar, Button, Card, Skeleton, StatusDot } from '@workflo/ui'
+import { Avatar, Button, Card, Skeleton } from '@workflo/ui'
 import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRequisites } from '@/lib/requisites'
+import { RequisitesSection } from './RequisitesSection'
 
 /**
- * COV-PRT-1: «Моя компанія» — реальна оглядова сторінка замість Placeholder.
- * Read-only зведення: профіль компанії + реквізити (редагування — у Налаштуваннях)
- * + учасники (керування — на «Учасники»). Нових ендпоінтів не потребує.
+ * COV-PRT-1 + DEDUP C10: «Моя компанія» — дім компанії: профіль + реквізити (форма —
+ * власнику) + учасники (керування правами — на «Учасники»).
  */
 interface CompanyMember {
   profileId: string
@@ -34,8 +33,6 @@ export function CompanyPage() {
   const company = user?.companies.find((c) => c.id === user.activeCompanyId) ?? user?.companies[0]
   // PORTAL-MEMBER: юр-дані (IBAN, ЄДРПОУ) — лише власнику компанії
   const isOwner = company?.role === 'owner'
-  const { data: reqData, isLoading: reqLoading } = useRequisites(isOwner)
-  const req = reqData?.requisites
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ['portal-company-members'],
     queryFn: () => api.get<{ members: CompanyMember[] }>('/portal/company/members'),
@@ -59,40 +56,16 @@ export function CompanyPage() {
         </div>
       </Card>
 
-      <Card title="Реквізити" style={{ marginBottom: 16 }}>
-        {!isOwner ? (
+      {/* DEDUP C10: форма реквізитів — тут (власник); учаснику — пояснення */}
+      {isOwner ? (
+        <RequisitesSection />
+      ) : (
+        <Card title="Реквізити" style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
             Реквізити компанії бачить і змінює власник компанії.
           </div>
-        ) : reqLoading ? (
-          <Skeleton style={{ height: 120 }} />
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <StatusDot tone={req?.legalIsComplete ? 'success' : 'warning'} />
-              <span style={{ fontSize: 13 }}>
-                {req?.legalIsComplete
-                  ? 'Реквізити заповнені — документи формуються коректно'
-                  : 'Реквізити неповні — заповніть для коректних документів'}
-              </span>
-            </div>
-            <div className="wfp-side">
-              <Row k="юр. назва" v={req?.legalName} />
-              <Row k="ЄДРПОУ/ІПН" v={req?.taxId} />
-              <Row k="адреса" v={req?.legalAddress} />
-              <Row k="IBAN" v={req?.iban} />
-              <Row k="email для документів" v={req?.documentEmail} />
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Link to="/settings">
-                <Button size="sm" variant="secondary">
-                  Редагувати в Налаштуваннях →
-                </Button>
-              </Link>
-            </div>
-          </>
-        )}
-      </Card>
+        </Card>
+      )}
 
       <Card title={`Учасники · ${members.length}`}>
         {membersLoading ? (
