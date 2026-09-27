@@ -2681,6 +2681,9 @@
 .wfp-modal-h-close {
   width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;
+  /* у дизайні — span; у нас <button>: прибрати дефолтний фон/паддінг браузера */
+  background: transparent;
+  padding: 0;
   border-radius: 6px;
   color: var(--wf-fg-muted);
   cursor: pointer;
