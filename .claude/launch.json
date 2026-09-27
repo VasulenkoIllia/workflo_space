@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "api",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@workflo/api", "dev"],
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "set -a; . ./.env; set +a; exec pnpm --filter @workflo/api dev"],
       "port": 4000
     },
     {

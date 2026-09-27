@@ -135,6 +135,10 @@ test.describe('smoke', () => {
       await test.step('portal create order', async () => {
         await gotoInApp(page, '/orders/new')
         await page.getByLabel('Назва').fill('Smoke замовлення з порталу')
+        // DSN-4: анкета — сабмітимо нові поля контракту (category/budget/channel)
+        await page.getByLabel('Категорія').selectOption('integration')
+        await page.getByLabel('Орієнтовний бюджет').fill('4000')
+        await page.getByRole('radio', { name: 'Telegram' }).click()
         await page.getByRole('button', { name: 'Створити замовлення' }).first().click()
         await expect(page, 'should land on the new order').toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
         await page.screenshot({ path: 'screenshots/portal/_order-create.png', fullPage: true })

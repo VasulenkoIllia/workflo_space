@@ -253,6 +253,110 @@ describe('POST /orders', () => {
     await app.close()
   })
 
+  it('DSN-4: persists the client intake (category/budget/billing/flex/channel) + echoes it', async () => {
+    orderCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      id: 'order-2',
+      title: data.title,
+      description: null,
+      clientStatus: 'in_progress',
+      priority: 'high',
+      deadline: null,
+      category: data.category,
+      clientBudget: data.clientBudget,
+      preferredBilling: data.preferredBilling,
+      deadlineFlexible: data.deadlineFlexible,
+      preferredChannel: data.preferredChannel,
+      createdAt: new Date('2026-05-31T00:00:00Z'),
+      updatedAt: new Date('2026-05-31T00:00:00Z'),
+    }))
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        title: 'Інтеграція 1С з ботом',
+        priority: 'high',
+        category: 'integration',
+        clientBudget: 4000,
+        preferredBilling: 'fixed',
+        deadlineFlexible: true,
+        preferredChannel: 'telegram',
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const arg = orderCreate.mock.calls[0][0]
+    expect(arg.data).toMatchObject({
+      category: 'integration',
+      clientBudget: 4000,
+      preferredBilling: 'fixed',
+      deadlineFlexible: true,
+      preferredChannel: 'telegram',
+    })
+    expect(res.json().data.order.intake).toEqual({
+      category: 'integration',
+      clientBudget: 4000,
+      preferredBilling: 'fixed',
+      deadlineFlexible: true,
+      preferredChannel: 'telegram',
+    })
+    await app.close()
+  })
+
+  it('DSN-4: intake is optional — «обговорити»/порожні поля пишуться як null/false', async () => {
+    orderCreate.mockResolvedValue({
+      id: 'order-3',
+      title: 'Без анкети',
+      description: null,
+      clientStatus: 'in_progress',
+      priority: 'medium',
+      deadline: null,
+      category: null,
+      clientBudget: null,
+      preferredBilling: null,
+      deadlineFlexible: false,
+      preferredChannel: null,
+      createdAt: new Date('2026-05-31T00:00:00Z'),
+      updatedAt: new Date('2026-05-31T00:00:00Z'),
+    })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: 'Без анкети', preferredBilling: null, clientBudget: null },
+    })
+    expect(res.statusCode).toBe(201)
+    const arg = orderCreate.mock.calls[0][0]
+    expect(arg.data).toMatchObject({
+      category: null,
+      clientBudget: null,
+      preferredBilling: null,
+      deadlineFlexible: false,
+      preferredChannel: null,
+    })
+    await app.close()
+  })
+
+  it('DSN-4: rejects an unknown category / non-positive budget (400)', async () => {
+    const { app, token } = await authed(CLIENT)
+    for (const payload of [
+      { title: 'Погана категорія', category: 'marketing' },
+      { title: 'Нульовий бюджет', clientBudget: 0 },
+      { title: 'Невідомий канал', preferredChannel: 'viber' },
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: `Bearer ${token}` },
+        payload,
+      })
+      expect(res.statusCode).toBe(400)
+    }
+    expect(orderCreate).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('rejects a too-short title (400 validation)', async () => {
     const { app, token } = await authed(CLIENT)
     const res = await app.inject({
@@ -395,6 +499,42 @@ describe('GET /orders/:id', () => {
     expect(o.internalStatus).toBeUndefined()
     expect(o.assignee).toBeUndefined()
     expect(o.stages).toHaveLength(1)
+    await app.close()
+  })
+
+  it('DSN-4: client view carries the intake + the pricing model for the «Кошторис» tab', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...fullOrder,
+      billingType: 'hourly',
+      hourlyRate: '45.00',
+      estimatedHours: '80.00',
+      category: 'bot',
+      clientBudget: '1500.00',
+      preferredBilling: null,
+      deadlineFlexible: true,
+      preferredChannel: 'email',
+    })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/orders/order-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const o = res.json().data.order
+    expect(o.billingType).toBe('hourly')
+    expect(o.hourlyRate).toBe(45)
+    expect(o.estimatedHours).toBe(80)
+    expect(o.intake).toEqual({
+      category: 'bot',
+      clientBudget: 1500,
+      preferredBilling: null,
+      deadlineFlexible: true,
+      preferredChannel: 'email',
+    })
+    // internal-only поля так і лишаються прихованими
+    expect(o.fixedPrice).toBeUndefined()
+    expect(o.acceptance).toBeUndefined()
     await app.close()
   })
 

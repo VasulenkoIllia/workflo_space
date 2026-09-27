@@ -3,6 +3,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ALLOWED_ORDER_TRANSITIONS, BillingType, OrderInternalStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Input, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import {
+  CONTACT_CHANNEL_LABEL,
+  ORDER_CATEGORY_LABEL,
+  hasIntake,
+  preferredBillingLabel,
+  type OrderIntake,
+} from '@workflo/app-core'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useNomenclature,
@@ -176,6 +183,8 @@ export function OrderDetailPage() {
             </Card>
           )}
 
+          {hasIntake(order.intake) && <IntakeCard intake={order.intake} />}
+
           <EstimateCard order={order} />
 
           <ApprovalCard order={order} />
@@ -240,6 +249,29 @@ export function OrderDetailPage() {
 
 /** COV-UX-1: видалення в кошик (30 днів) — кошик з restore існував, кнопки не було.
  * Owner/manager; двокрокове підтвердження без модалки. */
+/** DSN-4: анкета клієнта з порталу — орієнтир для оцінки (НЕ умови угоди). */
+function IntakeCard({ intake }: { intake: OrderIntake }) {
+  const rows: { k: string; v: string }[] = []
+  if (intake.category) rows.push({ k: 'категорія', v: ORDER_CATEGORY_LABEL[intake.category] })
+  if (intake.clientBudget != null) rows.push({ k: 'бюджет ~', v: formatMoney(intake.clientBudget) })
+  rows.push({ k: 'білінг', v: preferredBillingLabel(intake.preferredBilling) })
+  if (intake.deadlineFlexible) rows.push({ k: 'дедлайн', v: 'гнучкий — можна посунути' })
+  if (intake.preferredChannel)
+    rows.push({ k: 'канал', v: CONTACT_CHANNEL_LABEL[intake.preferredChannel] })
+  return (
+    <Card title="Заявка клієнта" aux="побажання" style={{ marginBottom: 16 }}>
+      <div className="wfp-side">
+        {rows.map((r) => (
+          <div key={r.k} className="wfp-side-row">
+            <div className="wfp-side-k">{r.k}</div>
+            <div className="wfp-side-v">{r.v}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 function DangerCard({ orderId, title }: { orderId: string; title: string }) {
   const { isOwner, isManager } = useAuth()
   const navigate = useNavigate()

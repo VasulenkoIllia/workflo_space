@@ -20,6 +20,9 @@ export default defineConfig({
         target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
+        // refresh-cookie має Path=/auth/refresh (ADR-001), а браузер у dev ходить на
+        // /api/auth/refresh → без переписування шляху cookie не шлеться і reload розлогінює.
+        cookiePathRewrite: { '/auth/refresh': '/api/auth/refresh' },
       },
     },
   },

@@ -50,6 +50,12 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             approvalStatus: true,
             approvalDecidedAt: true,
             approvalComment: true,
+            // DSN-4 анкета клієнта (побажання при заявці)
+            category: true,
+            clientBudget: true,
+            preferredBilling: true,
+            deadlineFlexible: true,
+            preferredChannel: true,
             createdAt: true,
             updatedAt: true,
             company: { select: { id: true, name: true } },
@@ -147,6 +153,18 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
           qty: num(l.qty),
           unitPrice: num(l.unitPrice),
         })),
+        // DSN-4 таб «Кошторис»: модель ціни, яку клієнт погоджує (02-А: для hourly —
+        // ставка + оцінка годин). Клієнтська ставка замовлення, НЕ ставка виконавця.
+        billingType: order.billingType,
+        hourlyRate: num(order.hourlyRate),
+        estimatedHours: num(order.estimatedHours),
+        intake: {
+          category: order.category ?? null,
+          clientBudget: num(order.clientBudget),
+          preferredBilling: order.preferredBilling ?? null,
+          deadlineFlexible: order.deadlineFlexible ?? false,
+          preferredChannel: order.preferredChannel ?? null,
+        },
       }
 
       if (!isInternal) {

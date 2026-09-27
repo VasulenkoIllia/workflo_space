@@ -490,3 +490,31 @@ name, code?, vatRate?, isActive, @@unique(agencyId,name)}`; `OrderEstimateLine
   «Оцінка» — селект номенклатури; таб «Специфікація» для замовлення БЕЗ проекту —
   редактор кошторису (позиції, Σ, блок на погодженні); картка проекту — селект
   номенклатури поряд з юр-особою.
+
+---
+
+## UPDATE (27.09.2026) — DSN-4: анкета клієнта при створенні + таб «Кошторис» у порталі ✅
+
+**Анкета (портал `/orders/new`, design-v2 `portal-order-new.jsx`).** `POST /orders` приймає
+додаткові опційні поля (`createOrderSchema`, @workflo/types) — **побажання-орієнтир для оцінки,
+НЕ умови угоди** (фактичні `billingType/fixedPrice/hourlyRate` виставляє команда):
+
+| Поле               | Тип                                                      | Примітка                                       |
+| ------------------ | -------------------------------------------------------- | ---------------------------------------------- |
+| `category`         | `OrderCategory?` (web·integration·bot·ai·data·crm·other) | таксономія з дизайну                           |
+| `clientBudget`     | `Decimal(10,2)?`                                         | у валюті замовлення, > 0                       |
+| `preferredBilling` | `BillingType?`                                           | `null` = «обговорити»                          |
+| `deadlineFlexible` | `Boolean` (default false)                                | має сенс лише з дедлайном                      |
+| `preferredChannel` | `ContactChannel?` (system·telegram·email·phone)          | інфо для команди; сповіщення — матриця профілю |
+
+Міграція `20260724_order_intake` — адитивна (nullable + boolean з константним DEFAULT → без
+перезапису таблиці). Rollback: `DROP COLUMN` ×5 + `DROP TYPE` ×2. `GET /orders/:id` віддає
+`intake` обом сторонам; workspace показує картку «Заявка клієнта» (лише якщо анкета не порожня).
+Файли з форми вантажаться **після** створення (`POST /orders/:id/files`, послідовно; збій
+окремого файлу не валить замовлення — toast «додайте у табі Файли»). Чернеток нема (пункт З).
+
+**Таб «Кошторис» (портал, design-v2 `PortalEstimate`).** Клієнтський DTO розширено
+`billingType/hourlyRate/estimatedHours` (клієнтська ставка замовлення, не ставка виконавця —
+02-А: для hourly клієнт погоджує ставку + оцінку годин). Таб — єдине місце дій погодження;
+банер «потрібна ваша дія» лише веде в таб. «Оплатити» не пропонується, поки
+`approvalStatus` = `pending`/`rejected`.

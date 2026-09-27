@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { api, getAccessToken, setAccessToken } from '@/lib/api'
+import { api, getAccessToken, refreshAccessToken, setAccessToken } from '@/lib/api'
 
 /**
  * Agency (team) role — the CANON the workspace gates on. Mirrors the backend
@@ -133,11 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     void (async () => {
       try {
-        // StrictMode mounts effects twice in dev; if the first pass already
-        // obtained a token, skip refresh (token rotation would 401 the 2nd call).
-        if (!getAccessToken()) {
-          const data = await api.post<{ accessToken: string }>('/auth/refresh')
-          setAccessToken(data.accessToken)
+        // Single-flight refresh (спільний із auto-retry на 401): StrictMode монтує effect
+        // двічі ПАРАЛЕЛЬНО — два прямі /auth/refresh ротували токен, і другий ловив 401
+        // (reuse-detection) → сесія злітала на reload. refreshAccessToken() ділить один запит.
+        if (!getAccessToken() && !(await refreshAccessToken())) {
+          throw new Error('no session')
         }
         const me = await api.get<AuthState>('/auth/me')
         if (!cancelled) setUser(me)

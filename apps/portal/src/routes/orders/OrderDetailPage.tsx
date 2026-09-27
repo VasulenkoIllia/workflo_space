@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { OrderClientStatus } from '@workflo/types'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, StatusDot, Tabs } from '@workflo/ui'
+import {
+  CONTACT_CHANNEL_LABEL,
+  ORDER_CATEGORY_LABEL,
+  hasIntake,
+  preferredBillingLabel,
+} from '@workflo/app-core'
 import { CLIENT_STATUS_META, PRIORITY_LABEL } from '@/lib/orders'
 import {
   useActivity,
@@ -15,6 +21,7 @@ import { openDocumentPdf, useOrderDocuments, type OrderDocument } from '@/lib/do
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
 import { DocumentsTab } from './DocumentsTab'
+import { EstimateTab } from './EstimateTab'
 import { FilesTab } from './FilesTab'
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -30,7 +37,8 @@ export function OrderDetailPage() {
   const { id = '' } = useParams()
   const { data: order, isLoading, isError } = useOrder(id)
   useCommentStream(id) // keep live chat updates flowing regardless of the active tab
-  const [tab, setTab] = useState('chat')
+  // null = ще не обирали → за замовчуванням «Кошторис», якщо чекаємо погодження, інакше «Чат»
+  const [pickedTab, setTab] = useState<string | null>(null)
   const decide = useDecideApproval(id)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
@@ -54,6 +62,8 @@ export function OrderDetailPage() {
 
   const meta = CLIENT_STATUS_META[order.clientStatus]
   const dl = deadlineMeta(order.dueDate)
+  const awaitingApproval = order.clientStatus === OrderClientStatus.PENDING_APPROVAL
+  const tab = pickedTab ?? (awaitingApproval ? 'estimate' : 'chat')
 
   return (
     <div>
@@ -82,7 +92,7 @@ export function OrderDetailPage() {
         </div>
       </div>
 
-      {order.clientStatus === OrderClientStatus.PENDING_APPROVAL && (
+      {awaitingApproval && (
         <div className="wfp-approve">
           <div className="wfp-approve-l">
             <div className="wfp-approve-k">// потрібна ваша дія</div>
@@ -92,61 +102,17 @@ export function OrderDetailPage() {
               <strong>
                 {formatMoney(order.totalAmount)} {order.currency}
               </strong>
-              . Погодьте, щоб команда почала роботу, або запросіть правки з коментарем.
+              . Перегляньте кошторис і погодьте його, щоб команда почала роботу, або запросіть
+              правки з коментарем.
             </div>
-            {order.estimateLines.length > 0 && (
-              <table
-                style={{
-                  marginTop: 10,
-                  borderCollapse: 'collapse',
-                  fontSize: 13,
-                  width: '100%',
-                  maxWidth: 460,
-                }}
-              >
-                <tbody>
-                  {order.estimateLines.map((l) => (
-                    <tr key={l.id} style={{ borderBottom: '1px solid var(--wf-border)' }}>
-                      <td style={{ padding: '4px 12px 4px 0' }}>{l.name}</td>
-                      <td
-                        className="wfp-mono"
-                        style={{
-                          padding: '4px 12px 4px 0',
-                          color: 'var(--wf-fg-muted)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {l.qty ?? 1} × {formatMoney(l.unitPrice)}
-                      </td>
-                      <td
-                        className="wfp-mono"
-                        style={{ padding: '4px 0', textAlign: 'right', whiteSpace: 'nowrap' }}
-                      >
-                        {formatMoney((l.qty ?? 1) * (l.unitPrice ?? 0))} {order.currency}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {decide.isError && !rejecting && (
-              <div style={{ color: 'var(--wf-destructive)', fontSize: 12, marginTop: 6 }}>
-                Не вдалося — оновіть сторінку й спробуйте ще раз.
-              </div>
-            )}
           </div>
-          <div className="wfp-approve-r">
-            <Button variant="ghost" disabled={decide.isPending} onClick={() => setRejecting(true)}>
-              Запросити правки
-            </Button>
-            <Button
-              variant="primary"
-              loading={decide.isPending}
-              onClick={() => decide.mutate({ decision: 'approve' })}
-            >
-              Погодити
-            </Button>
-          </div>
+          {tab !== 'estimate' && (
+            <div className="wfp-approve-r">
+              <Button variant="primary" onClick={() => setTab('estimate')}>
+                Переглянути кошторис →
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -157,11 +123,28 @@ export function OrderDetailPage() {
             onChange={setTab}
             items={[
               { id: 'chat', label: 'Чат' },
+              { id: 'estimate', label: 'Кошторис' },
               { id: 'files', label: 'Файли' },
               { id: 'docs', label: 'Документи' },
             ]}
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
+          {tab === 'estimate' && (
+            <EstimateTab
+              order={order}
+              deciding={decide.isPending}
+              failed={decide.isError && !rejecting}
+              // фіксуємо таб: після рішення статус міняється, і дефолт-таб «стрибнув» би в Чат
+              onApprove={() => {
+                setTab('estimate')
+                decide.mutate({ decision: 'approve' })
+              }}
+              onRequestChanges={() => {
+                setTab('estimate')
+                setRejecting(true)
+              }}
+            />
+          )}
           {tab === 'files' && <FilesTab orderId={order.id} />}
           {tab === 'docs' && <DocumentsTab orderId={order.id} />}
         </div>
@@ -196,16 +179,21 @@ export function OrderDetailPage() {
                 </div>
               </div>
             </div>
-            {!order.paidAt && order.totalAmount != null && order.totalAmount > 0 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setPayInfo(true)}
-                style={{ marginTop: 12, width: '100%' }}
-              >
-                Оплатити
-              </Button>
-            )}
+            {/* оплату не пропонуємо, поки кошторис чекає рішення або відхилений */}
+            {!order.paidAt &&
+              order.totalAmount != null &&
+              order.totalAmount > 0 &&
+              order.approvalStatus !== 'pending' &&
+              order.approvalStatus !== 'rejected' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setPayInfo(true)}
+                  style={{ marginTop: 12, width: '100%' }}
+                >
+                  Оплатити
+                </Button>
+              )}
           </Card>
 
           <Card title="Деталі" style={{ marginBottom: 16 }}>
@@ -226,6 +214,46 @@ export function OrderDetailPage() {
                 <div className="wfp-side-k">етапів</div>
                 <div className="wfp-side-v">{order.stages.length}</div>
               </div>
+              {hasIntake(order.intake) && (
+                <>
+                  {order.intake.category && (
+                    <div className="wfp-side-row">
+                      <div className="wfp-side-k">категорія</div>
+                      <div className="wfp-side-v">
+                        {ORDER_CATEGORY_LABEL[order.intake.category]}
+                      </div>
+                    </div>
+                  )}
+                  {order.intake.clientBudget != null && (
+                    <div className="wfp-side-row">
+                      <div className="wfp-side-k">ваш бюджет ~</div>
+                      <div className="wfp-side-v wfp-mono">
+                        {formatMoney(order.intake.clientBudget)}
+                      </div>
+                    </div>
+                  )}
+                  <div className="wfp-side-row">
+                    <div className="wfp-side-k">білінг</div>
+                    <div className="wfp-side-v">
+                      {preferredBillingLabel(order.intake.preferredBilling)}
+                    </div>
+                  </div>
+                  {order.intake.deadlineFlexible && (
+                    <div className="wfp-side-row">
+                      <div className="wfp-side-k">дедлайн</div>
+                      <div className="wfp-side-v">гнучкий</div>
+                    </div>
+                  )}
+                  {order.intake.preferredChannel && (
+                    <div className="wfp-side-row">
+                      <div className="wfp-side-k">канал</div>
+                      <div className="wfp-side-v">
+                        {CONTACT_CHANNEL_LABEL[order.intake.preferredChannel]}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </Card>
 

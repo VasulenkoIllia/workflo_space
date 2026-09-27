@@ -179,6 +179,25 @@ export enum BillingType {
   HOURLY = 'hourly',
 }
 
+/** DSN-4: категорія заявки клієнта (портал /orders/new). */
+export enum OrderCategory {
+  WEB = 'web',
+  INTEGRATION = 'integration',
+  BOT = 'bot',
+  AI = 'ai',
+  DATA = 'data',
+  CRM = 'crm',
+  OTHER = 'other',
+}
+
+/** DSN-4: бажаний канал звʼязку по замовленню (інфо для команди). */
+export enum ContactChannel {
+  SYSTEM = 'system',
+  TELEGRAM = 'telegram',
+  EMAIL = 'email',
+  PHONE = 'phone',
+}
+
 /**
  * BillingMode controls how an internal task is paid:
  *   - client_paid: rolled into a client invoice,

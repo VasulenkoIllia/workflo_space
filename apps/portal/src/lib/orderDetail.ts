@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { OrderClientStatus, OrderPriority } from '@workflo/types'
-import { orderKeys } from '@workflo/app-core'
+import type { BillingType, OrderClientStatus, OrderPriority } from '@workflo/types'
+import { orderKeys, type OrderIntake } from '@workflo/app-core'
 import { api } from '@/lib/api'
 
 // Shared order-chat data layer lives in @workflo/app-core (AR-42, audit r4 decomp B);
@@ -61,6 +61,16 @@ export interface OrderDetail {
   updatedAt: string
   stages: OrderStage[]
   estimateLines: EstimateLine[]
+  // 02-А: стан погодження оцінки (блок-банер + таб «Кошторис»)
+  requiresApproval: boolean
+  approvalStatus: 'pending' | 'approved' | 'rejected' | null
+  approvalComment: string | null
+  // DSN-4 таб «Кошторис»: модель ціни (для hourly — ставка × оцінка годин)
+  billingType: BillingType
+  hourlyRate: number | null
+  estimatedHours: number | null
+  /** DSN-4: анкета клієнта з форми нового замовлення */
+  intake: OrderIntake
 }
 
 export interface ActivityItem {

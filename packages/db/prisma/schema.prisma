@@ -353,6 +353,14 @@ model Order {
   acceptedById        String?
   acceptedBy          Profile?             @relation("OrderAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
   billableHours       Decimal?             @db.Decimal(8, 2)
+  // DSN-4 АНКЕТА КЛІЄНТА (портал /orders/new): побажання клієнта на момент заявки — орієнтир
+  // для оцінки команди, НЕ умови угоди. preferredBilling null = «обговорити»; clientBudget —
+  // у валюті замовлення. Фактичні billingType/fixedPrice/hourlyRate виставляє команда.
+  category            OrderCategory?
+  clientBudget        Decimal?             @db.Decimal(10, 2)
+  preferredBilling    BillingType?
+  deadlineFlexible    Boolean              @default(false)
+  preferredChannel    ContactChannel?
   createdAt           DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -2034,6 +2042,25 @@ enum InvoiceApprover {
 enum BillingType {
   fixed
   hourly
+}
+
+// DSN-4: категорія заявки клієнта (портал /orders/new) — таксономія з design-v2.
+enum OrderCategory {
+  web
+  integration
+  bot
+  ai
+  data
+  crm
+  other
+}
+
+// DSN-4: бажаний канал звʼязку по замовленню (інфо для команди; сповіщення — матриця профілю).
+enum ContactChannel {
+  system
+  telegram
+  email
+  phone
 }
 
 enum StageStatus {

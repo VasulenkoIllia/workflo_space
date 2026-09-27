@@ -7,7 +7,7 @@ import type {
   OrderType,
   StageStatus,
 } from '@workflo/types'
-import { orderKeys } from '@workflo/app-core'
+import { orderKeys, type OrderIntake } from '@workflo/app-core'
 import { api } from '@/lib/api'
 
 // Shared order-chat data layer lives in @workflo/app-core (AR-42, audit r4 decomp B);
@@ -88,6 +88,8 @@ export interface WorkspaceOrderDetail {
   blockedBy?: OrderDependencyRef[]
   blocks?: OrderDependencyRef[]
   isBlocked?: boolean
+  /** DSN-4: анкета клієнта з порталу (побажання при заявці; порожня для workspace-замовлень) */
+  intake?: OrderIntake
 }
 
 /** S10-03: посилання залежності (dependencyId — для видалення звʼязку). */

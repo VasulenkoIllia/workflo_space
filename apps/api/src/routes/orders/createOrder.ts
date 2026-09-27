@@ -53,6 +53,12 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
             internalStatus: 'new',
             clientStatus: 'in_progress',
             deadline: input.dueDate ? new Date(input.dueDate) : null,
+            // DSN-4 анкета клієнта — побажання-орієнтир (фактичний білінг виставляє команда)
+            category: input.category ?? null,
+            clientBudget: input.clientBudget ?? null,
+            preferredBilling: input.preferredBilling ?? null,
+            deadlineFlexible: input.deadlineFlexible ?? false,
+            preferredChannel: input.preferredChannel ?? null,
             ...(input.stages?.length
               ? {
                   stages: {
@@ -72,6 +78,11 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
             clientStatus: true,
             priority: true,
             deadline: true,
+            category: true,
+            clientBudget: true,
+            preferredBilling: true,
+            deadlineFlexible: true,
+            preferredChannel: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -104,6 +115,13 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
             clientStatus: order.clientStatus,
             priority: order.priority,
             dueDate: order.deadline,
+            intake: {
+              category: order.category,
+              clientBudget: order.clientBudget == null ? null : Number(order.clientBudget),
+              preferredBilling: order.preferredBilling,
+              deadlineFlexible: order.deadlineFlexible,
+              preferredChannel: order.preferredChannel,
+            },
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
           },

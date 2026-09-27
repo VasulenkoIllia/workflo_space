@@ -207,9 +207,9 @@ webhooks + ApiKey беремо **лише коли система цілісна
 
 **Блок 2 · Портал (обличчя перед клієнтом):**
 
-- [ ] **DSN-4 Замовлення** (M): нове замовлення → 5 нумерованих секцій дизайну
-      (що потрібно · деталі+білінг · дедлайн · ФАЙЛИ-upload · канал звʼязку);
-      деталь → постійний таб «Кошторис» (DTO вже віддає позиції).
+- [x] **DSN-4 Замовлення** ✅ (27.09): нове замовлення → 5 нумерованих секцій дизайну
+      (що потрібно · деталі+білінг · дедлайн · ФАЙЛИ-upload · канал звʼязку) + анкета в БД;
+      деталь → постійний таб «Кошторис» (єдине місце погодження).
 - [ ] **DSN-5 Документи + Проєкти** (M/L): документи — групування по замовленнях +
       сегмент «Договори» + inline-дії; проєкти — KPI-ряд + картки + деталь-модалка +
       retainer hours-bar (бек: агрегація годин циклу).
@@ -236,6 +236,23 @@ wallet top-up (платіжний шлюз), booking-сторінка, mobile-sh
 Permissions-матриця + white-label + landing-CMS (S14).
 
 ## ✅ Готово нещодавно (не брати вдруге)
+
+- **DSN-4 (2026-09-27) — портал: нове замовлення за дизайном + таб «Кошторис».** Бек: анкета
+  клієнта `Order.category/clientBudget/preferredBilling/deadlineFlexible/preferredChannel`
+  (міграція `20260724_order_intake`, fresh-PG-proven + drift-free, адитивна) у
+  `createOrderSchema`/`POST /orders`/`GET /orders/:id` (+ `billingType/hourlyRate/estimatedHours`
+  у клієнтському DTO для hourly-кошторису). Фронт: `OrderCreatePage` — 5 секцій + sticky
+  «Ваша заявка» + файли drag&drop (валідація типу/розміру/ліміту, upload після створення);
+  `EstimateTab` — таблиця/підсумок/статус + «Погодити / Запросити правки» (банер лише веде
+  в таб, авто-відкриття при pending); «Оплатити» сховано при pending/rejected; workspace —
+  картка «Заявка клієнта». Спільні підписи — `@workflo/app-core` `orderIntake.ts`.
+  **Попутно (dev-сесія):** відновлення сесії в обох `AuthContext` ішло повз single-flight
+  refresh → два паралельні `/auth/refresh` під StrictMode ротували токен і другий ловив 401
+  (reload розлогінював) — тепер через `refreshAccessToken()`; vite-proxy `cookiePathRewrite`
+  для refresh-cookie (`Path=/auth/refresh` ≠ `/api/auth/refresh` у dev); `.claude/launch.json`
+  api стартує з кореневим `.env`. Гейт turbo **51/51**, api orders **88** (+4), integration
+  **162/162** на реальній PG, live-verify: створення з анкетою+файлом → workspace-картка →
+  кошторис pending → «Запросити правки» → rejected-стан.
 
 - **TEAM-ADMIN-1 (2026-07-13) — тімлід підрозділу як ЛОГІКА (рішення власника: 1 людина =
   1 команда; лід = права, не візуал).** `Team.leadId` (лід мусить бути членом команди) +

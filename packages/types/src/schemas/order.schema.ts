@@ -2,7 +2,9 @@ import { z } from 'zod'
 import {
   ApprovalMode,
   BillingType,
+  ContactChannel,
   InternalTaskStatus,
+  OrderCategory,
   OrderInternalStatus,
   OrderPriority,
   OrderType,
@@ -25,7 +27,15 @@ export const createOrderSchema = z.object({
   priority: z.nativeEnum(OrderPriority).default(OrderPriority.MEDIUM),
   dueDate: dueDateSchema.optional(),
   stages: z.array(orderStageInputSchema).max(20).optional(),
+  // DSN-4 анкета клієнта — побажання-орієнтир для оцінки (не умови угоди).
+  // preferredBilling null/відсутній = «обговорити»; clientBudget — у валюті замовлення.
+  category: z.nativeEnum(OrderCategory).nullish(),
+  clientBudget: z.number().positive().max(99_999_999).nullish(),
+  preferredBilling: z.nativeEnum(BillingType).nullish(),
+  deadlineFlexible: z.boolean().optional(),
+  preferredChannel: z.nativeEnum(ContactChannel).nullish(),
 })
+export type CreateOrderInput = z.input<typeof createOrderSchema>
 
 /**
  * POST /workspace/orders (P-7) — the internal team creates a task FOR a chosen client,

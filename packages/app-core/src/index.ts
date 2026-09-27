@@ -34,3 +34,5 @@ export * from './announcements.js'
 // S9-06 (хвіст): контактні дані профілю (телефон + часовий пояс).
 export * from './ContactDetailsSection.js'
 export * from './DataExportSection.js'
+// DSN-4: анкета клієнта при створенні замовлення — тип + підписи для обох апок.
+export * from './orderIntake.js'

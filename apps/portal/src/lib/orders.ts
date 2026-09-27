@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   INTERNAL_TO_CLIENT_STATUS,
   OrderClientStatus,
+  type CreateOrderInput,
   type OrderInternalStatus,
   type OrderPriority,
 } from '@workflo/types'
@@ -61,18 +62,20 @@ export const PRIORITY_LABEL: Record<OrderPriority, string> = {
   urgent: 'терміновий',
 }
 
-/** POST /orders — client creates a request. `dueDate` must be an ISO datetime in the future. */
-export interface CreateOrderInput {
-  title: string
-  description?: string
-  priority?: OrderPriority
-  dueDate?: string
-}
-
+/** POST /orders — client creates a request (контракт — `createOrderSchema` у @workflo/types;
+ * DSN-4: + анкета category/clientBudget/preferredBilling/deadlineFlexible/preferredChannel).
+ * `dueDate` must be an ISO datetime in the future. */
 export function useCreateOrder() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: CreateOrderInput) => api.post<{ order: PortalOrder }>('/orders', body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['orders'] }),
   })
+}
+
+/** DSN-4: файли з форми нового замовлення вантажимо ПІСЛЯ створення (id ще нема до POST). */
+export function uploadOrderFile(orderId: string, file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.upload<{ file: { id: string } }>(`/orders/${orderId}/files`, fd)
 }
