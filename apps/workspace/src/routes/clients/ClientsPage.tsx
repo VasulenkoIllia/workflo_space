@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { EmptyState, Skeleton } from '@workflo/ui'
+import { Button, EmptyState, Skeleton } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { useClients } from '@/lib/clients'
+import { NewClientModal } from './NewClientModal'
 import { formatMoney } from '@/lib/format'
 
 /** Loyalty-tier display (label + accent flag) — mirrors the 5-tier model (10-loyalty). */
@@ -43,6 +46,15 @@ function TierPill({ tier }: { tier: string | null }) {
 export function ClientsPage() {
   const navigate = useNavigate()
   const { clients, isLoading, isError } = useClients()
+  const { can } = useAuth()
+  const [adding, setAdding] = useState(false)
+  // CORE-FLOWS (D4): агенція заводить клієнта сама — clients.manage
+  const canCreate = can('clients.manage')
+  const addButton = canCreate ? (
+    <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
+      + Клієнт
+    </Button>
+  ) : null
 
   return (
     <div>
@@ -51,7 +63,9 @@ export function ClientsPage() {
           <h1 className="wfp-ph-h1">Клієнти</h1>
           <div className="wfp-ph-sub">// {clients.length} клієнтів</div>
         </div>
+        <div className="wfp-ph-r">{addButton}</div>
       </div>
+      {adding && <NewClientModal onClose={() => setAdding(false)} />}
 
       <div
         className="wfp-mono"
@@ -78,7 +92,12 @@ export function ClientsPage() {
       ) : clients.length === 0 ? (
         <EmptyState
           title="Поки немає клієнтів"
-          description="Клієнти зʼявляться тут, коли в агенції будуть компанії."
+          description={
+            canCreate
+              ? 'Заведіть першого клієнта вручну або конвертуйте лід — клієнти також зʼявляються після самореєстрації в порталі.'
+              : 'Клієнти зʼявляться тут, коли в агенції будуть компанії.'
+          }
+          action={addButton}
         />
       ) : (
         <table className="wfp-table">

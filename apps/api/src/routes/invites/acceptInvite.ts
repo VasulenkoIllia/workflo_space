@@ -67,6 +67,7 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
           throw gone()
         }
         const companyId = invite.companyId
+        let role: 'owner' | 'member' = 'member'
         await tenantTransaction(prisma, async (tx) => {
           // Atomic claim: only the first concurrent accept flips usedAt; a racing
           // second request sees count=0 and aborts before mutating membership.
@@ -77,14 +78,18 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
           if (claimed.count === 0) {
             throw gone()
           }
+          // CORE-FLOWS (D4): компанію, заведену агенцією, ще ніхто не «має» — перший, хто
+          // приймає запрошення, стає власником; далі — звичайні учасники.
+          const owners = await tx.companyMember.count({ where: { companyId, role: 'owner' } })
+          role = owners === 0 ? 'owner' : 'member'
           await tx.companyMember.upsert({
             where: { companyId_profileId: { companyId, profileId } },
             update: {}, // already a member → idempotent
             create: {
               companyId,
               profileId,
-              role: 'member',
-              permissions: (invite.permissions as object) ?? {},
+              role,
+              permissions: role === 'owner' ? {} : ((invite.permissions as object) ?? {}),
             },
           })
         })
@@ -96,12 +101,12 @@ const acceptInviteRoute: FastifyPluginAsync = (fastify) => {
           resourceType: 'company',
           resourceId: companyId,
           result: 'allowed',
-          metadata: { inviteId: invite.id },
+          metadata: { inviteId: invite.id, role },
         })
 
         return reply.status(200).send({
           success: true,
-          data: { type: 'company_member', companyId, role: 'member' },
+          data: { type: 'company_member', companyId, role },
         })
       }
 

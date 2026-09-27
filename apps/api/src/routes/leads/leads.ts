@@ -1,11 +1,12 @@
 import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, LeadStatus } from '@workflo/types'
+import { ApiErrorCode, AppError, LeadStatus, convertLeadSchema } from '@workflo/types'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { ensureStages } from './leadStages.js'
 import { requirePermission } from '../../auth/permissions.js'
+import { generateUniqueCompanySlug } from '../../auth/slug.js'
 
 /** ХВІСТ-4: перша відкрита стадія воронки агенції (сідить дефолти, якщо порожньо). */
 async function firstOpenStageId(
@@ -109,10 +110,6 @@ const UPDATED_TRACKED_FIELDS = [
   'estimatedValue',
   'notes',
 ] as const
-const convertSchema = z.object({
-  companyId: z.string().min(1),
-  title: z.string().trim().min(1).max(200).optional(),
-})
 
 /** PERM-4: ліди й воронка — право leads.manage (раніше будь-хто з команди, вкл. виконавця). */
 async function assertTeam(request: FastifyRequest): Promise<string> {
@@ -367,7 +364,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = await assertTeam(request)
-      const input = convertSchema.parse(request.body)
+      const input = convertLeadSchema.parse(request.body)
       const result = await tenantTransaction(prisma, async (tx) => {
         // Serialize concurrent converts of the same lead (double-click / retry) so the
         // idempotency check can't be raced into two orphaned Orders (audit MEDIUM).
@@ -380,10 +377,20 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
         if (lead.convertedOrderId) {
           throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Лід вже конвертовано', 409)
         }
-        const company = await tx.company.findFirst({
-          where: { id: input.companyId, agencyId },
-          select: { id: true },
-        })
+        // CORE-FLOWS (D4): у наявну компанію агенції АБО нову (раніше — лише наявна → глухий кут)
+        const company = input.newCompanyName
+          ? await tx.company.create({
+              data: {
+                agencyId,
+                name: input.newCompanyName,
+                slug: await generateUniqueCompanySlug(tx, agencyId, input.newCompanyName),
+              },
+              select: { id: true },
+            })
+          : await tx.company.findFirst({
+              where: { id: input.companyId, agencyId },
+              select: { id: true },
+            })
         if (!company) throw new AppError(ApiErrorCode.NOT_FOUND, 'Компанію не знайдено', 404)
 
         const order = await tx.order.create({
@@ -420,7 +427,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
             metadata: { orderId: order.id, companyId: company.id },
           },
         })
-        return { lead: updated, orderId: order.id }
+        return { lead: updated, orderId: order.id, companyId: company.id }
       })
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
@@ -429,11 +436,15 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
         resourceType: 'lead',
         resourceId: request.params.id,
         result: 'allowed',
-        metadata: { orderId: result.orderId, companyId: input.companyId },
+        metadata: {
+          orderId: result.orderId,
+          companyId: result.companyId,
+          newCompany: Boolean(input.newCompanyName),
+        },
       })
       return reply.send({
         success: true,
-        data: { lead: toDto(result.lead), orderId: result.orderId },
+        data: { lead: toDto(result.lead), orderId: result.orderId, companyId: result.companyId },
       })
     }
   )

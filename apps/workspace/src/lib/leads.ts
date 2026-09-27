@@ -126,15 +126,48 @@ export function useUpdateLead() {
   })
 }
 
+/** Конвертація ліда: у наявну компанію (companyId) АБО нову (newCompanyName, CORE-FLOWS D4);
+ * для нової — опційно запросити контакт ліда в портал (перший прийнятий = власник). */
 export function useConvertLead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, companyId, title }: { id: string; companyId: string; title?: string }) =>
-      api.post<{ lead: Lead; orderId: string }>(`/workspace/leads/${id}/convert`, {
-        companyId,
-        ...(title ? { title } : {}),
-      }),
-    onSuccess: () => invalidateLeads(qc),
+    mutationFn: async ({
+      id,
+      companyId,
+      newCompanyName,
+      title,
+      inviteEmail,
+    }: {
+      id: string
+      companyId?: string
+      newCompanyName?: string
+      title?: string
+      inviteEmail?: string
+    }) => {
+      const res = await api.post<{ lead: Lead; orderId: string; companyId: string }>(
+        `/workspace/leads/${id}/convert`,
+        {
+          ...(newCompanyName ? { newCompanyName } : { companyId }),
+          ...(title ? { title } : {}),
+        }
+      )
+      let invited = false
+      if (inviteEmail) {
+        try {
+          await api.post(`/workspace/clients/${res.companyId}/members/invite`, {
+            email: inviteEmail,
+          })
+          invited = true
+        } catch {
+          invited = false // замовлення вже є; запросити можна з картки клієнта «Люди»
+        }
+      }
+      return { ...res, invited }
+    },
+    onSuccess: () => {
+      invalidateLeads(qc)
+      void qc.invalidateQueries({ queryKey: ['companies'] })
+    },
   })
 }
 

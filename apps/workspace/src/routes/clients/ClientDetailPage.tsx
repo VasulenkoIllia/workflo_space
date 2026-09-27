@@ -25,7 +25,6 @@ import {
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
 import { INTERNAL_STATUS_META, useOrders } from '@/lib/orders'
-import { useOrder } from '@/lib/orderDetail'
 import { type CompanyLoyalty, useCompanyLoyalty, useSetLoyaltyOverride } from '@/lib/loyalty'
 import {
   useClientActivity,
@@ -58,7 +57,7 @@ import {
   useClientRequisites,
   useUpdateClientRequisites,
 } from '@/lib/requisites'
-import { useCompanyProjects } from '@/lib/projects'
+import { useCompanies, useCompanyProjects } from '@/lib/projects'
 import { type WsCharge, useCompanyCharges } from '@/lib/billing'
 import {
   type ClientDocument,
@@ -101,16 +100,16 @@ const TIER_LABEL: Record<LoyaltyTier, string> = {
 const fmtUsd = (v: string | number | null | undefined): string =>
   `$${Number(v ?? 0).toLocaleString('uk-UA', { maximumFractionDigits: 0 })}`
 
-/** Owner — a single client (company): its orders + aggregate stats. Name resolved
- * from one order's detail (no companies endpoint yet — S5). */
+/** A single client (company): its orders + aggregate stats. Name — з реєстру компаній
+ * (D15: раніше бралась із першого замовлення → новий клієнт без замовлень був «Клієнт · id»). */
 export function ClientDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useOrders({ companyId: id, limit: 100 })
   const orders = data?.orders ?? []
-  const firstId = orders[0]?.id ?? ''
-  const { data: sample } = useOrder(firstId)
-  const name = sample?.company?.name ?? `Клієнт · ${id.slice(0, 8)}`
+  const { data: companiesData } = useCompanies()
+  const name =
+    companiesData?.companies.find((c) => c.id === id)?.name ?? `Клієнт · ${id.slice(0, 8)}`
   const { isOwner, can } = useAuth()
   const [tab, setTab] = useState('overview')
 

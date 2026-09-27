@@ -92,6 +92,38 @@ export function useSetClientMemberPermission(companyId: string) {
   })
 }
 
+/**
+ * CORE-FLOWS (D4): агенція заводить компанію-клієнта (clients.manage). Контакт (опційно)
+ * запрошується в портал — перший, хто прийме, стає власником компанії.
+ */
+export function useCreateClient() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { name: string; currency?: string; contactEmail?: string }) => {
+      const { company } = await api.post<{ company: { id: string; name: string } }>(
+        '/workspace/companies',
+        { name: v.name, ...(v.currency ? { currency: v.currency } : {}) }
+      )
+      let invited = false
+      if (v.contactEmail) {
+        try {
+          await api.post(`/workspace/clients/${company.id}/members/invite`, {
+            email: v.contactEmail,
+          })
+          invited = true
+        } catch {
+          invited = false // компанію створено; запросити можна з картки «Люди»
+        }
+      }
+      return { company, invited }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['companies'] })
+      void qc.invalidateQueries({ queryKey: ['ws-orders'] })
+    },
+  })
+}
+
 /** DELETE member — agency owner only. Backend refuses removing the last owner (409). */
 export function useRemoveClientMember(companyId: string) {
   const qc = useQueryClient()

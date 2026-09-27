@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { useAuth } from '@/contexts/AuthContext'
 import { useCompanies } from '@/lib/projects'
 import { useTeam } from '@/lib/payouts'
 import {
@@ -15,6 +16,8 @@ import {
   useLeadActivity,
   useUpdateLead,
 } from '@/lib/leads'
+
+const NEW_COMPANY = '__new__'
 
 // «won» is set only by convert; the free-edit dropdown offers the other stages.
 const STAGE_OPTIONS: { value: Exclude<LeadStatus, 'won'>; label: string }[] = [
@@ -74,6 +77,7 @@ export function LeadDetailPage() {
 
 function LeadEditor({ lead }: { lead: Lead }) {
   const navigate = useNavigate()
+  const { can } = useAuth()
   const update = useUpdateLead()
   const convert = useConvertLead()
   const del = useDeleteLead()
@@ -93,6 +97,11 @@ function LeadEditor({ lead }: { lead: Lead }) {
   })
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
   const [companyId, setCompanyId] = useState('')
+  // CORE-FLOWS (D4): «+ Нова компанія» — назва з ліда, контакт ліда можна одразу запросити
+  const isNew = companyId === NEW_COMPANY
+  const [newName, setNewName] = useState(lead.name)
+  const [invite, setInvite] = useState(Boolean(lead.email))
+  const canInvite = can('clients.manage') && Boolean(lead.email)
 
   const converted = Boolean(lead.convertedOrderId)
 
@@ -131,11 +140,25 @@ function LeadEditor({ lead }: { lead: Lead }) {
       toast.error('Оберіть компанію-клієнта')
       return
     }
+    if (isNew && newName.trim() === '') {
+      toast.error('Вкажіть назву нової компанії')
+      return
+    }
     convert.mutate(
-      { id: lead.id, companyId },
+      isNew
+        ? {
+            id: lead.id,
+            newCompanyName: newName.trim(),
+            ...(canInvite && invite && lead.email ? { inviteEmail: lead.email } : {}),
+          }
+        : { id: lead.id, companyId },
       {
-        onSuccess: () => {
-          toast.success('Лід конвертовано в замовлення')
+        onSuccess: (r) => {
+          toast.success(
+            isNew
+              ? `Створено клієнта й замовлення${r.invited ? ` · запрошення надіслано на ${lead.email}` : ''}`
+              : 'Лід конвертовано в замовлення'
+          )
         },
       }
     )
@@ -275,21 +298,51 @@ function LeadEditor({ lead }: { lead: Lead }) {
             </Link>
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 220 }}>
-              <Select
-                label="Компанія-клієнт"
-                value={companyId}
-                onChange={setCompanyId}
-                options={[
-                  { value: '', label: '— оберіть —' },
-                  ...companies.map((c) => ({ value: c.id, label: c.name })),
-                ]}
-              />
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 220 }}>
+                <Select
+                  label="Компанія-клієнт"
+                  value={companyId}
+                  onChange={setCompanyId}
+                  options={[
+                    { value: '', label: '— оберіть —' },
+                    { value: NEW_COMPANY, label: '+ Нова компанія…' },
+                    ...companies.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
+              </div>
+              {isNew && (
+                <div style={{ minWidth: 220, flex: 1 }}>
+                  <Input
+                    label="Назва нової компанії"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                </div>
+              )}
+              <Button variant="secondary" loading={convert.isPending} onClick={doConvert}>
+                Конвертувати в замовлення
+              </Button>
             </div>
-            <Button variant="secondary" loading={convert.isPending} onClick={doConvert}>
-              Конвертувати в замовлення
-            </Button>
+            {isNew && canInvite && (
+              <label
+                style={{
+                  display: 'inline-flex',
+                  gap: 8,
+                  alignItems: 'center',
+                  fontSize: 13,
+                  color: 'var(--wf-fg-secondary)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={invite}
+                  onChange={(e) => setInvite(e.target.checked)}
+                />
+                Запросити {lead.email} у портал — стане власником компанії
+              </label>
+            )}
           </div>
         )}
       </Card>

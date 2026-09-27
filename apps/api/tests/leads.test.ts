@@ -22,7 +22,7 @@ const db = {
     delete: vi.fn(),
     aggregate: vi.fn().mockResolvedValue({ _max: { position: 3 } }),
   },
-  company: { findFirst: vi.fn() },
+  company: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
   order: { create: vi.fn() },
   $executeRaw: vi.fn().mockResolvedValue(1),
 }
@@ -288,6 +288,45 @@ describe('POST /workspace/leads/:id/convert', () => {
     expect(oArg.data.agency.connect.id).toBe(AGENCY)
     expect(oArg.data.company.connect.id).toBe('company-1')
     expect(oArg.data.title).toBe('Acme deal')
+    await app.close()
+  })
+
+  it('CORE-FLOWS: конвертація в НОВУ компанію — створюється в агенції ліда з унікальним slug', async () => {
+    db.lead.findFirst.mockResolvedValue({ id: 'lead-1', name: 'Acme deal', convertedOrderId: null })
+    db.company.findUnique.mockResolvedValue(null) // slug вільний
+    db.company.create.mockResolvedValue({ id: 'company-new' })
+    db.order.create.mockResolvedValue({ id: 'order-9' })
+    db.lead.update.mockResolvedValue(
+      leadRow({ status: 'won', companyId: 'company-new', convertedOrderId: 'order-9' })
+    )
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/leads/lead-1/convert',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { newCompanyName: 'ТОВ Акме' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.companyId).toBe('company-new')
+    const cArg = db.company.create.mock.calls[0]![0] as {
+      data: { agencyId: string; name: string; slug: string }
+    }
+    expect(cArg.data.agencyId).toBe(AGENCY)
+    expect(cArg.data.name).toBe('ТОВ Акме')
+    expect(cArg.data.slug).toMatch(/^[a-z0-9-]+$/)
+    expect(db.company.findFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('CORE-FLOWS: і companyId, і newCompanyName одночасно → 400', async () => {
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/leads/lead-1/convert',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { companyId: 'company-1', newCompanyName: 'X' },
+    })
+    expect(res.statusCode).toBe(400)
     await app.close()
   })
 

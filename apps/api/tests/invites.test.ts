@@ -378,7 +378,8 @@ describe('POST /invite/:token/accept', () => {
     inviteUpdateMany.mockResolvedValue({ count: 1 }) // atomic claim succeeds
     transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
-        companyMember: { upsert: companyMemberUpsert },
+        // у компанії вже є власник → запрошений стає учасником
+        companyMember: { upsert: companyMemberUpsert, count: vi.fn().mockResolvedValue(1) },
         invite: { updateMany: inviteUpdateMany },
       })
     )
@@ -392,7 +393,42 @@ describe('POST /invite/:token/accept', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.type).toBe('company_member')
-    expect(companyMemberUpsert).toHaveBeenCalled()
+    expect(res.json().data.role).toBe('member')
+    expect(companyMemberUpsert.mock.calls[0][0].create.role).toBe('member')
+    await app.close()
+  })
+
+  it('CORE-FLOWS: компанія без власника (заведена агенцією) → перший прийнятий стає власником', async () => {
+    inviteFindUnique.mockResolvedValue({
+      id: 'inv-2',
+      email: 'member@e.com',
+      type: 'company_member',
+      companyId: 'company-new',
+      permissions: { can_view_billing: true },
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 100000),
+    })
+    profileFindUnique.mockResolvedValue({ id: 'member-1', email: 'member@e.com' })
+    inviteUpdateMany.mockResolvedValue({ count: 1 })
+    transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        companyMember: { upsert: companyMemberUpsert, count: vi.fn().mockResolvedValue(0) },
+        invite: { updateMany: inviteUpdateMany },
+      })
+    )
+    auditLogCreate.mockResolvedValue({})
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/invite/tok-2/accept',
+      headers: { authorization: `Bearer ${tokenFor(app, MEMBER_CLAIMS)}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.role).toBe('owner')
+    const create = companyMemberUpsert.mock.calls.at(-1)?.[0].create
+    expect(create.role).toBe('owner')
+    expect(create.permissions).toEqual({}) // власнику прапорці не потрібні
     await app.close()
   })
 

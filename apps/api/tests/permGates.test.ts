@@ -58,6 +58,8 @@ const MATRIX: [string, string, unknown, ('executor' | 'manager')[]][] = [
   ['POST', '/workspace/billing/charges/generate', { month: '2026-09' }, ['executor', 'manager']],
   ['POST', '/workspace/services', { name: 'Послуга' }, ['executor', 'manager']],
   ['POST', '/workspace/team/invite', { email: 'n@e.com' }, ['executor']],
+  // CORE-FLOWS (D4): завести компанію-клієнта — clients.manage (менеджер може)
+  ['POST', '/workspace/companies', { name: 'ТОВ Нова' }, ['executor']],
 ]
 
 describe('PERM-2 регресійна матриця фінансових гейтів', () => {
