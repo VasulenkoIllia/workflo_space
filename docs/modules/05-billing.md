@@ -592,6 +592,21 @@ PATCH /workspace/settings/exchange-rate — вручну оновити курс
 POST /workspace/settings/exchange-rate/refresh — примусово оновити з НБУ API
 ```
 
+### Workspace — Financial Projects (billing module, 05-ПРОЕКТИ, owner + billing.view)
+
+```
+GET    /workspace/projects                            — список проєктів агенції (опц. ?companyId=uuid)
+GET    /workspace/projects/:id                        — деталі + stats {cycle:{from,to,hoursUsed}, nextCycleAt, openOrders}
+POST   /workspace/projects                            — створити новий проєкт
+PATCH  /workspace/projects/:id                        — оновити проєкт
+```
+
+### Portal — Financial Projects (client side)
+
+```
+GET    /portal/projects                               — список проєктів компанії + stats; nextCycleAt тепер кінець поточного вікна
+```
+
 ### Workspace — Services Management (owner)
 
 ```

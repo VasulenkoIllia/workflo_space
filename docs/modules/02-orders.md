@@ -131,21 +131,21 @@ task-assignees ∪ task-co-assignees ∪ time-loggers ∪ наявні settlemen
 
 ### Workspace (команда)
 
-| Метод    | URL                                        | Опис                                                                     |
-| -------- | ------------------------------------------ | ------------------------------------------------------------------------ |
-| `GET`    | `/orders`                                  | Список всіх замовлень з фільтрами                                        |
-| `GET`    | `/orders/:id`                              | Деталі замовлення (internal view)                                        |
-| `PATCH`  | `/orders/:id/status`                       | Змінити статус (приймання: →done/review→revision — owner/manager)        |
-| `PUT`    | `/orders/:id/reconciliation`               | Звірка годин: білабельні клієнту + оплатні по-виконавцях (owner/manager) |
-| `PATCH`  | `/orders/:id`                              | Редагувати будь-яке поле                                                 |
-| `DELETE` | `/orders/:id`                              | Soft delete                                                              |
-| `PATCH`  | `/orders/:id/assign`                       | Призначити / зняти головного executor (triage)                           |
-| `PUT`    | `/orders/:id/assignees`                    | Замінити список співвиконавців замовлення                                |
-| `GET`    | `/orders/:orderId/tasks`                   | Внутрішні підзадачі (workspace-only)                                     |
-| `POST`   | `/orders/:orderId/tasks`                   | Створити підзадачу                                                       |
-| `PATCH`  | `/orders/:orderId/tasks/:taskId`           | Оновити підзадачу (status/assignee/position/title)                       |
-| `PUT`    | `/orders/:orderId/tasks/:taskId/assignees` | Замінити список співвиконавців підзадачі                                 |
-| `DELETE` | `/orders/:orderId/tasks/:taskId`           | Видалити підзадачу                                                       |
+| Метод    | URL                                        | Опис                                                                                                                                   |
+| -------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET`    | `/orders`                                  | Список всіх замовлень з фільтрами                                                                                                      |
+| `GET`    | `/orders/:id`                              | Деталі замовлення (internal view)                                                                                                      |
+| `PATCH`  | `/orders/:id/status`                       | Змінити статус (приймання: →done/review→revision — owner/manager)                                                                      |
+| `PUT`    | `/orders/:id/reconciliation`               | Звірка годин: білабельні клієнту + оплатні по-виконавцях (owner/manager)                                                               |
+| `PATCH`  | `/orders/:id`                              | Редагувати будь-яке поле                                                                                                               |
+| `DELETE` | `/orders/:id`                              | Soft delete                                                                                                                            |
+| `PATCH`  | `/orders/:id/assign`                       | Призначити / зняти головного executor (triage)                                                                                         |
+| `PUT`    | `/orders/:id/assignees`                    | Замінити список співвиконавців замовлення                                                                                              |
+| `GET`    | `/orders/:orderId/tasks`                   | Внутрішні підзадачі (workspace-only)                                                                                                   |
+| `POST`   | `/orders/:orderId/tasks`                   | Створити підзадачу; body: {title, position?, assigneeId?, teamId?}; teamId: своєї агенції або null; якщо не передано — команда проєкту | tasks.manage (скоуп) |
+| `PATCH`  | `/orders/:orderId/tasks/:taskId`           | Оновити підзадачу (status/assignee/position/title)                                                                                     |
+| `PUT`    | `/orders/:orderId/tasks/:taskId/assignees` | Замінити список співвиконавців підзадачі                                                                                               |
+| `DELETE` | `/orders/:orderId/tasks/:taskId`           | Видалити підзадачу                                                                                                                     |
 
 ### Query параметри для `GET /orders` (workspace)
 

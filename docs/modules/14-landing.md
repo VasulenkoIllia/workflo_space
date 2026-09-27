@@ -33,20 +33,19 @@
 ## Структура сторінок
 
 ```
-workflo.space/
-├── /                      → redirect → /uk/
-├── /uk/                   → Головна (UA)
-├── /en/                   → Головна (EN)
-├── /uk/blog               → Блог (ISR)
-├── /uk/blog/[slug]        → Стаття (ISR)
-├── /en/blog               → Blog (EN)
-├── /uk/pricing            → Ціни
-├── /uk/terms              → Умови використання
-├── /uk/privacy            → Політика конфіденційності
-├── /en/terms              → Terms of Service
-├── /en/privacy            → Privacy Policy
-├── /uk/about              → Про нас (Phase 2)
-└── /api/revalidate        → Internal ISR endpoint
+workflo.space/                       (UA — у корені; EN — лише головна)
+├── /                      → Головна (UA)
+├── /en                    → Головна (EN) · hreflang uk ↔ en, x-default → /
+├── /services, /services/[slug] → Послуги (SSG)
+├── /cases                 → Кейси
+├── /cases/[slug]          → Деталь кейса (тіло — CMS case_study з тим самим slug, інакше контент лендінгу)
+├── /partners/[slug]       → Профіль партнера (SSG)
+├── /blog, /blog/[slug]    → Блог (з публічного API, без кешу)
+├── /about                 → Про мене
+├── /contact               → Форма контакту (тип задачі + бюджет чипами)
+├── /terms, /privacy       → Юр-сторінки (⚠ чернетка з макета — звірити власником)
+├── not-found / error      → Брендовані 404 / 500
+└── /api/health            → health-check
 ```
 
 ---
@@ -406,3 +405,13 @@ New: LandingContent, ConsentLog
 **Відхилено:** А (калькулятор/квіз оцінки), Д (лід-магніти).
 
 **Для ТЗ дизайнеру:** блок відгуків/логотипів (Г); CTA-блок бронювання дзвінка (В).
+
+## UPDATE (27.09.2026) — DSN-8 + DSN-9 ✅
+
+- **DSN-8:** `/cases/[slug]` і `/partners/[slug]` замість мертвих якорів `#project-…`/`#company-…`
+  на головній; брендовані `not-found`/`error`; `/terms` і `/privacy` (+ посилання в статус-барі,
+  sitemap); форма `/contact` — «Тип задачі» + бюджет чипами. ⚠ Юр-тексти
+  (`apps/landing/src/data/legal.ts`) — чернетка з дизайн-макета, потребують звірки власником.
+- **DSN-9:** `/en` (EN-головна з design-v2 `data.js`), перемикач ua/en у статус-барі, hreflang
+  у `<head>` і sitemap. Внутрішні сторінки — поки лише UA. Lighthouse (mobile, prod-збірка):
+  Performance 98–99 · Accessibility 94–96 · Best Practices 96–100 · SEO 100.

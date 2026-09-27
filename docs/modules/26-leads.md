@@ -135,15 +135,15 @@ enum StageKind  { open won lost }
 
 ## 5. API (Workspace, `isInternalTeam` + agency-scoped)
 
-| Метод                   | URL                                           | Опис                                                                        |
-| ----------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET`                   | `/leads`                                      | Канбан/список (groupBy stage; фільтри source/assignee/pipeline; pagination) |
-| `POST`                  | `/leads`                                      | Створити лід (manual)                                                       |
-| `GET`                   | `/leads/:id`                                  | Картка ліда + activities                                                    |
-| `PATCH`                 | `/leads/:id`                                  | Редагувати / перемістити stage / призначити                                 |
-| `POST`                  | `/leads/:id/convert`                          | → Company (+owner)                                                          |
-| `POST`                  | `/leads/:id/activities`                       | Нотатка/контакт                                                             |
-| `GET/POST/PATCH/DELETE` | `/settings/leads/pipelines[/:id]` + `/stages` | Налаштування воронки                                                        |
+| Метод                   | URL                             | Опис                                                                                                 |
+| ----------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET`                   | `/workspace/leads`              | Канбан/список (groupBy stage; фільтри source/assignee/pipeline; pagination)                          |
+| `POST`                  | `/workspace/leads`              | Створити лід (manual)                                                                                |
+| `GET`                   | `/workspace/leads/:id`          | Картка ліда + activities                                                                             |
+| `PATCH`                 | `/workspace/leads/:id`          | Редагувати / перемістити stage / призначити                                                          |
+| `POST`                  | `/workspace/leads/:id/convert`  | → замовлення в наявній (`companyId`) АБО новій (`newCompanyName`) компанії; → `{companyId, orderId}` |
+| `GET`                   | `/workspace/leads/:id/activity` | Таймлайн ліда (створення, стадії, призначення, конвертація)                                          |
+| `GET/POST/PATCH/DELETE` | `/workspace/lead-stages[/:id]`  | Стадії воронки (право `leads.manage`)                                                                |
 
 **Inbound** (публічний, з модуля 27): `POST` із зовнішнього джерела → `Lead` (source-tagged). Див. 27-integrations §2.
 
