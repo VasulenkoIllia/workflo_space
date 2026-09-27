@@ -36,6 +36,8 @@ const LOCALES: { id: Locale; label: string }[] = [
 
 export function SettingsPage() {
   const { user, reload } = useAuth()
+  const isCompanyOwner =
+    user?.companies.find((c) => c.id === user.activeCompanyId)?.role === 'owner'
   const { theme, setTheme } = useTheme()
   const { locale, setLocale } = useI18n()
   const [name, setName] = useState(user?.profile.displayName ?? '')
@@ -131,7 +133,8 @@ export function SettingsPage() {
         cardStyle={{ marginBottom: 16 }}
       />
 
-      <RequisitesSection />
+      {/* PORTAL-MEMBER: реквізити — лише власнику активної компанії (бек теж owner-only) */}
+      {isCompanyOwner && <RequisitesSection />}
 
       <NotificationsSection cardStyle={{ marginBottom: 16 }} />
 

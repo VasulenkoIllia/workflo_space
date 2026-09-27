@@ -2,8 +2,8 @@ import { Icon, type SidebarNavEntry } from '@workflo/ui'
 
 /**
  * Portal sidebar navigation — synced to the design-v2 PORTAL_NAV grouping
- * (`DESIGN_SYSTEM.md §5.13.1`). Unfiltered: the portal has no role-gated nav (a
- * company switcher lives in the footer). New destinations render Placeholder
+ * (`DESIGN_SYSTEM.md §5.13.1`). Фільтрується за правами учасника компанії — filterPortalNav
+ * (PORTAL-MEMBER); company switcher lives in the footer. New destinations render Placeholder
  * until their feature wave. Phase-3 items (help, tour — `DESIGN_TODO §3`) omitted.
  */
 export const PORTAL_NAV: SidebarNavEntry[] = [
@@ -41,6 +41,38 @@ export const PORTAL_NAV: SidebarNavEntry[] = [
   { id: 'support', label: 'Підтримка', icon: <Icon name="inbox" />, href: '/support' },
   { id: 'calendar', label: 'Зустрічі', icon: <Icon name="file" />, href: '/calendar' },
 ]
+
+/**
+ * PORTAL-MEMBER: пункти, яких учасник без прапорця не бачить (власник компанії бачить усе).
+ * `billing` — can_view_billing (бек: can 'billing.view'); `owner` — лише власник (сейф).
+ */
+const NAV_REQUIRES: Record<string, 'billing' | 'owner'> = {
+  projects: 'billing',
+  billing: 'billing',
+  wallet: 'billing',
+  loyalty: 'billing',
+  referrals: 'billing',
+  secrets: 'owner',
+}
+
+export function filterPortalNav(
+  nav: SidebarNavEntry[],
+  access: { isOwner: boolean; canViewBilling: boolean }
+): SidebarNavEntry[] {
+  const allowed = nav.filter((e) => {
+    if (!('id' in e)) return true
+    const need = NAV_REQUIRES[e.id]
+    if (need === 'owner') return access.isOwner
+    if (need === 'billing') return access.canViewBilling
+    return true
+  })
+  // Прибрати заголовки груп, що лишились без пунктів
+  return allowed.filter((e, i) => {
+    if ('id' in e) return true
+    const next = allowed[i + 1]
+    return next != null && 'id' in next
+  })
+}
 
 /**
  * Resolve the active nav id by the LONGEST matching href prefix, so nested paths

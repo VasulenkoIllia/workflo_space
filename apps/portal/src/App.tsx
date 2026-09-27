@@ -4,6 +4,7 @@ import { RegisterPage } from '@/routes/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { BillingGate } from '@/components/CompanyPermGate'
 import { CompanyGate } from '@/components/CompanyGate'
 import { AppLayout } from '@/layouts/AppLayout'
 import { OrdersPage } from '@/routes/orders/OrdersPage'
@@ -54,12 +55,14 @@ export default function App() {
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/orders/new" element={<OrderCreatePage />} />
           <Route path="/orders/:id" element={<OrderDetailPage />} />
-          <Route path="/billing" element={<BillingPage />} />
-          <Route path="/wallet" element={<WalletPage />} />
-          <Route path="/loyalty" element={<LoyaltyPage />} />
-          <Route path="/referrals" element={<ReferralsPage />} />
+          <Route element={<BillingGate />}>
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/loyalty" element={<LoyaltyPage />} />
+            <Route path="/referrals" element={<ReferralsPage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+          </Route>
           <Route path="/team" element={<TeamPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/secrets" element={<SecretsPage />} />
           {/* COV-PRT-1/2: /company — реальна сторінка; /documents — під гейт
               (company-scoped дані; раніше fail-soft-ив порожнім списком) */}

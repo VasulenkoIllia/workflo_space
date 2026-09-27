@@ -453,3 +453,37 @@ export const setPermissionSchema = z
 export type SetPermissionInput = z.infer<typeof setPermissionSchema>
 
 export const permissionRoleSchema = z.enum(['manager', 'lead', 'executor'])
+
+// ── Портал: права учасника компанії-клієнта (PORTAL-MEMBER, 27.09) ────────────
+// Власник компанії має всі завжди; учаснику вмикає власник компанії (або агенція з
+// clients.manage). Зберігаються в CompanyMember.permissions (JSON); читає бекенд `can()`.
+export const COMPANY_PERMISSIONS = [
+  {
+    key: 'can_view_billing',
+    label: 'Бачить фінанси компанії',
+    hint: 'рахунки, оплати, гаманець, бонуси, умови проєктів',
+  },
+  {
+    key: 'can_approve_estimates',
+    label: 'Погоджує кошториси й рахунки',
+    hint: 'рішення від імені компанії',
+  },
+  {
+    key: 'can_invite_members',
+    label: 'Запрошує учасників',
+    hint: 'нові колеги в кабінет компанії',
+  },
+] as const
+
+export type CompanyPermissionKey = (typeof COMPANY_PERMISSIONS)[number]['key']
+
+export const updateCompanyMemberPermissionsSchema = z
+  .object({
+    can_view_billing: z.boolean().optional(),
+    can_approve_estimates: z.boolean().optional(),
+    can_invite_members: z.boolean().optional(),
+  })
+  .strict()
+export type UpdateCompanyMemberPermissionsInput = z.infer<
+  typeof updateCompanyMemberPermissionsSchema
+>

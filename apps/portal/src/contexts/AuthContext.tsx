@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { CompanyPermissionKey } from '@workflo/types'
 import { api, getAccessToken, refreshAccessToken, setAccessToken } from '@/lib/api'
 
 export interface AuthCompany {
@@ -7,6 +8,8 @@ export interface AuthCompany {
   name: string
   slug: string
   role: 'owner' | 'member'
+  /** PORTAL-MEMBER: прапорці учасника (власнику не потрібні — має все). */
+  permissions?: Partial<Record<CompanyPermissionKey, boolean>>
 }
 
 export interface AuthProfile {

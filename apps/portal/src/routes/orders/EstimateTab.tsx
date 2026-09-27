@@ -17,12 +17,15 @@ const APPROVAL_META: Record<
 
 export function EstimateTab({
   order,
+  canDecide,
   deciding,
   failed,
   onApprove,
   onRequestChanges,
 }: {
   order: OrderDetail
+  /** PORTAL-MEMBER: власник компанії або учасник з can_approve_estimates. */
+  canDecide: boolean
   deciding: boolean
   failed: boolean
   onApprove: () => void
@@ -137,7 +140,20 @@ export function EstimateTab({
         </div>
       </div>
 
-      {awaiting && (
+      {awaiting && !canDecide && (
+        <div
+          style={{
+            padding: '14px 16px',
+            borderRadius: 12,
+            background: 'var(--wf-subtle)',
+            fontSize: 13,
+            color: 'var(--wf-fg-secondary)',
+          }}
+        >
+          Кошторис погоджує власник компанії або учасник із правом погодження.
+        </div>
+      )}
+      {awaiting && canDecide && (
         <div
           style={{
             display: 'flex',

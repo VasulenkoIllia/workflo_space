@@ -19,6 +19,7 @@ import {
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 import { DOC_SELECT } from './shared.js'
+import { clientSeesBillingDocs } from '../../auth/companyAccess.js'
 import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
@@ -118,7 +119,10 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
       const access = await requireOrderParticipant(request, request.params.orderId)
       // PERM-2: команда без billing.view не бачить грошових документів; клієнт — лише
       // надіслані/прийняті (раніше бачив і сформовані, ще не надіслані).
-      const hideMoney = access.isInternal && !(await hasPermission(request, 'billing.view'))
+      // PORTAL-MEMBER: учасник компанії без can_view_billing — теж без грошових документів.
+      const hideMoney = access.isInternal
+        ? !(await hasPermission(request, 'billing.view'))
+        : !clientSeesBillingDocs(request.user, access.companyId)
       const documents = await withTenant((tx) =>
         tx.document.findMany({
           where: {
@@ -200,6 +204,13 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
       }
       if (access.isInternal && MONEY_DOC_TYPES.has(doc.type)) {
         await requirePermission(request, 'billing.view')
+      }
+      if (
+        !access.isInternal &&
+        MONEY_DOC_TYPES.has(doc.type) &&
+        !clientSeesBillingDocs(request.user, access.companyId)
+      ) {
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
       }
 
       const data = await withTenant((tx) => buildRenderData(tx, doc))

@@ -14,6 +14,7 @@ import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMo
 import { DOC_TYPE_LABEL } from '../../services/documentRender.js'
 import { agencyOwnerIds, fanOut } from '../../services/recipients.js'
 import { DOC_SELECT } from './shared.js'
+import { clientSeesBillingDocs } from '../../auth/companyAccess.js'
 import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
@@ -37,9 +38,19 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
       // компаніях документи змішувались; без активної — усі свої (back-compat).
       const active = request.user.activeCompanyId
       const scope = active && companyIds.includes(active) ? [active] : companyIds
+      // PORTAL-MEMBER: грошові документи — власнику або учаснику з can_view_billing
+      const billingCompanies = scope.filter((c) => clientSeesBillingDocs(request.user, c))
+      const moneyTypes = ['invoice', 'advance_invoice', 'reconciliation_act', 'monthly_report']
       const documents = await withTenant((tx) =>
         tx.document.findMany({
-          where: { companyId: { in: scope }, status: { in: ['sent', 'accepted'] } },
+          where: {
+            companyId: { in: scope },
+            status: { in: ['sent', 'accepted'] },
+            OR: [
+              { type: { notIn: moneyTypes as never[] } },
+              { companyId: { in: billingCompanies } },
+            ],
+          },
           orderBy: { generatedAt: 'desc' },
           // DSN-5: статус/оплата замовлення — для групування «По замовленнях» + inline «Оплатити»
           select: {
@@ -171,7 +182,8 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
       // PERM-2: місячний звіт містить оплати/борг → команді лише з billing.view
       const isTeam =
         user.activeAgencyId === doc.agencyId && (await hasPermission(request, 'billing.view'))
-      const isCompanyClient = user.memberships.some((m) => m.companyId === doc.companyId)
+      // PORTAL-MEMBER: учаснику компанії — лише з can_view_billing (оплати/борг)
+      const isCompanyClient = clientSeesBillingDocs(user, doc.companyId)
       if (!isTeam && !isCompanyClient) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)
       }

@@ -40,10 +40,12 @@ export interface RequisitesInput {
 
 const KEY = ['portal-requisites'] as const
 
-export function useRequisites() {
+/** enabled=false для учасника (не власника) — бек віддає реквізити лише власнику (403). */
+export function useRequisites(enabled = true) {
   return useQuery({
     queryKey: KEY,
     queryFn: () => api.get<{ requisites: Requisites }>('/portal/company/requisites'),
+    enabled,
   })
 }
 

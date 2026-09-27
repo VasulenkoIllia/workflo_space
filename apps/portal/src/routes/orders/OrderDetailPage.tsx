@@ -17,6 +17,7 @@ import {
   type OrderDetail,
 } from '@/lib/orderDetail'
 import { usePortalSummary } from '@/lib/billing'
+import { useCompanyAccess } from '@/lib/companyAccess'
 import { openDocumentPdf, useOrderDocuments, type OrderDocument } from '@/lib/documents'
 import { deadlineMeta, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { ChatTab } from './ChatTab'
@@ -26,6 +27,9 @@ import { FilesTab } from './FilesTab'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   status_changed: 'змінив статус',
+  approval_requested: 'надіслав кошторис на погодження',
+  approval_approved: 'погодив кошторис',
+  approval_rejected: 'запросив правки до кошторису',
   'order.status_changed': 'змінив статус',
   comment_created: 'залишив коментар',
   'order.comment_created': 'залишив коментар',
@@ -43,6 +47,8 @@ export function OrderDetailPage() {
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
   const [payInfo, setPayInfo] = useState(false)
+  // PORTAL-MEMBER: суми/погодження/оплата — за правами учасника компанії
+  const { canApprove, canViewBilling, seesMoney } = useCompanyAccess()
 
   if (isLoading) return <DetailSkeleton />
   if (isError || !order) {
@@ -63,7 +69,7 @@ export function OrderDetailPage() {
   const meta = CLIENT_STATUS_META[order.clientStatus]
   const dl = deadlineMeta(order.dueDate)
   const awaitingApproval = order.clientStatus === OrderClientStatus.PENDING_APPROVAL
-  const tab = pickedTab ?? (awaitingApproval ? 'estimate' : 'chat')
+  const tab = pickedTab ?? (awaitingApproval && seesMoney ? 'estimate' : 'chat')
 
   return (
     <div>
@@ -96,17 +102,27 @@ export function OrderDetailPage() {
         <div className="wfp-approve">
           <div className="wfp-approve-l">
             <div className="wfp-approve-k">// потрібна ваша дія</div>
-            <div className="wfp-approve-t">Замовлення очікує вашого погодження</div>
+            <div className="wfp-approve-t">
+              {canApprove
+                ? 'Замовлення очікує вашого погодження'
+                : 'Кошторис чекає погодження компанії'}
+            </div>
             <div className="wfp-approve-sub">
-              Оцінка:{' '}
-              <strong>
-                {formatMoney(order.totalAmount)} {order.currency}
-              </strong>
-              . Перегляньте кошторис і погодьте його, щоб команда почала роботу, або запросіть
-              правки з коментарем.
+              {canApprove ? (
+                <>
+                  Оцінка:{' '}
+                  <strong>
+                    {formatMoney(order.totalAmount)} {order.currency}
+                  </strong>
+                  . Перегляньте кошторис і погодьте його, щоб команда почала роботу, або запросіть
+                  правки з коментарем.
+                </>
+              ) : (
+                'Погоджує власник компанії або учасник із правом погодження — роботу почнемо після його рішення.'
+              )}
             </div>
           </div>
-          {tab !== 'estimate' && (
+          {seesMoney && tab !== 'estimate' && (
             <div className="wfp-approve-r">
               <Button variant="primary" onClick={() => setTab('estimate')}>
                 Переглянути кошторис →
@@ -123,15 +139,16 @@ export function OrderDetailPage() {
             onChange={setTab}
             items={[
               { id: 'chat', label: 'Чат' },
-              { id: 'estimate', label: 'Кошторис' },
+              ...(seesMoney ? [{ id: 'estimate', label: 'Кошторис' }] : []),
               { id: 'files', label: 'Файли' },
               { id: 'docs', label: 'Документи' },
             ]}
           />
           {tab === 'chat' && <ChatTab orderId={order.id} />}
-          {tab === 'estimate' && (
+          {tab === 'estimate' && seesMoney && (
             <EstimateTab
               order={order}
+              canDecide={canApprove}
               deciding={decide.isPending}
               failed={decide.isError && !rejecting}
               // фіксуємо таб: після рішення статус міняється, і дефолт-таб «стрибнув» би в Чат
@@ -160,41 +177,43 @@ export function OrderDetailPage() {
             </Card>
           )}
 
-          <Card title="Рахунок" style={{ marginBottom: 16 }}>
-            <div className="wfp-side">
-              <div className="wfp-side-row">
-                <div className="wfp-side-k">до сплати</div>
-                <div className="wfp-money-big">
-                  {formatMoney(order.totalAmount)} {order.currency}
+          {canViewBilling && (
+            <Card title="Рахунок" style={{ marginBottom: 16 }}>
+              <div className="wfp-side">
+                <div className="wfp-side-row">
+                  <div className="wfp-side-k">до сплати</div>
+                  <div className="wfp-money-big">
+                    {formatMoney(order.totalAmount)} {order.currency}
+                  </div>
+                </div>
+                <div className="wfp-side-row">
+                  <div className="wfp-side-k">статус</div>
+                  <div className="wfp-side-v">
+                    {order.paidAt ? (
+                      <span style={{ color: 'var(--wf-accent)' }}>Сплачено ✓</span>
+                    ) : (
+                      'Очікує оплати'
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="wfp-side-row">
-                <div className="wfp-side-k">статус</div>
-                <div className="wfp-side-v">
-                  {order.paidAt ? (
-                    <span style={{ color: 'var(--wf-accent)' }}>Сплачено ✓</span>
-                  ) : (
-                    'Очікує оплати'
-                  )}
-                </div>
-              </div>
-            </div>
-            {/* оплату не пропонуємо, поки кошторис чекає рішення або відхилений */}
-            {!order.paidAt &&
-              order.totalAmount != null &&
-              order.totalAmount > 0 &&
-              order.approvalStatus !== 'pending' &&
-              order.approvalStatus !== 'rejected' && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setPayInfo(true)}
-                  style={{ marginTop: 12, width: '100%' }}
-                >
-                  Оплатити
-                </Button>
-              )}
-          </Card>
+              {/* оплату не пропонуємо, поки кошторис чекає рішення або відхилений */}
+              {!order.paidAt &&
+                order.totalAmount != null &&
+                order.totalAmount > 0 &&
+                order.approvalStatus !== 'pending' &&
+                order.approvalStatus !== 'rejected' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setPayInfo(true)}
+                    style={{ marginTop: 12, width: '100%' }}
+                  >
+                    Оплатити
+                  </Button>
+                )}
+            </Card>
+          )}
 
           <Card title="Деталі" style={{ marginBottom: 16 }}>
             <div className="wfp-side">

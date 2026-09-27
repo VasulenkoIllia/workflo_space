@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { OrderInternalStatus } from '@workflo/types'
+import { OrderInternalStatus, type CompanyPermissionKey } from '@workflo/types'
 import { api } from '@/lib/api'
 import { useOrders, type WorkspaceOrder } from './orders'
 import { useCompanies } from './projects'
@@ -13,6 +13,8 @@ export interface ClientMember {
   email: string
   role: string
   joinedAt: string
+  /** PORTAL-MEMBER: прапорці учасника (власник компанії має все). */
+  permissions?: Partial<Record<CompanyPermissionKey, boolean>>
 }
 
 export function useClientMembers(companyId: string, enabled = true) {
@@ -75,6 +77,18 @@ export function useResetClientMemberPassword(companyId: string) {
   return useMutation({
     mutationFn: (profileId: string) =>
       api.post(`/workspace/clients/${companyId}/members/${profileId}/reset-password`, {}),
+  })
+}
+
+/** PORTAL-MEMBER: агенція (clients.manage) вмикає учаснику компанії права порталу. */
+export function useSetClientMemberPermission(companyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { profileId: string; key: CompanyPermissionKey; on: boolean }) =>
+      api.patch(`/workspace/clients/${companyId}/members/${v.profileId}/permissions`, {
+        [v.key]: v.on,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-members', companyId] }),
   })
 }
 

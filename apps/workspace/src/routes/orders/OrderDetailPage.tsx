@@ -52,6 +52,9 @@ import { TimeTab } from './TimeTab'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   status_changed: 'змінив статус',
+  approval_requested: 'надіслав кошторис на погодження',
+  approval_approved: 'погодив кошторис',
+  approval_rejected: 'запросив правки до кошторису',
   'order.status_changed': 'змінив статус',
   comment_created: 'залишив коментар',
   'order.comment_created': 'залишив коментар',

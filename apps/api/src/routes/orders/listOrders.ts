@@ -3,6 +3,7 @@ import { listOrdersQuerySchema, OrderInternalStatus, OrderPriority } from '@work
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+import { clientSeesMoney } from '../../auth/companyAccess.js'
 import { getPermissions, hasPermission, orderScopeWhere } from '../../auth/permissions.js'
 
 function parseEnumList<T extends string>(
@@ -47,10 +48,10 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
       if (q.companyId) where.companyId = q.companyId
     }
     // Суми замовлень — команді лише з правом на кошторис або фінанси (виконавець — без грошей)
-    const showMoney =
-      !isInternal ||
-      (await hasPermission(request, 'orders.estimate')) ||
-      (await hasPermission(request, 'billing.view'))
+    const showMoney = isInternal
+      ? (await hasPermission(request, 'orders.estimate')) ||
+        (await hasPermission(request, 'billing.view'))
+      : null // клієнт — per-order за компанією (PORTAL-MEMBER)
 
     // Triage filter (variant B): workspace can scope to a specific executor or to
     // unassigned (`assigneeId=none`). Clients can't filter by executor.
@@ -126,7 +127,10 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           ...(isInternal ? { coAssignees: o.coAssignees.map((c) => c.profile) } : {}),
           priority: o.priority,
           dueDate: o.deadline,
-          totalAmount: !showMoney || o.totalAmount == null ? null : Number(o.totalAmount),
+          totalAmount:
+            o.totalAmount == null || !(showMoney ?? clientSeesMoney(user, o.companyId))
+              ? null
+              : Number(o.totalAmount),
           companyId: o.companyId,
           stageCount: o._count.stages,
           createdAt: o.createdAt,

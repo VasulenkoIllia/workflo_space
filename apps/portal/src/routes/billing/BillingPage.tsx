@@ -12,6 +12,7 @@ import {
 } from '@/lib/billing'
 import { num as walletNum, useWallet } from '@/lib/wallet'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCompanyAccess } from '@/lib/companyAccess'
 
 const TIER_LABEL: Record<string, string> = {
   new: 'Новий',
@@ -65,11 +66,13 @@ function ApprovalBadge({ status }: { status: PortalCharge['approvalStatus'] }) {
 
 function ChargeRow({
   c,
+  canDecide,
   onDecide,
   onPayBonus,
   bonusAvailable,
 }: {
   c: PortalCharge
+  canDecide: boolean
   onDecide: (c: PortalCharge) => void
   onPayBonus: (c: PortalCharge) => void
   bonusAvailable: number
@@ -137,7 +140,7 @@ function ChargeRow({
           )}
           {formatMoney(final ?? quote)} {c.currency}
         </div>
-        {pending && (
+        {pending && canDecide && (
           <Button size="sm" variant="primary" onClick={() => onDecide(c)} style={{ marginTop: 6 }}>
             Погодити
           </Button>
@@ -312,6 +315,7 @@ export function BillingPage() {
   const [payingBonus, setPayingBonus] = useState<PortalCharge | null>(null)
   const isCompanyOwner =
     user?.companies.find((c) => c.id === user.activeCompanyId)?.role === 'owner'
+  const { canApprove } = useCompanyAccess()
   const bonusAvailable = isCompanyOwner ? (walletNum(wallet.data?.bonusBalance) ?? 0) : 0
 
   if (summary.isLoading) {
@@ -397,6 +401,7 @@ export function BillingPage() {
                   <ChargeRow
                     key={c.id}
                     c={c}
+                    canDecide={canApprove}
                     onDecide={setDeciding}
                     onPayBonus={setPayingBonus}
                     bonusAvailable={bonusAvailable}

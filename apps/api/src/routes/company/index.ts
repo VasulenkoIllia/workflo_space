@@ -3,6 +3,7 @@ import clientActivityRoute from './clientActivity.js'
 import credentialsRoute from './credentials.js'
 import listCompaniesRoute from './listCompanies.js'
 import clientMembersRoute from './members.js'
+import memberPermissionsRoute from './memberPermissions.js'
 import portalCredentialsRoute from './portalCredentials.js'
 import companyRequisitesRoute from './requisites.js'
 import vaultSharesRoute from './vaultShares.js'
@@ -13,6 +14,7 @@ import vaultSharesRoute from './vaultShares.js'
 const companyRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(companyRequisitesRoute)
   await fastify.register(clientMembersRoute)
+  await fastify.register(memberPermissionsRoute) // PORTAL-MEMBER
   await fastify.register(clientActivityRoute)
   await fastify.register(credentialsRoute)
   await fastify.register(portalCredentialsRoute)

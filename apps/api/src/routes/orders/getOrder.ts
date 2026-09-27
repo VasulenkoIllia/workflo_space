@@ -1,6 +1,7 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
+import { clientSeesMoney } from '../../auth/companyAccess.js'
 import { assertTeamScope } from './access.js'
 import { coversOrder, getPermissions, hasPermission } from '../../auth/permissions.js'
 import { assertSameTenant } from '../../auth/tenant.js'
@@ -131,10 +132,11 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       // PERM-4: команда — лише замовлення в межах orders.view (інакше 404, як чужа компанія)
       if (isInternal) await assertTeamScope(request, order.id, order.agencyId)
-      const showMoney =
-        !isInternal ||
-        (await hasPermission(request, 'orders.estimate')) ||
-        (await hasPermission(request, 'billing.view'))
+      // PERM-4 (команда) + PORTAL-MEMBER (клієнт: власник / фінанси / погодження)
+      const showMoney = isInternal
+        ? (await hasPermission(request, 'orders.estimate')) ||
+          (await hasPermission(request, 'billing.view'))
+        : clientSeesMoney(user, order.companyId)
       const money = (d: unknown) => (showMoney ? num(d) : null)
 
       const clientView = {

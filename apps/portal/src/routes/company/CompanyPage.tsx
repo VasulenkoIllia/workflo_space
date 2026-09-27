@@ -32,7 +32,9 @@ function Row({ k, v }: { k: string; v: string | null | undefined }) {
 export function CompanyPage() {
   const { user } = useAuth()
   const company = user?.companies.find((c) => c.id === user.activeCompanyId) ?? user?.companies[0]
-  const { data: reqData, isLoading: reqLoading } = useRequisites()
+  // PORTAL-MEMBER: юр-дані (IBAN, ЄДРПОУ) — лише власнику компанії
+  const isOwner = company?.role === 'owner'
+  const { data: reqData, isLoading: reqLoading } = useRequisites(isOwner)
   const req = reqData?.requisites
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ['portal-company-members'],
@@ -58,7 +60,11 @@ export function CompanyPage() {
       </Card>
 
       <Card title="Реквізити" style={{ marginBottom: 16 }}>
-        {reqLoading ? (
+        {!isOwner ? (
+          <div style={{ fontSize: 13, color: 'var(--wf-fg-secondary)' }}>
+            Реквізити компанії бачить і змінює власник компанії.
+          </div>
+        ) : reqLoading ? (
           <Skeleton style={{ height: 120 }} />
         ) : (
           <>

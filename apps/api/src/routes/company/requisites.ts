@@ -6,6 +6,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { REQUISITES_SELECT, applyClientRequisites } from '../../services/clientRequisites.js'
 import { requirePermission } from '../../auth/permissions.js'
+import { coercePermissions } from '../../auth/tokens.js'
 
 /**
  * Client legal requisites (06-Б, P-3) — the document "to" party. The client fills/reads
@@ -92,6 +93,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
           select: {
             role: true,
             joinedAt: true,
+            permissions: true, // PORTAL-MEMBER: права учасника
             profile: { select: { id: true, name: true, email: true } },
           },
           orderBy: { joinedAt: 'asc' },
@@ -106,6 +108,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
             email: m.profile.email,
             role: m.role,
             joinedAt: m.joinedAt,
+            permissions: coercePermissions(m.permissions) ?? {},
           })),
         },
       })
@@ -131,6 +134,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
           select: {
             role: true,
             joinedAt: true,
+            permissions: true, // PORTAL-MEMBER: права учасника
             profile: { select: { id: true, name: true, email: true } },
           },
           orderBy: { joinedAt: 'asc' },
@@ -145,6 +149,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
             email: m.profile.email,
             role: m.role,
             joinedAt: m.joinedAt,
+            permissions: coercePermissions(m.permissions) ?? {},
           })),
         },
       })

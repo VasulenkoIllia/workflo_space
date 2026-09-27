@@ -3,6 +3,7 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { loadAgencyMemberships } from '../../auth/memberships.js'
 import { loadPermissionSnapshot } from '../../auth/permissions.js'
+import { coercePermissions } from '../../auth/tokens.js'
 import { twoFactorSetupState } from '../../services/twoFactorPolicy.js'
 
 /**
@@ -41,7 +42,12 @@ const meRoute: FastifyPluginAsync = (fastify) => {
 
     const memberRows = await prisma.companyMember.findMany({
       where: { profileId },
-      select: { companyId: true, role: true, company: { select: { name: true, slug: true } } },
+      select: {
+        companyId: true,
+        role: true,
+        permissions: true, // PORTAL-MEMBER: права учасника (власник — усі)
+        company: { select: { name: true, slug: true } },
+      },
       orderBy: { joinedAt: 'asc' },
     })
 
@@ -91,6 +97,7 @@ const meRoute: FastifyPluginAsync = (fastify) => {
           name: m.company?.name ?? null,
           slug: m.company?.slug ?? null,
           role: m.role,
+          permissions: coercePermissions(m.permissions) ?? {},
         })),
         // Agency/team axis — canon for workspace role gating.
         activeAgencyId,

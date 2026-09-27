@@ -13,7 +13,8 @@ import {
 import { BellDropdown } from '@workflo/app-core'
 import { useAuth } from '@/contexts/AuthContext'
 import { useI18n } from '@/i18n'
-import { PORTAL_NAV, activeNavId } from '@/config/nav'
+import { PORTAL_NAV, activeNavId, filterPortalNav } from '@/config/nav'
+import { useCompanyAccess } from '@/lib/companyAccess'
 import { useNotifications } from '@/lib/notifications'
 import { SidebarCompanyMenu } from '@/components/SidebarCompanyMenu'
 import { EmailVerifyBanner } from '@/components/EmailVerifyBanner'
@@ -40,7 +41,12 @@ export function AppLayout() {
 
   // Unread notifications → «Інбокс» nav badge + bell dot.
   const unread = useNotifications(1).data?.meta.unreadCount ?? 0
-  const navWithBadges = PORTAL_NAV.map((e) =>
+  const { isOwner, canViewBilling } = useCompanyAccess()
+  const nav = useMemo(
+    () => filterPortalNav(PORTAL_NAV, { isOwner, canViewBilling }),
+    [isOwner, canViewBilling]
+  )
+  const navWithBadges = nav.map((e) =>
     'id' in e && e.id === 'inbox' && unread > 0 ? { ...e, badge: unread, badgeAccent: true } : e
   )
 
@@ -66,7 +72,7 @@ export function AppLayout() {
   }, [])
   const commands = useMemo<CommandItem[]>(() => {
     const items: CommandItem[] = []
-    for (const e of PORTAL_NAV) {
+    for (const e of nav) {
       if ('id' in e && e.href) {
         const href = e.href
         items.push({
@@ -79,7 +85,7 @@ export function AppLayout() {
       }
     }
     return items
-  }, [navigate])
+  }, [navigate, nav])
 
   const roleLabel =
     company?.role === 'owner'

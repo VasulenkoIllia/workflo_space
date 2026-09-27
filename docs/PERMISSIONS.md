@@ -20,13 +20,26 @@
   `PUT /workspace/permissions/members/:profileId` (`level: null` — скинути). Audit на кожну зміну.
 - **Бекенд:** `requirePermission(request, key, min?)` (`apps/api/src/auth/permissions.ts`) —
   резолв на запит, кеш 30 с (відкликання діє швидко, не чекає спливу JWT); `invalidatePermissions`
-  при зміні матриці/людини/тімліда/підрозділу. Юніт-тести — `tests/setup/permissionStore.mock.ts`.
+  при зміні матриці/людини/тімліда/підрозділу. **Роль агенції — з БД** (не з токена): пониження
+  ролі чи видалення з агенції діє за ≤30 с (security-review 27.09). Кеш обмежений 5 000 записів.
+  Юніт-тести — `tests/setup/permissionStore.mock.ts`.
+- **Скоуп дій:** для права з рівнем `team`/`own` на конкретному замовленні — `assertTeamScope(request,
+orderId, agencyId, key)` з ключем САМОЇ дії (напр. `orders.assign`), інакше `team` фактично
+  стає `all` (так було з призначенням виконавців до 27.09).
 - **Фронт:** `/auth/me` → `permissions` (ключ → рівень) + `permissionRole`. Меню/маршрути/кнопки
   гейтяться правами; бек однаково перевіряє кожен роут.
 - **Секрети (vault):** поза матрицею — власник бачить усе, решта лише персонально розшарене
   (17-SHARE, з терміном і журналом); менеджер — ні (канон модуля 17).
 - **Портал (клієнт):** окрема вісь — `CompanyMember.permissions` (`can_view_billing`,
-  `can_approve_estimates`, `can_invite_members`), керує власник компанії (PORTAL-MEMBER).
+  `can_approve_estimates`, `can_invite_members`; каталог `COMPANY_PERMISSIONS` у @workflo/types).
+  Власник компанії — усе завжди. Керують: власник компанії (портал «Учасники»,
+  `PATCH /portal/company/members/:id/permissions`, `DELETE /portal/company/members/:id`) і агенція
+  з `clients.manage` (картка клієнта «Люди», `PATCH /workspace/clients/:id/members/:pid/permissions`).
+  Бек: `can()` (`billing.view` → рахунки/гаманець/реферал/проєкти), суми замовлень/кошторису —
+  `clientSeesMoney` (фінанси АБО погодження), грошові документи (рахунки, звірки, місячні звіти) —
+  `clientSeesBillingDocs` (`apps/api/src/auth/companyAccess.ts`). Прапорці читаються з claims
+  токена → зміна діє з наступним оновленням сесії учасника (≤15 хв). Фронт: `useCompanyAccess()`,
+  меню `filterPortalNav`, маршрути `BillingGate`, реквізити лише власнику.
 
 ## 2. Дефолти (рішення власника 27.09)
 

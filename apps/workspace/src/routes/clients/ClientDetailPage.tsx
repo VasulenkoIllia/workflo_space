@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, apiErrorMessage } from '@/lib/api'
 import {
+  COMPANY_PERMISSIONS,
   LoyaltyTier,
   OrderInternalStatus,
   type VaultField,
@@ -31,6 +32,7 @@ import {
   useClientMembers,
   useInviteClientMember,
   useRemoveClientMember,
+  useSetClientMemberPermission,
   useResetClientMemberPassword,
   useUpdateClientMemberRole,
   type ClientActivityItem,
@@ -1013,6 +1015,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
   const remove = useRemoveClientMember(companyId)
   const invite = useInviteClientMember(companyId)
   const resetPw = useResetClientMemberPassword(companyId)
+  const setFlag = useSetClientMemberPermission(companyId)
   const [inviting, setInviting] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   if (!allowed) return null
@@ -1171,6 +1174,50 @@ function PeopleSection({ companyId }: { companyId: string }) {
                   >
                     видалити
                   </button>
+                </div>
+              )}
+
+              {/* PORTAL-MEMBER: права учасника в порталі (власник компанії має все) */}
+              {m.role === 'member' && (
+                <div
+                  style={{
+                    gridColumn: '1 / -1',
+                    display: 'flex',
+                    gap: 14,
+                    flexWrap: 'wrap',
+                    paddingLeft: 38,
+                  }}
+                >
+                  {COMPANY_PERMISSIONS.map((p) => {
+                    const on = m.permissions?.[p.key] === true
+                    return (
+                      <label
+                        key={p.key}
+                        title={p.hint}
+                        className="wfp-mono"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 11,
+                          color: on ? 'var(--wf-fg)' : 'var(--wf-fg-muted)',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={!can('clients.manage') || setFlag.isPending}
+                          onChange={(e) =>
+                            setFlag.mutate(
+                              { profileId: m.profileId, key: p.key, on: e.target.checked },
+                              { onSuccess: () => toast.success('Права учасника оновлено') }
+                            )
+                          }
+                        />
+                        {p.label}
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </div>
