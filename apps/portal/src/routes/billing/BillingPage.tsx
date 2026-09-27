@@ -13,6 +13,7 @@ import {
 import { num as walletNum, useWallet } from '@/lib/wallet'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCompanyAccess } from '@/lib/companyAccess'
+import { RecurringTab } from './RecurringTab'
 
 const TIER_LABEL: Record<string, string> = {
   new: 'Новий',
@@ -310,7 +311,7 @@ export function BillingPage() {
   const payments = usePortalPayments()
   const wallet = useWallet()
   const { user } = useAuth()
-  const [tab, setTab] = useState<'charges' | 'payments'>('charges')
+  const [tab, setTab] = useState<'charges' | 'payments' | 'recurring'>('charges')
   const [deciding, setDeciding] = useState<PortalCharge | null>(null)
   const [payingBonus, setPayingBonus] = useState<PortalCharge | null>(null)
   const isCompanyOwner =
@@ -389,7 +390,18 @@ export function BillingPage() {
             >
               Платежі
             </button>
+            {/* DSN-6: регулярні послуги (абонплата) — design-v2 BillingRecurring */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'recurring'}
+              onClick={() => setTab('recurring')}
+            >
+              Регулярні
+            </button>
           </div>
+
+          {tab === 'recurring' && <RecurringTab charges={chargeList} />}
 
           {tab === 'charges' &&
             (chargeList.length === 0 ? (

@@ -479,7 +479,13 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
         paymentTermsDays: p.paymentTermsDays,
         active: p.active,
         createdAt: p.createdAt.toISOString(),
-        nextCycleAt: p.nextCycleAt ? p.nextCycleAt.toISOString() : null,
+        // DSN-6: клієнту — наступне продовження ПІСЛЯ «зараз»: якщо крон ще не зсунув якір,
+        // сирий nextCycleAt у минулому («наступне списання 01.09» 27.09) — беремо кінець
+        // поточного вікна (currentCycleWindow котить протухлий якір вперед).
+        nextCycleAt:
+          p.nextCycleAt && p.billingCycle !== 'manual'
+            ? cycleHours[i]!.window.to.toISOString()
+            : null,
         cycle: {
           from: cycleHours[i]!.window.from.toISOString(),
           to: cycleHours[i]!.window.to.toISOString(),

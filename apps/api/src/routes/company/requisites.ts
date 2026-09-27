@@ -17,6 +17,60 @@ import { coercePermissions } from '../../auth/tokens.js'
  */
 type AuthUser = Parameters<typeof can>[0]
 
+const EMPTY_ACTIVITY = { activeOrders: 0, comments30d: 0, lastActiveAt: null as Date | null }
+const DAY_MS = 86_400_000
+
+/**
+ * DSN-6 (design-v2 portal-team.jsx): активність учасників компанії — відкриті замовлення,
+ * які людина створила; публічні коментарі в чатах замовлень компанії за 30 днів; остання
+ * активність (останнє оновлення сесії). Три агрегати на весь склад, без N+1.
+ */
+async function memberActivity(companyId: string, profileIds: string[]) {
+  const out = new Map<string, typeof EMPTY_ACTIVITY>()
+  if (profileIds.length === 0) return out
+  const since = new Date(Date.now() - 30 * DAY_MS)
+  const [orders, comments, sessions] = await Promise.all([
+    withTenant((tx) =>
+      tx.order.groupBy({
+        by: ['createdById'],
+        where: {
+          companyId,
+          deletedAt: null,
+          createdById: { in: profileIds },
+          internalStatus: { notIn: ['done', 'cancelled'] },
+        },
+        _count: { _all: true },
+      })
+    ),
+    withTenant((tx) =>
+      tx.orderComment.groupBy({
+        by: ['authorId'],
+        where: {
+          authorId: { in: profileIds },
+          isInternal: false,
+          createdAt: { gte: since },
+          order: { companyId },
+        },
+        _count: { _all: true },
+      })
+    ),
+    prisma.refreshToken.groupBy({
+      by: ['profileId'],
+      where: { profileId: { in: profileIds } },
+      _max: { createdAt: true },
+    }),
+  ])
+  const get = (id: string) => {
+    const cur = out.get(id) ?? { ...EMPTY_ACTIVITY }
+    out.set(id, cur)
+    return cur
+  }
+  for (const o of orders) get(o.createdById).activeOrders = o._count._all
+  for (const c of comments) get(c.authorId).comments30d = c._count._all
+  for (const r of sessions) get(r.profileId).lastActiveAt = r._max.createdAt
+  return out
+}
+
 const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
   function activeCompany(user: AuthUser): { agencyId: string; companyId: string } {
     const agencyId = requireActiveAgency(user)
@@ -99,6 +153,10 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
           orderBy: { joinedAt: 'asc' },
         })
       )
+      const activity = await memberActivity(
+        companyId,
+        members.map((m) => m.profile.id)
+      )
       return reply.send({
         success: true,
         data: {
@@ -109,6 +167,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
             role: m.role,
             joinedAt: m.joinedAt,
             permissions: coercePermissions(m.permissions) ?? {},
+            ...(activity.get(m.profile.id) ?? EMPTY_ACTIVITY),
           })),
         },
       })

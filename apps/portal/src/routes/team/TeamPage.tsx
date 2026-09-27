@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCompanyAccess } from '@/lib/companyAccess'
 import { formatDate } from '@/lib/format'
+import { LoadError } from '@workflo/app-core'
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/
 
@@ -18,7 +19,13 @@ interface CompanyMember {
   joinedAt: string
   /** PORTAL-MEMBER: прапорці учасника (у власника порожні — має все). */
   permissions?: Partial<Record<CompanyPermissionKey, boolean>>
+  /** DSN-6: активність — відкриті замовлення, які створив; коментарі за 30 днів; остання сесія. */
+  activeOrders?: number
+  comments30d?: number
+  lastActiveAt?: string | null
 }
+
+type RoleFilter = 'all' | 'owner' | 'member'
 
 const MEMBERS_KEY = ['portal-company-members'] as const
 
@@ -33,9 +40,11 @@ export function TeamPage() {
   const { company, isOwner, canInvite } = useCompanyAccess()
   const [email, setEmail] = useState('')
   const [removing, setRemoving] = useState<CompanyMember | null>(null)
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const qc = useQueryClient()
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: MEMBERS_KEY,
     queryFn: () => api.get<{ members: CompanyMember[] }>('/portal/company/members'),
   })
@@ -69,6 +78,17 @@ export function TeamPage() {
   })
 
   const memberCount = members.filter((m) => m.role === 'member').length
+  const q = search.trim().toLowerCase()
+  const shown = members.filter(
+    (m) =>
+      (roleFilter === 'all' || m.role === roleFilter) &&
+      (q === '' || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+  )
+  const totalActive = members.reduce((a, m) => a + (m.activeOrders ?? 0), 0)
+  const totalComments = members.reduce((a, m) => a + (m.comments30d ?? 0), 0)
+  const withBilling = members.filter(
+    (m) => m.role === 'owner' || m.permissions?.can_view_billing === true
+  ).length
 
   return (
     <div style={{ maxWidth: 820 }}>
@@ -113,17 +133,59 @@ export function TeamPage() {
         </Card>
       )}
 
+      {members.length > 0 && (
+        <>
+          {/* DSN-6 · design-v2 PortalTeam: KPI-ряд + пошук і фільтр ролей */}
+          <div className="wfp-stats" style={{ marginBottom: 16 }}>
+            <Stat k="учасників" v={members.length} sub={`1 власник · ${memberCount} учасн.`} />
+            <Stat k="відкритих замовлень" v={totalActive} sub="створені командою" accent />
+            <Stat k="коментарів · 30 днів" v={totalComments} sub="у чатах замовлень" />
+            <Stat
+              k="бачать фінанси"
+              v={`${withBilling} / ${members.length}`}
+              sub="власник + з правом"
+            />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ flex: '1 1 220px', maxWidth: 320 }}>
+              <Input
+                placeholder="Шукати учасника…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {(['all', 'owner', 'member'] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                className="wfp-pill"
+                data-on={roleFilter === r || undefined}
+                onClick={() => setRoleFilter(r)}
+              >
+                {r === 'all' ? 'всі ролі' : r === 'owner' ? 'власник' : 'учасники'}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {isLoading ? (
         <div style={{ display: 'grid', gap: 8 }}>
           <Skeleton style={{ height: 64 }} />
           <Skeleton style={{ height: 64 }} />
         </div>
       ) : isError ? (
-        <EmptyState
-          glyph="// помилка"
-          title="Не вдалося завантажити учасників"
-          description="Оновіть сторінку або спробуйте пізніше."
-        />
+        <LoadError what="учасників" onRetry={() => void refetch()} />
+      ) : shown.length === 0 && members.length > 0 ? (
+        <EmptyState title="Нікого не знайдено" description="Змініть пошук або фільтр ролі." />
       ) : members.length === 0 ? (
         <EmptyState
           title="Поки лише ви"
@@ -131,7 +193,7 @@ export function TeamPage() {
         />
       ) : (
         <div>
-          {members.map((m) => {
+          {shown.map((m) => {
             const me = m.profileId === myId
             const editable = isOwner && m.role === 'member' && !me
             return (
@@ -139,7 +201,7 @@ export function TeamPage() {
                 key={m.profileId}
                 className="wfp-member-row"
                 data-me={me || undefined}
-                style={{ gridTemplateColumns: '44px minmax(0, 1fr) auto auto' }}
+                style={{ gridTemplateColumns: '44px minmax(0, 1fr) auto auto auto' }}
               >
                 <span
                   className="wfp-member-row-av"
@@ -161,6 +223,18 @@ export function TeamPage() {
                   >
                     {m.email} · з {formatDate(m.joinedAt)}
                   </div>
+                </div>
+                <div
+                  className="wfp-mono"
+                  style={{ display: 'grid', gap: 2, fontSize: 11, textAlign: 'right' }}
+                  title="відкриті замовлення, які створив · коментарі за 30 днів · остання активність"
+                >
+                  <span style={{ color: 'var(--wf-fg)' }}>
+                    {m.activeOrders ?? 0} відкр. · {m.comments30d ?? 0} коментарів
+                  </span>
+                  <span style={{ color: 'var(--wf-fg-muted)' }}>
+                    {m.lastActiveAt ? `активність ${formatDate(m.lastActiveAt)}` : 'ще не входив'}
+                  </span>
                 </div>
                 <span
                   className={`wfp-role-pill wfp-role-pill--${m.role === 'owner' ? 'owner' : 'executor'}`}
@@ -291,5 +365,27 @@ function initials(name: string): string {
       .join('')
       .slice(0, 2)
       .toUpperCase() || '?'
+  )
+}
+
+function Stat({
+  k,
+  v,
+  sub,
+  accent,
+}: {
+  k: string
+  v: string | number
+  sub: string
+  accent?: boolean
+}) {
+  return (
+    <div className="wfp-stat">
+      <div className="wfp-stat-k">{k}</div>
+      <div className={`wfp-stat-v${accent ? ' wfp-stat-v--accent' : ''}`}>{v}</div>
+      <div className="wfp-mono" style={{ fontSize: 10.5, color: 'var(--wf-fg-muted)' }}>
+        {sub}
+      </div>
+    </div>
   )
 }

@@ -7,7 +7,15 @@ const memberFindUnique = vi.fn()
 const memberUpdate = vi.fn()
 const memberDelete = vi.fn()
 const db = {
-  companyMember: { findUnique: memberFindUnique, update: memberUpdate, delete: memberDelete },
+  companyMember: {
+    findUnique: memberFindUnique,
+    update: memberUpdate,
+    delete: memberDelete,
+    findMany: vi.fn(),
+  },
+  order: { groupBy: vi.fn() },
+  orderComment: { groupBy: vi.fn() },
+  refreshToken: { groupBy: vi.fn() },
   company: { findFirst: vi.fn() },
   document: { findFirst: vi.fn() },
 }
@@ -160,5 +168,47 @@ describe('PORTAL-MEMBER: суми й грошові документи учас�
     })
     await app.close()
     expect(res.statusCode).toBe(403)
+  })
+})
+
+describe('DSN-6: активність учасників у GET /portal/company/members', () => {
+  it('рахує відкриті замовлення, коментарі за 30 днів і останню активність — у межах компанії', async () => {
+    db.companyMember.findMany.mockResolvedValue([
+      {
+        role: 'owner',
+        joinedAt: new Date('2026-06-01'),
+        permissions: {},
+        profile: { id: 'owner-1', name: 'Власник', email: 'o@e.com' },
+      },
+      {
+        role: 'member',
+        joinedAt: new Date('2026-07-01'),
+        permissions: { can_view_billing: true },
+        profile: { id: 'm-1', name: 'Учасник', email: 'm@e.com' },
+      },
+    ])
+    db.order.groupBy.mockResolvedValue([{ createdById: 'm-1', _count: { _all: 2 } }])
+    db.orderComment.groupBy.mockResolvedValue([{ authorId: 'owner-1', _count: { _all: 5 } }])
+    const seen = new Date('2026-09-26T10:00:00Z')
+    db.refreshToken.groupBy.mockResolvedValue([{ profileId: 'm-1', _max: { createdAt: seen } }])
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/company/members',
+      headers: { authorization: `Bearer ${app.jwt.sign(COMPANY_OWNER as never)}` },
+    })
+    await app.close()
+    expect(res.statusCode).toBe(200)
+    const [owner, member] = res.json().data.members
+    expect(owner).toMatchObject({ activeOrders: 0, comments30d: 5, lastActiveAt: null })
+    expect(member).toMatchObject({ activeOrders: 2, comments30d: 0 })
+    expect(new Date(member.lastActiveAt).toISOString()).toBe(seen.toISOString())
+    // агрегати — лише по цій компанії й публічних коментарях
+    expect(db.order.groupBy.mock.calls[0][0].where.companyId).toBe('company-1')
+    expect(db.orderComment.groupBy.mock.calls[0][0].where).toMatchObject({
+      isInternal: false,
+      order: { companyId: 'company-1' },
+    })
   })
 })

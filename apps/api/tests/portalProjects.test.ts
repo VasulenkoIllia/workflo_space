@@ -102,6 +102,38 @@ describe('GET /portal/projects — client reads own projects', () => {
     await app.close()
   })
 
+  it('DSN-6: протухлий якір циклу (крон ще не зсунув) → nextCycleAt клієнту в майбутньому', async () => {
+    projectFindMany.mockResolvedValue([
+      {
+        id: 'pr2',
+        name: 'Абонплата',
+        type: 'support',
+        billingModel: 'fixed_monthly_advance',
+        currency: 'USD',
+        abonAmount: Dec('300'),
+        clientHourlyRate: null,
+        billingCycle: 'monthly_day_n',
+        includedHoursCap: null,
+        paymentTermsDays: 7,
+        active: true,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        nextCycleAt: new Date('2020-01-01T00:00:00Z'), // давно в минулому
+      },
+    ])
+    timeLogAggregate.mockResolvedValue({ _sum: { hours: null } })
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/portal/projects',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    const p = res.json().data.projects[0]
+    expect(new Date(p.nextCycleAt).getTime()).toBeGreaterThan(Date.now())
+    expect(p.nextCycleAt).toBe(p.cycle.to)
+    expect(new Date(p.nextCycleAt).getUTCDate()).toBe(1) // день якоря збережено
+    await app.close()
+  })
+
   it('is 400 when the account has no active company', async () => {
     const { app, token } = await authed({ ...CLIENT, activeCompanyId: null })
     const res = await app.inject({
