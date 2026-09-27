@@ -369,10 +369,9 @@ export function BillingPage() {
         />
       </div>
 
-      <div
-        style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18, alignItems: 'start' }}
-      >
-        <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+        {/* flex-wrap: на телефоні «Як оплатити» стає під список, а не обрізається */}
+        <div style={{ flex: '999 1 420px', minWidth: 0 }}>
           <div className="wfp-od-tabs" role="tablist" style={{ marginBottom: 4 }}>
             <button
               type="button"
@@ -456,7 +455,7 @@ export function BillingPage() {
         </div>
 
         {/* Sticky pay-to requisites card */}
-        <Card title="Як оплатити">
+        <Card title="Як оплатити" style={{ flex: '1 1 280px', minWidth: 0 }}>
           {s.paymentSettings == null ? (
             <div style={{ fontSize: 13, color: 'var(--wf-fg-muted)' }}>
               Реквізити ще не вказані.
