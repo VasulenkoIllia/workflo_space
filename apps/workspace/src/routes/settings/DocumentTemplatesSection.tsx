@@ -101,7 +101,6 @@ export function DocumentTemplatesSection() {
       setDirty(false)
       void qc.invalidateQueries({ queryKey: ['doc-templates'] })
     },
-    onError: () => toast.error('Не вдалося зберегти шаблон'),
   })
   const reset = useMutation({
     mutationFn: () => api.delete(`/workspace/agency/document-templates/${type}`),
@@ -469,7 +468,6 @@ export function EmailTemplatesSection() {
       setDirty(false)
       void qc.invalidateQueries({ queryKey: ['email-templates'] })
     },
-    onError: () => toast.error('Не вдалося зберегти'),
   })
   const reset = useMutation({
     mutationFn: () => api.delete(`/workspace/agency/email-templates/${event}`),

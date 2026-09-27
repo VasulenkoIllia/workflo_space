@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
-import { ApiError } from '@/lib/api'
 import {
   type AnnouncementAudience,
   useAnnouncementsAdmin,
@@ -280,8 +279,6 @@ function BroadcastsSection() {
                 toast.success('Розсилку поставлено в чергу — листи підуть за хвилину')
                 setEditing(null)
               },
-              onError: (err) =>
-                toast.error(err instanceof ApiError ? err.message : 'Не вдалося надіслати'),
             })
           }
         />
@@ -322,8 +319,6 @@ function BroadcastModal({
           setSavedId(r.broadcast.id)
           then?.(r.broadcast.id)
         },
-        onError: (err) =>
-          toast.error(err instanceof ApiError ? err.message : 'Не вдалося зберегти'),
       }
     )
 
@@ -471,8 +466,6 @@ function CreateModal({ onClose }: { onClose: () => void }) {
                     toast.success('Чернетку створено — опублікуй, щоб показати банер')
                     onClose()
                   },
-                  onError: (err) =>
-                    toast.error(err instanceof ApiError ? err.message : 'Не вдалося створити'),
                 }
               )
             }

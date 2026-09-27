@@ -114,7 +114,6 @@ export function NotificationsSection({ cardStyle }: { cardStyle?: CSSProperties 
     )
     save.mutate(preferences, {
       onSuccess: () => toast.success('Налаштування сповіщень збережено'),
-      onError: () => toast.error('Не вдалося зберегти'),
     })
   }
 
@@ -210,7 +209,6 @@ function QuietDigestBlock({
   }) =>
     saveQuiet.mutate(body, {
       onSuccess: () => toast.success('Збережено'),
-      onError: () => toast.error('Не вдалося зберегти'),
     })
 
   return (
@@ -343,7 +341,6 @@ export function TelegramSection({
         // The link completes async via the bot — re-check shortly after the user returns.
         setTimeout(() => void qc.invalidateQueries({ queryKey: ['telegram-status'] }), 8000)
       },
-      onError: () => toast.error('Не вдалося створити посилання'),
     })
 
   return (
@@ -445,7 +442,6 @@ export function TwoFactorSection({
         setCode('')
         toast.success('Двофакторну автентифікацію увімкнено')
       },
-      onError: () => toast.error('Невірний код — спробуйте ще раз'),
     })
   }
 
@@ -458,7 +454,6 @@ export function TwoFactorSection({
           setBackupCodes(null)
           toast.success('2FA вимкнено')
         },
-        onError: () => toast.error('Потрібен код 2FA або пароль акаунта'),
       }
     )
   }
@@ -649,7 +644,6 @@ export function SessionsSection({ cardStyle }: { cardStyle?: CSSProperties }) {
                   onClick={() =>
                     revoke.mutate(s.id, {
                       onSuccess: () => toast.success('Сесію завершено'),
-                      onError: () => toast.error('Не вдалося завершити сесію'),
                     })
                   }
                 >
@@ -666,7 +660,6 @@ export function SessionsSection({ cardStyle }: { cardStyle?: CSSProperties }) {
                 onClick={() =>
                   revokeOthers.mutate(undefined, {
                     onSuccess: (r) => toast.success(`Завершено сесій: ${r.revoked}`),
-                    onError: () => toast.error('Не вдалося завершити сесії'),
                   })
                 }
               >
@@ -745,7 +738,6 @@ export function LinkedAccountsSection({
                       setPwd('')
                       toast.success('Google відвʼязано')
                     },
-                    onError: () => toast.error('Невірний пароль'),
                   }
                 )
               }
@@ -884,8 +876,6 @@ export function EmailChangeSection({
           setPassword('')
           toast.success('Лист підтвердження надіслано на нову адресу')
         },
-        onError: (err) =>
-          toast.error(err instanceof ApiError ? err.message : 'Не вдалося надіслати запит'),
       }
     )
   }

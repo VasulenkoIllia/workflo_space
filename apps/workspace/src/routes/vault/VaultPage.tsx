@@ -13,6 +13,7 @@ import { SecretRow } from '@/components/SecretRow'
 import { VaultStepUpModal } from '@/components/VaultStepUpModal'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatDate } from '@/lib/format'
+import { LoadError } from '@workflo/app-core'
 
 /** Global credentials vault (module 17-ГЛОБАЛ + 17-SHARE). Owner: every client's secrets with
  * client/service/search filters + CRUD. Executor: read-only view of the secrets shared with
@@ -20,7 +21,7 @@ import { formatDate } from '@/lib/format'
  * route. Reveal/revoke/delete route back to per-company endpoints via each row's companyId. */
 export function VaultPage() {
   const { isOwner } = useAuth()
-  const { data, isLoading } = useGlobalVault()
+  const { data, isLoading, isError, refetch } = useGlobalVault()
   const revoke = useRevokeGlobal()
   const del = useDeleteGlobal()
   const setExpiry = useSetCredentialExpiry()
@@ -116,6 +117,8 @@ export function VaultPage() {
 
       {isLoading ? (
         <Skeleton style={{ height: 280 }} />
+      ) : isError ? (
+        <LoadError what="секрети" onRetry={() => void refetch()} />
       ) : all.length === 0 ? (
         <EmptyState
           glyph="// vault"

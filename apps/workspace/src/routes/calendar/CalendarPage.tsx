@@ -333,7 +333,6 @@ function CreateEventModal({ onClose }: { onClose: () => void }) {
         toast.success('Зустріч створено, запрошення надіслано')
         onClose()
       },
-      onError: () => toast.error('Не вдалося створити (перевірте час/учасників)'),
     })
   }
 
@@ -531,7 +530,6 @@ function EventDetailModal({ event, onClose }: { event: CalendarEventDto; onClose
             toast.success('Зустріч оновлено')
             setEditing(false)
           },
-          onError: () => toast.error('Не вдалося оновити'),
         }
       )
     }

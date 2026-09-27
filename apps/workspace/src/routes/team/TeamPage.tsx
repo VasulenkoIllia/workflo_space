@@ -350,7 +350,6 @@ function DepartmentsTab({
                         {
                           onSuccess: () =>
                             toast.success(v ? 'Тімліда призначено' : 'Тімліда знято'),
-                          onError: () => toast.error('Лід має бути членом команди'),
                         }
                       )
                     }

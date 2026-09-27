@@ -2,6 +2,7 @@ import { Button, Card, EmptyState, Skeleton } from '@workflo/ui'
 import { toast } from 'sonner'
 import { useMyMeetings, useRespondMeeting, type PortalMeeting } from '@/lib/calendar'
 import { useAuth } from '@/contexts/AuthContext'
+import { LoadError } from '@workflo/app-core'
 
 const RESP_LABEL: Record<string, string> = {
   pending: 'очікує відповіді',
@@ -10,7 +11,7 @@ const RESP_LABEL: Record<string, string> = {
 }
 
 export function CalendarPage() {
-  const { data: meetings, isLoading } = useMyMeetings()
+  const { data: meetings, isLoading, isError, refetch } = useMyMeetings()
 
   return (
     <div>
@@ -23,6 +24,8 @@ export function CalendarPage() {
       </div>
       {isLoading ? (
         <Skeleton style={{ height: 160 }} />
+      ) : isError ? (
+        <LoadError what="зустрічі" onRetry={() => void refetch()} />
       ) : (meetings ?? []).length === 0 ? (
         <EmptyState
           title="Зустрічей немає"

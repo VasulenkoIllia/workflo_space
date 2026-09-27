@@ -640,7 +640,6 @@ export function OrderChat({ orderId, currentUserId, capabilities, upload }: Orde
       { commentId: editing.id, content: editing.content.trim() },
       {
         onSuccess: () => setEditing(null),
-        onError: () => toast.error('Не вдалося зберегти (вікно 15 хв могло минути)'),
       }
     )
   }

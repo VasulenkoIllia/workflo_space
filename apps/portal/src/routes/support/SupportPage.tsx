@@ -10,6 +10,7 @@ import {
   useTickets,
   type SupportTicket,
 } from '@/lib/support'
+import { LoadError } from '@workflo/app-core'
 
 const STATUS_META: Record<
   string,
@@ -28,7 +29,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 }
 
 export function SupportPage() {
-  const { data: tickets, isLoading } = useTickets()
+  const { data: tickets, isLoading, isError, refetch } = useTickets()
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -55,6 +56,8 @@ export function SupportPage() {
 
       {isLoading ? (
         <Skeleton style={{ height: 160 }} />
+      ) : isError ? (
+        <LoadError what="звернення" onRetry={() => void refetch()} />
       ) : (tickets ?? []).length === 0 ? (
         <EmptyState
           title="Звернень ще немає"

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button, EmptyState, Icon, Input, Modal, Skeleton, StatusDot } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
-import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import { CLIENT_STATUS_META } from '@/lib/orders'
 import {
@@ -90,8 +89,6 @@ export function DocumentsPage() {
           setAccepting(null)
           setFullName('')
         },
-        onError: (err) =>
-          toast.error(err instanceof ApiError ? err.message : 'Не вдалося прийняти документ'),
       }
     )
   }

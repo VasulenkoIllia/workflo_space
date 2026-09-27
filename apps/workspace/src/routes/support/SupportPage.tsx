@@ -12,6 +12,7 @@ import {
   usePatchTicket,
   type WsTicket,
 } from '@/lib/support'
+import { LoadError } from '@workflo/app-core'
 
 const STATUS_META: Record<
   string,
@@ -44,7 +45,7 @@ const ASSIGNEE_OPTS = [
 export function SupportPage() {
   const [status, setStatus] = useState('')
   const [assignee, setAssignee] = useState('')
-  const { data: tickets, isLoading } = useWsTickets({ status, assignee })
+  const { data: tickets, isLoading, isError, refetch } = useWsTickets({ status, assignee })
   const [selected, setSelected] = useState<string | null>(null)
 
   return (
@@ -77,6 +78,8 @@ export function SupportPage() {
         <div>
           {isLoading ? (
             <Skeleton style={{ height: 200 }} />
+          ) : isError ? (
+            <LoadError what="звернення" onRetry={() => void refetch()} />
           ) : (tickets ?? []).length === 0 ? (
             <EmptyState title="Тікетів немає" description="За цим фільтром звернень немає." />
           ) : (

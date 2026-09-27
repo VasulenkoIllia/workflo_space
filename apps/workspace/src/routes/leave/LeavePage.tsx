@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { Select } from '@/components/Select'
 import { useAuth } from '@/contexts/AuthContext'
-import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
   LEAVE_STATUS_BADGE,
@@ -17,6 +16,7 @@ import {
   type LeaveRequest,
   type LeaveType,
 } from '@/lib/leave'
+import { LoadError } from '@workflo/app-core'
 
 /**
  * S13-04/05 LEAVE (дизайн calendar-plus WsLeaves): відсутності команди.
@@ -26,7 +26,7 @@ import {
 export function LeavePage() {
   const { user, isOwner } = useAuth()
   const myId = user?.profile.id
-  const { data, isLoading } = useLeaves()
+  const { data, isLoading, isError, refetch } = useLeaves()
   const balance = useLeaveBalance()
   const decide = useDecideLeave()
   const cancel = useCancelLeave()
@@ -119,8 +119,6 @@ export function LeavePage() {
                           { id: l.id, action: 'approve' },
                           {
                             onSuccess: () => toast.success('Погоджено'),
-                            onError: (err) =>
-                              toast.error(err instanceof ApiError ? err.message : 'Не вдалося'),
                           }
                         )
                       }
@@ -142,6 +140,8 @@ export function LeavePage() {
         <Card title={canReview ? 'Усі заявки' : 'Мої заявки'}>
           {isLoading ? (
             <Skeleton style={{ height: 160 }} />
+          ) : isError ? (
+            <LoadError what="відсутності" onRetry={() => void refetch()} />
           ) : leaves.length === 0 ? (
             <EmptyState
               glyph="// 🌴"
@@ -253,8 +253,6 @@ function CreateLeaveModal({ onClose }: { onClose: () => void }) {
                     toast.success('Заявку подано — очікує погодження')
                     onClose()
                   },
-                  onError: (err) =>
-                    toast.error(err instanceof ApiError ? err.message : 'Не вдалося подати'),
                 }
               )
             }
@@ -326,8 +324,6 @@ function RejectModal({ leave, onClose }: { leave: LeaveRequest; onClose: () => v
                     toast.success('Відхилено')
                     onClose()
                   },
-                  onError: (err) =>
-                    toast.error(err instanceof ApiError ? err.message : 'Не вдалося'),
                 }
               )
             }

@@ -1,6 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LoadError } from '@workflo/app-core'
 import { Tabs, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
 import { isoDay } from '@/lib/finance'
 import { formatDate, formatDateTime } from '@/lib/format'
@@ -217,8 +218,9 @@ function buildRetentionTables(r: RetentionReport): ExportTable[] {
 
 /** S11-07: retention — життєвий цикл клієнтської бази (без вікна дат). */
 function RetentionSection() {
-  const { data, isLoading } = useRetentionReport()
+  const { data, isLoading, isError, refetch } = useRetentionReport()
   if (isLoading) return <Skeleton style={{ height: 240 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (!data) return null
   const risky = data.activity.atRisk + data.activity.churned
   return (
@@ -318,8 +320,9 @@ function RetentionSection() {
 }
 
 function RevenueSection({ from, to }: { from: string; to: string }) {
-  const { data, isLoading } = useRevenueReport(from, to)
+  const { data, isLoading, isError, refetch } = useRevenueReport(from, to)
   if (isLoading) return <Skeleton style={{ height: 240 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (!data) return null
   return (
     <Card
@@ -450,8 +453,9 @@ function RevenueSection({ from, to }: { from: string; to: string }) {
 
 /** SLA-compliance блок (S11): загальні % + розріз по виконавцях + список порушень. */
 function SlaSection({ from, to }: { from: string; to: string }) {
-  const { data, isLoading } = useSlaReport(from, to)
+  const { data, isLoading, isError, refetch } = useSlaReport(from, to)
   if (isLoading) return <Skeleton style={{ height: 200 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (!data || data.total === 0) {
     return (
       <Card title="SLA-виконання" style={{ marginBottom: 20 }}>
@@ -548,8 +552,9 @@ function SlaSection({ from, to }: { from: string; to: string }) {
 
 /** Джерела лідів (S11): utm-source → воронка → гроші (per-currency, без зшивання курсів). */
 function LeadSourcesSection({ from, to }: { from: string; to: string }) {
-  const { data, isLoading } = useLeadSourceReport(from, to)
+  const { data, isLoading, isError, refetch } = useLeadSourceReport(from, to)
   if (isLoading) return <Skeleton style={{ height: 200 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (!data || data.totalLeads === 0) {
     return (
       <Card title="Джерела лідів" style={{ marginBottom: 20 }}>
@@ -826,9 +831,10 @@ export function ReportsPage() {
 
 /** DSN-2: агрегація по підрозділах — години · throughput · cycle · utilization. */
 function DepartmentsTab({ from, to }: { from: string; to: string }) {
-  const { data, isLoading } = useDepartmentsReport(from, to)
+  const { data, isLoading, isError, refetch } = useDepartmentsReport(from, to)
   const rows = data?.departments ?? []
   if (isLoading) return <Skeleton style={{ height: 220 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (rows.length === 0)
     return (
       <EmptyState
@@ -945,9 +951,10 @@ function DepartmentsTab({ from, to }: { from: string; to: string }) {
 
 /** DSN-2: timesheet — стрічка записів часу, згрупована по днях з денними підсумками. */
 function TimesheetTab({ from, to }: { from: string; to: string }) {
-  const { data, isLoading } = useTimesheetReport(from, to)
+  const { data, isLoading, isError, refetch } = useTimesheetReport(from, to)
   const entries = data?.entries ?? []
   if (isLoading) return <Skeleton style={{ height: 260 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   if (entries.length === 0)
     return <EmptyState title="Записів немає" description="За обраний період час не логувався." />
   const totalH = entries.reduce((s, e) => s + e.hours, 0)
@@ -1059,9 +1066,10 @@ function TimesheetTab({ from, to }: { from: string; to: string }) {
 
 /** DSN-2: audit log — журнал подій агенції (read-only, останні 200). */
 function AuditTab() {
-  const { data, isLoading } = useAuditReport()
+  const { data, isLoading, isError, refetch } = useAuditReport()
   const [q, setQ] = useState('')
   if (isLoading) return <Skeleton style={{ height: 260 }} />
+  if (isError) return <LoadError what="звіт" onRetry={() => void refetch()} />
   const events = data?.events ?? []
   const needle = q.trim().toLowerCase()
   const filtered = needle

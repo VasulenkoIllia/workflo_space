@@ -320,7 +320,6 @@ function DangerCard({ orderId, title }: { orderId: string; title: string }) {
                     toast.success('Замовлення переміщено в кошик')
                     navigate('/orders')
                   },
-                  onError: () => toast.error('Не вдалося видалити'),
                 })
               }
             >
@@ -1050,8 +1049,6 @@ function DependenciesCard({ order, canEdit }: { order: WorkspaceOrderDetail; can
                     setPick('')
                     setPicking(false)
                   },
-                  onError: (err) =>
-                    toast.error(err instanceof Error ? err.message : 'Не вдалося (цикл?)'),
                 })
               }
             >
@@ -1121,7 +1118,6 @@ function AcceptanceCard({ order }: { order: WorkspaceOrderDetail }) {
           toast.success('Звірку збережено')
           then?.()
         },
-        onError: () => toast.error('Не вдалося зберегти звірку'),
       }
     )
   }
@@ -1415,9 +1411,7 @@ function OrderExecutorsCard({
                       const next = new Set(coIds)
                       if (e.target.checked) next.add(m.profileId)
                       else next.delete(m.profileId)
-                      setCo.mutate([...next], {
-                        onError: () => toast.error('Не вдалося зберегти виконавців'),
-                      })
+                      setCo.mutate([...next], {})
                     }}
                   />
                   {m.name}
@@ -1756,7 +1750,6 @@ function OrderEstimateEditor({ orderId, editable }: { orderId: string; editable:
                     : 'Кошторис прибрано'
                 )
               },
-              onError: () => toast.error('Не вдалося зберегти кошторис'),
             })
           }
         >

@@ -35,7 +35,6 @@ export function ContactDetailsSection(props: {
       toast.success('Контактні дані збережено')
       props.onSaved?.()
     },
-    onError: () => toast.error('Не вдалося зберегти'),
   })
 
   const dirty = phone !== (props.initialPhone ?? '') || timezone !== (props.initialTimezone ?? '')

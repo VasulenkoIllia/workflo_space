@@ -249,13 +249,12 @@ function StageEditorModal({ stages, onClose }: { stages: LeadStage[]; onClose: (
         setNewName('')
         toast.success('Стадію додано')
       },
-      onError: () => toast.error('Не вдалося (можливо, назва зайнята)'),
     })
   }
   const renameStage = (s: LeadStage) => {
     const name = window.prompt('Нова назва стадії', s.name)
     if (name === null || name.trim() === '' || name.trim() === s.name) return
-    rename.mutate({ id: s.id, name: name.trim() }, { onError: () => toast.error('Не вдалося') })
+    rename.mutate({ id: s.id, name: name.trim() })
   }
   const swap = (i: number, j: number) => {
     const a = openStages[i]
@@ -268,7 +267,6 @@ function StageEditorModal({ stages, onClose }: { stages: LeadStage[]; onClose: (
     if (!window.confirm(`Видалити стадію «${s.name}»? Ліди перейдуть на першу відкриту.`)) return
     del.mutate(s.id, {
       onSuccess: () => toast.success('Стадію видалено'),
-      onError: () => toast.error('Не вдалося видалити'),
     })
   }
 

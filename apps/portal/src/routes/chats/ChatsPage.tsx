@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useCommentStream } from '@workflo/app-core'
+import { useCommentStream, LoadError } from '@workflo/app-core'
 import { EmptyState, Skeleton } from '@workflo/ui'
 import { useConversations, useSetConversationState, type PortalConversation } from '@/lib/chats'
 import { ChatTab } from '@/routes/orders/ChatTab'
@@ -114,7 +114,7 @@ function ThreadRow({
 }
 
 export function ChatsPage() {
-  const { data, isLoading } = useConversations()
+  const { data, isLoading, isError, refetch } = useConversations()
   const qc = useQueryClient()
   const isNarrow = useIsNarrow()
   const [filter, setFilter] = useState<Filter>('all')
@@ -180,6 +180,8 @@ export function ChatsPage() {
 
       {isLoading ? (
         <Skeleton style={{ height: 320 }} />
+      ) : isError ? (
+        <LoadError what="чати" onRetry={() => void refetch()} />
       ) : (data?.conversations ?? []).length === 0 ? (
         <EmptyState
           title="Розмов ще немає"

@@ -89,7 +89,6 @@ function ProjectTeamCard({ project }: { project: FinProject }) {
         onChange={(e) =>
           setTeam.mutate(e.target.value || null, {
             onSuccess: () => toast.success('Команду проєкту збережено'),
-            onError: () => toast.error('Не вдалося зберегти'),
           })
         }
         disabled={setTeam.isPending}

@@ -115,7 +115,6 @@ export function TimeTab({ orderId }: { orderId: string }) {
                   { logId: t.id, ...input },
                   {
                     onSuccess: () => toast.success('Запис оновлено'),
-                    onError: () => toast.error('Не вдалося оновити (період міг бути зафіксований)'),
                   }
                 )
               }

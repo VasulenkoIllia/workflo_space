@@ -415,7 +415,6 @@ function DunningSection() {
       setRaw(null)
       void qc.invalidateQueries({ queryKey: ['agency-dunning-settings'] })
     },
-    onError: () => toast.error('Не вдалося зберегти'),
   })
 
   if (isLoading) return <Skeleton style={{ height: 90 }} />
@@ -549,7 +548,6 @@ function NomenclatureSection() {
                         setEditId(null)
                         toast.success('Позицію оновлено')
                       },
-                      onError: () => toast.error('Не вдалося оновити'),
                     }
                   )
                 }
@@ -664,7 +662,6 @@ function NomenclatureSection() {
                   setVat('')
                   toast.success('Позицію додано')
                 },
-                onError: () => toast.error('Не вдалося додати (можливо, дубль назви)'),
               }
             )
           }
@@ -1327,7 +1324,6 @@ function SmtpSection() {
       r.status === 'sent'
         ? toast.success(`Тестовий лист надіслано на ${r.to}`)
         : toast.error(`Не надіслано: ${r.status}`),
-    onError: () => toast.error('Не вдалося надіслати тест'),
   })
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   if (!data) return null

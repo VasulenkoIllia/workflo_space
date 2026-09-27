@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
-import { ApiError } from '@/lib/api'
 import {
   type BlogDraft,
   type CmsPostInput,
@@ -251,18 +250,12 @@ function EditorModal({ id, onClose }: { id: string; onClose: () => void }) {
 
   const save = () => {
     const body = toInput(form)
-    const onError = (err: unknown) =>
-      toast.error(err instanceof ApiError ? err.message : 'Не вдалося зберегти')
     if (isNew) {
       create.mutate(body, {
         onSuccess: () => (toast.success('Чернетку створено'), onClose()),
-        onError,
       })
     } else {
-      update.mutate(
-        { id, ...body },
-        { onSuccess: () => (toast.success('Збережено'), onClose()), onError }
-      )
+      update.mutate({ id, ...body }, { onSuccess: () => (toast.success('Збережено'), onClose()) })
     }
   }
 
@@ -286,8 +279,6 @@ function EditorModal({ id, onClose }: { id: string; onClose: () => void }) {
                   { topic: topic.trim(), type: form.type },
                   {
                     onSuccess: (d) => (applyDraft(d), toast.success('Чернетку згенеровано')),
-                    onError: (err) =>
-                      toast.error(err instanceof ApiError ? err.message : 'AI недоступний'),
                   }
                 )
               }
@@ -562,17 +553,14 @@ function TestimonialModal({ item, onClose }: { item: Testimonial | null; onClose
       rating,
       featured,
     }
-    const onError = (err: unknown) =>
-      toast.error(err instanceof ApiError ? err.message : 'Не вдалося зберегти')
     if (item) {
       update.mutate(
         { id: item.id, ...body },
-        { onSuccess: () => (toast.success('Збережено'), onClose()), onError }
+        { onSuccess: () => (toast.success('Збережено'), onClose()) }
       )
     } else {
       create.mutate(body, {
         onSuccess: () => (toast.success('Відгук додано (чернетка)'), onClose()),
-        onError,
       })
     }
   }

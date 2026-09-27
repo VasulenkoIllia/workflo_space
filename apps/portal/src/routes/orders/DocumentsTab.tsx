@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button, EmptyState, Input, Modal, Skeleton } from '@workflo/ui'
 import { useAuth } from '@/contexts/AuthContext'
-import { ApiError } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import {
   DOC_STATUS_BADGE,
@@ -38,8 +37,6 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
           setAccepting(null)
           setFullName('')
         },
-        onError: (err) =>
-          toast.error(err instanceof ApiError ? err.message : 'Не вдалося прийняти документ'),
       }
     )
   }

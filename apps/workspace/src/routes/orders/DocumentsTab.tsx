@@ -57,7 +57,6 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
           () => toast.info(r.url) // буфер недоступний — показуємо лінк
         )
       },
-      onError: () => toast.error('Не вдалося видати посилання'),
     })
 
   return (

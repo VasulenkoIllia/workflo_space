@@ -1244,7 +1244,6 @@ function DunningToggleSection({ companyId }: { companyId: string }) {
     mutationFn: (optOut: boolean) =>
       api.patch(`/workspace/companies/${companyId}/dunning`, { optOut }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['company-dunning', companyId] }),
-    onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
   })
 
   if (!allowed) return null
@@ -1300,7 +1299,6 @@ function ApprovalOverrideSection({ companyId }: { companyId: string }) {
       toast.success('Збережено')
       void qc.invalidateQueries({ queryKey: ['company-approval', companyId] })
     },
-    onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
   })
 
   if (!allowed) return null

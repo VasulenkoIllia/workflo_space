@@ -13,6 +13,7 @@ import {
 } from '@/lib/tasks'
 import { type ColumnKind, type Team, useCreateColumn, useDeleteColumn, useTeams } from '@/lib/teams'
 import { AddTaskModal } from './AddTaskModal'
+import { LoadError } from '@workflo/app-core'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'todo', label: 'До роботи' },
@@ -73,7 +74,9 @@ export function TaskBoardPage() {
   const { user, can } = useAuth()
   const myId = user?.profile.id
   const [mine, setMine] = useState(false)
-  const { data, isLoading } = useAllTasks(mine && myId ? { assigneeId: myId } : {})
+  const { data, isLoading, isError, refetch } = useAllTasks(
+    mine && myId ? { assigneeId: myId } : {}
+  )
   const move = useMoveBoardTask()
   const setTaskTeam = useSetTaskTeam()
   const moveToColumn = useMoveTaskToColumn()
@@ -220,6 +223,8 @@ export function TaskBoardPage() {
 
       {isLoading ? (
         <Skeleton style={{ height: 320 }} />
+      ) : isError ? (
+        <LoadError what="задачі" onRetry={() => void refetch()} />
       ) : tasks.length === 0 ? (
         <EmptyState
           title={mine ? 'У вас немає задач' : 'Задач ще немає'}
