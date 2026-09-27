@@ -1,8 +1,29 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyRequest } from 'fastify'
+import { getPermissions, orderScopeWhere } from '../../auth/permissions.js'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+
+/**
+ * PERM-4: скоуп команди — замовлення має покриватися правом `orders.view` (all — будь-яке;
+ * team — підрозділ тімліда; own — призначене мені чи моя задача). Непокрите → 404, щоб не
+ * світити існування (як для клієнта чужої компанії).
+ */
+export async function assertTeamScope(
+  request: FastifyRequest,
+  orderId: string,
+  orderAgencyId: string
+): Promise<void> {
+  const notFound = new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
+  const snap = await getPermissions(request)
+  if (!snap || snap.agencyId !== orderAgencyId) throw notFound
+  const where = orderScopeWhere(snap, snap.levels['orders.view'], request.user.sub)
+  if (where === null) throw notFound
+  if (Object.keys(where).length === 0) return
+  const visible = await withTenant((tx) => tx.order.count({ where: { id: orderId, ...where } }))
+  if (visible === 0) throw notFound
+}
 
 export interface OrderAccess {
   orderId: string
@@ -17,7 +38,7 @@ export interface OrderAccess {
  * Load an order and assert the caller may participate in it (chat, reads, files).
  * The single source of truth for order-level IDOR across sub-resources:
  *
- *  - executor (internal team): any order in their tenant;
+ *  - internal team: orders covered by `orders.view` (PERM-4: all / team / own);
  *  - client: only orders of a company they belong to — otherwise `404` so the
  *    order's existence isn't leaked to a sibling tenant company.
  *
@@ -44,6 +65,7 @@ export async function requireOrderParticipant(
   if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
     throw notFound() // same tenant, different company → hide
   }
+  if (isInternal) await assertTeamScope(request, order.id, agencyId)
 
   return { orderId: order.id, agencyId, companyId: order.companyId, isInternal }
 }
@@ -71,6 +93,7 @@ export async function requireTeamOrder(
     throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
   }
   assertSameTenant(user, order.agencyId)
+  await assertTeamScope(request, order.id, order.agencyId)
   // Return the ORDER's agency (the resource), not the actor's active agency — they
   // differ for a multi-agency user, and downstream stamps / assignee-membership
   // checks must bind to the order's tenant (R-3 / Phase 1 IDOR).

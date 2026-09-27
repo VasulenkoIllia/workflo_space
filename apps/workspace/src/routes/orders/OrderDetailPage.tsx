@@ -166,9 +166,14 @@ export function OrderDetailPage() {
             orderId={order.id}
             primary={order.assignee ?? null}
             coAssignees={order.coAssignees ?? []}
+            canEdit={can('orders.assign')}
           />
-          <OrderTagsCard orderId={order.id} current={order.tags ?? []} />
-          <DependenciesCard order={order} />
+          <OrderTagsCard
+            orderId={order.id}
+            current={order.tags ?? []}
+            canEdit={can('orders.edit')}
+          />
+          <DependenciesCard order={order} canEdit={can('orders.edit')} />
           {order.company && (
             <Card title="Клієнт" style={{ marginBottom: 16 }}>
               <div className="wfp-side">
@@ -202,30 +207,33 @@ export function OrderDetailPage() {
 
           <ApprovalCard order={order} />
 
-          <Card title="Фінанси" style={{ marginBottom: 16 }}>
-            <div className="wfp-side">
-              <div className="wfp-side-row">
-                <div className="wfp-side-k">оцінка</div>
-                <div className="wfp-money-big">{formatMoney(order.totalAmount)}</div>
-              </div>
-              {order.billingType && (
+          {/* PERM-4: суми замовлення — лише з правом на кошторис або фінанси */}
+          {(can('orders.estimate') || can('billing.view')) && (
+            <Card title="Фінанси" style={{ marginBottom: 16 }}>
+              <div className="wfp-side">
                 <div className="wfp-side-row">
-                  <div className="wfp-side-k">тип</div>
-                  <div className="wfp-side-v">{order.billingType}</div>
+                  <div className="wfp-side-k">оцінка</div>
+                  <div className="wfp-money-big">{formatMoney(order.totalAmount)}</div>
                 </div>
-              )}
-              <div className="wfp-side-row">
-                <div className="wfp-side-k">валюта</div>
-                <div className="wfp-side-v">{order.currency}</div>
-              </div>
-              {order.paidAt && (
+                {order.billingType && (
+                  <div className="wfp-side-row">
+                    <div className="wfp-side-k">тип</div>
+                    <div className="wfp-side-v">{order.billingType}</div>
+                  </div>
+                )}
                 <div className="wfp-side-row">
-                  <div className="wfp-side-k">оплачено</div>
-                  <div className="wfp-side-v">{formatDate(order.paidAt)}</div>
+                  <div className="wfp-side-k">валюта</div>
+                  <div className="wfp-side-v">{order.currency}</div>
                 </div>
-              )}
-            </div>
-          </Card>
+                {order.paidAt && (
+                  <div className="wfp-side-row">
+                    <div className="wfp-side-k">оплачено</div>
+                    <div className="wfp-side-v">{formatDate(order.paidAt)}</div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
 
           <Card title="Деталі" style={{ marginBottom: 16 }}>
             <div className="wfp-side">
@@ -253,7 +261,7 @@ export function OrderDetailPage() {
           </Card>
 
           <ActivityCard orderId={order.id} />
-          <DangerCard orderId={order.id} title={order.title} />
+          {can('orders.delete') && <DangerCard orderId={order.id} title={order.title} />}
         </aside>
       </div>
     </div>
@@ -936,7 +944,7 @@ const HRS = (n: number | null | undefined): string =>
  * коригує білабельні + оплатні години й приймає або повертає на доопрацювання.
  */
 /** S10-03: залежності — блокери цього замовлення (гейт старту) + кого блокує воно. */
-function DependenciesCard({ order }: { order: WorkspaceOrderDetail }) {
+function DependenciesCard({ order, canEdit }: { order: WorkspaceOrderDetail; canEdit: boolean }) {
   const add = useAddDependency(order.id)
   const remove = useRemoveDependency(order.id)
   const [picking, setPicking] = useState(false)
@@ -981,19 +989,21 @@ function DependenciesCard({ order }: { order: WorkspaceOrderDetail }) {
               <Link to={`/orders/${b.id}`} style={{ fontSize: 13, minWidth: 0, flex: 1 }}>
                 {b.title}
               </Link>
-              <button
-                type="button"
-                title="Прибрати залежність"
-                onClick={() => remove.mutate(b.dependencyId)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--wf-fg-muted)',
-                }}
-              >
-                ✕
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  title="Прибрати залежність"
+                  onClick={() => remove.mutate(b.dependencyId)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--wf-fg-muted)',
+                  }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1049,11 +1059,11 @@ function DependenciesCard({ order }: { order: WorkspaceOrderDetail }) {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : canEdit ? (
         <Button size="sm" variant="ghost" onClick={() => setPicking(true)}>
           + залежить від…
         </Button>
-      )}
+      ) : null}
     </Card>
   )
 }
@@ -1344,10 +1354,12 @@ function OrderExecutorsCard({
   orderId,
   primary,
   coAssignees,
+  canEdit,
 }: {
   orderId: string
   primary: { id: string; name: string } | null
   coAssignees: { id: string; name: string }[]
+  canEdit: boolean
 }) {
   const { data: team } = useTeam()
   const setCo = useSetOrderCoAssignees(orderId)
@@ -1359,14 +1371,16 @@ function OrderExecutorsCard({
     <Card
       title="Виконавці"
       aux={
-        <button
-          type="button"
-          className="wfp-link"
-          style={{ fontSize: 11 }}
-          onClick={() => setEditing((v) => !v)}
-        >
-          {editing ? 'готово' : 'змінити'}
-        </button>
+        canEdit && (
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 11 }}
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? 'готово' : 'змінити'}
+          </button>
+        )
       }
       style={{ marginBottom: 16 }}
     >
@@ -1435,7 +1449,15 @@ function OrderExecutorsCard({
   )
 }
 
-function OrderTagsCard({ orderId, current }: { orderId: string; current: OrderTag[] }) {
+function OrderTagsCard({
+  orderId,
+  current,
+  canEdit,
+}: {
+  orderId: string
+  current: OrderTag[]
+  canEdit: boolean
+}) {
   const { data } = useOrderTags()
   const setTags = useSetOrderTags(orderId)
   const catalog = data?.tags ?? []
@@ -1446,14 +1468,16 @@ function OrderTagsCard({ orderId, current }: { orderId: string; current: OrderTa
     <Card
       title="Теги"
       aux={
-        <button
-          type="button"
-          className="wfp-link"
-          style={{ fontSize: 11 }}
-          onClick={() => setEditing((v) => !v)}
-        >
-          {editing ? 'готово' : 'змінити'}
-        </button>
+        canEdit && (
+          <button
+            type="button"
+            className="wfp-link"
+            style={{ fontSize: 11 }}
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? 'готово' : 'змінити'}
+          </button>
+        )
       }
       style={{ marginBottom: 16 }}
     >

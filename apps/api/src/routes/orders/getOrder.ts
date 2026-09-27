@@ -1,7 +1,8 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { coversOrder, getPermissions } from '../../auth/permissions.js'
+import { assertTeamScope } from './access.js'
+import { coversOrder, getPermissions, hasPermission } from '../../auth/permissions.js'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 
@@ -128,6 +129,13 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
         throw notFound() // same tenant, different company → hide
       }
+      // PERM-4: команда — лише замовлення в межах orders.view (інакше 404, як чужа компанія)
+      if (isInternal) await assertTeamScope(request, order.id, order.agencyId)
+      const showMoney =
+        !isInternal ||
+        (await hasPermission(request, 'orders.estimate')) ||
+        (await hasPermission(request, 'billing.view'))
+      const money = (d: unknown) => (showMoney ? num(d) : null)
 
       const clientView = {
         id: order.id,
@@ -135,7 +143,7 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
         description: order.description,
         clientStatus: order.clientStatus,
         priority: order.priority,
-        totalAmount: num(order.totalAmount),
+        totalAmount: money(order.totalAmount),
         currency: order.currency,
         // 05-А: клієнт бачить статус оплати замовлення (рахунок + «Як оплатити»)
         paidAt: order.paidAt,
@@ -152,16 +160,16 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
           id: l.id,
           name: l.name,
           qty: num(l.qty),
-          unitPrice: num(l.unitPrice),
+          unitPrice: money(l.unitPrice),
         })),
         // DSN-4 таб «Кошторис»: модель ціни, яку клієнт погоджує (02-А: для hourly —
         // ставка + оцінка годин). Клієнтська ставка замовлення, НЕ ставка виконавця.
         billingType: order.billingType,
-        hourlyRate: num(order.hourlyRate),
+        hourlyRate: money(order.hourlyRate),
         estimatedHours: num(order.estimatedHours),
         intake: {
           category: order.category ?? null,
-          clientBudget: num(order.clientBudget),
+          clientBudget: money(order.clientBudget),
           preferredBilling: order.preferredBilling ?? null,
           deadlineFlexible: order.deadlineFlexible ?? false,
           preferredChannel: order.preferredChannel ?? null,
@@ -261,8 +269,8 @@ const getOrderRoute: FastifyPluginAsync = (fastify) => {
             type: order.type,
             billingType: order.billingType,
             nomenclatureId: order.nomenclatureId,
-            fixedPrice: num(order.fixedPrice),
-            hourlyRate: num(order.hourlyRate),
+            fixedPrice: money(order.fixedPrice),
+            hourlyRate: money(order.hourlyRate),
             estimatedHours: num(order.estimatedHours),
             onHoldReason: order.onHoldReason,
             cancelledReason: order.cancelledReason,

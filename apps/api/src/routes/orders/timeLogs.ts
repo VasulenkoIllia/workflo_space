@@ -5,6 +5,7 @@ import { writeAuditAsync } from '../../services/audit.js'
 import { isPeriodLocked, periodOf } from '../../services/payout.js'
 import { resolveTimeLogRates } from '../../services/rateResolution.js'
 import { requireTeamOrder } from './access.js'
+import { coversMember, getPermissions } from '../../auth/permissions.js'
 
 /**
  * Time logs in a period that has an approved/paid payout are frozen (S5-04) — editing
@@ -159,8 +160,12 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       const log = await loadLogOfOrder(request.params.logId, request.params.orderId)
+      // PERM-4: чужий запис — time.edit_others (all / автор у моєму підрозділі)
       if (log.executorId !== request.user.sub) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Редагувати може лише автор запису', 403)
+        const snap = await getPermissions(request)
+        if (!snap || !(await coversMember(snap, snap.levels['time.edit_others'], log.executorId))) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Редагувати може лише автор запису', 403)
+        }
       }
       const input = updateTimeLogSchema.parse(request.body)
       // Freeze edits once the period is settled (current period + destination if the date moves).
@@ -190,8 +195,12 @@ const timeLogsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       const log = await loadLogOfOrder(request.params.logId, request.params.orderId)
+      // PERM-4: чужий запис — time.edit_others (all / автор у моєму підрозділі)
       if (log.executorId !== request.user.sub) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалити може лише автор запису', 403)
+        const snap = await getPermissions(request)
+        if (!snap || !(await coversMember(snap, snap.levels['time.edit_others'], log.executorId))) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалити може лише автор запису', 403)
+        }
       }
       await assertNotLocked(agencyId, log.executorId, log.date)
       await withTenant((tx) => tx.timeLog.delete({ where: { id: log.id } }))

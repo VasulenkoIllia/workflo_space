@@ -2,12 +2,12 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, ApprovalMode, AppError, createWorkspaceOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { assertWithinQuota } from '../../saas/limits.js'
 import { resolveApprovalMode } from '../../services/approvalPolicy.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { slaDueDates } from '../../services/sla.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * POST /workspace/orders (P-7) — the internal team (owner/executor) creates a task FOR a
@@ -25,9 +25,7 @@ const createWorkspaceOrderRoute: FastifyPluginAsync = (fastify) => {
       const input = createWorkspaceOrderSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'orders.create')
       await assertWithinQuota(agencyId, 'orders')
 
       // P-11: agency-tier floor of the approval cascade (non-null).

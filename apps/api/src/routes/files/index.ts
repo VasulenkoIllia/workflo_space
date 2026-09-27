@@ -16,6 +16,7 @@ import { getStorage } from '../../services/storage.js'
 import { isThumbnailable, makeThumbnail } from '../../services/imageThumbnail.js'
 import { requireOrderParticipant } from '../orders/access.js'
 import { FILE_META_SELECT, requireFileAccess, serializeFileMeta } from './access.js'
+import { hasPermission } from '../../auth/permissions.js'
 
 /** RFC 5987 Content-Disposition; always `attachment` (no inline render → no stored-XSS). */
 function attachmentDisposition(filename: string): string {
@@ -239,8 +240,12 @@ const fileRoutes: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { file, access } = await requireFileAccess(request, request.params.id)
-      if (!access.isInternal && file.uploadedBy !== request.user.sub) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Видаляти може лише автор або команда', 403)
+      // PERM-4: чужий файл — лише команда з orders.edit (раніше будь-хто з команди)
+      if (
+        file.uploadedBy !== request.user.sub &&
+        !(access.isInternal && (await hasPermission(request, 'orders.edit')))
+      ) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Видаляти може лише автор або керівництво', 403)
       }
 
       await withTenant((tx) =>

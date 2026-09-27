@@ -119,6 +119,24 @@ const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
       // ROLE-NAV → PERM-3: керівні переходи (триаж нового, пауза, скасування) — orders.status;
       // без нього лише робочі (уточнити / взяти в роботу / здати). Приймання — вище (orders.accept).
       const managesStatus = snap?.levels['orders.status'] === 'all'
+      // PERM-4: робочий перехід (взяти/уточнити/здати) — лише для замовлення в межах orders.work
+      if (isInternal && !managesStatus && !isAcceptanceTransition(from, to)) {
+        const covered =
+          snap != null &&
+          (await coversOrder(
+            snap,
+            snap.levels['orders.work'],
+            {
+              assigneeId: order.assigneeId,
+              coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profileId),
+              projectTeamId: order.project?.teamId ?? null,
+            },
+            user.sub
+          ))
+        if (!covered) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Замовлення не призначене вам', 403)
+        }
+      }
       if (
         isInternal &&
         !managesStatus &&

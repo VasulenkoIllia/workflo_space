@@ -2,6 +2,7 @@ import { withTenant } from '@workflo/db'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+import { getPermissions, orderScopeWhere } from '../../auth/permissions.js'
 
 /**
  * 24 Calendar — агрегований read-only view: зустрічі (де я учасник) + дедлайни
@@ -28,6 +29,9 @@ const calendarViewRoute: FastifyPluginAsync = (fastify) => {
     const to = q.to ? new Date(q.to) : new Date(from.getTime() + 31 * 86_400_000)
     const isTeam = isInternalTeam(user)
     const companyIds = user.memberships.map((m) => m.companyId)
+    // PERM-4: дедлайни команди — у межах orders.view (виконавець — свої замовлення)
+    const snap = isTeam ? await getPermissions(request) : null
+    const teamScope = snap ? orderScopeWhere(snap, snap.levels['orders.view'], user.sub) : null
 
     const [events, orders] = await withTenant((tx) =>
       Promise.all([
@@ -53,7 +57,9 @@ const calendarViewRoute: FastifyPluginAsync = (fastify) => {
             agencyId,
             deletedAt: null,
             deadline: { not: null, gte: from, lte: to },
-            ...(isTeam ? {} : { companyId: { in: companyIds } }),
+            ...(isTeam
+              ? { AND: [teamScope ?? { id: '__none__' }] }
+              : { companyId: { in: companyIds } }),
           },
           orderBy: { deadline: 'asc' },
           take: 300,

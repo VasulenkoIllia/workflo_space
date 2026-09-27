@@ -3,6 +3,7 @@ import { listOrdersQuerySchema, OrderInternalStatus, OrderPriority } from '@work
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
+import { getPermissions, hasPermission, orderScopeWhere } from '../../auth/permissions.js'
 
 function parseEnumList<T extends string>(
   csv: string | undefined,
@@ -38,9 +39,18 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
         : memberCompanyIds
       // `__none__` guarantees an empty result for a client with no companies.
       where.companyId = { in: allowed.length ? allowed : ['__none__'] }
-    } else if (q.companyId) {
-      where.companyId = q.companyId
+    } else {
+      // PERM-4: команда бачить замовлення за orders.view (all / підрозділ тімліда / свої)
+      const snap = await getPermissions(request)
+      const scope = snap ? orderScopeWhere(snap, snap.levels['orders.view'], user.sub) : null
+      where.AND = [scope ?? { id: '__none__' }]
+      if (q.companyId) where.companyId = q.companyId
     }
+    // Суми замовлень — команді лише з правом на кошторис або фінанси (виконавець — без грошей)
+    const showMoney =
+      !isInternal ||
+      (await hasPermission(request, 'orders.estimate')) ||
+      (await hasPermission(request, 'billing.view'))
 
     // Triage filter (variant B): workspace can scope to a specific executor or to
     // unassigned (`assigneeId=none`). Clients can't filter by executor.
@@ -116,7 +126,7 @@ const listOrdersRoute: FastifyPluginAsync = (fastify) => {
           ...(isInternal ? { coAssignees: o.coAssignees.map((c) => c.profile) } : {}),
           priority: o.priority,
           dueDate: o.deadline,
-          totalAmount: o.totalAmount == null ? null : Number(o.totalAmount),
+          totalAmount: !showMoney || o.totalAmount == null ? null : Number(o.totalAmount),
           companyId: o.companyId,
           stageCount: o._count.stages,
           createdAt: o.createdAt,

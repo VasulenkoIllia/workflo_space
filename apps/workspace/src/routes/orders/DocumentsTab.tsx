@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { Button, EmptyState, Skeleton } from '@workflo/ui'
+import { useAuth } from '@/contexts/AuthContext'
 import { formatDate } from '@/lib/format'
 import {
   DOC_STATUS_BADGE,
@@ -24,8 +25,14 @@ const GENERATE: { type: DocumentType; label: string }[] = [
   { type: 'contract', label: 'Договір' },
 ]
 
+/** PERM-4: грошові документи — billing.manage; специфікації/акти/договори — documents.manage */
+const MONEY_TYPES = new Set<DocumentType>(['invoice', 'advance_invoice', 'reconciliation_act'])
+
 /** Team-side documents tab: list the order's documents + generate an invoice/act/spec. */
 export function DocumentsTab({ orderId }: { orderId: string }) {
+  const { can } = useAuth()
+  const canWrite = (t: DocumentType) =>
+    MONEY_TYPES.has(t) ? can('billing.manage') : can('documents.manage')
   const { data: documents = [], isLoading } = useOrderDocuments(orderId)
   const generate = useGenerateDocument(orderId)
   const send = useSendDocument(orderId)
@@ -56,7 +63,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
   return (
     <div className="wfp-chat" style={{ display: 'block' }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        {GENERATE.map((g) => (
+        {GENERATE.filter((g) => canWrite(g.type)).map((g) => (
           <Button
             key={g.type}
             variant="secondary"
@@ -131,17 +138,18 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
                 {formatDate(d.generatedAt)}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {(d.type === 'invoice' || d.type === 'advance_invoice') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title="Публічне посилання на рахунок (без логіна)"
-                    loading={publicLink.isPending && publicLink.variables === d.id}
-                    onClick={() => onPublicLink(d)}
-                  >
-                    🔗
-                  </Button>
-                )}
+                {(d.type === 'invoice' || d.type === 'advance_invoice') &&
+                  can('billing.manage') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Публічне посилання на рахунок (без логіна)"
+                      loading={publicLink.isPending && publicLink.variables === d.id}
+                      onClick={() => onPublicLink(d)}
+                    >
+                      🔗
+                    </Button>
+                  )}
                 {d.status === 'sent' ? (
                   <span
                     className="wfp-mono"
@@ -150,7 +158,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
                   >
                     ✓ надіслано
                   </span>
-                ) : (
+                ) : canWrite(d.type) ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -159,7 +167,7 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
                   >
                     Надіслати
                   </Button>
-                )}
+                ) : null}
               </span>
             </div>
           ))}

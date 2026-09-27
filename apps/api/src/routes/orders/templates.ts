@@ -1,11 +1,12 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, OrderType, BillingType } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { slaDueDates } from '../../services/sla.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S10-01: шаблони замовлень (спека 02-orders §E). Каталог owner-only (CRUD),
@@ -50,8 +51,11 @@ function assertTeam(user: AccessClaims): string {
   return agencyId
 }
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Шаблони редагує лише власник')
+/** PERM-4: право `settings.catalogs` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'settings.catalogs')
+  return agencyId
 }
 
 const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
@@ -60,6 +64,7 @@ const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = assertTeam(request.user)
+      await requirePermission(request, 'orders.create')
       const templates = await withTenant((tx) =>
         tx.orderTemplate.findMany({
           where: { agencyId, isActive: true },
@@ -83,7 +88,7 @@ const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/order-templates',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const input = createTemplateSchema.parse(request.body)
       const dup = await withTenant((tx) =>
         tx.orderTemplate.findFirst({
@@ -131,7 +136,7 @@ const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/order-templates/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const res = await withTenant((tx) =>
         tx.orderTemplate.deleteMany({ where: { id: request.params.id, agencyId } })
       )
@@ -154,6 +159,7 @@ const orderTemplatesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = assertTeam(request.user)
+      await requirePermission(request, 'orders.create')
       const input = fromTemplateSchema.parse(request.body)
 
       const order = await withTenant(async (tx) => {

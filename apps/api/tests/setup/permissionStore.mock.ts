@@ -8,11 +8,18 @@ import { beforeEach, vi } from 'vitest'
  */
 vi.mock('../../src/auth/permissionStore.js', async (importOriginal) => {
   if (process.env.RUN_DB_TESTS === '1') return importOriginal()
+  // PERM-4: базова фікстура юніт-тестів — видимість замовлень/чатів для виконавця й тімліда
+  // «вся агенція» (як до PERM-4), щоб функціональні тести під-ресурсів замовлень не залежали
+  // від скоупу. Скоуп own/team перевіряють окремі тести (permScope.test.ts) через
+  // vi.mocked(fetchPermissionData) із порожніми roleRows (= реальні дефолти каталогу).
+  const WIDE = ['orders.view', 'orders.work', 'chats.view'].flatMap((permission) =>
+    (['executor', 'lead'] as const).map((role) => ({ role, permission, level: 'all' as const }))
+  )
   return {
     fetchPermissionData: vi.fn(async () => ({
       leadTeamIds: [],
       teamId: null,
-      roleRows: [],
+      roleRows: WIDE,
       memberRows: [],
     })),
   }

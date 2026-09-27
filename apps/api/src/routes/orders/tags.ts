@@ -1,11 +1,12 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S10-01: теги замовлень (спека 02-orders §B). Каталог — per-agency, CRUD owner-only;
@@ -32,8 +33,11 @@ function assertTeam(user: AccessClaims): string {
   return agencyId
 }
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Каталог тегів редагує лише власник')
+/** PERM-4: право `settings.catalogs` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'settings.catalogs')
+  return agencyId
 }
 
 const orderTagsRoute: FastifyPluginAsync = (fastify) => {
@@ -58,7 +62,7 @@ const orderTagsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/order-tags',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const input = createTagSchema.parse(request.body)
       const dup = await withTenant((tx) =>
         tx.orderTag.findFirst({
@@ -90,7 +94,7 @@ const orderTagsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/order-tags/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const res = await withTenant((tx) =>
         tx.orderTag.deleteMany({ where: { id: request.params.id, agencyId } })
       )
@@ -113,6 +117,7 @@ const orderTagsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { orderId, agencyId } = await requireTeamOrder(request, request.params.id)
+      await requirePermission(request, 'orders.edit')
       const { tagIds } = setTagsSchema.parse(request.body)
 
       const tags = await withTenant(async (tx) => {

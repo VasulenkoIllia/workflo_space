@@ -1,4 +1,4 @@
-import { prisma } from '@workflo/db'
+import { type Prisma, prisma } from '@workflo/db'
 import {
   ApiErrorCode,
   AppError,
@@ -196,4 +196,42 @@ export async function coversOrder(
   if (order.projectTeamId && snap.leadTeamIds.includes(order.projectTeamId)) return true
   if (!order.assigneeId) return false
   return coversMember(snap, 'team', order.assigneeId)
+}
+
+/**
+ * PERM-4: Prisma-фільтр замовлень за рівнем права (orders.view / chats.view / orders.work).
+ *  all — усі замовлення агенції; own — де я головний/співвиконавець АБО маю задачу (виконавець
+ *  чи співвиконавець задачі); team — own + замовлення підрозділів, де я тімлід (проєкт
+ *  підрозділу, задачі підрозділу, головний виконавець у підрозділі). null — доступу нема.
+ */
+export function orderScopeWhere(
+  snap: PermissionSnapshot,
+  level: PermissionLevel,
+  userId: string
+): Prisma.OrderWhereInput | null {
+  if (level === 'all') return {}
+  if (level === 'none') return null
+  const own: Prisma.OrderWhereInput[] = [
+    { assigneeId: userId },
+    { coAssignees: { some: { profileId: userId } } },
+    {
+      internalTasks: {
+        some: { OR: [{ assigneeId: userId }, { coAssignees: { some: { profileId: userId } } }] },
+      },
+    },
+  ]
+  if (level === 'own' || snap.leadTeamIds.length === 0) return { OR: own }
+  const teams = { in: snap.leadTeamIds }
+  return {
+    OR: [
+      ...own,
+      { project: { teamId: teams } },
+      { internalTasks: { some: { teamId: teams } } },
+      {
+        assignee: {
+          agencyMemberships: { some: { agencyId: snap.agencyId, teamId: teams } },
+        },
+      },
+    ],
+  }
 }

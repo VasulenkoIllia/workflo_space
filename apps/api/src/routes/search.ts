@@ -2,6 +2,7 @@ import { Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
+import { getPermissions, orderScopeWhere } from '../auth/permissions.js'
 import { isAgencyOwner, requireActiveAgency } from '../auth/tenant.js'
 import { isAgencyManager, isInternalTeam } from '../auth/tokens.js'
 
@@ -49,6 +50,23 @@ const searchRoute: FastifyPluginAsync = (fastify) => {
       const owner = isAgencyOwner(user, agencyId)
       const manager = isAgencyManager(user, agencyId)
       const canClients = owner || manager
+      // PERM-4: замовлення в пошуку — у межах orders.view (виконавець — свої)
+      const snap = await getPermissions(request)
+      const orderScope = snap ? orderScopeWhere(snap, snap.levels['orders.view'], user.sub) : null
+      const seeAllOrders = orderScope != null && Object.keys(orderScope).length === 0
+      const visibleOrderIds = seeAllOrders
+        ? []
+        : orderScope
+          ? (
+              await withTenant((tx) =>
+                tx.order.findMany({
+                  where: { agencyId, deletedAt: null, ...orderScope },
+                  select: { id: true },
+                  take: 2000,
+                })
+              )
+            ).map((o) => o.id)
+          : []
       // ROLE-NAV (аудит D8): фін-проєкти (/projects/:id) — owner-only екран; виконавцю ⌘K
       // віддавав проєкти, клік вів у редирект. Проєкти в пошуку — лише власнику.
       const canProjects = owner
@@ -60,6 +78,7 @@ const searchRoute: FastifyPluginAsync = (fastify) => {
           SELECT id, title, "internalStatus"
           FROM orders
           WHERE "agencyId" = ${agencyId} AND "deletedAt" IS NULL
+            AND (${seeAllOrders} OR id = ANY(${visibleOrderIds}))
             AND to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("description", ''))
                 @@ to_tsquery('simple', ${ts})
           ORDER BY "createdAt" DESC

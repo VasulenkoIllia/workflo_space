@@ -3,10 +3,10 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
 import { requireTeamOrder } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * МУЛЬТИВИКОНАВЦІ (рішення власника 07.07): співвиконавці ДОДАТКОВО до головного
@@ -38,9 +38,7 @@ const coAssigneesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = request.user
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Призначення доступне лише команді', 403)
-      }
+      await requirePermission(request, 'orders.assign')
       const order = await withTenant((tx) =>
         tx.order.findUnique({
           where: { id: request.params.id },
@@ -106,6 +104,7 @@ const coAssigneesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'tasks.manage')
       const task = await withTenant((tx) =>
         tx.internalTask.findFirst({
           where: { id: request.params.taskId, orderId: request.params.orderId, agencyId },

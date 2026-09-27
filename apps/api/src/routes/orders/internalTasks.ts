@@ -11,6 +11,7 @@ import { requireActiveAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 const TASK_SELECT = {
   id: true,
@@ -55,7 +56,12 @@ async function loadTaskOfOrder(taskId: string, orderId: string) {
   const task = await withTenant((tx) =>
     tx.internalTask.findUnique({
       where: { id: taskId },
-      select: { id: true, orderId: true },
+      select: {
+        id: true,
+        orderId: true,
+        assigneeId: true,
+        coAssignees: { select: { profileId: true } },
+      },
     })
   )
   if (!task || task.orderId !== orderId) {
@@ -187,6 +193,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'tasks.manage') // PERM-4: створення задач
       const input = createInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
 
@@ -222,8 +229,17 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
-      await loadTaskOfOrder(request.params.taskId, request.params.orderId)
+      const current = await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       const input = updateInternalTaskSchema.parse(request.body)
+      // PERM-4: пересунути СВОЮ задачу (статус/колонка/позиція) — робота виконавця, без права;
+      // решта (назва, виконавець, команда, чужа задача) — tasks.manage.
+      const me = request.user.sub
+      const mine =
+        current.assigneeId === me || (current.coAssignees ?? []).some((c) => c.profileId === me)
+      const onlyMove = Object.keys(input).every((k) =>
+        ['status', 'position', 'columnId'].includes(k)
+      )
+      if (!(mine && onlyMove)) await requirePermission(request, 'tasks.manage')
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
       // TEAM-BOARDS: команда задачі — лише команда ЦІЄЇ агенції (cross-tenant → 400)
       if (input.teamId) {
@@ -302,6 +318,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'tasks.delete') // PERM-4: hard-delete задачі
       await loadTaskOfOrder(request.params.taskId, request.params.orderId)
       await withTenant((tx) => tx.internalTask.delete({ where: { id: request.params.taskId } }))
 

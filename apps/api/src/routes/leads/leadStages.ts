@@ -2,9 +2,9 @@ import { type Prisma, prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * ХВІСТ-4 (07.07): кастомні стадії воронки лідів per-agency. Читання — команда; зміни —
@@ -59,7 +59,7 @@ const leadStagesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
-      if (!isInternalTeam(request.user)) {
+      if (!(await hasPermission(request, 'leads.manage'))) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
       }
       const stages = await tenantTransaction(prisma, async (tx) => {
@@ -76,9 +76,7 @@ const leadStagesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
-      if (!isAgencyOwner(request.user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Стадії редагує лише власник', 403)
-      }
+      await requirePermission(request, 'leads.manage') // PERM-4: воронку веде менеджер
       const body = createStageSchema.parse(request.body)
       const stage = await tenantTransaction(prisma, async (tx) => {
         await ensureStages(tx, agencyId)
@@ -121,9 +119,7 @@ const leadStagesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
-      if (!isAgencyOwner(request.user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Стадії редагує лише власник', 403)
-      }
+      await requirePermission(request, 'leads.manage') // PERM-4: воронку веде менеджер
       const body = updateStageSchema.parse(request.body)
       const stage = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.leadStage.findFirst({
@@ -158,9 +154,7 @@ const leadStagesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const agencyId = requireActiveAgency(request.user)
-      if (!isAgencyOwner(request.user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Стадії редагує лише власник', 403)
-      }
+      await requirePermission(request, 'leads.manage') // PERM-4: воронку веде менеджер
       await tenantTransaction(prisma, async (tx) => {
         const stage = await tx.leadStage.findFirst({
           where: { id: request.params.id, agencyId },

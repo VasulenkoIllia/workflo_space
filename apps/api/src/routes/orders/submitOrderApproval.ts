@@ -7,9 +7,9 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 // 02-А: only pre-work states make sense to send for estimate approval.
 const SUBMITTABLE: readonly OrderInternalStatus[] = [
@@ -34,9 +34,7 @@ const submitOrderApprovalRoute: FastifyPluginAsync = (fastify) => {
       const input = submitOrderApprovalSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'orders.estimate')
 
       const order = await withTenant((tx) =>
         tx.order.findFirst({

@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S10-03 (спека 02-D): залежності між замовленнями — «orderId заблокований, поки
@@ -52,6 +53,7 @@ const dependenciesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'orders.edit')
       const { dependsOnId } = createSchema.parse(request.body)
       if (dependsOnId === orderId) {
         throw new AppError(
@@ -117,6 +119,7 @@ const dependenciesRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'orders.edit')
       const removed = await tenantTransaction(prisma, (tx) =>
         tx.orderDependency.deleteMany({
           where: { id: request.params.depId, orderId, agencyId },

@@ -838,7 +838,7 @@ describe('PATCH /orders/:id/status', () => {
   it('PERM-3: тімлід приймає замовлення СВОГО підрозділу; чужого — 403', async () => {
     const { fetchPermissionData } = await import('../src/auth/permissionStore.js')
     const leadData = { leadTeamIds: ['team-dev'], teamId: 'team-dev', roleRows: [], memberRows: [] }
-    vi.mocked(fetchPermissionData).mockResolvedValue(leadData)
+    vi.mocked(fetchPermissionData).mockResolvedValueOnce(leadData) // кеш прав — 1 виклик на тест
     orderUpdateMany.mockResolvedValue({ count: 1 })
     orderFindUniqueOrThrow.mockResolvedValue({
       id: 'order-1',
@@ -877,12 +877,6 @@ describe('PATCH /orders/:id/status', () => {
     })
     expect(own.statusCode).toBe(200)
     expect(orderUpdateMany.mock.calls[0][0].data.acceptedById).toBe('exec-1')
-    vi.mocked(fetchPermissionData).mockResolvedValue({
-      leadTeamIds: [],
-      teamId: null,
-      roleRows: [],
-      memberRows: [],
-    })
     await app.close()
   })
 
@@ -937,7 +931,7 @@ describe('PATCH /orders/:id (edit)', () => {
   it('executor edits title + billing field', async () => {
     orderFindUnique.mockResolvedValue({ ...newOrder, internalStatus: 'in_progress' })
     orderUpdate.mockResolvedValue({ id: 'order-1' })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: '/orders/order-1',
@@ -990,6 +984,43 @@ describe('PATCH /orders/:id (edit)', () => {
   })
 })
 
+describe('PERM-4: виконавець без керівних дій', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('DELETE / зміна ціни / призначення → 403', async () => {
+    orderFindUnique.mockResolvedValue({
+      id: 'order-1',
+      agencyId: 'agency-1',
+      companyId: 'company-1',
+      deletedAt: null,
+      internalStatus: 'in_progress',
+      approvalStatus: null,
+      fixedPrice: null,
+      hourlyRate: null,
+      estimatedHours: null,
+    })
+    const { app, token } = await authed(EXECUTOR)
+    const h = { authorization: `Bearer ${token}` }
+    const del = await app.inject({ method: 'DELETE', url: '/orders/order-1', headers: h })
+    expect(del.statusCode).toBe(403)
+    const price = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1',
+      headers: h,
+      payload: { fixedPrice: 999 },
+    })
+    expect(price.statusCode).toBe(403)
+    const assign = await app.inject({
+      method: 'PATCH',
+      url: '/orders/order-1/assign',
+      headers: h,
+      payload: { assigneeId: null },
+    })
+    expect(assign.statusCode).toBe(403)
+    expect(orderUpdate).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
 describe('DELETE /orders/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -1002,7 +1033,7 @@ describe('DELETE /orders/:id', () => {
   it('executor soft-deletes the order', async () => {
     orderFindUnique.mockResolvedValue(base)
     orderUpdate.mockResolvedValue({ id: 'order-1' })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'DELETE',
       url: '/orders/order-1',
@@ -1039,7 +1070,7 @@ describe('PATCH /orders/:id/assign', () => {
     orderFindUnique.mockResolvedValue(base)
     agencyMemberFindUnique.mockResolvedValue({ profileId: 'exec-2' })
     orderUpdate.mockResolvedValue({ id: 'order-1', assigneeId: 'exec-2', updatedAt: new Date() })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: '/orders/order-1/assign',
@@ -1053,7 +1084,7 @@ describe('PATCH /orders/:id/assign', () => {
   it('400 when the assignee is not an agency member', async () => {
     orderFindUnique.mockResolvedValue(base)
     agencyMemberFindUnique.mockResolvedValue(null)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: '/orders/order-1/assign',
@@ -1067,7 +1098,7 @@ describe('PATCH /orders/:id/assign', () => {
   it('executor can unassign (assigneeId = null)', async () => {
     orderFindUnique.mockResolvedValue(base)
     orderUpdate.mockResolvedValue({ id: 'order-1', assigneeId: null, updatedAt: new Date() })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: '/orders/order-1/assign',
@@ -1109,7 +1140,7 @@ describe('internal tasks (workspace-only)', () => {
       taskFindMany.mockResolvedValue([
         { id: 't1', title: 'A', status: 'todo', assigneeId: null, position: 0, coAssignees: [] },
       ])
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'GET',
         url: '/orders/order-1/tasks',
@@ -1148,7 +1179,7 @@ describe('internal tasks (workspace-only)', () => {
 
     it('404 for an unknown order', async () => {
       orderFindUnique.mockResolvedValue(null)
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'GET',
         url: '/orders/nope/tasks',
@@ -1160,7 +1191,7 @@ describe('internal tasks (workspace-only)', () => {
 
     it('403 cross-tenant (order in another agency)', async () => {
       orderFindUnique.mockResolvedValue({ ...order, agencyId: 'agency-OTHER' })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'GET',
         url: '/orders/order-1/tasks',
@@ -1182,7 +1213,7 @@ describe('internal tasks (workspace-only)', () => {
         position: 1,
         coAssignees: [],
       })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'POST',
         url: '/orders/order-1/tasks',
@@ -1203,7 +1234,7 @@ describe('internal tasks (workspace-only)', () => {
         position: 0,
         coAssignees: [],
       })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'POST',
         url: '/orders/order-1/tasks',
@@ -1219,7 +1250,7 @@ describe('internal tasks (workspace-only)', () => {
     it('400 when the assignee is not an agency member', async () => {
       orderFindUnique.mockResolvedValue(order)
       agencyMemberFindUnique.mockResolvedValue(null)
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'POST',
         url: '/orders/order-1/tasks',
@@ -1245,7 +1276,7 @@ describe('internal tasks (workspace-only)', () => {
 
     it('400 on an empty title (validation)', async () => {
       orderFindUnique.mockResolvedValue(order)
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'POST',
         url: '/orders/order-1/tasks',
@@ -1260,7 +1291,8 @@ describe('internal tasks (workspace-only)', () => {
   describe('PATCH /orders/:orderId/tasks/:taskId', () => {
     it('executor updates status (200)', async () => {
       orderFindUnique.mockResolvedValue(order)
-      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
+      // PERM-4: власну задачу виконавець рухає без tasks.manage
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1', assigneeId: 'exec-1' })
       taskUpdate.mockResolvedValue({
         id: 't1',
         title: 'A',
@@ -1277,6 +1309,20 @@ describe('internal tasks (workspace-only)', () => {
       })
       expect(res.statusCode).toBe(200)
       expect(taskUpdate.mock.calls[0][0].data.status).toBe('done')
+      await app.close()
+    })
+    it('PERM-4: виконавець не редагує чужу задачу (tasks.manage) → 403', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1', assigneeId: 'someone' })
+      const { app, token } = await authed(EXECUTOR)
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/orders/order-1/tasks/t1',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { status: 'done' },
+      })
+      expect(res.statusCode).toBe(403)
+      expect(taskUpdate).not.toHaveBeenCalled()
       await app.close()
     })
 
@@ -1297,7 +1343,7 @@ describe('internal tasks (workspace-only)', () => {
         position: 0,
         coAssignees: [],
       })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'PATCH',
         url: '/orders/order-1/tasks/t1',
@@ -1328,7 +1374,7 @@ describe('internal tasks (workspace-only)', () => {
         position: 0,
         coAssignees: [],
       })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'PATCH',
         url: '/orders/order-1/tasks/t1',
@@ -1352,7 +1398,7 @@ describe('internal tasks (workspace-only)', () => {
         position: 0,
         coAssignees: [],
       })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'PATCH',
         url: '/orders/order-1/tasks/t1',
@@ -1368,7 +1414,7 @@ describe('internal tasks (workspace-only)', () => {
     it('404 when the task belongs to a different order (IDOR guard)', async () => {
       orderFindUnique.mockResolvedValue(order)
       taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-OTHER' })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'PATCH',
         url: '/orders/order-1/tasks/t1',
@@ -1398,7 +1444,7 @@ describe('internal tasks (workspace-only)', () => {
       orderFindUnique.mockResolvedValue(order)
       taskFindUnique.mockResolvedValue({ id: 't1', orderId: 'order-1' })
       taskDelete.mockResolvedValue({ id: 't1' })
-      const { app, token } = await authed(EXECUTOR)
+      const { app, token } = await authed(OWNER)
       const res = await app.inject({
         method: 'DELETE',
         url: '/orders/order-1/tasks/t1',

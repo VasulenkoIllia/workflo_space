@@ -10,6 +10,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * PATCH /orders/:id — edit order fields. Internal team may edit anything; a client
@@ -71,6 +72,17 @@ const updateOrderRoute: FastifyPluginAsync = (fastify) => {
         )
       }
 
+      if (isInternal) {
+        // PERM-4: ціни/білінг/номенклатура — orders.estimate; решта полів — orders.edit
+        const editsPricing = editsBilling || input.nomenclatureId !== undefined
+        const editsOther =
+          input.title !== undefined ||
+          input.description !== undefined ||
+          input.priority !== undefined ||
+          input.dueDate !== undefined
+        if (editsPricing) await requirePermission(request, 'orders.estimate')
+        if (editsOther || !editsPricing) await requirePermission(request, 'orders.edit')
+      }
       if (!isInternal) {
         if ((order.internalStatus as OrderInternalStatus) !== OrderInternalStatus.NEW) {
           throw new AppError(

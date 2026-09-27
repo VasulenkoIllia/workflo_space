@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireTeamOrder } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 02-Б КОШТОРИС разового замовлення (рішення власника 07.07): позиції к-сть × ціна
@@ -42,6 +43,7 @@ const orderEstimateRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'orders.estimate')
       const lines = await withTenant((tx) =>
         tx.orderEstimateLine.findMany({
           where: { orderId },
@@ -61,6 +63,7 @@ const orderEstimateRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'orders.estimate')
       const body = putSchema.parse(request.body)
 
       const order = await withTenant((tx) =>

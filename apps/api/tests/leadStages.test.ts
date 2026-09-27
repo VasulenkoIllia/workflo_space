@@ -61,14 +61,21 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('lead stages CRUD (ХВІСТ-4)', () => {
-  it('GET lists stages sorted open→won→lost (team)', async () => {
+  it('GET lists stages sorted open→won→lost (leads.manage)', async () => {
     db.leadStage.findMany.mockResolvedValue([
       { id: 's5', name: 'Втрачено', kind: 'lost', position: 5 },
       { id: 's4', name: 'Виграно', kind: 'won', position: 4 },
       { id: 's1', name: 'Новий', kind: 'open', position: 0 },
     ])
-    const { app } = await authed(EXECUTOR)
-    const token = app.jwt.sign(EXECUTOR)
+    const { app } = await authed(OWNER)
+    // PERM-4: воронка — leads.manage; виконавцю — 403
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/workspace/lead-stages',
+      headers: { authorization: `Bearer ${app.jwt.sign(EXECUTOR)}` },
+    })
+    expect(denied.statusCode).toBe(403)
+    const token = app.jwt.sign(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/lead-stages',

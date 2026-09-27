@@ -7,6 +7,7 @@ import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
 import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
+import { hasPermission } from '../../auth/permissions.js'
 
 /**
  * 24 Calendar MVP — зустрічі команда↔команда і команда↔клієнт. Створює команда
@@ -226,7 +227,12 @@ const calendarEventsRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
       const body = patchSchema.parse(request.body)
-      const ev = await loadOwned(request.params.id, user, agencyId)
+      const ev = await loadOwned(
+        request.params.id,
+        user,
+        agencyId,
+        await hasPermission(request, 'calendar.manage')
+      )
 
       if (body.startsAt && body.endsAt && new Date(body.endsAt) <= new Date(body.startsAt)) {
         throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Кінець має бути пізніше початку', 400)
@@ -265,7 +271,12 @@ const calendarEventsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      const ev = await loadOwned(request.params.id, user, agencyId)
+      const ev = await loadOwned(
+        request.params.id,
+        user,
+        agencyId,
+        await hasPermission(request, 'calendar.manage')
+      )
       if (ev.cancelledAt) {
         throw new AppError(ApiErrorCode.CONFLICT, 'Зустріч уже скасовано', 409)
       }
@@ -318,7 +329,12 @@ const calendarEventsRoute: FastifyPluginAsync = (fastify) => {
 }
 
 /** Завантажити подію, доступну на редагування: creator АБО owner агенції. */
-async function loadOwned(id: string, user: AccessClaims, agencyId: string) {
+async function loadOwned(
+  id: string,
+  user: AccessClaims,
+  agencyId: string,
+  canManageOthers: boolean
+) {
   const ev = await withTenant((tx) =>
     tx.calendarEvent.findFirst({
       where: { id, agencyId },
@@ -335,9 +351,9 @@ async function loadOwned(id: string, user: AccessClaims, agencyId: string) {
   )
   if (!ev) throw new AppError(ApiErrorCode.NOT_FOUND, 'Зустріч не знайдено', 404)
   assertSameTenant(user, ev.agencyId)
-  const isOwner = user.agencyMemberships.some((m) => m.agencyId === agencyId && m.role === 'owner')
-  if (ev.createdById !== user.sub && !isOwner) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Змінити може автор або власник', 403)
+  // PERM-4: чужу подію — calendar.manage (власник має завжди)
+  if (ev.createdById !== user.sub && !canManageOthers) {
+    throw new AppError(ApiErrorCode.FORBIDDEN, 'Змінити може автор або керівництво', 403)
   }
   return ev
 }

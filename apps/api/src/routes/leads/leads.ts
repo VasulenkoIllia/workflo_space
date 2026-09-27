@@ -1,11 +1,11 @@
 import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, LeadStatus } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { ensureStages } from './leadStages.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /** ХВІСТ-4: перша відкрита стадія воронки агенції (сідить дефолти, якщо порожньо). */
 async function firstOpenStageId(
@@ -114,12 +114,20 @@ const convertSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
 })
 
-function assertTeam(user: Pick<AccessClaims, 'agencyMemberships' | 'activeAgencyId'>): string {
-  const agencyId = requireActiveAgency(user)
-  if (!isInternalTeam(user)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
-  }
+/** PERM-4: ліди й воронка — право leads.manage (раніше будь-хто з команди, вкл. виконавця). */
+async function assertTeam(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'leads.manage')
   return agencyId
+}
+
+/** Відповідальний за лід — член цієї агенції (аудит: assigneeId не валідувався). */
+async function assertLeadAssignee(agencyId: string, assigneeId: string | null | undefined) {
+  if (!assigneeId) return
+  const m = await withTenant((tx) =>
+    tx.agencyMember.findFirst({ where: { agencyId, profileId: assigneeId }, select: { id: true } })
+  )
+  if (!m) throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Відповідальний — не член агенції', 400)
 }
 
 const leadsRoute: FastifyPluginAsync = (fastify) => {
@@ -128,7 +136,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const q = listQuerySchema.parse(request.query)
       const rows = await withTenant((tx) =>
         tx.lead.findMany({
@@ -151,7 +159,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const lead = await withTenant((tx) =>
         tx.lead.findFirst({ where: { id: request.params.id, agencyId }, select: LEAD_SELECT })
       )
@@ -165,8 +173,9 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const input = createSchema.parse(request.body)
+      await assertLeadAssignee(agencyId, input.assigneeId)
       const lead = await withTenant(async (tx) => {
         const stageId = await firstOpenStageId(tx, agencyId)
         const created = await tx.lead.create({
@@ -215,8 +224,9 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const input = updateSchema.parse(request.body)
+      await assertLeadAssignee(agencyId, input.assigneeId)
       // «won» is an outcome of conversion (which creates the linked Order), never a free stage
       // move — otherwise a drag-to-won leaves status=won with no order/company (audit HIGH).
       if (input.status === LeadStatus.WON) {
@@ -356,7 +366,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads/:id/convert',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const input = convertSchema.parse(request.body)
       const result = await tenantTransaction(prisma, async (tx) => {
         // Serialize concurrent converts of the same lead (double-click / retry) so the
@@ -433,7 +443,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads/:id/activity',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const rows = await withTenant(async (tx) => {
         const lead = await tx.lead.findFirst({
           where: { id: request.params.id, agencyId },
@@ -461,7 +471,7 @@ const leadsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/leads/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertTeam(request.user)
+      const agencyId = await assertTeam(request)
       const res = await withTenant((tx) =>
         tx.lead.deleteMany({ where: { id: request.params.id, agencyId } })
       )

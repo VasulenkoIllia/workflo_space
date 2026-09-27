@@ -12,6 +12,7 @@ import {
   serializeTicketMessage,
   TICKET_MESSAGE_SELECT,
 } from './access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 29 Support MVP — тікети підтримки (звернення поза замовленням). Portal: клієнт
@@ -265,9 +266,7 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'support.handle') // PERM-4
       const q = request.query as {
         status?: string
         priority?: string
@@ -298,9 +297,7 @@ const supportRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'support.handle') // PERM-4
       const body = patchSchema.parse(request.body)
 
       const before = await withTenant((tx) =>

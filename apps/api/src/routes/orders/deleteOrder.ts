@@ -2,8 +2,8 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * DELETE /orders/:id — soft delete (sets deletedAt). Workspace-only operation;
@@ -27,9 +27,7 @@ const deleteOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       assertSameTenant(user, order.agencyId)
 
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Видалення доступне лише команді', 403)
-      }
+      await requirePermission(request, 'orders.delete')
 
       await withTenant((tx) =>
         tx.order.update({

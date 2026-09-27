@@ -1,10 +1,11 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, OrderPriority } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S10-02: SLA-політики (спека 02-orders §C) — per-agency конфіг per-пріоритет.
@@ -38,8 +39,11 @@ function assertTeam(user: AccessClaims): string {
   return agencyId
 }
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'SLA-політики редагує лише власник')
+/** PERM-4: право `settings.manage` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'settings.manage')
+  return agencyId
 }
 
 const SELECT = { id: true, priority: true, firstResponseMins: true, resolutionMins: true } as const
@@ -61,7 +65,7 @@ const slaRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/sla-policies',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const input = upsertSchema.parse(request.body)
       const policy = await withTenant((tx) =>
         tx.slaPolicy.upsert({
@@ -91,7 +95,7 @@ const slaRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/sla-policies/:priority',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const priority = z.nativeEnum(OrderPriority).parse(request.params.priority)
       const res = await withTenant((tx) =>
         tx.slaPolicy.deleteMany({ where: { agencyId, priority } })

@@ -1,9 +1,9 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * S10-07: soft-delete restore («кошик»). Owner-only, 30-денне вікно — старші за нього
@@ -12,8 +12,11 @@ import { writeAuditAsync } from '../../services/audit.js'
  */
 const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Кошик доступний лише власнику')
+/** PERM-4: право `orders.delete` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'orders.delete')
+  return agencyId
 }
 
 const restoreOrderRoute: FastifyPluginAsync = (fastify) => {
@@ -22,7 +25,7 @@ const restoreOrderRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/orders/deleted',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const windowStart = new Date(Date.now() - RESTORE_WINDOW_MS)
       const rows = await withTenant((tx) =>
         tx.order.findMany({
@@ -63,7 +66,7 @@ const restoreOrderRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/orders/:id/restore',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const order = await withTenant((tx) =>
         tx.order.findFirst({
           where: { id: request.params.id, agencyId },

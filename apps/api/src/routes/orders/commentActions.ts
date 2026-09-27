@@ -2,11 +2,11 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, reactionSchema, updateCommentSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { agencyRole } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { publishChangeEvent, publishTypingEvent } from '../../services/chatBus.js'
 import { requireOrderParticipant } from './access.js'
 import { COMMENT_SELECT, serializeComment } from './comments.js'
+import { hasPermission } from '../../auth/permissions.js'
 
 // Канон 03-B: автор редагує 15 хв від createdAt; owner агенції — будь-коли.
 const EDIT_WINDOW_MS = 15 * 60 * 1000
@@ -29,7 +29,8 @@ const commentActionsRoute: FastifyPluginAsync = (fastify) => {
       const access = await requireOrderParticipant(request, request.params.id)
       const input = updateCommentSchema.parse(request.body)
       const user = request.user
-      const isAgencyOwner = agencyRole(user, access.agencyId) === 'owner'
+      // PERM-4: чужі повідомлення — chats.moderate (власник має завжди)
+      const isAgencyOwner = access.isInternal && (await hasPermission(request, 'chats.moderate'))
 
       const updated = await withTenant(async (tx) => {
         const row = await tx.orderComment.findFirst({
@@ -82,7 +83,8 @@ const commentActionsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const access = await requireOrderParticipant(request, request.params.id)
       const user = request.user
-      const isAgencyOwner = agencyRole(user, access.agencyId) === 'owner'
+      // PERM-4: чужі повідомлення — chats.moderate (власник має завжди)
+      const isAgencyOwner = access.isInternal && (await hasPermission(request, 'chats.moderate'))
 
       await withTenant(async (tx) => {
         const row = await tx.orderComment.findFirst({

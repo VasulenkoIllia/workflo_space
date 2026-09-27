@@ -92,7 +92,7 @@ describe('order tags (S10-01)', () => {
       { tag: { id: 't-1', name: 'a', color: null } },
       { tag: { id: 't-2', name: 'b', color: null } },
     ])
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PUT',
       url: '/orders/o-1/tags',
@@ -153,7 +153,7 @@ describe('order templates (S10-01)', () => {
     })
     db.company.findFirst.mockResolvedValue({ id: 'company-1' })
     db.order.create.mockResolvedValue({ id: 'o-9', title: 'Лендінг під ключ' })
-    const etoken = app.jwt.sign(EXECUTOR as object)
+    const etoken = app.jwt.sign(OWNER as object) // PERM-4: з шаблону — orders.create
     const from = await app.inject({
       method: 'POST',
       url: '/workspace/orders/from-template/tpl-1',

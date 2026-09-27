@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { writeAuditAsync } from '../../services/audit.js'
 import { requireOrderParticipant, requireTeamOrder } from './access.js'
+import { getPermissions, orderScopeWhere, requirePermission } from '../../auth/permissions.js'
 
 /**
  * 18-хвости (chat-hub):
@@ -108,6 +109,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { orderId, agencyId } = await requireTeamOrder(request, request.params.id)
+      await requirePermission(request, 'orders.assign') // PERM-4: відповідальний за тред
       const { profileId } = chatOwnerSchema.parse(request.body)
 
       if (profileId !== null) {
@@ -153,6 +155,10 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
       }
       const me = user.sub
+      // PERM-4: хаб розмов — лише замовлення в межах chats.view (виконавець — свої)
+      const snap = await getPermissions(request)
+      const chatScope = snap ? orderScopeWhere(snap, snap.levels['chats.view'], me) : null
+      if (!chatScope) throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до чатів', 403)
 
       const data = await withTenant(async (tx) => {
         const staff = await tx.agencyMember.findMany({
@@ -166,6 +172,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
             agencyId,
             deletedAt: null,
             comments: { some: { deletedAt: null } },
+            AND: [chatScope],
           },
           select: {
             id: true,
@@ -373,6 +380,9 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
       }
       const { hours } = unansweredQuerySchema.parse(request.query)
       const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+      const snap = await getPermissions(request)
+      const chatScope = snap ? orderScopeWhere(snap, snap.levels['chats.view'], user.sub) : null
+      if (!chatScope) throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до чатів', 403)
 
       const rows = await withTenant(async (tx) => {
         // Team profile ids — to classify the LAST public message as client-authored.
@@ -388,6 +398,7 @@ const conversationRoute: FastifyPluginAsync = (fastify) => {
             deletedAt: null,
             internalStatus: { notIn: ['done', 'cancelled'] },
             comments: { some: { isInternal: false, deletedAt: null } },
+            AND: [chatScope],
           },
           select: {
             id: true,

@@ -2,9 +2,9 @@ import { prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, assignOrderSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { assertSameTenant } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * PATCH /orders/:id/assign — triage: assign an executor to the order (null =
@@ -31,9 +31,7 @@ const assignOrderRoute: FastifyPluginAsync = (fastify) => {
       }
       assertSameTenant(user, order.agencyId)
 
-      if (!isInternalTeam(user)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Призначення доступне лише команді', 403)
-      }
+      await requirePermission(request, 'orders.assign')
 
       if (input.assigneeId) {
         // Validate against the ORDER's agency (the resource), not the actor's active
