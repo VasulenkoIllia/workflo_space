@@ -18,7 +18,11 @@ export function ContactForm() {
     e.preventDefault()
     if (state === 'sending' || state === 'sent') return
     setState('sending')
-    const budget = vals.budget ? `\n\nБюджет: ${vals.budget}` : ''
+    const kind = vals.kind ?? CONTACT_PAGE.fields.find((f) => f.id === 'kind')?.options?.[0]
+    const meta = [kind ? `Тип задачі: ${kind}` : '', vals.budget ? `Бюджет: ${vals.budget}` : '']
+      .filter(Boolean)
+      .join('\n')
+    const budget = meta ? `\n\n${meta}` : ''
     try {
       const res = await fetch(`${API_URL}/content/contact`, {
         method: 'POST',
@@ -67,6 +71,22 @@ export function ContactForm() {
               value={vals[fld.id] ?? ''}
               onChange={(e) => set(fld.id, e.target.value)}
             />
+          ) : fld.type === 'chips' ? (
+            <div className="wf-tm-blog-filters" role="radiogroup" aria-label={fld.label}>
+              {(fld.options ?? []).map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  role="radio"
+                  aria-checked={vals[fld.id] === o}
+                  className="wf-tm-blog-filter"
+                  data-on={vals[fld.id] === o || undefined}
+                  onClick={() => set(fld.id, vals[fld.id] === o ? '' : o)}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
           ) : fld.type === 'select' ? (
             <select
               className="wf-tm-field-input"

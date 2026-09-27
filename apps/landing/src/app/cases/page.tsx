@@ -1,19 +1,13 @@
 import type { Metadata } from 'next'
 import { TermPageShell } from '@/components/TermPageShell'
 import { UA } from '@/data/content'
+import { splitMetric } from '@/lib/metrics'
 
 export const metadata: Metadata = {
   title: 'Кейси — workflo.space',
   description:
     'Реальні проєкти з реальними цифрами: інтеграції, AI-агенти, портали. Більшість — під NDA; тут публічні.',
   alternates: { canonical: '/cases' },
-}
-
-function splitMetric(m: string): { v: string; l: string } {
-  const arrow = m.match(/^(.+?\s*→\s*\d+\S*)\s+(.+)$/)
-  if (arrow) return { v: arrow[1] ?? '', l: arrow[2] ?? '' }
-  const sp = m.indexOf(' ')
-  return sp > 0 ? { v: m.slice(0, sp), l: m.slice(sp + 1) } : { v: m, l: '' }
 }
 
 export default function CasesPage() {
@@ -81,6 +75,13 @@ export default function CasesPage() {
                     </span>
                   )}
                 </div>
+                {/* DSN-8: деталь кейса */}
+                {c.slug && (
+                  <a className="wf-tm-case-card-readmore" href={`/cases/${c.slug}`}>
+                    <span>$ cat ~/work/{c.slug}.md</span>
+                    <span className="wf-tm-case-card-readmore-arrow">→</span>
+                  </a>
+                )}
               </article>
             )
           })}

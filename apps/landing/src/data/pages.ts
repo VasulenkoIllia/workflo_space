@@ -200,7 +200,8 @@ export interface ContactField {
   id: string
   label: string
   placeholder: string
-  type: 'text' | 'textarea' | 'select'
+  /** chips — один вибір із пілюль (DSN-8: бюджет), не обовʼязковий. */
+  type: 'text' | 'textarea' | 'select' | 'chips'
   options?: string[]
 }
 
@@ -239,11 +240,26 @@ export const CONTACT_PAGE = {
       placeholder: '@olena / olena@brunky.ua',
       type: 'text',
     },
+    // DSN-8 (DESIGN_SPEC §contact): тип задачі (select) + бюджет чипами (опційно)
     {
-      id: 'budget',
-      label: 'Орієнтовний бюджет',
+      id: 'kind',
+      label: 'Тип задачі',
       placeholder: '',
       type: 'select',
+      options: [
+        'Інтеграція систем (1С, CRM, Telegram…)',
+        'AI-агент / автоматизація з AI',
+        'Портал, CRM або внутрішній сервіс',
+        'Парсинг, звіти, рутинна автоматизація',
+        'Підтримка наявного рішення',
+        'Інше / ще не знаю',
+      ],
+    },
+    {
+      id: 'budget',
+      label: 'Орієнтовний бюджет (необовʼязково)',
+      placeholder: '',
+      type: 'chips',
       options: ['Ще не знаю', 'до $1 500', '$1 500 – $5 000', '$5 000+', 'Підписка / retainer'],
     },
     {

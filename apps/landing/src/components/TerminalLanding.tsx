@@ -3,6 +3,7 @@
 import { Fragment, type FormEvent, useEffect, useState } from 'react'
 import { HERO_ASCII, UA, type LandingContent } from '@/data/content'
 import { getUtm } from '@/lib/utm'
+import { splitMetric } from '@/lib/metrics'
 
 const PORTAL_URL = 'https://app.workflo.space'
 // Inlined at build (NEXT_PUBLIC_*); defaults to the staging API. Prod sets the build-arg.
@@ -128,15 +129,9 @@ function useTypewriter(lines: string[], enabled: boolean) {
 }
 
 /** Split a metric string into a big value + label (e.g. "18 год → 12 хв щодня"). */
-function splitMetric(m: string): { v: string; l: string } {
-  const arrow = m.match(/^(.+?\s*→\s*\d+\S*)\s+(.+)$/)
-  if (arrow) return { v: arrow[1] ?? '', l: arrow[2] ?? '' }
-  const sp = m.indexOf(' ')
-  return sp > 0 ? { v: m.slice(0, sp), l: m.slice(sp + 1) } : { v: m, l: '' }
-}
 
 /** Cases — git-log-styled proof cards (design: TerminalCases). Partner-chip + per-case
- * read-more link to #company-/#project- anchors (those pages land in later S7 slices). */
+ * read-more → /cases/:slug (DSN-8). */
 function CasesSection({ items }: { items: LandingContent['cases'] }) {
   return (
     <section className="wf-tm-section" id="work" data-screen-label="work">
@@ -150,9 +145,8 @@ function CasesSection({ items }: { items: LandingContent['cases'] }) {
             return (
               <article key={c.num} className="wf-tm-case-card">
                 <div className="wf-tm-case-card-top">
-                  <a className="wf-tm-case-partner-chip" href={`#company-${c.company}`}>
-                    {c.company}
-                  </a>
+                  {/* DSN-8: галузь кейса — не партнер, тож без посилання (був мертвий якір) */}
+                  <span className="wf-tm-case-partner-chip">{c.company}</span>
                   <span className="wf-tm-case-card-meta">
                     {c.year} · {c.duration}
                   </span>
@@ -185,7 +179,7 @@ function CasesSection({ items }: { items: LandingContent['cases'] }) {
                   )}
                 </div>
                 {c.slug ? (
-                  <a className="wf-tm-case-card-readmore" href={`#project-${c.slug}`}>
+                  <a className="wf-tm-case-card-readmore" href={`/cases/${c.slug}`}>
                     <span>$ cat ~/work/{c.slug}.md</span>
                     <span className="wf-tm-case-card-readmore-arrow">→</span>
                   </a>
@@ -233,8 +227,7 @@ function ProcessSection({ items }: { items: LandingContent['process'] }) {
   )
 }
 
-/** Partners — company cards (design: TerminalPartners). Cards link to #company- anchors
- * (company detail pages land in a later slice). */
+/** Partners — company cards (design: TerminalPartners). Cards link to /partners/:slug (DSN-8). */
 function PartnersSection({ partners }: { partners: LandingContent['partners'] }) {
   const totalProjects = partners.reduce((n, p) => n + p.projectsCount, 0)
   return (
@@ -246,7 +239,7 @@ function PartnersSection({ partners }: { partners: LandingContent['partners'] })
         </p>
         <div className="wf-tm-partner-grid">
           {partners.map((c) => (
-            <a key={c.slug} className="wf-tm-partner-card" href={`#company-${c.slug}`}>
+            <a key={c.slug} className="wf-tm-partner-card" href={`/partners/${c.slug}`}>
               <div className="wf-tm-partner-card-top">
                 <div className="wf-tm-partner-logo-lg" style={{ background: c.accent }}>
                   {c.logoGlyph}
@@ -770,6 +763,15 @@ export function TerminalLanding({ content = UA }: { content?: LandingContent }) 
               <span>lime</span>
             </div>
             <div className="wf-tm-statusbar-right">
+              {/* DSN-8: юридичні сторінки */}
+              <a href="/terms" className="wf-tm-sb-link">
+                умови
+              </a>
+              <span className="wf-tm-sb-sep">·</span>
+              <a href="/privacy" className="wf-tm-sb-link">
+                приватність
+              </a>
+              <span className="wf-tm-sb-sep">·</span>
               <span>ua</span>
               <span className="wf-tm-sb-sep">·</span>
               <div className="wf-tm-sb-toggle">

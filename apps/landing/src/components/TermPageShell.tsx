@@ -92,6 +92,15 @@ export function TermPageShell({
           <div className="wf-tm-statusbar">
             <div className="wf-tm-statusbar-left">{statusLeft}</div>
             <div className="wf-tm-statusbar-right">
+              {/* DSN-8: юридичні сторінки */}
+              <a href="/terms" className="wf-tm-sb-link">
+                умови
+              </a>
+              <span className="wf-tm-sb-sep">·</span>
+              <a href="/privacy" className="wf-tm-sb-link">
+                приватність
+              </a>
+              <span className="wf-tm-sb-sep">·</span>
               <span>lime</span>
               <span className="wf-tm-sb-sep">·</span>
               <div className="wf-tm-sb-toggle">
