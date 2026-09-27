@@ -97,6 +97,38 @@ export function useSetTaskTeam() {
   })
 }
 
+/**
+ * CORE-FLOWS (D3): «+ Задача» з дошки (design-v2 AddTaskModal). Задача живе в замовленні;
+ * teamId не передано → бек бере команду проєкту замовлення, null → без команди. Перший
+ * виконавець — головний, решта — співвиконавці (PUT …/assignees).
+ */
+export function useCreateBoardTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: {
+      orderId: string
+      title: string
+      teamId?: string | null
+      assigneeIds: string[]
+    }) => {
+      const [main, ...co] = v.assigneeIds
+      const { task } = await api.post<{ task: OrderTask }>(`/orders/${v.orderId}/tasks`, {
+        title: v.title,
+        ...(main ? { assigneeId: main } : {}),
+        ...(v.teamId !== undefined ? { teamId: v.teamId } : {}),
+      })
+      if (co.length > 0) {
+        await api.put(`/orders/${v.orderId}/tasks/${task.id}/assignees`, { profileIds: co })
+      }
+      return task
+    },
+    onSuccess: (_t, v) => {
+      void qc.invalidateQueries({ queryKey: ['ws-tasks'] })
+      void qc.invalidateQueries({ queryKey: key(v.orderId) })
+    },
+  })
+}
+
 export function useCreateTask(orderId: string) {
   const qc = useQueryClient()
   return useMutation({

@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { agencyRole, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
-import { requireTeamOrder } from './access.js'
+import { assertTeamScope, requireTeamOrder } from './access.js'
 import { requirePermission } from '../../auth/permissions.js'
 
 const TASK_SELECT = {
@@ -194,8 +194,28 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       await requirePermission(request, 'tasks.manage') // PERM-4: створення задач
+      // тімлід (team) / виконавець (own) — лише замовлення свого скоупу
+      await assertTeamScope(request, request.params.orderId, agencyId, 'tasks.manage')
       const input = createInternalTaskSchema.parse(request.body)
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
+      // CORE-FLOWS: команда — явна (своєї агенції) або з проєкту замовлення
+      let teamId: string | null = null
+      if (input.teamId) {
+        const explicit = input.teamId
+        const team = await withTenant((tx) =>
+          tx.team.findFirst({ where: { id: explicit, agencyId }, select: { id: true } })
+        )
+        if (!team) throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Команду не знайдено', 400)
+        teamId = team.id
+      } else if (input.teamId === undefined) {
+        const order = await withTenant((tx) =>
+          tx.order.findUnique({
+            where: { id: request.params.orderId },
+            select: { project: { select: { teamId: true } } },
+          })
+        )
+        teamId = order?.project?.teamId ?? null
+      }
 
       const task = await withTenant((tx) =>
         tx.internalTask.create({
@@ -205,6 +225,7 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
             title: input.title,
             position: input.position ?? 0,
             ...(input.assigneeId ? { assignee: { connect: { id: input.assigneeId } } } : {}),
+            ...(teamId ? { team: { connect: { id: teamId } } } : {}),
           },
           select: TASK_SELECT,
         })
@@ -239,7 +260,10 @@ const internalTasksRoute: FastifyPluginAsync = (fastify) => {
       const onlyMove = Object.keys(input).every((k) =>
         ['status', 'position', 'columnId'].includes(k)
       )
-      if (!(mine && onlyMove)) await requirePermission(request, 'tasks.manage')
+      if (!(mine && onlyMove)) {
+        await requirePermission(request, 'tasks.manage')
+        await assertTeamScope(request, request.params.orderId, agencyId, 'tasks.manage')
+      }
       if (input.assigneeId) await assertAgencyMember(agencyId, input.assigneeId)
       // TEAM-BOARDS: команда задачі — лише команда ЦІЄЇ агенції (cross-tenant → 400)
       if (input.teamId) {

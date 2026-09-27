@@ -107,6 +107,7 @@ const coAssigneesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId } = await requireTeamOrder(request, request.params.orderId)
       await requirePermission(request, 'tasks.manage')
+      await assertTeamScope(request, request.params.orderId, agencyId, 'tasks.manage')
       const task = await withTenant((tx) =>
         tx.internalTask.findFirst({
           where: { id: request.params.taskId, orderId: request.params.orderId, agencyId },

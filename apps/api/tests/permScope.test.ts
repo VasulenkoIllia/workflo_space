@@ -141,6 +141,8 @@ describe('PERM-4 скоуп orders.assign тімліда + роль із БД', 
   it.each([
     ['PATCH', '/orders/o-9/assign', { assigneeId: '00000000-0000-4000-8000-000000000002' }],
     ['PUT', '/orders/o-9/assignees', { profileIds: ['exec-2'] }],
+    // CORE-FLOWS: tasks.manage = team — задачі лише на замовленнях підрозділу
+    ['POST', '/orders/o-9/tasks', { title: 'Чужа задача' }],
   ])('%s %s на замовлення іншого підрозділу → 404', async (method, url, payload) => {
     vi.mocked(fetchPermissionData).mockResolvedValue(LEAD_DATA)
     orderFindUnique.mockResolvedValue({
@@ -154,7 +156,7 @@ describe('PERM-4 скоуп orders.assign тімліда + роль із БД', 
     const app = buildApp()
     await app.ready()
     const res = await app.inject({
-      method: method as 'PATCH' | 'PUT',
+      method: method as 'PATCH' | 'PUT' | 'POST',
       url,
       payload,
       headers: { authorization: `Bearer ${app.jwt.sign(LEAD as never)}` },

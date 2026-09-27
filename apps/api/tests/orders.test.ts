@@ -38,6 +38,7 @@ const payoutFindUnique = vi.fn() // S5-04 time-log lock; default → null (unloc
 // AR-13: guarded transition (updateMany WHERE internalStatus=from) + re-read.
 const orderUpdateMany = vi.fn()
 const orderFindUniqueOrThrow = vi.fn()
+const teamFindFirst = vi.fn()
 
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as { Prisma: unknown }
@@ -57,6 +58,8 @@ vi.mock('@workflo/db', async (importOriginal) => {
     // S10-02: штампування SLA-дедлайнів при створенні (null = політики нема)
     slaPolicy: { findFirst: vi.fn().mockResolvedValue(null) },
     teamColumn: { findFirst: teamColumnFindFirst },
+    // CORE-FLOWS: команда задачі при створенні — лише своєї агенції
+    team: { findFirst: teamFindFirst },
     internalTask: {
       findMany: taskFindMany,
       create: taskCreate,
@@ -1244,6 +1247,38 @@ describe('internal tasks (workspace-only)', () => {
       expect(res.statusCode).toBe(201)
       expect(agencyMemberFindUnique).not.toHaveBeenCalled()
       expect(taskCreate.mock.calls[0][0].data.position).toBe(0)
+      await app.close()
+    })
+
+    it('CORE-FLOWS: без teamId задача успадковує команду проєкту замовлення', async () => {
+      const TEAM = '00000000-0000-4000-8000-0000000000aa'
+      orderFindUnique.mockResolvedValue({ ...order, project: { teamId: TEAM } })
+      taskCreate.mockResolvedValue({ id: 't1', title: 'Build', status: 'todo', coAssignees: [] })
+      const { app, token } = await authed(OWNER)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build' },
+      })
+      expect(res.statusCode).toBe(201)
+      expect(taskCreate.mock.calls[0][0].data.team).toEqual({ connect: { id: TEAM } })
+      await app.close()
+    })
+
+    it('CORE-FLOWS: команда іншої агенції → 400, задача не створюється', async () => {
+      orderFindUnique.mockResolvedValue(order)
+      teamFindFirst.mockResolvedValue(null)
+      const { app, token } = await authed(OWNER)
+      const res = await app.inject({
+        method: 'POST',
+        url: '/orders/order-1/tasks',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Build', teamId: '00000000-0000-4000-8000-0000000000bb' },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(teamFindFirst.mock.calls[0][0].where.agencyId).toBe('agency-1')
+      expect(taskCreate).not.toHaveBeenCalled()
       await app.close()
     })
 

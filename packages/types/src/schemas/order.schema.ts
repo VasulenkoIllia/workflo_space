@@ -196,6 +196,9 @@ export const createInternalTaskSchema = z.object({
   title: z.string().min(1).max(255),
   assigneeId: z.string().uuid().nullable().optional(),
   position: z.number().int().min(0).optional(),
+  // CORE-FLOWS (D3): команда задачі; не передано → команда проєкту замовлення (design-v2
+  // AddTaskModal: «проєкт — драйвер»), null → без команди (лише в «Усі»)
+  teamId: z.string().uuid().nullable().optional(),
 })
 
 /** PATCH /orders/:orderId/tasks/:taskId — partial update. */

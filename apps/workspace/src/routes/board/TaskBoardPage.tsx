@@ -22,6 +22,7 @@ import {
   useTeams,
 } from '@/lib/teams'
 import { useTeam } from '@/lib/payouts'
+import { AddTaskModal } from './AddTaskModal'
 
 const COLUMNS: { id: TaskStatus; label: string }[] = [
   { id: 'todo', label: 'До роботи' },
@@ -92,6 +93,9 @@ export function TaskBoardPage() {
   const [teamTab, setTeamTab] = useState<string>('all')
   const [teamsEditor, setTeamsEditor] = useState(false)
   const [columnsEditor, setColumnsEditor] = useState(false)
+  const [adding, setAdding] = useState(false)
+  // CORE-FLOWS (D3): створення задач — tasks.manage (тімлід — у своєму підрозділі)
+  const canCreate = can('tasks.manage')
   const all = data?.tasks ?? []
   const activeTeam = teamTab === 'all' ? null : (teams.find((tm) => tm.id === teamTab) ?? null)
   // TEAM-ADMIN-1: колонки своєї дошки налаштовує і ТІМЛІД активної команди
@@ -152,7 +156,7 @@ export function TaskBoardPage() {
           <div className="wfp-ph-sub">// задачі команди · усі замовлення</div>
           <h1 className="wfp-ph-h1">Дошка задач</h1>
         </div>
-        <div className="wfp-ph-r">
+        <div className="wfp-ph-r" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
             type="button"
             className="wfp-link wfp-mono"
@@ -161,6 +165,11 @@ export function TaskBoardPage() {
           >
             {mine ? '← усі задачі' : 'лише мої →'}
           </button>
+          {canCreate && (
+            <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
+              + Задача
+            </Button>
+          )}
         </div>
       </div>
 
@@ -225,7 +234,18 @@ export function TaskBoardPage() {
       ) : tasks.length === 0 ? (
         <EmptyState
           title={mine ? 'У вас немає задач' : 'Задач ще немає'}
-          description="Задачі створюються в деталі замовлення (таб «Задачі»)."
+          description={
+            canCreate
+              ? 'Розбийте замовлення на задачі — кожна потрапляє на дошку своєї команди.'
+              : 'Задачі створюють менеджер або тімлід — тут зʼявляться призначені вам.'
+          }
+          action={
+            canCreate ? (
+              <Button variant="primary" onClick={() => setAdding(true)}>
+                + Створити задачу
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div
@@ -272,7 +292,8 @@ export function TaskBoardPage() {
                 <span>{col.label}</span>
                 <span>{col.tasks.length}</span>
               </div>
-              <div style={{ display: 'grid', gap: 8 }}>
+              {/* minmax(0,1fr): довга назва замовлення (nowrap) не розпирає картку за колонку */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
                 {col.tasks.map((t) => (
                   <div
                     key={t.id}
@@ -363,6 +384,13 @@ export function TaskBoardPage() {
         </div>
       )}
 
+      {adding && (
+        <AddTaskModal
+          teams={teams}
+          defaultTeamId={activeTeam?.id ?? null}
+          onClose={() => setAdding(false)}
+        />
+      )}
       {teamsEditor && <TeamsEditorModal teams={teams} onClose={() => setTeamsEditor(false)} />}
       {columnsEditor && activeTeam && (
         <ColumnsEditorModal team={activeTeam} onClose={() => setColumnsEditor(false)} />
