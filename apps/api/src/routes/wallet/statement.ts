@@ -2,8 +2,8 @@ import { ApiErrorCode, AppError, statementQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { buildStatement } from '../../services/statement.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * Unified financial statement (S5-08). Portal serves the caller's own company;
@@ -42,9 +42,7 @@ const statementRoute: FastifyPluginAsync = (fastify) => {
       const query = statementQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.view')
 
       const statement = await buildStatement({
         agencyId,

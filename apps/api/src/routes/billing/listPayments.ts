@@ -3,7 +3,7 @@ import { ApiErrorCode, AppError, billingListQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 interface PaymentRow {
   id: string
@@ -72,9 +72,7 @@ const listPaymentsRoute: FastifyPluginAsync = (fastify) => {
       const query = billingListQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.view')
 
       const where: Prisma.PaymentWhereInput = {
         agencyId,

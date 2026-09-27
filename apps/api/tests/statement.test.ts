@@ -49,6 +49,13 @@ const EXECUTOR = {
   agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' as const }],
   memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
 }
+// PERM-2: фінансові дії — за правом (дефолт: лише власник); executor → 403
+const OWNER = {
+  ...EXECUTOR,
+  sub: 'owner-1',
+  role: 'owner' as const,
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'owner' as const }],
+}
 
 const COMPANY_ID = '22222222-2222-4222-8222-222222222222'
 
@@ -173,7 +180,7 @@ describe('GET /admin/wallet/companies/:id/statement', () => {
         createdAt: new Date('2026-06-05T00:00:00Z'),
       },
     ])
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/admin/wallet/companies/${COMPANY_ID}/statement`,

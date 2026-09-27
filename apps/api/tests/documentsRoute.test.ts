@@ -82,6 +82,11 @@ const MANAGER = {
   agencyMemberships: [{ agencyId: AGENCY, role: 'manager' as const }],
   memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
 }
+const EXECUTOR = {
+  ...MANAGER,
+  sub: 'exec-1',
+  agencyMemberships: [{ agencyId: AGENCY, role: 'executor' as const }],
+}
 // Same tenant, but belongs to a different company than the order → must not see it.
 const OTHER_CLIENT = {
   ...CLIENT,
@@ -246,8 +251,11 @@ describe('GET /orders/:orderId/documents — list (participant)', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.documents).toHaveLength(1)
+    // PERM-2: клієнт бачить лише надіслані/прийняті (не чернетки агенції)
     expect(db.document.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orderId: ORDER } })
+      expect.objectContaining({
+        where: { orderId: ORDER, status: { in: ['sent', 'accepted'] } },
+      })
     )
     await app.close()
   })
@@ -345,8 +353,8 @@ describe('GET /workspace/clients/:id/documents — client document overview', ()
     await app.close()
   })
 
-  it('a manager is blocked (financial/legal artefacts) — 403', async () => {
-    const { app, token } = await authed(MANAGER)
+  it('PERM-2: an executor is blocked (documents.manage) — 403', async () => {
+    const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
       url: `/workspace/clients/${COMPANY}/documents`,
@@ -411,6 +419,7 @@ describe('POST /orders/:orderId/documents/:docId/send — send (team-only)', () 
 
   it('owner sends: status→sent + a single document.sent outbox event', async () => {
     db.order.findUnique.mockResolvedValue(orderRow())
+    db.document.findFirst.mockResolvedValue({ type: 'invoice' }) // PERM-2: право за типом
     db.document.updateMany.mockResolvedValue({ count: 1 })
     db.document.findFirstOrThrow.mockResolvedValue({
       id: 'doc-1',

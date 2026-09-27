@@ -1,10 +1,10 @@
 import { prisma, tenantTransaction } from '@workflo/db'
-import { ApiErrorCode, AppError, generateChargesSchema } from '@workflo/types'
+import { generateChargesSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { endOfMonthUtc, generateRecurringCharges } from '../../services/recurringCharges.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * POST /workspace/billing/charges/generate — manual fallback for the recurring-charge
@@ -20,9 +20,7 @@ const generateChargesRoute: FastifyPluginAsync = (fastify) => {
       const input = generateChargesSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.manage')
 
       const result = await tenantTransaction(prisma, (tx) =>
         generateRecurringCharges(tx, { now: endOfMonthUtc(input.month), agencyId })

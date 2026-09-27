@@ -8,7 +8,6 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import {
@@ -18,6 +17,7 @@ import {
   getEstimate,
   updateEstimateLine,
 } from '../../services/estimate.js'
+import { hasPermission, requireAnyPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * Project estimate lines (02-Б, P-6). Workspace = internal-team editor (CRUD); Portal =
@@ -33,17 +33,20 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (
-        !isInternalTeam(user) ||
-        isAgencyManager(user, agencyId) ||
-        !(await moduleEnabled(agencyId, 'billing'))
-      ) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      // PERM-2: читання специфікації — фін-проєкти АБО робота із замовленнями (таб
+      // «Специфікація» виконавця); суми позицій — лише з billing.view.
+      await requireAnyPermission(request, ['projects.view', 'orders.view'])
+      if (!(await moduleEnabled(agencyId, 'billing'))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Модуль білінгу вимкнено', 403)
       }
+      const showAmounts = await hasPermission(request, 'billing.view')
       const estimate = await withTenant((tx) =>
         getEstimate(tx, { agencyId, projectId: request.params.id })
       )
-      return reply.send({ success: true, data: { estimate } })
+      const masked = showAmounts
+        ? estimate
+        : { ...estimate, lines: estimate.lines.map((l) => ({ ...l, amount: null })) }
+      return reply.send({ success: true, data: { estimate: masked } })
     }
   )
 
@@ -55,12 +58,9 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
       const input = createEstimateLineSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (
-        !isInternalTeam(user) ||
-        isAgencyManager(user, agencyId) ||
-        !(await moduleEnabled(agencyId, 'billing'))
-      ) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      await requirePermission(request, 'projects.manage')
+      if (!(await moduleEnabled(agencyId, 'billing'))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Модуль білінгу вимкнено', 403)
       }
       const line = await tenantTransaction(prisma, (tx) =>
         createEstimateLine(tx, { agencyId, projectId: request.params.id, actorId: user.sub, input })
@@ -86,12 +86,9 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
       const input = updateEstimateLineSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (
-        !isInternalTeam(user) ||
-        isAgencyManager(user, agencyId) ||
-        !(await moduleEnabled(agencyId, 'billing'))
-      ) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      await requirePermission(request, 'projects.manage')
+      if (!(await moduleEnabled(agencyId, 'billing'))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Модуль білінгу вимкнено', 403)
       }
       const line = await tenantTransaction(prisma, (tx) =>
         updateEstimateLine(tx, {
@@ -112,12 +109,9 @@ const estimatesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (
-        !isInternalTeam(user) ||
-        isAgencyManager(user, agencyId) ||
-        !(await moduleEnabled(agencyId, 'billing'))
-      ) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
+      await requirePermission(request, 'projects.manage')
+      if (!(await moduleEnabled(agencyId, 'billing'))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Модуль білінгу вимкнено', 403)
       }
       await tenantTransaction(prisma, (tx) =>
         deleteEstimateLine(tx, {

@@ -78,7 +78,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('nomenclature CRUD (02-Б)', () => {
-  it('POST creates (owner); duplicate → 409; executor → 403; GET lists for whole team', async () => {
+  it('POST creates (owner); duplicate → 409; executor → 403; GET — owner, скоуп агенції', async () => {
     db.nomenclature.create.mockResolvedValue({
       id: 'n-1',
       name: 'Консультації з питань інформатизації',
@@ -115,13 +115,21 @@ describe('nomenclature CRUD (02-Б)', () => {
     })
     expect(denied.statusCode).toBe(403)
 
-    // читає і виконавець — селект в оцінці замовлення
-    const list = await app.inject({
+    // PERM-2: виконавцю номенклатура не потрібна (оцінка/каталог — керівництво) → 403
+    const execList = await app.inject({
       method: 'GET',
       url: '/workspace/nomenclature',
       headers: { authorization: `Bearer ${etoken}` },
     })
+    expect(execList.statusCode).toBe(403)
+    // власник читає — і лише СВОЮ агенцію (раніше без фільтра agencyId — міжтенантний витік)
+    const list = await app.inject({
+      method: 'GET',
+      url: '/workspace/nomenclature',
+      headers: { authorization: `Bearer ${token}` },
+    })
     expect(list.statusCode).toBe(200)
+    expect(db.nomenclature.findMany.mock.calls.at(-1)?.[0].where).toEqual({ agencyId: 'agency-1' })
     await app.close()
   })
 

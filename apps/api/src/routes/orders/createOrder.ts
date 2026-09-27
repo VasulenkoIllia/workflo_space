@@ -34,6 +34,14 @@ const createOrderRoute: FastifyPluginAsync = (fastify) => {
       if (!can(user, 'order.create', { companyId, agencyId })) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для створення замовлення', 403)
       }
+      // PERM-2 (аудит): компанія мусить належати АКТИВНІЙ агенції — інакше користувач, що
+      // є командою агенції A і клієнтом компанії агенції B, створював замовлення A на компанію B.
+      const ownCompany = await withTenant((tx) =>
+        tx.company.findFirst({ where: { id: companyId, agencyId }, select: { id: true } })
+      )
+      if (!ownCompany) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Компанія не належить цій агенції', 403)
+      }
       // SaaS quota seam (no-op Phase 0; per-plan limit Phase 1) — SAAS.md F2 / ADR-007.
       await assertWithinQuota(agencyId, 'orders')
 

@@ -112,3 +112,28 @@ export async function requirePermission(
   }
   return { ...snap, level }
 }
+
+/** Неблокуюча перевірка — для маскування полів (суми лише з `billing.view` тощо). */
+export async function hasPermission(
+  request: FastifyRequest,
+  key: PermissionKey,
+  min: PermissionLevel = 'own'
+): Promise<boolean> {
+  const snap = await getPermissions(request)
+  const level = snap?.levels[key] ?? 'none'
+  return level !== 'none' && levelAtLeast(level, min)
+}
+
+/** Гард «хоча б одне з прав» (напр. пікер юр-осіб: settings.legal ∨ projects.manage). */
+export async function requireAnyPermission(
+  request: FastifyRequest,
+  keys: readonly PermissionKey[]
+): Promise<PermissionSnapshot> {
+  const snap = await getPermissions(request)
+  if (snap && keys.some((k) => snap.levels[k] !== 'none')) return snap
+  throw new AppError(
+    ApiErrorCode.FORBIDDEN,
+    `Недостатньо прав: ${keys.map((k) => permissionDef(k).label.toLowerCase()).join(' або ')}`,
+    403
+  )
+}

@@ -154,7 +154,7 @@ describe('GET /workspace/companies/:id/loyalty', () => {
     historyFindMany.mockResolvedValue([
       { fromTier: 'new', toTier: 'regular', reason: 'auto_recalc', createdAt: new Date() },
     ])
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/workspace/companies/${COMPANY_ID}/loyalty`,
@@ -193,7 +193,7 @@ describe('GET /workspace/companies/:id/loyalty', () => {
       loyaltyTier: 'new',
       tierOverride: null,
     })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/workspace/companies/${COMPANY_ID}/loyalty`,

@@ -1,8 +1,9 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, pnlQuerySchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { computeClientMargin, computeProjectMargin } from '../../services/margin.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * Margin reports (S5.6 P-9, module 22-Д). Owner-only — margin/cost visibility is
@@ -10,15 +11,8 @@ import { computeClientMargin, computeProjectMargin } from '../../services/margin
  * Reuses `pnlQuerySchema` (inclusive `YYYY-MM-DD` window). Charges are matched by their
  * month anchor, so windows should bound whole months (aligned with billing periods).
  */
-type AuthUser = Parameters<typeof isAgencyOwner>[0]
 
 const marginRoute: FastifyPluginAsync = (fastify) => {
-  function ownerOrThrow(user: AuthUser, agencyId: string): void {
-    if (!isAgencyOwner(user, agencyId)) {
-      throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції має доступ до маржі', 403)
-    }
-  }
-
   function window(from: string, to: string): { from: Date; to: Date } {
     return { from: new Date(`${from}T00:00:00.000Z`), to: new Date(`${to}T23:59:59.999Z`) }
   }
@@ -31,7 +25,7 @@ const marginRoute: FastifyPluginAsync = (fastify) => {
       const query = pnlQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      ownerOrThrow(user, agencyId)
+      await requirePermission(request, 'finance.view')
 
       const { from, to } = window(query.from, query.to)
       const margin = await withTenant((tx) =>
@@ -52,7 +46,7 @@ const marginRoute: FastifyPluginAsync = (fastify) => {
       const query = pnlQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      ownerOrThrow(user, agencyId)
+      await requirePermission(request, 'finance.view')
 
       const { from, to } = window(query.from, query.to)
       const margin = await withTenant((tx) =>

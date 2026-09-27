@@ -103,7 +103,7 @@ describe('parseReferralTiers', () => {
 describe('GET /admin/referral/settings', () => {
   it('internal team gets defaults when no settings row exists', async () => {
     referralSettingsFindUnique.mockResolvedValue(null)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/admin/referral/settings',
@@ -120,7 +120,7 @@ describe('GET /admin/referral/settings', () => {
       enabled: false,
       tiers: [{ minPaidUsd: 0, percent: 8 }],
     })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/admin/referral/settings',
@@ -256,7 +256,7 @@ describe('GET /portal/referral (S5-11 client overview)', () => {
   })
 
   it('400 when the caller has no active company (e.g. internal team)', async () => {
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/portal/referral',

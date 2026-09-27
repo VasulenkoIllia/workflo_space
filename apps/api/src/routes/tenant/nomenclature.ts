@@ -1,10 +1,10 @@
 import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireActiveAgency, requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requireAnyPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * 02-Б НОМЕНКЛАТУРА (рішення власника 07.07): довідник офіційних позицій «згідно КВЕД».
@@ -30,8 +30,11 @@ const SELECT = {
   updatedAt: true,
 } as const
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Номенклатуру змінює лише власник')
+/** PERM-2: зміни номенклатури — право `settings.catalogs` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'settings.catalogs')
+  return agencyId
 }
 
 const nomenclatureRoute: FastifyPluginAsync = (fastify) => {
@@ -39,9 +42,17 @@ const nomenclatureRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/nomenclature',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      requireActiveAgency(request.user)
+      const agencyId = requireActiveAgency(request.user)
+      // PERM-2 (аудит): раніше без фільтра агенції (при вимкненому RLS — каталоги всіх
+      // агенцій) і доступно клієнтам. Тепер — своя агенція + право роботи з кошторисом/каталогом.
+      await requireAnyPermission(request, [
+        'orders.estimate',
+        'orders.edit',
+        'settings.catalogs',
+        'projects.manage',
+      ])
       const items = await withTenant((tx) =>
-        tx.nomenclature.findMany({ orderBy: { name: 'asc' }, select: SELECT })
+        tx.nomenclature.findMany({ where: { agencyId }, orderBy: { name: 'asc' }, select: SELECT })
       )
       return reply.send({ success: true, data: { items } })
     }
@@ -51,7 +62,7 @@ const nomenclatureRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/nomenclature',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = upsertSchema.parse(request.body)
       const item = await withTenant((tx) =>
         tx.nomenclature.create({
@@ -83,7 +94,7 @@ const nomenclatureRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/nomenclature/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = patchSchema.parse(request.body)
       const updated = await withTenant((tx) =>
         tx.nomenclature.updateMany({
@@ -119,7 +130,7 @@ const nomenclatureRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/nomenclature/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       // На позицію можуть посилатись замовлення/проекти (їх рахунки вже друкували цю
       // назву) — тоді лише деактивуємо; вільну від посилань видаляємо повністю.
       const result = await withTenant(async (tx) => {

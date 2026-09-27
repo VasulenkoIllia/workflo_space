@@ -2,7 +2,7 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * 28-Б C360 «Активність» — агрегований per-client timeline: об'єднує події замовлень
@@ -58,9 +58,8 @@ const clientActivityRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'clients.view')
+      const showMoney = await hasPermission(request, 'billing.view')
       const limit = Math.min(Math.max(Number(request.query.limit ?? 40) || 40, 1), 100)
       const companyId = request.params.id
 
@@ -131,7 +130,10 @@ const clientActivityRoute: FastifyPluginAsync = (fastify) => {
             id: `pay-${p.id}`,
             kind: 'payment',
             at: p.confirmedAt.toISOString(),
-            title: `Оплата ${num(p.amount).toFixed(2)} ${p.currency}${p.type !== 'final' ? ` (${p.type})` : ''}`,
+            // PERM-2: сума оплати — лише з billing.view (менеджер бачить факт оплати)
+            title: showMoney
+              ? `Оплата ${num(p.amount).toFixed(2)} ${p.currency}${p.type !== 'final' ? ` (${p.type})` : ''}`
+              : `Оплата${p.type !== 'final' ? ` (${p.type})` : ''}`,
             orderId: p.orderId,
             actorName: null,
           })

@@ -1,11 +1,11 @@
 import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, INVITE_TTL_MS, inviteExecutorSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
 import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { sendExecutorInviteEmail } from '../../services/inviteEmail.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /** POST /workspace/team/invite — invite an executor (internal team). */
 const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
@@ -16,9 +16,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
       config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      if (!can(request.user, 'executor.invite')) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Запрошувати виконавців може лише команда', 403)
-      }
+      await requirePermission(request, 'team.invite') // PERM-3: раніше executor міг, manager ні
 
       const input = inviteExecutorSchema.parse(request.body)
       const email = input.email.toLowerCase().trim()
@@ -30,7 +28,8 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
       // double-submit can't leave two live invites for the same email (audit S0-S2).
       const invite = await tenantTransaction(prisma, async (tx) => {
         await tx.invite.updateMany({
-          where: { email, type: 'executor', usedAt: null },
+          // Скоуп на СВОЮ агенцію: раніше гасило pending-інвайти цього email в інших агенціях
+          where: { email, type: 'executor', usedAt: null, agencyId },
           data: { usedAt: new Date() },
         })
         return tx.invite.create({
@@ -83,9 +82,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/team/invites',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      if (!can(request.user, 'executor.invite')) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
-      }
+      await requirePermission(request, 'team.invite') // PERM-3: раніше executor міг, manager ні
       const agencyId = requireActiveAgency(request.user)
       const invites = await tenantTransaction(prisma, (tx) =>
         tx.invite.findMany({
@@ -126,9 +123,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
       config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      if (!can(request.user, 'executor.invite')) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
-      }
+      await requirePermission(request, 'team.invite') // PERM-3: раніше executor міг, manager ні
       const agencyId = requireActiveAgency(request.user)
       const invite = await tenantTransaction(prisma, async (tx) => {
         const existing = await tx.invite.findFirst({
@@ -173,9 +168,7 @@ const createExecutorInviteRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/team/invites/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      if (!can(request.user, 'executor.invite')) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступно лише команді', 403)
-      }
+      await requirePermission(request, 'team.invite') // PERM-3: раніше executor міг, manager ні
       const agencyId = requireActiveAgency(request.user)
       await tenantTransaction(prisma, async (tx) => {
         const updated = await tx.invite.updateMany({

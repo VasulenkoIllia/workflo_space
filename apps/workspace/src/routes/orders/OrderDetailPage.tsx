@@ -65,7 +65,7 @@ export function OrderDetailPage() {
   const { id = '' } = useParams()
   const { data: order, isLoading, isError } = useOrder(id)
   const { data: timeData } = useTimeLogs(id)
-  const { isOwner } = useAuth()
+  const { isOwner, can } = useAuth()
   useCommentStream(id) // keep live chat updates flowing regardless of the active tab
   const [tab, setTab] = useState('chat')
 
@@ -197,7 +197,8 @@ export function OrderDetailPage() {
 
           {hasIntake(order.intake) && <IntakeCard intake={order.intake} />}
 
-          <EstimateCard order={order} />
+          {/* PERM: оцінка/кошторис — право orders.estimate (виконавець не ціноутворює) */}
+          {can('orders.estimate') && <EstimateCard order={order} />}
 
           <ApprovalCard order={order} />
 

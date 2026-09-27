@@ -2,8 +2,8 @@ import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createServiceSchema, updateServiceSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { hasPermission, requireAnyPermission, requirePermission } from '../../auth/permissions.js'
 
 interface ServiceRow {
   id: string
@@ -40,13 +40,6 @@ const SERVICE_SELECT = {
   createdAt: true,
 } satisfies Prisma.ServiceSelect
 
-/** Workspace-only catalog management. Internal team manages the agency's services. */
-function assertInternal(user: Pick<AccessClaims, 'agencyMemberships'>): void {
-  if (!isInternalTeam(user)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-  }
-}
-
 const catalogRoute: FastifyPluginAsync = (fastify) => {
   // ── List ──────────────────────────────────────────────────────────────────
   fastify.get(
@@ -55,7 +48,12 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      // PERM-2: каталог читає команда; ціни — лише з правом на гроші/кошторис/каталоги
+      await requireAnyPermission(request, ['orders.view', 'settings.catalogs'])
+      const showPrices =
+        (await hasPermission(request, 'billing.view')) ||
+        (await hasPermission(request, 'orders.estimate')) ||
+        (await hasPermission(request, 'settings.catalogs'))
       const rows = await withTenant((tx) =>
         tx.service.findMany({
           where: { agencyId },
@@ -63,7 +61,15 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
           orderBy: { createdAt: 'desc' },
         })
       )
-      return reply.send({ success: true, data: { services: rows.map(toDto) } })
+      return reply.send({
+        success: true,
+        data: {
+          services: rows.map((r) => {
+            const dto = toDto(r)
+            return showPrices ? dto : { ...dto, defaultPriceUsd: null }
+          }),
+        },
+      })
     }
   )
 
@@ -75,7 +81,7 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
       const input = createServiceSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      await requirePermission(request, 'settings.catalogs')
 
       const service = await withTenant((tx) =>
         tx.service.create({
@@ -111,7 +117,7 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
       const input = updateServiceSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      await requirePermission(request, 'settings.catalogs')
 
       const service = await withTenant(async (tx) => {
         const existing = await tx.service.findUnique({
@@ -157,7 +163,7 @@ const catalogRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user)
+      await requirePermission(request, 'settings.catalogs')
 
       await withTenant(async (tx) => {
         const existing = await tx.service.findUnique({

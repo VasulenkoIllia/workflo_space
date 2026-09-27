@@ -3,9 +3,9 @@ import { ApiErrorCode, AppError, updateClientRequisitesSchema } from '@workflo/t
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { REQUISITES_SELECT, applyClientRequisites } from '../../services/clientRequisites.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * Client legal requisites (06-Б, P-3) — the document "to" party. The client fills/reads
@@ -119,9 +119,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'clients.view')
       const members = await withTenant(async (tx) => {
         const company = await tx.company.findFirst({
           where: { id: request.params.id, agencyId },
@@ -161,9 +159,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
       // Client legal/PII (tax-id/IBAN/signatory) → manager-blocked like the finance surface (MOD-4).
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'clients.requisites')
       const requisites = await withTenant((tx) =>
         tx.company.findFirst({
           where: { id: request.params.id, agencyId },
@@ -188,9 +184,7 @@ const companyRequisitesRoute: FastifyPluginAsync = (fastify) => {
       const input = updateClientRequisitesSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'clients.requisites')
       const requisites = await tenantTransaction(prisma, (tx) =>
         applyClientRequisites(tx, { agencyId, companyId: request.params.id, input })
       )

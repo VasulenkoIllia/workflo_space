@@ -194,9 +194,14 @@ describe('POST /workspace/billing/payments', () => {
   })
 
   it('400 when the Idempotency-Key header is missing', async () => {
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 }, null)
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 100 }, null)
     expect(res.statusCode).toBe(400)
     expect(paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it('PERM-2: executor записати платіж не може (billing.manage) → 403, без запису', async () => {
+    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 })
+    expect(res.statusCode).toBe(403)
   })
 
   it('403 for a client (not internal team)', async () => {
@@ -207,30 +212,30 @@ describe('POST /workspace/billing/payments', () => {
 
   it('404 for an unknown company', async () => {
     companyFindUnique.mockResolvedValue(null)
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 100 })
     expect(res.statusCode).toBe(404)
   })
 
   it('403 for a company in another agency', async () => {
     companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-OTHER' })
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 100 })
     expect(res.statusCode).toBe(403)
   })
 
   it('400 on an amount with more than 2 decimals', async () => {
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 10.123 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 10.123 })
     expect(res.statusCode).toBe(400)
     expect(paymentCreate).not.toHaveBeenCalled()
   })
 
   it('400 on a non-positive amount', async () => {
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 0 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 0 })
     expect(res.statusCode).toBe(400)
   })
 
   it('happy path: standalone USD payment → 201, manual + USD snapshot, audit', async () => {
     paymentCreate.mockResolvedValue(paymentRow('250.00'))
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 250 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 250 })
     expect(res.statusCode).toBe(201)
     const body = res.json().data
     expect(body.payment.amount).toBe('250.00')
@@ -243,7 +248,7 @@ describe('POST /workspace/billing/payments', () => {
     expect(data.status).toBe('confirmed')
     expect(data.provider).toBe('manual')
     expect(data.providerPaymentId).toBeNull()
-    expect(data.confirmedBy).toBe('exec-1')
+    expect(data.confirmedBy).toBe('owner-1')
     expect(exchangeRateFindUnique).not.toHaveBeenCalled() // USD → no FX lookup
     expect(auditLogCreate).toHaveBeenCalled()
   })
@@ -252,7 +257,7 @@ describe('POST /workspace/billing/payments', () => {
   it('явна legalEntityId: tenant-валідована і записана на платіж', async () => {
     legalEntityFindFirst.mockResolvedValue({ id: 'le-fop' })
     paymentCreate.mockResolvedValue(paymentRow('100.00'))
-    const res = await post(EXECUTOR, {
+    const res = await post(OWNER, {
       companyId: COMPANY_ID,
       amount: 100,
       legalEntityId: '11111111-1111-4111-8111-111111111111',
@@ -267,7 +272,7 @@ describe('POST /workspace/billing/payments', () => {
 
   it('чужа/неіснуюча legalEntityId → 404, платіж не створюється', async () => {
     legalEntityFindFirst.mockResolvedValue(null)
-    const res = await post(EXECUTOR, {
+    const res = await post(OWNER, {
       companyId: COMPANY_ID,
       amount: 100,
       legalEntityId: '22222222-2222-4222-8222-222222222222',
@@ -279,7 +284,7 @@ describe('POST /workspace/billing/payments', () => {
   it('без явної юр-особи: каскад падає на дефолтну юр-особу агенції', async () => {
     legalEntityFindFirst.mockResolvedValue({ id: 'le-default' })
     paymentCreate.mockResolvedValue(paymentRow('100.00'))
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 100 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 100 })
     expect(res.statusCode).toBe(201)
     expect(legalEntityFindFirst.mock.calls[0][0].where).toMatchObject({
       agencyId: 'agency-1',
@@ -301,7 +306,7 @@ describe('POST /workspace/billing/payments', () => {
     ]
     paymentCreate.mockResolvedValue(paymentRow('1000.00'))
     paymentAggregate.mockResolvedValue({ _sum: { amount: Dec('1000.00') } })
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 1000 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 1000 })
     expect(res.statusCode).toBe(201)
     expect(res.json().data.newDebt).toBe('0.00')
     expect(res.json().data.orderPaidAt).not.toBeNull()
@@ -322,7 +327,7 @@ describe('POST /workspace/billing/payments', () => {
     ]
     paymentCreate.mockResolvedValue(paymentRow('400.00'))
     paymentAggregate.mockResolvedValue({ _sum: { amount: Dec('400.00') } })
-    const res = await post(EXECUTOR, {
+    const res = await post(OWNER, {
       companyId: COMPANY_ID,
       orderId: ORDER_ID,
       amount: 400,
@@ -347,7 +352,7 @@ describe('POST /workspace/billing/payments', () => {
     ]
     paymentCreate.mockResolvedValue(paymentRow('1200.00'))
     paymentAggregate.mockResolvedValue({ _sum: { amount: Dec('1200.00') } })
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 1200 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 1200 })
     expect(res.statusCode).toBe(201)
     expect(res.json().data.newDebt).toBe('0.00')
     expect(res.json().data.orderPaidAt).not.toBeNull()
@@ -364,7 +369,7 @@ describe('POST /workspace/billing/payments', () => {
         companyId: COMPANY_ID,
       },
     ]
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 100 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 100 })
     expect(res.statusCode).toBe(409)
     expect(paymentCreate).not.toHaveBeenCalled()
   })
@@ -380,7 +385,7 @@ describe('POST /workspace/billing/payments', () => {
         companyId: COMPANY_ID,
       },
     ]
-    const res = await post(EXECUTOR, {
+    const res = await post(OWNER, {
       companyId: COMPANY_ID,
       orderId: ORDER_ID,
       amount: 100,
@@ -401,14 +406,14 @@ describe('POST /workspace/billing/payments', () => {
         companyId: COMPANY_ID,
       },
     ]
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 100 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, orderId: ORDER_ID, amount: 100 })
     expect(res.statusCode).toBe(404)
   })
 
   it('UAH payment → FX snapshot (amountUsd = amount / rate, rateUsed stored)', async () => {
     exchangeRateFindUnique.mockResolvedValue({ usdToUah: Dec('40.0000') })
     paymentCreate.mockResolvedValue(paymentRow('4000.00', 'UAH'))
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 4000, currency: 'UAH' })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 4000, currency: 'UAH' })
     expect(res.statusCode).toBe(201)
     expect(res.json().data.payment.amountUsd).toBe('100.00') // 4000 / 40
     expect(res.json().data.payment.rateUsed).toBe('40')
@@ -418,7 +423,7 @@ describe('POST /workspace/billing/payments', () => {
 
   it('422 when a non-USD payment has no exchange rate', async () => {
     exchangeRateFindUnique.mockResolvedValue(null)
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 4000, currency: 'UAH' })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 4000, currency: 'UAH' })
     expect(res.statusCode).toBe(422)
     expect(paymentCreate).not.toHaveBeenCalled()
   })
@@ -434,7 +439,7 @@ describe('POST /workspace/billing/payments', () => {
         responseBody: { success: true, data: { payment: { id: 'pay-1' }, newDebt: '0' } },
       },
     ]
-    const res = await post(EXECUTOR, body)
+    const res = await post(OWNER, body)
     expect(res.statusCode).toBe(201)
     expect(res.json().data.payment.id).toBe('pay-1')
     expect(paymentCreate).not.toHaveBeenCalled() // replayed, not re-run
@@ -444,7 +449,7 @@ describe('POST /workspace/billing/payments', () => {
   it('422 idempotency reuse: same key + different body', async () => {
     executeRaw.mockResolvedValue(0)
     idemExistingRows = [{ requestHash: 'a-different-hash', responseStatus: 201, responseBody: {} }]
-    const res = await post(EXECUTOR, { companyId: COMPANY_ID, amount: 999 })
+    const res = await post(OWNER, { companyId: COMPANY_ID, amount: 999 })
     expect(res.statusCode).toBe(422)
     expect(paymentCreate).not.toHaveBeenCalled()
   })
@@ -477,7 +482,7 @@ describe('GET /workspace/billing/payments', () => {
       },
     ])
     paymentCount.mockResolvedValue(1)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/billing/payments',
@@ -693,7 +698,7 @@ describe('payment settings', () => {
       notes: null,
       invoiceCurrency: 'USD',
     })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/settings/payment',

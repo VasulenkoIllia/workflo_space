@@ -71,6 +71,13 @@ const EXECUTOR = {
   agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' as const }],
   memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
 }
+// PERM-2: фінансові дії — за правом (дефолт: лише власник); executor → 403
+const OWNER = {
+  ...EXECUTOR,
+  sub: 'owner-1',
+  role: 'owner' as const,
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'owner' as const }],
+}
 const CLIENT = {
   sub: 'p1',
   email: 'c@e.com',
@@ -118,7 +125,7 @@ afterEach(() => vi.clearAllMocks())
 describe('services catalog', () => {
   it('executor lists agency services', async () => {
     serviceFindMany.mockResolvedValue([svcRow()])
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/services',
@@ -143,7 +150,7 @@ describe('services catalog', () => {
 
   it('executor creates a service (201, tenant-stamped)', async () => {
     serviceCreate.mockResolvedValue(svcRow())
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'POST',
       url: '/workspace/services',
@@ -156,7 +163,7 @@ describe('services catalog', () => {
   })
 
   it('400 on a too-short name', async () => {
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'POST',
       url: '/workspace/services',
@@ -170,7 +177,7 @@ describe('services catalog', () => {
   it('PATCH renames a service (200)', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
     serviceUpdate.mockResolvedValue(svcRow({ name: 'SEO Pro' }))
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: `/workspace/services/${SERVICE_ID}`,
@@ -184,7 +191,7 @@ describe('services catalog', () => {
   it('PATCH changes price (200 — no subscription guard anymore)', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
     serviceUpdate.mockResolvedValue(svcRow({ defaultPriceUsd: Dec('200.00') }))
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: `/workspace/services/${SERVICE_ID}`,
@@ -197,7 +204,7 @@ describe('services catalog', () => {
 
   it('PATCH 404 cross-tenant', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-OTHER' })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'PATCH',
       url: `/workspace/services/${SERVICE_ID}`,
@@ -211,7 +218,7 @@ describe('services catalog', () => {
   it('DELETE succeeds (200)', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-1' })
     serviceDelete.mockResolvedValue({ id: SERVICE_ID })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'DELETE',
       url: `/workspace/services/${SERVICE_ID}`,
@@ -224,7 +231,7 @@ describe('services catalog', () => {
 
   it('DELETE 404 cross-tenant', async () => {
     serviceFindUnique.mockResolvedValue({ id: SERVICE_ID, agencyId: 'agency-OTHER' })
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'DELETE',
       url: `/workspace/services/${SERVICE_ID}`,
@@ -256,7 +263,7 @@ describe('POST /workspace/billing/charges/generate', () => {
     chargeCreateMany.mockResolvedValue({ count: 1 })
     projectUpdate.mockResolvedValue({})
     projectCount.mockResolvedValue(0) // no contract-gated projects
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'POST',
       url: '/workspace/billing/charges/generate',
@@ -289,7 +296,7 @@ describe('POST /workspace/billing/charges/generate', () => {
   })
 
   it('400 on a malformed month', async () => {
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'POST',
       url: '/workspace/billing/charges/generate',

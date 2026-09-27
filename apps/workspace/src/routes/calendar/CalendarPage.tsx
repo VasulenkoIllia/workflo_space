@@ -291,7 +291,9 @@ const controlStyle = {
 function CreateEventModal({ onClose }: { onClose: () => void }) {
   const create = useCreateEvent()
   const { data: team } = useTeam()
-  const { clients } = useClients()
+  const { can } = useAuth()
+  // PERM: клієнтські зустрічі з учасниками клієнта — для ролей із clients.view
+  const { clients } = useClients(can('clients.view'))
   const [companyIdForMembers, setCompanyIdForMembers] = useState('')
   const { data: clientMembersData } = useClientMembers(
     companyIdForMembers,

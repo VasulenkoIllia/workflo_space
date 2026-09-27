@@ -8,9 +8,9 @@ import {
   loyaltyOverrideSchema,
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 const TIER_ORDER = [LoyaltyTier.NEW, LoyaltyTier.REGULAR, LoyaltyTier.PARTNER, LoyaltyTier.VIP]
 
@@ -31,9 +31,9 @@ const companyLoyaltyRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      // PERM-2: тір клієнта — clients.view; lifetimePaidUsd/прогрес у грошах — billing.view
+      await requirePermission(request, 'clients.view')
+      const showMoney = await hasPermission(request, 'billing.view')
 
       const data = await withTenant(async (tx) => {
         const company = await tx.company.findUnique({
@@ -73,8 +73,12 @@ const companyLoyaltyRoute: FastifyPluginAsync = (fastify) => {
           tierOverride: data.company.tierOverride,
           effectiveTier: effective,
           discountPercent: LOYALTY_DISCOUNT_PCT[effective],
-          lifetimePaidUsd: lifetime.toFixed(2),
-          progress: { nextTier: next, nextThresholdUsd: nextThreshold, remainingUsd: remaining },
+          lifetimePaidUsd: showMoney ? lifetime.toFixed(2) : null,
+          progress: {
+            nextTier: next,
+            nextThresholdUsd: showMoney ? nextThreshold : null,
+            remainingUsd: showMoney ? remaining : null,
+          },
           history: data.history,
         },
       })
@@ -88,9 +92,7 @@ const companyLoyaltyRoute: FastifyPluginAsync = (fastify) => {
       const input = loyaltyOverrideSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції може змінювати тір', 403)
-      }
+      await requirePermission(request, 'billing.manage')
 
       const updated = await withTenant(async (tx) => {
         const company = await tx.company.findUnique({

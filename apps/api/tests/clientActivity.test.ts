@@ -37,6 +37,11 @@ const MANAGER = {
   sub: 'manager-1',
   agencyMemberships: [{ agencyId: AGENCY, role: 'manager' as const }],
 }
+const EXECUTOR = {
+  ...MANAGER,
+  sub: 'exec-1',
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' as const }],
+}
 const CLIENT = {
   sub: 'client-1',
   email: 'c@e.com',
@@ -129,9 +134,9 @@ describe('GET /workspace/clients/:id/activity', () => {
     await app.close()
   })
 
-  it('manager is forbidden (403) — фін-таб internal-non-manager', async () => {
-    const { app } = await authed(MANAGER)
-    const token = app.jwt.sign(MANAGER)
+  it('PERM-2: executor is forbidden (403) — clients.view лише owner/manager', async () => {
+    const { app } = await authed(EXECUTOR)
+    const token = app.jwt.sign(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
       url,

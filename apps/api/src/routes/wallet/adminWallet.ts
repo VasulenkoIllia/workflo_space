@@ -9,11 +9,11 @@ import {
   walletTxnQuerySchema,
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { assertSameTenant, isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { walletCredit, walletDebit } from '../../services/wallet.js'
 import { WALLET_TXN_SELECT, walletTxnDto } from './portalWallet.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * Agency-side bonus-wallet management (module 25). Reads are open to the internal
@@ -30,9 +30,7 @@ const adminWalletRoute: FastifyPluginAsync = (fastify) => {
       const query = walletCompaniesQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.view')
 
       const where: Prisma.CompanyWhereInput = {
         agencyId,
@@ -82,9 +80,7 @@ const adminWalletRoute: FastifyPluginAsync = (fastify) => {
       const query = walletTxnQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.view')
 
       const where: Prisma.WalletTransactionWhereInput = {
         agencyId,
@@ -131,13 +127,7 @@ const adminWalletRoute: FastifyPluginAsync = (fastify) => {
       const input = walletAdjustSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може коригувати бонуси',
-          403
-        )
-      }
+      await requirePermission(request, 'billing.manage')
 
       const txn = await tenantTransaction(prisma, (tx) => {
         const args = {

@@ -1,8 +1,9 @@
 import { type Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createExpenseSchema, updateExpenseSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 interface ExpenseRow {
   id: string
@@ -54,15 +55,6 @@ function toDto(e: ExpenseRow) {
   }
 }
 
-function requireOwner(
-  user: Parameters<typeof isAgencyOwner>[0] & { activeAgencyId: string | null },
-  agencyId: string
-): void {
-  if (!isAgencyOwner(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції має доступ до фінансів', 403)
-  }
-}
-
 /**
  * Operating expenses (S5-10) — owner-only. All rows are operator-entered
  * (`source=manual`); executor-rate salary is synthesized in P&L, never stored here.
@@ -74,7 +66,7 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      requireOwner(user, agencyId)
+      await requirePermission(request, 'finance.view')
       const rows = await withTenant((tx) =>
         tx.expense.findMany({
           where: { agencyId },
@@ -93,7 +85,7 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
       const input = createExpenseSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      requireOwner(user, agencyId)
+      await requirePermission(request, 'finance.manage')
 
       const expense = await withTenant((tx) =>
         tx.expense.create({
@@ -135,7 +127,7 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
       const input = updateExpenseSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      requireOwner(user, agencyId)
+      await requirePermission(request, 'finance.manage')
 
       const expense = await withTenant(async (tx) => {
         const existing = await tx.expense.findUnique({
@@ -180,7 +172,7 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      requireOwner(user, agencyId)
+      await requirePermission(request, 'finance.manage')
       const expense = await withTenant(async (tx) => {
         const existing = await tx.expense.findUnique({
           where: { id: request.params.id },
@@ -213,7 +205,7 @@ const expensesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      requireOwner(user, agencyId)
+      await requirePermission(request, 'finance.manage')
       await withTenant(async (tx) => {
         const existing = await tx.expense.findUnique({
           where: { id: request.params.id },

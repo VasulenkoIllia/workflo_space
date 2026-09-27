@@ -2,11 +2,12 @@ import { Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, decideChargeApprovalSchema, InvoiceApprover } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { type AccessClaims } from '../../auth/tokens.js'
 import { refreshMoneyBalance } from '../../services/allocation.js'
 import { resolveInvoiceApprover } from '../../services/approvalPolicy.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { enqueueOutbox } from '../../services/outbox.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 type AuthUser = AccessClaims
 
@@ -200,11 +201,9 @@ const chargeApprovalRoutes: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = request.user
-      // Releasing a draft into the live balance is a finance action (class of payment.confirm)
-      // → owner/executor only; a manager is finance-blocked (MOD-4 pattern).
-      if (!isInternalTeam(user) || isAgencyManager(user, requireActiveAgency(user))) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      // Випуск чернетки в живий баланс — фінансова дія (PERM-2: billing.manage).
+      requireActiveAgency(user)
+      await requirePermission(request, 'billing.manage')
       return decideCharge(request, reply, user, InvoiceApprover.INTERNAL)
     }
   )

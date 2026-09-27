@@ -9,12 +9,12 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { computeClientMonthlyNumbers, moneyLabel } from '../../services/clientMonthlyReport.js'
 import { DOC_TYPE_LABEL } from '../../services/documentRender.js'
 import { agencyOwnerIds, fanOut } from '../../services/recipients.js'
 import { DOC_SELECT } from './shared.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * R2 (аудит r6, розбиття documents.ts): COMPANY-scoped документообіг — портальний
@@ -168,10 +168,9 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
       )
       if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
 
+      // PERM-2: місячний звіт містить оплати/борг → команді лише з billing.view
       const isTeam =
-        isInternalTeam(user) &&
-        user.agencyMemberships.some((m) => m.agencyId === doc.agencyId) &&
-        !isAgencyManager(user, doc.agencyId)
+        user.activeAgencyId === doc.agencyId && (await hasPermission(request, 'billing.view'))
       const isCompanyClient = user.memberships.some((m) => m.companyId === doc.companyId)
       if (!isTeam && !isCompanyClient) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)
@@ -228,12 +227,21 @@ const companyDocumentsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'documents.manage')
+      const hideMoney = !(await hasPermission(request, 'billing.view'))
       const documents = await withTenant((tx) =>
         tx.document.findMany({
-          where: { companyId: request.params.id, agencyId },
+          where: {
+            companyId: request.params.id,
+            agencyId,
+            ...(hideMoney
+              ? {
+                  type: {
+                    notIn: ['invoice', 'advance_invoice', 'reconciliation_act', 'monthly_report'],
+                  },
+                }
+              : {}),
+          },
           orderBy: { generatedAt: 'desc' },
           select: { ...DOC_SELECT, order: { select: { id: true, title: true } } },
         })

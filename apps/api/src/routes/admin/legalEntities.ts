@@ -8,9 +8,9 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requireAnyPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * Agency legal entities (20-Д, S5.6 P-1б). Workspace-admin CRUD over the entities
@@ -47,14 +47,6 @@ function toDto(e: EntityRow) {
   return { ...e, createdAt: e.createdAt.toISOString() }
 }
 
-/** Workspace-only: internal team (NOT manager — legal/IBAN = settings, 20-А) manages
- *  the agency's legal entities. */
-function assertInternal(user: Pick<AccessClaims, 'agencyMemberships'>, agencyId: string): void {
-  if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-  }
-}
-
 /** MOD-2 gate — module must be enabled for the tenant (Phase 0: always on). */
 async function assertModule(agencyId: string): Promise<void> {
   if (!(await moduleEnabled(agencyId, 'legal_entity'))) {
@@ -70,7 +62,13 @@ const legalEntitiesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      // PERM-2: пікер юр-осіб (проєкти/документи/рахунки) + налаштування юр-осіб
+      await requireAnyPermission(request, [
+        'settings.legal',
+        'projects.manage',
+        'billing.manage',
+        'documents.manage',
+      ])
       await assertModule(agencyId)
       const rows = await withTenant((tx) =>
         tx.legalEntity.findMany({
@@ -91,7 +89,7 @@ const legalEntitiesRoute: FastifyPluginAsync = (fastify) => {
       const input = createLegalEntitySchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'settings.legal')
       await assertModule(agencyId)
 
       const entity = await withTenant((tx) =>
@@ -139,7 +137,7 @@ const legalEntitiesRoute: FastifyPluginAsync = (fastify) => {
       const input = updateLegalEntitySchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'settings.legal')
       await assertModule(agencyId)
 
       const entity = await withTenant(async (tx) => {
@@ -202,7 +200,7 @@ const legalEntitiesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'settings.legal')
       await assertModule(agencyId)
 
       const entity = await withTenant(async (tx) => {
@@ -251,7 +249,7 @@ const legalEntitiesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'settings.legal')
       await assertModule(agencyId)
 
       await withTenant(async (tx) => {

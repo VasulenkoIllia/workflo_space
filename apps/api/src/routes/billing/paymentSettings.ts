@@ -2,9 +2,9 @@ import { withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, updatePaymentSettingsSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 // Internal (owner/team) view — includes the agency-wide default net terms (P-4 tier 3)
 // and the declared bonus-wallet currency (P-8).
@@ -43,9 +43,7 @@ const paymentSettingsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'settings.legal')
       const settings = await withTenant((tx) =>
         tx.paymentSettings.findUnique({ where: { agencyId }, select: SETTINGS_SELECT })
       )
@@ -60,13 +58,7 @@ const paymentSettingsRoute: FastifyPluginAsync = (fastify) => {
       const input = updatePaymentSettingsSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може змінювати реквізити',
-          403
-        )
-      }
+      await requirePermission(request, 'settings.legal')
 
       const settings = await withTenant((tx) =>
         tx.paymentSettings.upsert({

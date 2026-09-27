@@ -1,8 +1,7 @@
 import { withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { hasPermission, requireAnyPermission } from '../../auth/permissions.js'
 
 /**
  * GET /workspace/companies — lightweight id+name list of the agency's client companies.
@@ -16,9 +15,9 @@ const listCompaniesRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      // PERM-2: реєстр клієнтів — clients.view (менеджер теж); тір/валюта — з billing.view
+      await requireAnyPermission(request, ['clients.view', 'orders.create', 'leads.manage'])
+      const showMoney = await hasPermission(request, 'billing.view')
       const companies = await withTenant((tx) =>
         tx.company.findMany({
           where: { agencyId },
@@ -26,7 +25,14 @@ const listCompaniesRoute: FastifyPluginAsync = (fastify) => {
           orderBy: { name: 'asc' },
         })
       )
-      return reply.send({ success: true, data: { companies } })
+      return reply.send({
+        success: true,
+        data: {
+          companies: showMoney
+            ? companies
+            : companies.map((c) => ({ ...c, loyaltyTier: null, currency: null })),
+        },
+      })
     }
   )
   return Promise.resolve()

@@ -73,6 +73,13 @@ const EXECUTOR_CLAIMS = {
   agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' }],
   memberships: [],
 }
+// PERM-3: інвайти виконавців — право team.invite (власник/менеджер агенції)
+const AGENCY_OWNER_CLAIMS = {
+  ...EXECUTOR_CLAIMS,
+  sub: 'agency-owner-1',
+  role: 'owner',
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'owner' }],
+}
 const OWNER_CLAIMS = {
   sub: 'owner-1',
   email: 'owner@e.com',
@@ -97,7 +104,20 @@ describe('POST /workspace/team/invite (executor)', () => {
   })
   afterEach(() => vi.clearAllMocks())
 
-  it('executor can invite → 201, supersedes old, sends email', async () => {
+  it('PERM-3: executor НЕ може запрошувати (team.invite) → 403', async () => {
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/team/invite',
+      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      payload: { email: 'new@e.com' },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('PERM-3: owner can invite → 201, supersedes old (своя агенція), sends email', async () => {
     inviteUpdateMany.mockResolvedValue({ count: 0 })
     inviteCreate.mockResolvedValue({ id: 'inv-1', token: 'tok-1', expiresAt: new Date() })
     profileFindUnique.mockResolvedValue({ name: 'Admin' })
@@ -107,7 +127,7 @@ describe('POST /workspace/team/invite (executor)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/workspace/team/invite',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
       payload: { email: 'New@Exec.com' },
     })
     expect(res.statusCode).toBe(201)
@@ -167,7 +187,7 @@ describe('workspace/team/invites (list/resend/cancel)', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/workspace/team/invites',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
     })
     expect(res.statusCode).toBe(200)
     const body = res.json().data.invites
@@ -192,7 +212,7 @@ describe('workspace/team/invites (list/resend/cancel)', () => {
     const ok = await app.inject({
       method: 'POST',
       url: '/workspace/team/invites/inv-1/resend',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
       payload: {},
     })
     expect(ok.statusCode).toBe(200)
@@ -202,7 +222,7 @@ describe('workspace/team/invites (list/resend/cancel)', () => {
     const nf = await app.inject({
       method: 'POST',
       url: '/workspace/team/invites/ghost/resend',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
       payload: {},
     })
     expect(nf.statusCode).toBe(404)
@@ -216,7 +236,7 @@ describe('workspace/team/invites (list/resend/cancel)', () => {
     const ok = await app.inject({
       method: 'DELETE',
       url: '/workspace/team/invites/inv-1',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
     })
     expect(ok.statusCode).toBe(200)
     expect(inviteUpdateMany.mock.calls[0][0].data.usedAt).toBeInstanceOf(Date)
@@ -225,7 +245,7 @@ describe('workspace/team/invites (list/resend/cancel)', () => {
     const nf = await app.inject({
       method: 'DELETE',
       url: '/workspace/team/invites/inv-1',
-      headers: { authorization: `Bearer ${tokenFor(app, EXECUTOR_CLAIMS)}` },
+      headers: { authorization: `Bearer ${tokenFor(app, AGENCY_OWNER_CLAIMS)}` },
     })
     expect(nf.statusCode).toBe(404)
     await app.close()

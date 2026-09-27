@@ -7,10 +7,10 @@ import {
 } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { applyChargeDiscount } from '../../services/chargeDiscount.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 interface ChargeRow {
   writeOffReason?: string | null
@@ -109,9 +109,7 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
       const query = billingListQuerySchema.parse(request.query)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'billing.view')
 
       const where: Prisma.ServiceChargeWhereInput = {
         agencyId,
@@ -176,9 +174,7 @@ const chargesRoute: FastifyPluginAsync = (fastify) => {
       const input = applyChargeDiscountSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Лише власник агенції може надавати знижки', 403)
-      }
+      await requirePermission(request, 'billing.manage')
 
       const pct = input.discountPct != null ? new Prisma.Decimal(input.discountPct) : null
       const amount = input.discountAmount != null ? new Prisma.Decimal(input.discountAmount) : null

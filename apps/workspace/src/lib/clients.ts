@@ -126,9 +126,9 @@ export function summariseClients(orders: WorkspaceOrder[]): OrderSummary[] {
   return [...map.values()]
 }
 
-export function useClients() {
+export function useClients(enabled = true) {
   const orders = useOrders({ limit: 100 })
-  const companies = useCompanies()
+  const companies = useCompanies(enabled)
   const clients = useMemo<ClientRow[]>(() => {
     const sById = new Map(summariseClients(orders.data?.orders ?? []).map((s) => [s.companyId, s]))
     const comps = companies.data?.companies ?? []

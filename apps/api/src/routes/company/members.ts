@@ -2,11 +2,12 @@ import { prisma, tenantTransaction } from '@workflo/db'
 import { ApiErrorCode, AppError, INVITE_TTL_MS } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { generateOpaqueToken } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
 import { sendCompanyMemberInviteEmail } from '../../services/inviteEmail.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 const RESET_TTL_MS = 60 * 60 * 1000 // 1h — matches POST /auth/forgot-password
 
@@ -58,13 +59,7 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
       const { email: rawEmail } = inviteSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може запрошувати користувачів клієнта',
-          403
-        )
-      }
+      await requirePermission(request, 'clients.manage')
       const companyId = request.params.id
       const email = rawEmail.toLowerCase().trim()
 
@@ -153,13 +148,7 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може скидати пароль користувача клієнта',
-          403
-        )
-      }
+      await requirePermission(request, 'clients.manage')
       const { id: companyId, profileId } = request.params
 
       const company = await prisma.company.findFirst({
@@ -215,13 +204,7 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
       const { role } = roleSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може керувати користувачами клієнта',
-          403
-        )
-      }
+      await requirePermission(request, 'clients.manage')
       const { id: companyId, profileId } = request.params
 
       const member = await tenantTransaction(prisma, async (tx) => {
@@ -281,13 +264,7 @@ const clientMembersRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може керувати користувачами клієнта',
-          403
-        )
-      }
+      await requirePermission(request, 'clients.manage')
       const { id: companyId, profileId } = request.params
 
       await tenantTransaction(prisma, async (tx) => {

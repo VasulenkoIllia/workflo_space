@@ -1,10 +1,10 @@
 import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError, updateReferralSettingsSchema } from '@workflo/types'
+import { updateReferralSettingsSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { isAgencyOwner, requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { resolveReferralConfig } from '../../services/referral.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * Per-agency referral program config (S5-06). Reads resolve through the same
@@ -18,9 +18,7 @@ const referralSettingsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'settings.manage')
       const config = await withTenant((tx) => resolveReferralConfig(tx, agencyId))
       return reply.send({ success: true, data: config })
     }
@@ -33,13 +31,7 @@ const referralSettingsRoute: FastifyPluginAsync = (fastify) => {
       const input = updateReferralSettingsSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isAgencyOwner(user, agencyId)) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Лише власник агенції може змінювати реферальну програму',
-          403
-        )
-      }
+      await requirePermission(request, 'settings.manage')
 
       const tiersJson = input.tiers as Prisma.InputJsonValue | undefined
       const settings = await tenantTransaction(prisma, (tx) =>

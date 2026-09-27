@@ -1,13 +1,12 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError, createPaymentSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { can } from '../../auth/can.js'
 import { assertSameTenant, requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { hashRequest, withIdempotency } from '../../services/idempotency.js'
 import { enqueueOutbox } from '../../services/outbox.js'
 import { confirmManualPayment } from '../../services/payments.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 const ENDPOINT = 'POST /workspace/billing/payments'
 
@@ -33,17 +32,8 @@ const createPaymentRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
 
-      // Workspace-only money action: internal team + payment.confirm (tenant-guarded).
-      if (
-        !isInternalTeam(user) ||
-        !can(user, 'payment.confirm', { agencyId, companyId: input.companyId })
-      ) {
-        throw new AppError(
-          ApiErrorCode.FORBIDDEN,
-          'Недостатньо прав для підтвердження платежу',
-          403
-        )
-      }
+      // PERM-2: гроші — лише з правом (раніше executor теж проходив через can(payment.confirm))
+      await requirePermission(request, 'billing.manage')
 
       const rawKey = request.headers['idempotency-key']
       const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey

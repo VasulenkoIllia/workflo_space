@@ -1,7 +1,8 @@
 import { prisma, withTenant } from '@workflo/db'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * DSN-2 (workspace-reports.jsx): три нові зрізи 6-таб хабу звітів.
@@ -21,7 +22,8 @@ const opsReportsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/reports/departments',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Звіти доступні лише власнику')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'reports.ops')
       const q = rangeSchema.parse(request.query)
       const from = new Date(q.from)
       const to = new Date(`${q.to}T23:59:59.999Z`)
@@ -102,7 +104,8 @@ const opsReportsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/reports/timesheet',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Звіти доступні лише власнику')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'reports.ops')
       const q = rangeSchema.parse(request.query)
       const rows = await withTenant((tx) =>
         tx.timeLog.findMany({
@@ -149,7 +152,8 @@ const opsReportsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/reports/audit',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = requireOwnerAgency(request.user, 'Журнал подій доступний лише власнику')
+      const agencyId = requireActiveAgency(request.user)
+      await requirePermission(request, 'reports.audit')
       // audit_logs — не tenant-RLS-таблиця (agencyId nullable, є system-події) → raw prisma
       // з явним where agencyId. Read-only.
       const events = await prisma.auditLog.findMany({

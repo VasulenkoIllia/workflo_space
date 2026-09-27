@@ -1,11 +1,11 @@
 import { Prisma, withTenant } from '@workflo/db'
 import { ApiErrorCode, AppError } from '@workflo/types'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { DEFAULT_DUNNING_STEPS, parseDunningSteps } from '../../cron/dunning.js'
 import { writeAuditAsync } from '../../services/audit.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 05-Б дунінг (owner): ланцюжок кроків нагадувань агенції + per-company opt-out.
@@ -21,8 +21,11 @@ const stepsSchema = z
 
 const optOutSchema = z.object({ optOut: z.boolean() }).strict()
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Налаштування дунінгу змінює лише власник')
+/** PERM-2: фінансова дія — право `billing.manage` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'billing.manage')
+  return agencyId
 }
 
 const dunningRoute: FastifyPluginAsync = (fastify) => {
@@ -30,7 +33,7 @@ const dunningRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/dunning-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const agency = await withTenant((tx) =>
         tx.agency.findUnique({ where: { id: agencyId }, select: { dunningSteps: true } })
       )
@@ -49,7 +52,7 @@ const dunningRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/agency/dunning-settings',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = stepsSchema.parse(request.body)
       const steps = body.steps === null ? null : parseDunningSteps(body.steps)
       const agency = await withTenant((tx) =>
@@ -83,7 +86,7 @@ const dunningRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/companies/:companyId/dunning',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const company = await withTenant((tx) =>
         tx.company.findFirst({
           where: { id: request.params.companyId, agencyId },
@@ -101,7 +104,7 @@ const dunningRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/companies/:companyId/dunning',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = optOutSchema.parse(request.body)
       const updated = await withTenant((tx) =>
         tx.company.updateMany({

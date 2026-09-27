@@ -48,6 +48,11 @@ const MANAGER = {
   agencyMemberships: [{ agencyId: AGENCY, role: 'manager' as const }],
   memberships: [] as Array<{ companyId: string; role: 'owner' }>,
 }
+const EXECUTOR = {
+  ...MANAGER,
+  sub: 'exec-1',
+  agencyMemberships: [{ agencyId: 'agency-1', role: 'executor' as const }],
+}
 
 async function authed(claims: unknown) {
   const app = buildApp()
@@ -115,8 +120,8 @@ describe('GET /workspace/clients/:id/members', () => {
     await app.close()
   })
 
-  it('a manager is blocked (403)', async () => {
-    const { app, token } = await authed(MANAGER)
+  it('PERM-2: an executor is blocked (403) — clients.view лише owner/manager', async () => {
+    const { app, token } = await authed(EXECUTOR)
     const res = await app.inject({
       method: 'GET',
       url,

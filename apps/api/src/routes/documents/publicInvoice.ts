@@ -11,6 +11,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { writeAuditAsync } from '../../services/audit.js'
 import { buildRenderData, loadPdfBranding } from '../../services/documentRender.js'
 import { requireTeamOrder } from '../orders/access.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 06-Д: публічна сторінка рахунку — hosted-лінк без логіна (дизайн PublicInvoicePage,
@@ -110,6 +111,7 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'billing.manage') // PERM-2: публічне посилання на рахунок
       const token = await tenantTransaction(prisma, async (tx) => {
         const doc = await tx.document.findFirst({
           where: { id: request.params.docId, orderId },
@@ -150,6 +152,7 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      await requirePermission(request, 'billing.manage') // PERM-2: публічне посилання на рахунок
       const cleared = await withTenant((tx) =>
         tx.document.updateMany({
           where: { id: request.params.docId, orderId, publicToken: { not: null } },

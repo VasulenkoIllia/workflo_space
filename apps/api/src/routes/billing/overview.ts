@@ -1,8 +1,7 @@
 import { Prisma, withTenant } from '@workflo/db'
-import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 interface DebtRow {
   companyId: string
@@ -29,9 +28,8 @@ const overviewRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      // PERM-2: фінанси — за правом (раніше owner+executor, менеджер блок)
+      await requirePermission(request, 'billing.view')
 
       const since = monthStart(new Date())
 

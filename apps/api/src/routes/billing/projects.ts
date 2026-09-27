@@ -11,11 +11,11 @@ import {
 import type { FastifyPluginAsync } from 'fastify'
 import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { type AccessClaims, isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { moduleEnabled } from '../../saas/limits.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { currentCycleWindow } from '../../services/projectCycle.js'
 import { closeProjectCycle } from '../../services/recurringCharges.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * Financial projects CRUD (05-ПРОЕКТИ, S5.6 P-1). Workspace-only, tenant-scoped,
@@ -58,26 +58,18 @@ type ProjectRow = Prisma.ProjectGetPayload<{ select: typeof PROJECT_SELECT }>
 
 const dec = (d: Prisma.Decimal | null) => (d ? d.toFixed(2) : null)
 
-function toDto(p: ProjectRow) {
+/** PERM-2: без `billing.view` (менеджер) — умови без сум/юр-особи/погоджувача рахунків. */
+function toDto(p: ProjectRow, showMoney = true) {
   return {
     ...p,
-    abonAmount: dec(p.abonAmount),
-    clientHourlyRate: dec(p.clientHourlyRate),
-    advanceGatePct: dec(p.advanceGatePct),
+    abonAmount: showMoney ? dec(p.abonAmount) : null,
+    clientHourlyRate: showMoney ? dec(p.clientHourlyRate) : null,
+    advanceGatePct: showMoney ? dec(p.advanceGatePct) : null,
+    legalEntityId: showMoney ? p.legalEntityId : null,
+    invoiceApprover: showMoney ? p.invoiceApprover : null,
     includedHoursCap: dec(p.includedHoursCap),
     nextCycleAt: p.nextCycleAt ? p.nextCycleAt.toISOString() : null,
     createdAt: p.createdAt.toISOString(),
-  }
-}
-
-/**
- * Financial-projects are a finance surface → managers are blocked (MOD-4 `MANAGER_BLOCKED`),
- * exactly like every other billing route (overview/charges/payments/wallet/…). Owner + executor
- * pass; manager → 403. close-cycle even generates live charges, so the gate must hold on writes.
- */
-function assertInternal(user: Pick<AccessClaims, 'agencyMemberships'>, agencyId: string): void {
-  if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-    throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
   }
 }
 
@@ -104,7 +96,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'projects.view')
+      const showMoney = await hasPermission(request, 'billing.view')
       await assertModule(agencyId)
       const { companyId } = request.query
       const rows = await withTenant((tx) =>
@@ -114,7 +107,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
           orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
         })
       )
-      return reply.send({ success: true, data: { projects: rows.map(toDto) } })
+      return reply.send({ success: true, data: { projects: rows.map((p) => toDto(p, showMoney)) } })
     }
   )
 
@@ -125,7 +118,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'projects.view')
+      const showMoney = await hasPermission(request, 'billing.view')
       await assertModule(agencyId)
       const project = await withTenant((tx) =>
         tx.project.findFirst({ where: { id: request.params.id, agencyId }, select: PROJECT_SELECT })
@@ -133,7 +127,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       if (!project) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Проєкт не знайдено', 404)
       }
-      return reply.send({ success: true, data: { project: toDto(project) } })
+      return reply.send({ success: true, data: { project: toDto(project, showMoney) } })
     }
   )
 
@@ -145,7 +139,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = createProjectSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'projects.manage')
       await assertModule(agencyId)
 
       const project = await withTenant(async (tx) => {
@@ -214,7 +208,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = updateProjectSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'projects.manage')
       await assertModule(agencyId)
 
       const project = await withTenant(async (tx) => {
@@ -321,7 +315,7 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      await requirePermission(request, 'projects.manage')
       await assertModule(agencyId)
 
       await withTenant(async (tx) => {
@@ -364,7 +358,8 @@ const projectsRoute: FastifyPluginAsync = (fastify) => {
       const input = closeCycleSchema.parse(request.body)
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      assertInternal(user, agencyId)
+      // PERM-2: закриття циклу генерує живі нарахування → billing.manage
+      await requirePermission(request, 'billing.manage')
       await assertModule(agencyId)
 
       // The schema regex accepts well-formed but non-existent calendar dates (e.g. 2024-02-30);

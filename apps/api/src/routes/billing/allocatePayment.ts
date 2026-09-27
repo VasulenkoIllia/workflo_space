@@ -1,11 +1,10 @@
 import { prisma, tenantTransaction } from '@workflo/db'
-import { allocatePaymentSchema, ApiErrorCode, AppError } from '@workflo/types'
+import { allocatePaymentSchema } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
-import { can } from '../../auth/can.js'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { allocatePayment } from '../../services/allocation.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * POST /workspace/billing/payments/:id/allocate (S5-07) — an operator allocates a
@@ -29,9 +28,7 @@ const allocatePaymentRoute: FastifyPluginAsync = (fastify) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
 
-      if (!isInternalTeam(user) || !can(user, 'payment.confirm', { agencyId })) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для розподілу платежу', 403)
-      }
+      await requirePermission(request, 'billing.manage')
 
       const result = await tenantTransaction(prisma, (tx) =>
         allocatePayment(tx, { agencyId, paymentId: id, allocations: body.allocations })

@@ -1,11 +1,11 @@
 import { prisma, tenantTransaction, withTenant } from '@workflo/db'
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { requireOwnerAgency } from '../../auth/tenant.js'
-import type { AccessClaims } from '../../auth/tokens.js'
+import { requireActiveAgency } from '../../auth/tenant.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { dispatchNotification } from '../../services/notifications.js'
 import { createCreditNote, refundPayment, writeOffCharge } from '../../services/reversals.js'
+import { requirePermission } from '../../auth/permissions.js'
 
 /**
  * 05-В: сторнування / повернення / списання (owner-only). Кожна операція атомарна
@@ -29,8 +29,11 @@ const creditNoteSchema = z
   })
   .strict()
 
-function assertOwner(user: AccessClaims): string {
-  return requireOwnerAgency(user, 'Операцію виконує лише власник')
+/** PERM-2: фінансова дія — право `billing.manage` (раніше owner-only). */
+async function assertOwner(request: FastifyRequest): Promise<string> {
+  const agencyId = requireActiveAgency(request.user)
+  await requirePermission(request, 'billing.manage')
+  return agencyId
 }
 
 /** Resolve a company's member profileIds (fan-out target for client notifications). */
@@ -47,7 +50,7 @@ const reversalsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/billing/payments/:id/refund',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = refundSchema.parse(request.body)
       const result = await tenantTransaction(prisma, (tx) =>
         refundPayment(tx, {
@@ -97,7 +100,7 @@ const reversalsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/billing/charges/:id/write-off',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = writeOffSchema.parse(request.body)
       const result = await tenantTransaction(prisma, (tx) =>
         writeOffCharge(tx, {
@@ -135,7 +138,7 @@ const reversalsRoute: FastifyPluginAsync = (fastify) => {
     '/workspace/billing/credit-notes',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const agencyId = assertOwner(request.user)
+      const agencyId = await assertOwner(request)
       const body = creditNoteSchema.parse(request.body)
       const result = await tenantTransaction(prisma, (tx) =>
         createCreditNote(tx, {

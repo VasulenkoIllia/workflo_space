@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
 
 const orderCreate = vi.fn()
+const companyFindFirst = vi.fn() // PERM-2: компанія мусить належати активній агенції
 const orderCount = vi.fn()
 const orderFindMany = vi.fn()
 const orderFindUnique = vi.fn()
@@ -41,6 +42,7 @@ const orderFindUniqueOrThrow = vi.fn()
 vi.mock('@workflo/db', async (importOriginal) => {
   const actual = (await importOriginal()) as { Prisma: unknown }
   const prisma = {
+    company: { findFirst: companyFindFirst },
     // S10-03: гейт блокерів у transition читає залежності (порожньо = не заблоковано)
     orderDependency: { findMany: vi.fn().mockResolvedValue([]) },
     order: {
@@ -189,6 +191,7 @@ function authed(claims: unknown) {
 describe('POST /orders', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    companyFindFirst.mockResolvedValue({ id: 'company-1' })
     auditLogCreate.mockResolvedValue({})
     // findUniqueOrThrow віддає повний рядок створеного коментаря (echo create-мока).
     commentFindUniqueOrThrow.mockImplementation(async () => {
@@ -199,6 +202,24 @@ describe('POST /orders', () => {
     fileUpdateMany.mockResolvedValue({ count: 0 })
   })
   afterEach(() => vi.clearAllMocks())
+
+  it('PERM-2: компанія іншої агенції → 403, замовлення не створюється (міжтенантний запис)', async () => {
+    companyFindFirst.mockResolvedValue(null)
+    const { app, token } = await authed(CLIENT)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: 'Чуже замовлення' },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(orderCreate).not.toHaveBeenCalled()
+    expect(companyFindFirst).toHaveBeenCalledWith({
+      where: { id: 'company-1', agencyId: 'agency-1' },
+      select: { id: true },
+    })
+    await app.close()
+  })
 
   it('creates an order for the active company → 201, tenant-stamped', async () => {
     orderCreate.mockResolvedValue({

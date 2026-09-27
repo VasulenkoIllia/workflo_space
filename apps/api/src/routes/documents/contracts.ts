@@ -4,10 +4,10 @@ import { ApiErrorCode, AppError } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { requireActiveAgency } from '../../auth/tenant.js'
-import { isAgencyManager, isInternalTeam } from '../../auth/tokens.js'
 import { writeAuditAsync } from '../../services/audit.js'
 import { getStorage } from '../../services/storage.js'
 import { DOC_SELECT } from './shared.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * R2 (аудит r6, розбиття documents.ts): ЗОВНІШНІ договори (06-ДОГОВІР-2) —
@@ -23,9 +23,7 @@ const contractsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const user = request.user
       const agencyId = requireActiveAgency(user)
-      if (!isInternalTeam(user) || isAgencyManager(user, agencyId)) {
-        throw new AppError(ApiErrorCode.FORBIDDEN, 'Доступ лише для команди', 403)
-      }
+      await requirePermission(request, 'documents.manage')
       const company = await withTenant((tx) =>
         tx.company.findFirst({
           where: { id: request.params.companyId, agencyId },
@@ -145,10 +143,9 @@ const contractsRoute: FastifyPluginAsync = (fastify) => {
         })
       )
       if (!doc?.storedAs) throw new AppError(ApiErrorCode.NOT_FOUND, 'Файл не знайдено', 404)
+      // PERM-2: команда активної агенції документа з правом documents.manage
       const isTeam =
-        isInternalTeam(user) &&
-        user.agencyMemberships.some((m) => m.agencyId === doc.agencyId) &&
-        !isAgencyManager(user, doc.agencyId)
+        user.activeAgencyId === doc.agencyId && (await hasPermission(request, 'documents.manage'))
       const isCompanyClient = user.memberships.some((m) => m.companyId === doc.companyId)
       if (!isTeam && !isCompanyClient) {
         throw new AppError(ApiErrorCode.FORBIDDEN, 'Немає доступу до документа', 403)

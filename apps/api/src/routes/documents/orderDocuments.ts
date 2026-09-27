@@ -6,6 +6,7 @@ import {
   renderDocumentHtml,
 } from '@workflo/templates'
 import { ApiErrorCode, AppError } from '@workflo/types'
+import type { PermissionKey } from '@workflo/types'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { nextDocumentNumber } from '../../services/documentNumber.js'
@@ -18,6 +19,7 @@ import {
 import { enqueueOutbox } from '../../services/outbox.js'
 import { requireOrderParticipant, requireTeamOrder } from '../orders/access.js'
 import { DOC_SELECT } from './shared.js'
+import { hasPermission, requirePermission } from '../../auth/permissions.js'
 
 /**
  * R2 (аудит r6, розбиття documents.ts): ORDER-scoped документообіг —
@@ -39,6 +41,18 @@ const createDocumentSchema = z.object({
   ]),
 })
 
+/** PERM-2: грошові документи (рахунки, аванс-рахунки, акти звірки) — фінанси; решта
+ *  (специфікації, акти виконаних робіт, договори) — documents.manage. */
+const MONEY_DOC_TYPES: ReadonlySet<string> = new Set([
+  'invoice',
+  'advance_invoice',
+  'reconciliation_act',
+])
+const docWritePermission = (type: string): PermissionKey =>
+  MONEY_DOC_TYPES.has(type) ? 'billing.manage' : 'documents.manage'
+/** Клієнт бачить лише надіслані/прийняті документи (не чернетки агенції). */
+const CLIENT_VISIBLE_STATUSES = ['sent', 'accepted'] as const
+
 const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
   // ── Generate a document from an order (team-only) ────────────────────────────
   fastify.post<{ Params: { orderId: string } }>(
@@ -47,6 +61,7 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
       const { type } = createDocumentSchema.parse(request.body)
+      await requirePermission(request, docWritePermission(type))
 
       const order = await withTenant((tx) =>
         tx.order.findUnique({
@@ -101,9 +116,16 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const access = await requireOrderParticipant(request, request.params.orderId)
+      // PERM-2: команда без billing.view не бачить грошових документів; клієнт — лише
+      // надіслані/прийняті (раніше бачив і сформовані, ще не надіслані).
+      const hideMoney = access.isInternal && !(await hasPermission(request, 'billing.view'))
       const documents = await withTenant((tx) =>
         tx.document.findMany({
-          where: { orderId: access.orderId },
+          where: {
+            orderId: access.orderId,
+            ...(access.isInternal ? {} : { status: { in: [...CLIENT_VISIBLE_STATUSES] } }),
+            ...(hideMoney ? { type: { notIn: [...MONEY_DOC_TYPES] as never[] } } : {}),
+          },
           orderBy: { generatedAt: 'desc' },
           select: DOC_SELECT,
         })
@@ -126,6 +148,7 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
           where: { id: request.params.docId, orderId: access.orderId },
           select: {
             type: true,
+            status: true,
             number: true,
             generatedAt: true,
             companyId: true,
@@ -168,6 +191,16 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
       if (!doc) {
         throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
       }
+      // PERM-2: клієнту — лише надіслані/прийняті; команді грошові — лише з billing.view
+      if (
+        !access.isInternal &&
+        !(CLIENT_VISIBLE_STATUSES as readonly string[]).includes(doc.status)
+      ) {
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+      }
+      if (access.isInternal && MONEY_DOC_TYPES.has(doc.type)) {
+        await requirePermission(request, 'billing.view')
+      }
 
       const data = await withTenant((tx) => buildRenderData(tx, doc))
       data.branding = await loadPdfBranding(doc.agencyId, doc.agency.name)
@@ -203,6 +236,15 @@ const orderDocumentsRoute: FastifyPluginAsync = (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
+      // PERM-2: право на надсилання — за типом документа (рахунок = фінанси)
+      const toSend = await withTenant((tx) =>
+        tx.document.findFirst({
+          where: { id: request.params.docId, orderId },
+          select: { type: true },
+        })
+      )
+      if (!toSend) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
+      await requirePermission(request, docWritePermission(toSend.type))
 
       const now = new Date()
       const document = await tenantTransaction(prisma, async (tx) => {

@@ -164,7 +164,7 @@ describe('GET /admin/wallet/companies', () => {
       },
     ])
     companyCount.mockResolvedValue(1)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: '/admin/wallet/companies?search=Acm',
@@ -195,7 +195,7 @@ describe('GET /admin/wallet/companies/:id/transactions', () => {
     companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-1' })
     txnFindMany.mockResolvedValue([])
     txnCount.mockResolvedValue(0)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/admin/wallet/companies/${COMPANY_ID}/transactions`,
@@ -209,7 +209,7 @@ describe('GET /admin/wallet/companies/:id/transactions', () => {
     companyFindUnique.mockResolvedValue({ id: COMPANY_ID, agencyId: 'agency-OTHER' })
     txnFindMany.mockResolvedValue([])
     txnCount.mockResolvedValue(0)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/admin/wallet/companies/${COMPANY_ID}/transactions`,
@@ -223,7 +223,7 @@ describe('GET /admin/wallet/companies/:id/transactions', () => {
     companyFindUnique.mockResolvedValue(null)
     txnFindMany.mockResolvedValue([])
     txnCount.mockResolvedValue(0)
-    const { app, token } = await authed(EXECUTOR)
+    const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'GET',
       url: `/admin/wallet/companies/${COMPANY_ID}/transactions`,

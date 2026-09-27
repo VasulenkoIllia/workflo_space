@@ -89,10 +89,12 @@ export function useCompanyProjects(companyId: string, enabled = true) {
   })
 }
 
-export function useCompanies() {
+/** PERM: `enabled=false` — ролі без clients.view (виконавець) не роблять 403-запит. */
+export function useCompanies(enabled = true) {
   return useQuery({
     queryKey: ['companies'],
     queryFn: () => api.get<{ companies: CompanyOption[] }>('/workspace/companies'),
+    enabled,
   })
 }
 

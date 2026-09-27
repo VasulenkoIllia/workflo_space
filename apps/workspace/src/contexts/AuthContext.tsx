@@ -1,3 +1,4 @@
+import { levelAtLeast, type PermissionKey, type PermissionLevel } from '@workflo/types'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api, getAccessToken, refreshAccessToken, setAccessToken } from '@/lib/api'
@@ -44,6 +45,9 @@ export interface AuthState {
   mustChangePassword?: boolean
   /** 01-Г: нова адреса, що чекає підтвердження лінком. */
   pendingEmail?: string | null
+  /** PERM-1: ефективні права в активній агенції (ключ → рівень) + колонка матриці. */
+  permissions?: Partial<Record<PermissionKey, PermissionLevel>>
+  permissionRole?: 'owner' | 'manager' | 'lead' | 'executor'
 }
 
 interface AuthContextValue {
@@ -56,6 +60,13 @@ interface AuthContextValue {
   isManager: boolean
   isExecutor: boolean
   isInternal: boolean
+  /** PERM: чи має користувач право (рівень ≥ min; дефолт — будь-який, крім none). Бек однаково
+   *  перевіряє кожен роут — це лише для меню/кнопок/запитів без 403-тостів. */
+  can: (key: PermissionKey, min?: PermissionLevel) => boolean
+  /** Рівень права (none, якщо нема). */
+  level: (key: PermissionKey) => PermissionLevel
+  /** Тімлід (executor, що є лідом підрозділу). */
+  isLead: boolean
   /** Password step. `twoFactorRequired` → caller shows the code step and calls verifyTwoFactor. */
   login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
   /** 2FA step: exchange the challenge + code for a session. */
@@ -154,6 +165,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Gate on the AGENCY role (canon), not profile.role (a UI hint). isInternal = is agency staff.
   const role = user?.agencyRole ?? null
+  const perms = user?.permissions
+  const level = useCallback(
+    (key: PermissionKey): PermissionLevel => (role === 'owner' ? 'all' : (perms?.[key] ?? 'none')),
+    [perms, role]
+  )
+  const can = useCallback(
+    (key: PermissionKey, min: PermissionLevel = 'own') => {
+      const l = level(key)
+      return l !== 'none' && levelAtLeast(l, min)
+    },
+    [level]
+  )
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -163,13 +186,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isManager: role === 'manager',
       isExecutor: role === 'executor',
       isInternal: role != null,
+      can,
+      level,
+      isLead: user?.permissionRole === 'lead',
       login,
       verifyTwoFactor,
       adoptTwoFactorChallenge,
       logout,
       reload,
     }),
-    [user, loading, role, login, verifyTwoFactor, adoptTwoFactorChallenge, logout, reload]
+    [
+      user,
+      loading,
+      role,
+      can,
+      level,
+      login,
+      verifyTwoFactor,
+      adoptTwoFactorChallenge,
+      logout,
+      reload,
+    ]
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
