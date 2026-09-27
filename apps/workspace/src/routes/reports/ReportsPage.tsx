@@ -1,3 +1,4 @@
+import { useAuth } from '@/contexts/AuthContext'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Tabs, Card, EmptyState, Input, Skeleton } from '@workflo/ui'
@@ -646,7 +647,20 @@ export function ReportsPage() {
   }, [])
   const [from, setFrom] = useState(range.from)
   const [to, setTo] = useState(range.to)
-  const [tab, setTab] = useState('overview')
+  const { can } = useAuth()
+  // PERM-6: таби звітів за правами — операційні (reports.ops), грошові (finance.view), журнал (reports.audit)
+  const canOps = can('reports.ops')
+  const canFin = can('finance.view')
+  const tabs = [
+    ...(canOps || canFin || can('leads.manage') ? [{ id: 'overview', label: 'Огляд' }] : []),
+    ...(canOps ? [{ id: 'executors', label: 'Виконавці' }] : []),
+    ...(canFin ? [{ id: 'clients', label: 'Клієнти' }] : []),
+    ...(canOps ? [{ id: 'departments', label: 'Підрозділи' }] : []),
+    ...(canOps ? [{ id: 'timesheet', label: 'Timesheet' }] : []),
+    ...(can('reports.audit') ? [{ id: 'audit', label: 'Audit log' }] : []),
+  ]
+  const [pickedTab, setTab] = useState<string | null>(null)
+  const tab = pickedTab ?? tabs[0]?.id ?? 'overview'
   const { data, isLoading } = useHoursReport(from, to, tab === 'executors')
 
   return (
@@ -658,18 +672,7 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { id: 'overview', label: 'Огляд' },
-          { id: 'executors', label: 'Виконавці' },
-          { id: 'clients', label: 'Клієнти' },
-          { id: 'departments', label: 'Підрозділи' },
-          { id: 'timesheet', label: 'Timesheet' },
-          { id: 'audit', label: 'Audit log' },
-        ]}
-      />
+      <Tabs value={tab} onChange={setTab} items={tabs} />
 
       {tab !== 'audit' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 20px' }}>
@@ -692,9 +695,9 @@ export function ReportsPage() {
 
       {tab === 'overview' && (
         <>
-          <RevenueSection from={from} to={to} />
-          <SlaSection from={from} to={to} />
-          <LeadSourcesSection from={from} to={to} />
+          {canFin && <RevenueSection from={from} to={to} />}
+          {canOps && <SlaSection from={from} to={to} />}
+          {can('leads.manage') && <LeadSourcesSection from={from} to={to} />}
         </>
       )}
 

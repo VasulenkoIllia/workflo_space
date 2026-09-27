@@ -1208,22 +1208,22 @@ function LegalEntitiesSection() {
 /** DSN-3 (workspace-admin-settings.jsx): налаштування = 6-таб хаб замість
  * плаского скролу 15 карток. + нові ops-таби: SMTP-статус/тест і крони-моніторинг. */
 export function SettingsPage() {
-  const { isOwner } = useAuth()
-  // ROLE-NAV: /settings відкрито всім ролям (таб «Акаунт») — owner-дані не запитуємо в інших
-  const payment = usePaymentSettings(isOwner)
-  const referral = useReferralSettings(isOwner)
+  const { isOwner, can } = useAuth()
+  // PERM-6: таби — за правами (settings.manage / settings.catalogs / settings.legal); «Акаунт» — усім
+  const canSettings = can('settings.manage')
+  const canLegal = can('settings.legal')
+  const payment = usePaymentSettings(canLegal)
+  const referral = useReferralSettings(canSettings)
   const [tab, setTab] = useState('account')
 
-  const items = isOwner
-    ? [
-        { id: 'account', label: 'Акаунт' },
-        { id: 'workflow', label: 'Воркфлоу' },
-        { id: 'templates', label: 'Шаблони й брендинг' },
-        { id: 'catalogs', label: 'Каталоги' },
-        { id: 'finance', label: 'Фінанси' },
-        { id: 'ops', label: 'SMTP · Крони' },
-      ]
-    : [{ id: 'account', label: 'Акаунт' }]
+  const items = [
+    { id: 'account', label: 'Акаунт' },
+    ...(canSettings ? [{ id: 'workflow', label: 'Воркфлоу' }] : []),
+    ...(canSettings ? [{ id: 'templates', label: 'Шаблони й брендинг' }] : []),
+    ...(can('settings.catalogs') ? [{ id: 'catalogs', label: 'Каталоги' }] : []),
+    ...(canLegal || canSettings ? [{ id: 'finance', label: 'Фінанси' }] : []),
+    ...(canSettings ? [{ id: 'ops', label: 'SMTP · Крони' }] : []),
+  ]
 
   return (
     <div>
@@ -1251,17 +1251,18 @@ export function SettingsPage() {
           </>
         )}
 
-        {isOwner && tab === 'workflow' && (
+        {canSettings && tab === 'workflow' && (
           <>
-            <AgencySecuritySection />
+            {/* політика безпеки агенції — лише власник (поза матрицею прав) */}
+            {isOwner && <AgencySecuritySection />}
             <WorkflowSection />
-            <DunningSection />
+            {can('billing.manage') && <DunningSection />}
             <SlaPoliciesSection />
             <EmailReportsSection />
           </>
         )}
 
-        {isOwner && tab === 'templates' && (
+        {canSettings && tab === 'templates' && (
           <>
             <EmailTemplatesSection />
             <DocumentTemplatesSection />
@@ -1269,22 +1270,22 @@ export function SettingsPage() {
           </>
         )}
 
-        {isOwner && tab === 'catalogs' && (
+        {can('settings.catalogs') && tab === 'catalogs' && (
           <>
             <NomenclatureSection />
             <OrderCatalogSection />
           </>
         )}
 
-        {isOwner && tab === 'finance' && (
+        {(canLegal || canSettings) && tab === 'finance' && (
           <>
-            <LegalEntitiesSection />
-            {payment.isLoading ? (
+            {canLegal && <LegalEntitiesSection />}
+            {!canLegal ? null : payment.isLoading ? (
               <Skeleton style={{ height: 200 }} />
             ) : (
               <PaymentForm initial={payment.data?.settings ?? null} />
             )}
-            {referral.isLoading ? (
+            {!canSettings ? null : referral.isLoading ? (
               <Skeleton style={{ height: 200 }} />
             ) : referral.data ? (
               <ReferralForm initial={referral.data} />
@@ -1292,7 +1293,7 @@ export function SettingsPage() {
           </>
         )}
 
-        {isOwner && tab === 'ops' && (
+        {canSettings && tab === 'ops' && (
           <>
             <SmtpSection />
             <CronSection />

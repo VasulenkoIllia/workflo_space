@@ -51,7 +51,7 @@ function isOverdue(o: WorkspaceOrder): boolean {
 }
 
 export function OrdersPage() {
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
   const [trashOpen, setTrashOpen] = useState(false)
   const [tagF, setTagF] = useState('')
   const orderTags = useOrderTags()
@@ -82,7 +82,8 @@ export function OrdersPage() {
   })
   const unassigned = useOrders({ assigneeId: 'none', limit: 100 })
   const team = useTeam()
-  const companies = useCompanies()
+  // PERM-6: компанії — для створення замовлення (виконавцю з orders.view own не потрібні)
+  const companies = useCompanies(can('orders.create'))
 
   const orders = useMemo(() => data?.orders ?? [], [data])
   const done = countByStatus(orders, [OrderInternalStatus.DONE])
@@ -138,19 +139,21 @@ export function OrdersPage() {
               onClick={() => setView('timeline')}
             />
           </div>
-          {isOwner && (
+          {can('orders.delete') && (
             <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
               Кошик
             </Button>
           )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreating(true)}
-            disabled={(companies.data?.companies.length ?? 0) === 0}
-          >
-            Нове замовлення
-          </Button>
+          {can('orders.create') && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreating(true)}
+              disabled={(companies.data?.companies.length ?? 0) === 0}
+            >
+              Нове замовлення
+            </Button>
+          )}
         </div>
       </div>
 
@@ -743,6 +746,7 @@ function OrdersTable({
   members: { profileId: string; name: string }[]
 }) {
   const navigate = useNavigate()
+  const { can } = useAuth()
   const bulk = useBulkAssign()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assignTo, setAssignTo] = useState('')
@@ -774,7 +778,8 @@ function OrdersTable({
 
   return (
     <div>
-      {selected.size > 0 && (
+      {/* PERM-6: масове призначення — orders.assign */}
+      {selected.size > 0 && can('orders.assign') && (
         <div
           style={{
             display: 'flex',

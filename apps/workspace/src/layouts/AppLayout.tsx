@@ -29,7 +29,7 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 export function AppLayout() {
-  const { user, role, isOwner, logout } = useAuth()
+  const { user, role, isOwner, logout, can } = useAuth()
   const { locale, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
@@ -45,7 +45,7 @@ export function AppLayout() {
     dark: 'Тема: темна',
   }
 
-  const nav = navVisibleForRole(WORKSPACE_NAV, role)
+  const nav = navVisibleForRole(WORKSPACE_NAV, role, can)
 
   // Breadcrumbs: app root + the active section's label (design topbar crumbs).
   const activeEntry = nav.find((e) => 'id' in e && e.id === activeNavId(location.pathname, nav))

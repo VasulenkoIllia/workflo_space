@@ -499,9 +499,9 @@ function toLocalInput(iso: string): string {
 function EventDetailModal({ event, onClose }: { event: CalendarEventDto; onClose: () => void }) {
   const cancel = useCancelEvent()
   const update = useUpdateEvent()
-  const { user } = useAuth()
-  const isOwner = user?.agencyMemberships?.some((m) => m.role === 'owner')
-  const canManage = event.createdById === user?.profile.id || isOwner
+  const { user, can } = useAuth()
+  // PERM-6: чужу подію — calendar.manage (власник має завжди)
+  const canManage = event.createdById === user?.profile.id || can('calendar.manage')
   const RESP_LABEL = { pending: 'очікує', accepted: 'прийняв', declined: 'відхилив' }
   // COV-UX-5: редагування (PATCH існував з CAL-MVP, UI не було)
   const [editing, setEditing] = useState(false)

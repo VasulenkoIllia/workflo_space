@@ -78,17 +78,21 @@ const ACTIVE_END: OrderInternalStatus[] = [OrderInternalStatus.DONE, OrderIntern
  * owner-блок «Фінанси та клієнти» (4 action-items). Донат/канбан живуть у /finance та /orders. */
 export function OwnerDashboard() {
   const navigate = useNavigate()
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
+  // PERM-6: віджети дашборда — за правами (фінанси/проєкти/виплати), не за роллю
+  const canBilling = can('billing.view')
+  const canFinance = can('finance.view')
+  const canProjects = can('projects.view')
   const { data, isLoading, isError } = useOrders({})
   const { data: unassignedData, isError: unassignedErr } = useOrders({ assigneeId: 'none' })
   // Фінанс-віджети — owner-only (manager finance-blocked): гейтимо запити, щоб не ловити 403.
-  const overview = useBillingOverview(isOwner)
-  const mom = useMomReport(isOwner)
-  const pendingCharges = useWsCharges('pending', isOwner)
-  const projects = useProjects(isOwner)
+  const overview = useBillingOverview(canBilling)
+  const mom = useMomReport(canFinance)
+  const pendingCharges = useWsCharges('pending', canBilling)
+  const projects = useProjects(canProjects)
   const leads = useLeads()
   const period = new Date().toISOString().slice(0, 7)
-  const payouts = usePayouts(isOwner ? period : '')
+  const payouts = usePayouts(can('payouts.view_team', 'all') ? period : '')
 
   const orders = data?.orders ?? []
   const o = overview.data
@@ -109,7 +113,7 @@ export function OwnerDashboard() {
   )
 
   // Action-items (owner)
-  const pendingList = isOwner ? (pendingCharges.data?.charges ?? []) : []
+  const pendingList = canBilling ? (pendingCharges.data?.charges ?? []) : []
   const pendingSum = pendingList.reduce((s, c) => s + (num(c.totalAmount ?? c.amount) ?? 0), 0)
   const weekAgo = Date.now() - 7 * 86_400_000
   const newLeads = (leads.data?.leads ?? []).filter(
@@ -127,7 +131,7 @@ export function OwnerDashboard() {
           <div className="wfp-ph-sub">
             // зведення по агенції · {inWork.length} у роботі · {data?.pagination.total ?? '—'}{' '}
             замовлень
-            {isOwner && o ? ` · виручка ${formatMoney(num(o.monthlyRevenueUsd))} за місяць` : ''}
+            {canBilling && o ? ` · виручка ${formatMoney(num(o.monthlyRevenueUsd))} за місяць` : ''}
           </div>
         </div>
         <div className="wfp-ph-r">
@@ -165,7 +169,7 @@ export function OwnerDashboard() {
             {waitingClient[0]?.title ? waitingClient[0].title.slice(0, 28) : '—'}
           </div>
         </div>
-        {isOwner && (
+        {canBilling && (
           <div className="wfp-stat">
             <div className="wfp-stat-k">виручка · місяць</div>
             <div className="wfp-stat-v">{formatMoney(num(o?.monthlyRevenueUsd))}</div>
@@ -176,7 +180,7 @@ export function OwnerDashboard() {
         )}
       </div>
 
-      {isOwner && mom.data && <MomStrip mom={mom.data} />}
+      {canFinance && mom.data && <MomStrip mom={mom.data} />}
 
       {/* ── Board-slices (дизайн wfd-grid): вікна в дошку, не другий канбан ── */}
       {isLoading ? (
@@ -226,13 +230,13 @@ export function OwnerDashboard() {
                 Абонплата · авто
               </span>
               {/* D8: /projects — owner-only маршрут; менеджеру лінк вів у редирект */}
-              {isOwner && (
+              {canProjects && (
                 <button className="wfd-panel-link" onClick={() => navigate('/projects')}>
                   відкрити проєкти →
                 </button>
               )}
             </div>
-            {!isOwner ? (
+            {!canProjects ? (
               <div className="wfd-empty">— фінанси доступні власнику —</div>
             ) : abonProjects.length === 0 ? (
               <div className="wfd-empty">— немає —</div>
@@ -244,7 +248,7 @@ export function OwnerDashboard() {
       )}
 
       {/* ── Owner: «Фінанси та клієнти» — action items (дизайн) ── */}
-      {isOwner && (
+      {canBilling && (
         <div style={{ marginTop: 24 }}>
           <div
             className="wfp-mono"

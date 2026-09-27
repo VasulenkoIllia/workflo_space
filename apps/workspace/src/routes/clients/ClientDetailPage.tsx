@@ -109,7 +109,7 @@ export function ClientDetailPage() {
   const firstId = orders[0]?.id ?? ''
   const { data: sample } = useOrder(firstId)
   const name = sample?.company?.name ?? `Клієнт · ${id.slice(0, 8)}`
-  const { isManager, isOwner } = useAuth()
+  const { isOwner, can } = useAuth()
   const [tab, setTab] = useState('overview')
 
   if (isLoading) return <Skeleton style={{ height: 280 }} />
@@ -143,10 +143,19 @@ export function ClientDetailPage() {
     { id: 'secrets', label: 'Секрети' },
     { id: 'requisites', label: 'Реквізити' },
   ]
-  const visibleTabs = isManager
-    ? ALL_TABS.filter((t) => t.id === 'overview')
-    : // «Секрети» is owner-only (executors don't reach this page; the vault API 403s non-owners).
-      ALL_TABS.filter((t) => t.id !== 'secrets' || isOwner)
+  // PERM-6: вкладки за правами (менеджер тепер веде клієнтів: люди, документи, активність);
+  // «Секрети» — лише власник (поза матрицею, шари 17-SHARE).
+  const tabAllowed: Record<string, boolean> = {
+    overview: true,
+    people: can('clients.view'),
+    projects: can('projects.view'),
+    finance: can('clients.view'),
+    docs: can('documents.manage'),
+    activity: can('clients.view'),
+    secrets: isOwner,
+    requisites: can('clients.requisites'),
+  }
+  const visibleTabs = ALL_TABS.filter((t) => tabAllowed[t.id])
   const safeTab = visibleTabs.some((t) => t.id === tab) ? tab : 'overview'
 
   return (
@@ -391,11 +400,12 @@ function ExternalContractModal({
 /** Документи tab (28-Б): all of the client's documents across orders. Internal-non-manager
  * (backend 403s managers → hidden). PDF opens via the Bearer-authed blob fetch. */
 function DocumentsSection({ companyId }: { companyId: string }) {
-  const { isManager } = useAuth()
+  const { can } = useAuth()
+  const allowed = can('documents.manage')
   const qc = useQueryClient()
-  const { data: docs, isLoading } = useClientDocuments(companyId, !isManager)
+  const { data: docs, isLoading } = useClientDocuments(companyId, allowed)
   const [externalOpen, setExternalOpen] = useState(false)
-  if (isManager) return null
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const documents = docs ?? []
 
@@ -512,9 +522,10 @@ function DocumentsSection({ companyId }: { companyId: string }) {
 /** "Needs attention" strip for the Overview tab — overdue charges + drafts awaiting release,
  * derived from the client's charges (internal-non-manager). Renders nothing when all clear. */
 function OverviewAttention({ companyId }: { companyId: string }) {
-  const { isManager } = useAuth()
-  const { data } = useCompanyCharges(companyId, !isManager)
-  if (isManager) return null
+  const { can } = useAuth()
+  const allowed = can('billing.view')
+  const { data } = useCompanyCharges(companyId, allowed)
+  if (!allowed) return null
   const charges = data?.charges ?? []
   const now = Date.now()
   const isOpen = (c: WsCharge) => c.status !== 'paid' && c.status !== 'written_off'
@@ -938,9 +949,10 @@ const ACTIVITY_TONE: Record<ClientActivityItem['kind'], string> = {
 
 /** 28-Б «Активність» — агрегований per-client timeline (замовлення+платежі+документи). */
 function ActivitySection({ companyId }: { companyId: string }) {
-  const { isManager } = useAuth()
-  const { data, isLoading } = useClientActivity(companyId, !isManager)
-  if (isManager) return null
+  const { can } = useAuth()
+  const allowed = can('clients.view')
+  const { data, isLoading } = useClientActivity(companyId, allowed)
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 200 }} />
   const items = data ?? []
   return (
@@ -994,15 +1006,16 @@ function ActivitySection({ companyId }: { companyId: string }) {
 }
 
 function PeopleSection({ companyId }: { companyId: string }) {
-  const { isManager, isOwner } = useAuth()
-  const { data, isLoading } = useClientMembers(companyId, !isManager)
+  const { can } = useAuth()
+  const allowed = can('clients.view')
+  const { data, isLoading } = useClientMembers(companyId, allowed)
   const setRole = useUpdateClientMemberRole(companyId)
   const remove = useRemoveClientMember(companyId)
   const invite = useInviteClientMember(companyId)
   const resetPw = useResetClientMemberPassword(companyId)
   const [inviting, setInviting] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
-  if (isManager) return null
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 120 }} />
   const members = data?.members ?? []
 
@@ -1040,7 +1053,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
 
   return (
     <Card title="Люди" aux={`${members.length}`}>
-      {isOwner && (
+      {can('clients.manage') && (
         <div style={{ marginBottom: members.length ? 12 : 8 }}>
           {inviting ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -1084,7 +1097,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
               key={m.profileId}
               style={{
                 display: 'grid',
-                gridTemplateColumns: isOwner ? '2fr 1.1fr 1fr auto' : '2fr 1fr 1.2fr',
+                gridTemplateColumns: can('clients.manage') ? '2fr 1.1fr 1fr auto' : '2fr 1fr 1.2fr',
                 alignItems: 'center',
                 gap: 12,
                 padding: '10px 8px',
@@ -1111,7 +1124,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
                 </div>
               </div>
 
-              {isOwner ? (
+              {can('clients.manage') ? (
                 <select
                   value={m.role}
                   disabled={setRole.isPending}
@@ -1138,7 +1151,7 @@ function PeopleSection({ companyId }: { companyId: string }) {
                 з {formatDate(m.joinedAt)}
               </span>
 
-              {isOwner && (
+              {can('clients.manage') && (
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                   <button
                     type="button"
@@ -1173,12 +1186,13 @@ function PeopleSection({ companyId }: { companyId: string }) {
 /** 05-Б дунінг: «не надсилати цьому клієнту нагадування про оплату» (owner-only).
  * Глушить лише листи/сповіщення — overdue-статус нарахувань ставиться незалежно. */
 function DunningToggleSection({ companyId }: { companyId: string }) {
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
+  const allowed = can('billing.manage')
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['company-dunning', companyId],
     queryFn: () => api.get<{ optOut: boolean }>(`/workspace/companies/${companyId}/dunning`),
-    enabled: isOwner,
+    enabled: allowed,
   })
   const patch = useMutation({
     mutationFn: (optOut: boolean) =>
@@ -1187,7 +1201,7 @@ function DunningToggleSection({ companyId }: { companyId: string }) {
     onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
   })
 
-  if (!isOwner) return null
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 60, marginBottom: 20 }} />
   if (!data) return null
 
@@ -1222,7 +1236,8 @@ function DunningToggleSection({ companyId }: { companyId: string }) {
 /** COV-SET-2: per-company override каскаду погодження (поля 02-А отримали write-роут).
  * null = успадкувати agency-дефолт із «Налаштування → Воркфлоу». */
 function ApprovalOverrideSection({ companyId }: { companyId: string }) {
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
+  const allowed = can('clients.manage')
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ['company-approval', companyId],
@@ -1230,7 +1245,7 @@ function ApprovalOverrideSection({ companyId }: { companyId: string }) {
       api.get<{ approvalMode: string | null; invoiceApprover: string | null }>(
         `/workspace/companies/${companyId}/approval`
       ),
-    enabled: isOwner,
+    enabled: allowed,
   })
   const patch = useMutation({
     mutationFn: (body: { approvalMode?: string | null; invoiceApprover?: string | null }) =>
@@ -1242,7 +1257,7 @@ function ApprovalOverrideSection({ companyId }: { companyId: string }) {
     onError: (e) => toast.error(apiErrorMessage(e, 'Не вдалося зберегти')),
   })
 
-  if (!isOwner) return null
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 60, marginBottom: 20 }} />
   if (!data) return null
 
@@ -1298,12 +1313,13 @@ function ApprovalOverrideSection({ companyId }: { companyId: string }) {
 }
 
 function LoyaltySection({ companyId }: { companyId: string }) {
-  const { isManager, isOwner } = useAuth()
-  const { data, isLoading } = useCompanyLoyalty(companyId, !isManager)
-  if (isManager) return null
+  const { can } = useAuth()
+  const allowed = can('clients.view')
+  const { data, isLoading } = useCompanyLoyalty(companyId, allowed)
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 120, marginBottom: 20 }} />
   if (!data) return null
-  return <LoyaltyPanel companyId={companyId} data={data} canOverride={isOwner} />
+  return <LoyaltyPanel companyId={companyId} data={data} canOverride={can('billing.manage')} />
 }
 
 function LoyaltyPanel({
@@ -1448,13 +1464,14 @@ function LoyaltyPanel({
 /** Year-to-date margin for the client (S5.6 P-9). Owner-only — the backend 403s
  * everyone else. A compact roll-up; the full /margin screen has period controls + per-executor. */
 function MarginSection({ companyId }: { companyId: string }) {
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
+  const allowed = can('finance.view')
   const range = useMemo(() => {
     const d = new Date()
     return { from: `${d.getFullYear()}-01-01`, to: isoDay(d) }
   }, [])
-  const { data, isLoading } = useClientMargin(isOwner ? companyId : '', range.from, range.to)
-  if (!isOwner) return null
+  const { data, isLoading } = useClientMargin(allowed ? companyId : '', range.from, range.to)
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
   const m = data?.margin
   if (!m) return null
@@ -1542,10 +1559,11 @@ function MarginSection({ companyId }: { companyId: string }) {
 /** Client legal requisites (06-Б, P-3) — the document "to" party. The team can edit on the
  * client's behalf (28-Б, PATCH); the client also edits in Portal. Managers are 403'd → hidden. */
 function RequisitesSection({ companyId }: { companyId: string }) {
-  const { isManager } = useAuth()
+  const { can } = useAuth()
+  const allowed = can('clients.requisites')
   const [editing, setEditing] = useState(false)
-  const { data, isLoading } = useClientRequisites(companyId, !isManager)
-  if (isManager) return null
+  const { data, isLoading } = useClientRequisites(companyId, allowed)
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
   const r = data?.requisites
   if (!r) return null
@@ -1757,9 +1775,10 @@ function RequisitesForm({
  * Read-only list here; full config (create/edit/close-cycle) lives on /projects/:id. */
 function ProjectsSection({ companyId }: { companyId: string }) {
   const navigate = useNavigate()
-  const { isManager } = useAuth()
-  const { data, isLoading } = useCompanyProjects(companyId, !isManager)
-  if (isManager) return null
+  const { can } = useAuth()
+  const allowed = can('projects.view')
+  const { data, isLoading } = useCompanyProjects(companyId, allowed)
+  if (!allowed) return null
   if (isLoading) return <Skeleton style={{ height: 110, marginBottom: 20 }} />
   const projects = data?.projects ?? []
 

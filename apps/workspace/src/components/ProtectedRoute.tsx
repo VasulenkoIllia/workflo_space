@@ -1,3 +1,4 @@
+import type { PermissionKey } from '@workflo/types'
 import { Navigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Button } from '@workflo/ui'
@@ -63,5 +64,14 @@ export function RoleRoute({ allow, children }: { allow: AgencyRole[]; children: 
   // but guard `loading` so a standalone use never flashes a wrong redirect.
   if (loading) return <Centered>// завантаження…</Centered>
   if (!role || !allow.includes(role)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+/** PERM-6: маршрут за правами — пускає, якщо є хоча б одне з `any`. Інакше — на головну
+ *  (бек однаково відповідає 403; це лише щоб не показувати порожній екран). */
+export function PermRoute({ any, children }: { any: PermissionKey[]; children: ReactNode }) {
+  const { can, loading } = useAuth()
+  if (loading) return <Centered>// завантаження…</Centered>
+  if (!any.some((k) => can(k))) return <Navigate to="/" replace />
   return <>{children}</>
 }

@@ -62,7 +62,7 @@ export function LeadBoardPage() {
   const colSum = (stageId: string) =>
     byCol(stageId).reduce((acc, l) => acc + (l.estimatedValue ? Number(l.estimatedValue) : 0), 0)
 
-  const { isOwner } = useAuth()
+  const { can } = useAuth()
 
   const remove = (lead: Lead) => {
     if (!window.confirm(`Видалити лід «${lead.name}»?`)) return
@@ -82,7 +82,7 @@ export function LeadBoardPage() {
           <h1 className="wfp-ph-h1">Ліди</h1>
         </div>
         <div className="wfp-ph-r" style={{ display: 'flex', gap: 8 }}>
-          {isOwner && (
+          {can('leads.manage') && (
             <Button variant="ghost" onClick={() => setEditingStages(true)}>
               ⚙ Стадії
             </Button>

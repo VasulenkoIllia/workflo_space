@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Avatar, Button, Card, EmptyState, Input, Modal, Skeleton, Tabs } from '@workflo/ui'
 import { Select } from '@/components/Select'
+import { PermissionsTab } from './PermissionsTab'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCreateTeam, useSetMemberTeam, useTeams, useUpdateTeam, type Team } from '@/lib/teams'
 import { api } from '@/lib/api'
@@ -125,22 +126,19 @@ export function TeamPage() {
 
       <Tabs
         value={tab}
-        onChange={(t) => {
-          if (t === 'permissions') {
-            toast.info('Permissions-матриця — у SaaS-фазі (S14, custom roles)')
-            return
-          }
-          setTab(t)
-        }}
+        onChange={setTab}
         items={[
           { id: 'departments', label: 'Підрозділи' },
           { id: 'members', label: 'Команда · ролі' },
-          { id: 'permissions', label: 'Permissions 🔒' },
+          // PERM-6: матриця прав + персональні права — керує лише власник
+          ...(isOwner ? [{ id: 'permissions', label: 'Права доступу' }] : []),
           ...(can('team.invite') ? [{ id: 'invites', label: 'Запрошення' }] : []),
         ]}
       />
 
       <div style={{ marginTop: 16 }}>
+        {tab === 'permissions' && isOwner && <PermissionsTab />}
+
         {tab === 'departments' && (
           <DepartmentsTab teams={teams} members={members} canEdit={can('team.departments')} />
         )}

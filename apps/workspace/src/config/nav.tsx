@@ -1,11 +1,13 @@
+import type { PermissionKey } from '@workflo/types'
 import { Icon, type SidebarNavEntry } from '@workflo/ui'
 import type { AgencyRole } from '@/contexts/AuthContext'
 
 /** Role char used in nav `roles` tags (design-v2 ia-roles): o=owner, m=manager, x=executor. */
 const ROLE_CHAR: Record<AgencyRole, string> = { owner: 'o', manager: 'm', executor: 'x' }
 
-/** A workspace nav entry may carry an optional `roles` tag (a subset of 'omx'). */
-type WsNavEntry = SidebarNavEntry & { roles?: string }
+/** A workspace nav entry may carry an optional `roles` tag (a subset of 'omx') або — PERM-6 —
+ *  `perm`: видимо, якщо є хоча б одне з прав (має пріоритет над `roles`). */
+type WsNavEntry = SidebarNavEntry & { roles?: string; perm?: PermissionKey[] }
 
 /**
  * Single role-tagged workspace nav (design-v2 WORKSPACE_NAV shape — see
@@ -22,8 +24,14 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   { id: 'dashboard', label: 'Дашборд', icon: <Icon name="home" />, href: '/', roles: 'omx' },
   { id: 'inbox', label: 'Інбокс', icon: <Icon name="inbox" />, href: '/inbox', roles: 'omx' },
 
-  { group: 'Робота', roles: 'om' },
-  { id: 'orders', label: 'Замовлення', icon: <Icon name="kanban" />, href: '/orders', roles: 'om' },
+  { group: 'Робота' },
+  {
+    id: 'orders',
+    label: 'Замовлення',
+    icon: <Icon name="kanban" />,
+    href: '/orders',
+    perm: ['orders.view'],
+  },
   { id: 'board', label: 'Дошка задач', icon: <Icon name="kanban" />, href: '/board', roles: 'omx' },
   // 18-А: єдиний хаб розмов (клієнт → замовлення), unread-бейджі всередині
   { id: 'chats', label: 'Чати', icon: <Icon name="inbox" />, href: '/chats', roles: 'omx' },
@@ -44,60 +52,96 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
   },
 
   // 'omx': executor reaches «Секрети» (17-SHARE) under this group; clients/leads stay 'om'.
-  { group: 'Клієнти', roles: 'omx' },
+  { group: 'Клієнти' },
   {
     id: 'clients',
     label: 'Клієнти',
     icon: <Icon name="building" />,
     href: '/clients',
-    roles: 'om',
+    perm: ['clients.view'],
   },
-  { id: 'leads', label: 'Ліди', icon: <Icon name="users" />, href: '/leads', roles: 'om' },
+  {
+    id: 'leads',
+    label: 'Ліди',
+    icon: <Icon name="users" />,
+    href: '/leads',
+    perm: ['leads.manage'],
+  },
   // Credentials vault (17-ГЛОБАЛ + 17-SHARE): owner = all; executor = їхні розшарені секрети.
   { id: 'vault', label: 'Секрети', icon: <Icon name="lock" />, href: '/vault', roles: 'ox' },
 
-  { group: 'Фінанси', roles: 'o' },
-  { id: 'billing', label: 'Рахунки', icon: <Icon name="receipt" />, href: '/billing', roles: 'o' },
+  { group: 'Фінанси' },
+  {
+    id: 'billing',
+    label: 'Рахунки',
+    icon: <Icon name="receipt" />,
+    href: '/billing',
+    perm: ['billing.view'],
+  },
   {
     id: 'projects',
     label: 'Фін-проєкти',
     icon: <Icon name="list" />,
     href: '/projects',
-    roles: 'o',
+    perm: ['projects.view'],
   },
   {
     id: 'finance',
     label: 'P&L і витрати',
     icon: <Icon name="file" />,
     href: '/finance',
-    roles: 'o',
+    perm: ['finance.view'],
   },
-  { id: 'margin', label: 'Маржа', icon: <Icon name="kanban" />, href: '/margin', roles: 'o' },
-  { id: 'reports', label: 'Звіти', icon: <Icon name="receipt" />, href: '/reports', roles: 'o' },
-  { id: 'payouts', label: 'Виплати', icon: <Icon name="users" />, href: '/payouts', roles: 'o' },
+  {
+    id: 'margin',
+    label: 'Маржа',
+    icon: <Icon name="kanban" />,
+    href: '/margin',
+    perm: ['finance.view'],
+  },
+  {
+    id: 'reports',
+    label: 'Звіти',
+    icon: <Icon name="receipt" />,
+    href: '/reports',
+    perm: ['reports.ops', 'finance.view', 'reports.audit'],
+  },
+  {
+    id: 'payouts',
+    label: 'Виплати',
+    icon: <Icon name="users" />,
+    href: '/payouts',
+    perm: ['payouts.manage', 'payouts.view_team'],
+  },
   {
     id: 'services',
     label: 'Каталог послуг',
     icon: <Icon name="star" />,
     href: '/services',
-    roles: 'o',
+    perm: ['settings.catalogs'],
   },
   // S7-05 міні-CMS: блог + кейси лендінга (owner)
-  { id: 'content', label: 'Контент', icon: <Icon name="file" />, href: '/content', roles: 'o' },
+  {
+    id: 'content',
+    label: 'Контент',
+    icon: <Icon name="file" />,
+    href: '/content',
+    perm: ['content.manage'],
+  },
   // 07-В: оголошення агенції (sticky-банер команді/клієнтам)
   {
     id: 'announcements',
     label: 'Оголошення',
     icon: <Icon name="bell" />,
     href: '/announcements',
-    roles: 'o',
+    perm: ['announcements.manage'],
   },
   {
     id: 'admin-wallet',
     label: 'Бонусні гаманці',
     icon: <Icon name="coins" />,
     href: '/admin-wallet',
-    roles: 'o',
+    perm: ['billing.view'],
   },
 
   { group: 'Команда', roles: 'omx' },
@@ -132,10 +176,15 @@ export const WORKSPACE_NAV: WsNavEntry[] = [
  */
 export function navVisibleForRole(
   items: WsNavEntry[],
-  role: AgencyRole | null | undefined
+  role: AgencyRole | null | undefined,
+  can?: (key: PermissionKey) => boolean
 ): SidebarNavEntry[] {
   const rc = role ? ROLE_CHAR[role] : 'o'
-  const kept = items.filter((it) => !it.roles || it.roles.includes(rc))
+  const kept = items.filter((it) => {
+    // PERM-6: право (хоча б одне) має пріоритет над рольовим тегом
+    if (it.perm && can) return it.perm.some((k) => can(k))
+    return !it.roles || it.roles.includes(rc)
+  })
   return kept.filter((it, i) => {
     if (!('group' in it)) return true
     const nx = kept[i + 1]

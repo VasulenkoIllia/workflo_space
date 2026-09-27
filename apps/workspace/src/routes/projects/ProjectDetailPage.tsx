@@ -416,9 +416,10 @@ const CHARGE_STATUS: Record<string, { label: string; color: string }> = {
 /** Charges generated for this project (recurring cron / manual close). Filtered client-side
  * from the company's charges by projectId — internal-non-manager (hidden for managers). */
 function ProjectChargesCard({ project }: { project: FinProject }) {
-  const { isManager } = useAuth()
-  const { data, isLoading } = useCompanyCharges(project.companyId, !isManager)
-  if (isManager) return null
+  const { can } = useAuth()
+  const allowed = can('billing.view')
+  const { data, isLoading } = useCompanyCharges(project.companyId, allowed)
+  if (!allowed) return null
 
   const charges = (data?.charges ?? []).filter((c) => c.projectId === project.id)
 

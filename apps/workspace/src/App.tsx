@@ -3,7 +3,7 @@ import { LoginPage } from '@/routes/auth/LoginPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
-import { ProtectedRoute, RoleRoute } from '@/components/ProtectedRoute'
+import { PermRoute, ProtectedRoute, RoleRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/layouts/AppLayout'
 import { TeamPage } from '@/routes/team/TeamPage'
 import { DashboardPage } from '@/routes/dashboard/DashboardPage'
@@ -77,9 +77,9 @@ export default function App() {
         <Route
           path="/orders"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <PermRoute any={['orders.view']}>
               <OrdersPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
@@ -101,25 +101,25 @@ export default function App() {
         <Route
           path="/leads"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <PermRoute any={['leads.manage']}>
               <LeadBoardPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/leads/:id"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <PermRoute any={['leads.manage']}>
               <LeadDetailPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/clients"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <PermRoute any={['clients.view']}>
               <ClientsPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
@@ -134,9 +134,9 @@ export default function App() {
         <Route
           path="/clients/:id"
           element={
-            <RoleRoute allow={['owner', 'manager']}>
+            <PermRoute any={['clients.view']}>
               <ClientDetailPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
@@ -160,65 +160,65 @@ export default function App() {
         <Route
           path="/billing"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['billing.view']}>
               <BillingPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/projects"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['projects.view']}>
               <ProjectsPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/projects/:id"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['projects.view']}>
               <ProjectDetailPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/finance"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['finance.view']}>
               <FinancePage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/margin"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['finance.view']}>
               <MarginPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/reports"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['reports.ops', 'finance.view', 'reports.audit']}>
               <ReportsPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/content"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['content.manage']}>
               <ContentPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/announcements"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['announcements.manage']}>
               <AnnouncementsPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
@@ -232,25 +232,25 @@ export default function App() {
         <Route
           path="/payouts"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['payouts.manage', 'payouts.view_team']}>
               <PayoutsPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/services"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['settings.catalogs']}>
               <ServicesPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
         <Route
           path="/admin-wallet"
           element={
-            <RoleRoute allow={['owner']}>
+            <PermRoute any={['billing.view']}>
               <AdminWalletPage />
-            </RoleRoute>
+            </PermRoute>
           }
         />
       </Route>
