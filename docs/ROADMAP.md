@@ -1614,15 +1614,18 @@ _Повний беклог — [`DESIGN_PHASE2_PLAN.md`](DESIGN_PHASE2_PLAN.md) 
 > **Re-audit 27.09 — [`AUDIT_2026-09-cicd.md`](AUDIT_2026-09-cicd.md):** нове — прод відстає на 500 комітів
 > (репетиція релізу + офсайт-бекап **до** першого релізу), Node 20 EOL, дубль staging/prod-воркфлоу;
 > notify-on-failure підтверджено інцидентом (staging-деплой 27.09 впав тихо).
+> **Ремедіація 04.10:** Node 24 LTS усюди · спільний `deploy.yml` + `scripts/deploy-remote.sh` (staging теж
+> з auto-rollback) · Telegram-notify · docs-only пуші не деплоять · `release-preflight.yml` · `bootstrap:owner` ·
+> nginx 1.28 · Traefik `ipallowlist`. Реліз dev → main — [`RELEASE_2026-10.md`](RELEASE_2026-10.md).
 > Коли візьмемо — фазами, перший зріз **INFRA-DR1** (DR/бекапи P0 — єдине з ризиком незворотної втрати даних).
 
 | Фаза | Зріз (код у BACKLOG)                                                                                                                                                                    | Пріоритет |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | 1    | ~~INFRA-DR1~~ ✅ repo-частина 03.07; лишилась серверна активація (крок 7 ранбука)                                                                                                       | P0        |
 | 2    | **INFRA-DR2** infra-as-code (Ansible/cloud-init)                                                                                                                                        | P0        |
-| 3    | **INFRA-OBS1** ✅ Sentry (`observability/sentry.ts` — api+worker+streams+ErrorBoundary); лишилось: **uptime-моніторинг + notify-on-failure**                                            | P1        |
+| 3    | **INFRA-OBS1** ✅ Sentry (`observability/sentry.ts` — api+worker+streams+ErrorBoundary); ✅ notify-on-failure (04.10, `deploy.yml` → Telegram); лишилось: **uptime-моніторинг**         | P1        |
 | 4    | **INFRA-SEC1/2** appleboy (SSH-key) запінено по SHA (r3); лишилось: **пін actions/docker/pnpm** (ще floating `@v`) · **SSH-fingerprint/known_hosts** · edge security-headers+rate-limit | P0/P1     |
-| 5    | **INFRA-OPS1** ✅ `health→/ready` (`routes/health.ts`); лишилось: **staging-rollback** (prod auto-rollback уже є)                                                                       | P1        |
+| 5    | **INFRA-OPS1** ✅ `health→/ready` (`routes/health.ts`); ✅ staging-rollback (04.10, спільний `deploy.yml`)                                                                              | P1        |
 | 6    | **AR-50b / CI-D1** multi-stage api + affected-build + promotion                                                                                                                         | P1/P2     |
 | 7    | **INFRA-DOC1** OPS_RUNBOOK + DISASTER_RECOVERY + §5-дрифт                                                                                                                               | P1        |
 
