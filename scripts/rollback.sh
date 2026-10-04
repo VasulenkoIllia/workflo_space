@@ -1,62 +1,31 @@
 #!/usr/bin/env bash
+# Manual production rollback: `bash scripts/rollback.sh [sha-tag]` (no tag → .previous_deploy).
+# Delegates to deploy-remote.sh — the same code path as the pipeline's auto-rollback, so it
+# only touches the apps the pipeline rolls out (.deploy_apps) and leaves kept apps (e.g. the
+# old prod landing, LANDING_SEO_PLAN §0) on their own tag.
 set -euo pipefail
 
 PROD_DIR="${PROD_DIR:-/var/www/srv/workflo/production}"
-ENV_FILE="${ENV_FILE:-$PROD_DIR/.env}"
-COMPOSE_FILE="${COMPOSE_FILE:-$PROD_DIR/docker-compose.production.yml}"
-# MUST match PRODUCTION_COMPOSE_PROJECT in .github/workflows/production.yml — without
-# it compose derives the project from the directory name and `up` starts a SECOND
-# stack with conflicting Traefik labels instead of rolling back the running one.
+# MUST match compose_project in .github/workflows/production.yml — without it compose
+# derives the project from the directory name and `up` starts a SECOND stack with
+# conflicting Traefik labels instead of rolling back the running one.
 PROJECT_NAME="${PROJECT_NAME:-workflo-production}"
-TARGET_TAG="${1:-}"
-
-if [[ ! -f "$COMPOSE_FILE" ]]; then
-  echo "Compose file not found: $COMPOSE_FILE" >&2
-  exit 1
-fi
-
-if [[ -f "$ENV_FILE" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$ENV_FILE"
-  set +a
-fi
-
-LAST_DEPLOY_FILE="$PROD_DIR/.last_deploy"
-PREVIOUS_DEPLOY_FILE="$PROD_DIR/.previous_deploy"
-
-CURRENT_TAG="$(cat "$LAST_DEPLOY_FILE" 2>/dev/null || echo 'none')"
-PREVIOUS_TAG="$(cat "$PREVIOUS_DEPLOY_FILE" 2>/dev/null || echo 'none')"
-
-if [[ -z "$TARGET_TAG" ]]; then
-  TARGET_TAG="$PREVIOUS_TAG"
-fi
-
-if [[ "$TARGET_TAG" == "none" || -z "$TARGET_TAG" ]]; then
-  echo "No rollback target found. Pass a tag manually: ./scripts/rollback.sh sha-xxxx" >&2
-  exit 1
-fi
-
-echo "Rolling back from $CURRENT_TAG to $TARGET_TAG"
-
-export LANDING_TAG="$TARGET_TAG"
-export PORTAL_TAG="$TARGET_TAG"
-export WORKSPACE_TAG="$TARGET_TAG"
-export API_TAG="$TARGET_TAG"
-export BOT_TAG="$TARGET_TAG"
 
 cd "$PROD_DIR"
 
-compose() {
-  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
-}
+# GHCR owner as the running api image spells it (ghcr.io/<owner>/workflo-api:<tag>).
+owner="$(docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" \
+  --filter "label=com.docker.compose.service=api" --format '{{.Image}}' | head -n1 | cut -d/ -f2)"
+if [[ -z "$owner" ]]; then
+  echo "Cannot detect the GHCR owner: no running api container in project ${PROJECT_NAME}" >&2
+  exit 1
+fi
 
-compose pull
-# --wait: fail loudly if the rolled-back services never become healthy — a rollback
-# that "completed" onto crashing containers is worse than a failed one.
-compose up -d --wait --wait-timeout 180
+ENVIRONMENT=production \
+  COMPOSE_PROJECT="$PROJECT_NAME" \
+  REGISTRY_OWNER="$owner" \
+  APPS="$(cat .deploy_apps 2>/dev/null || echo 'portal workspace api bot')" \
+  ROLLBACK_TAG="${1:-}" \
+  bash scripts/deploy-remote.sh rollback
 
-echo "$CURRENT_TAG" >"$PREVIOUS_DEPLOY_FILE"
-echo "$TARGET_TAG" >"$LAST_DEPLOY_FILE"
-
-echo "Rollback completed. Verify: ./scripts/healthcheck.sh --env production"
+echo "Verify: ./scripts/healthcheck.sh --env production"

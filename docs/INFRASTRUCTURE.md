@@ -120,7 +120,7 @@ workflo.space/
 
 ```dockerfile
 # apps/landing/Dockerfile
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # ── Залежності ──────────────────────────────────────────────────
@@ -143,7 +143,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter landing build
 
 # ── Runner ───────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -179,7 +179,7 @@ node_modules
 
 ```dockerfile
 # apps/portal/Dockerfile  (те саме для apps/workspace/Dockerfile)
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # ── Залежності ──────────────────────────────────────────────────
@@ -204,7 +204,7 @@ ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 RUN pnpm --filter portal build
 
 # ── Runner (nginx) ───────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.28-alpine AS runner
 COPY --from=builder /app/apps/portal/dist /usr/share/nginx/html
 COPY apps/portal/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
@@ -249,7 +249,7 @@ server {
 
 ```dockerfile
 # apps/api/Dockerfile
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # ── Залежності ──────────────────────────────────────────────────
@@ -271,7 +271,7 @@ COPY . .
 RUN pnpm --filter api build   # tsc → dist/
 
 # ── Runner (тільки production deps) ─────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -300,7 +300,7 @@ CMD ["node", "apps/api/dist/server.js"]
 
 ```dockerfile
 # apps/bot/Dockerfile
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 FROM base AS deps
@@ -319,7 +319,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter bot build
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -570,7 +570,7 @@ services:
       - traefik_network
 
   maintenance:
-    image: nginx:1.27-alpine
+    image: nginx:1.28-alpine
     restart: unless-stopped
     volumes:
       - ./infra/maintenance:/usr/share/nginx/html:ro
@@ -590,6 +590,14 @@ networks:
 ---
 
 ## 5. CI/CD PIPELINE
+
+> **Канон з 04.10.2026 — код, не YAML нижче** ([`AUDIT_2026-09-cicd.md`](AUDIT_2026-09-cicd.md) N4):
+> `staging.yml` / `production.yml` — тонкі виклики спільного **`.github/workflows/deploy.yml`**
+> (гейти check ‖ db ‖ smoke → build → [approval] → deploy → verify → [auto-rollback] → Telegram-notify);
+> серверна половина — **`scripts/deploy-remote.sh`** (`deploy` · `record` · `rollback`), ручний відкат —
+> `scripts/rollback.sh [sha-tag]` (делегує туди ж). Прод не викочує `landing` (рішення 27.09 —
+> лендінг лишається на своєму тегу). Перед релізом — `release-preflight.yml` (сам запускається на PR у `main`).
+> Node 24 LTS (`.nvmrc`) у CI і всіх образах. Нижче — історичний опис, деталі можуть розходитись.
 
 ### 5.1 .github/workflows/staging.yml
 
@@ -618,7 +626,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc # Node 24 LTS
           cache: pnpm
 
       - name: Install dependencies
@@ -768,7 +776,7 @@ jobs:
           version: latest
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc # Node 24 LTS
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: actions/cache@v4
@@ -1270,6 +1278,10 @@ Frontend apps **не мають** DATABASE_URL. Ніколи.
 # Server access
 HETZNER_HOST            IP адреса сервера
 HETZNER_SSH_KEY         приватний SSH ключ (deploy user)
+
+# Deploy alerts (deploy.yml → job notify; без них — лише ::warning:: у лозі)
+TELEGRAM_BOT_TOKEN      токен бота, що шле алерти деплою
+TELEGRAM_ALERT_CHAT_ID  чат/канал для алертів (бот має бути його учасником)
 
 # Databases
 DATABASE_URL_PROD       postgresql://...@localhost:5432/workflo_production
