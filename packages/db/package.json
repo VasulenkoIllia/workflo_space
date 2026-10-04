@@ -14,7 +14,8 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "seed": "tsx prisma/seed.ts",
-    "seed:reset": "prisma migrate reset --force && tsx prisma/seed.ts"
+    "seed:reset": "prisma migrate reset --force && tsx prisma/seed.ts",
+    "bootstrap:owner": "tsx prisma/bootstrap-owner.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
