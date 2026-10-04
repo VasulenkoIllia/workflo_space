@@ -9,11 +9,13 @@
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
+    "test": "vitest run",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "seed": "tsx prisma/seed.ts",
-    "seed:reset": "prisma migrate reset --force && tsx prisma/seed.ts"
+    "seed:reset": "prisma migrate reset --force && tsx prisma/seed.ts",
+    "bootstrap:owner": "tsx prisma/bootstrap-owner.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "prisma": "^5.22.0",
-    "tsx": "^4.19.3"
+    "tsx": "^4.19.3",
+    "vitest": "^1.6.1"
   }
 }

@@ -1,11 +1,17 @@
+# Traefik edge compose — КАНОН (AR-52, аудит 2026-06-11). Синхронізація на сервер
+# ручна (див. шапку traefik.yml). env-файл поряд (.env) має містити:
+#   CF_DNS_API_TOKEN=...          # Cloudflare API token (Zone:DNS:Edit) для DNS-challenge
+#   TRAEFIK_DASHBOARD_AUTH=...    # htpasswd-рядок: `htpasswd -nB admin`
 services:
   traefik:
     image: traefik:v3.2
     container_name: traefik
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:?CF_DNS_API_TOKEN is required for the cf resolver}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
@@ -15,8 +21,15 @@ services:
       - traefik_network
     labels:
       - traefik.enable=true
+      # AR-52: dashboard БУЛО відкрито без auth (будь-хто з Host/SNI `traefik.internal`
+      # на 443 діставав api@internal з усіма роутами і TEAM_IPS-діапазонами).
+      # Тепер: явний entrypoint + basicauth (htpasswd через env).
       - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.internal`)
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.tls=true
       - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.middlewares.traefik-dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH:?TRAEFIK_DASHBOARD_AUTH is required (htpasswd -nB)}
+      - traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard-auth
 
 volumes:
   traefik_logs:

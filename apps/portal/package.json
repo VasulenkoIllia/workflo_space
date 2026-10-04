@@ -9,16 +9,26 @@
     "preview": "vite preview --host --port 3001",
     "lint": "eslint src --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
     "@tanstack/react-query": "^5.74.4",
+    "@workflo/app-core": "workspace:^",
+    "@workflo/i18n": "workspace:^",
+    "@workflo/types": "workspace:^",
+    "@workflo/ui": "workspace:^",
+    "date-fns": "^4.4.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.0",
-    "sonner": "^2.0.3"
+    "react-hook-form": "^7.77.0",
+    "react-router-dom": "^6.30.4",
+    "sonner": "^2.0.3",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.4.1",

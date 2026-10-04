@@ -13,15 +13,15 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: 9.15.9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
@@ -35,3 +35,19 @@ jobs:
 
       - name: Lint
         run: pnpm turbo lint
+
+      - name: Test
+        run: pnpm turbo test
+
+  # AR-01: shared with staging/production deploy workflows (the actual delivery
+  # path is direct push → those workflows; this PR entry stays for future PR flow).
+  db:
+    name: DB gate
+    uses: ./.github/workflows/db-gate.yml
+
+  # Playwright smoke: ephemeral stack + drive the implemented screens (login, key
+  # pages render, no uncaught/4xx/5xx). Catches render-crash/missing-data regressions
+  # the unit gate can't — there are no frontend unit tests.
+  smoke:
+    name: Smoke
+    uses: ./.github/workflows/smoke.yml

@@ -3,16 +3,34 @@
 This file is the primary operating standard for AI agents working in this repository.
 If a global agent file exists, this project file overrides it for repository-specific behavior.
 
+## Workflo-specific canon (READ FIRST — overrides the generic flow below)
+
+1. **Daily control panel:** `docs/ROADMAP.md` — take the TOP slice of the queue; one vertical
+   slice at a time, never build wide. "Done recently" there is the truth about current state.
+2. **Definition of Done:** `docs/ENGINEERING_STANDARDS.md` §8 — backend first → contract in
+   `@workflo/types` → frontend on real data (0 mocks) → conformance vs `design-v2/` →
+   green gates → update `docs/DESIGN_COVERAGE.md` row → owner tests on staging.
+3. **Canon hierarchy:** DB = `packages/db/prisma/schema.prisma` · real code state =
+   `docs/DESIGN_COVERAGE.md` · WHAT = `docs/SPEC.md` + `docs/modules/` · queue = `docs/ROADMAP.md`.
+   `docs/TRACKER.md` is a frozen historical snapshot (21.06.2026) — do not update it.
+4. **Gates before push:** `pnpm turbo type-check lint test` locally (real-DB integration tests
+   are CI-gated separately; a green smoke on staging does NOT excuse red unit tests).
+5. **Session audits:** record in `docs/AUDIT_YYYY-MM[-topic].md` (remediation loop:
+   audit → fix → re-audit) and do the doc-drift check listed in `docs/README.md` §ПРАВИЛА.
+
 ## Mission
+
 Work predictably, safely, and with minimal unnecessary context usage.
 Prefer maintainable implementation over fast but fragile changes.
 Choose the lightest process and architecture level that safely fits the real project.
 
 ## Core rule
+
 Do not impose heavy structure on simple projects.
 Do not under-engineer projects that already have operational, data, or scaling risk.
 
 ## Standard execution flow
+
 1. Understand the task and scan the relevant repository area first.
 2. Determine the current project mode from repository evidence.
 3. For any non-trivial task, create a short implementation plan.
@@ -23,7 +41,9 @@ Do not under-engineer projects that already have operational, data, or scaling r
 8. Update docs when setup, behavior, contracts, or workflows changed.
 
 ## Default stack assumptions
+
 Unless repository files clearly indicate otherwise, assume:
+
 - TypeScript
 - Node.js
 - React, Vite, or Next.js
@@ -36,10 +56,13 @@ Unless repository files clearly indicate otherwise, assume:
 Always defer to actual repository files over assumptions.
 
 ## Project mode selection
+
 Choose the lightest mode that safely matches the repository and task.
 
 ### Light mode
+
 Use for:
+
 - small integrations
 - bots
 - parsers
@@ -50,6 +73,7 @@ Use for:
 - short-lived or low-complexity backend tasks
 
 Behavior in Light mode:
+
 - prefer simple structure
 - avoid introducing architecture layers without need
 - do not assume CI/CD, Docker, monorepo, or complex deployment
@@ -57,7 +81,9 @@ Behavior in Light mode:
 - use minimal sufficient verification
 
 ### Standard mode
+
 Use for:
+
 - backend services
 - dashboards
 - admin panels
@@ -67,6 +93,7 @@ Use for:
 - medium-lifetime production systems
 
 Behavior in Standard mode:
+
 - prefer modular structure
 - separate main concerns clearly
 - treat database, API boundaries, env handling, and deployment discipline seriously
@@ -74,7 +101,9 @@ Behavior in Standard mode:
 - consider maintainability and future growth, but do not overbuild
 
 ### Pro mode
+
 Use for:
+
 - monorepos
 - multi-service systems
 - production-critical SaaS
@@ -83,15 +112,18 @@ Use for:
 - systems with strong operational requirements
 
 Behavior in Pro mode:
+
 - enforce stronger architectural boundaries
 - consider rollout, rollback, migration risk, observability, and operational safety
 - treat CI/CD, infra, env separation, and failure recovery as first-class concerns
 - run broader verification where practical
 
 ## How to determine project mode
+
 Use repository evidence first.
 
 Signals for Light mode:
+
 - small file count
 - one app/service
 - little or no infra
@@ -101,6 +133,7 @@ Signals for Light mode:
 - task is narrow and isolated
 
 Signals for Standard mode:
+
 - backend plus db
 - frontend plus backend
 - Docker present
@@ -110,6 +143,7 @@ Signals for Standard mode:
 - more than one major responsibility
 
 Signals for Pro mode:
+
 - monorepo layout
 - multiple apps/packages/services
 - CI/CD configs
@@ -120,9 +154,11 @@ Signals for Pro mode:
 - explicit scalability or reliability requirements
 
 ## When to ask clarifying questions
+
 Do not ask questions if repository evidence is sufficient.
 
 Ask concise questions only when critical decisions are unclear, such as:
+
 - Is this a small one-purpose integration or a long-lived product?
 - Is Docker required now, optional later, or not needed?
 - Is CI/CD required now or not part of the project yet?
@@ -131,12 +167,15 @@ Ask concise questions only when critical decisions are unclear, such as:
 - Is this production-facing or mainly internal/test usage?
 
 If asking is needed:
+
 - ask only the minimum useful questions
 - avoid long questionnaires
 - continue with the safest light assumption when possible
 
 ## Repository shape assumptions
+
 This repository may be:
+
 - backend-only
 - frontend-only
 - fullstack
@@ -145,11 +184,13 @@ This repository may be:
 - internal dashboard or SaaS product
 
 If the repository contains multiple apps or packages:
+
 - identify boundaries first
 - avoid mixing concerns between apps
 - verify changes in the affected scope first, then widen verification if needed
 
 ## Architecture rules
+
 - Prefer clear separation of concerns.
 - Keep business logic out of controllers, routes, UI components, and handlers where possible.
 - Prefer explicit contracts, typed DTOs, and predictable interfaces.
@@ -161,6 +202,7 @@ If the repository contains multiple apps or packages:
 - In Standard and Pro modes, prefer boundaries that reduce long-term coupling.
 
 ## Backend rules
+
 - Validate all external input.
 - Use typed request and response contracts where practical.
 - Handle errors explicitly and consistently.
@@ -170,6 +212,7 @@ If the repository contains multiple apps or packages:
 - Keep integration logic isolated from pure domain logic where practical.
 
 ## API and integration rules
+
 - Treat all third-party integrations as unreliable boundaries.
 - Document auth method, retry behavior, timeout policy, rate-limit handling, and failure modes when relevant.
 - Verify webhook signature handling where relevant.
@@ -179,6 +222,7 @@ If the repository contains multiple apps or packages:
 - Prefer adapter or service wrappers for external systems.
 
 ## Frontend rules
+
 - Keep UI components focused and composable.
 - Separate presentation, state, and side effects where reasonable.
 - Avoid unnecessary client-side complexity.
@@ -187,6 +231,7 @@ If the repository contains multiple apps or packages:
 - Keep API state and UI state clearly separated.
 
 ## Database rules
+
 - Treat schema changes and migrations as high risk.
 - Prefer additive changes over destructive ones.
 - Review indexes for hot paths, filters, joins, and ordering.
@@ -198,6 +243,7 @@ If the repository contains multiple apps or packages:
 - In Standard and Pro modes, take migration and query safety more seriously.
 
 ## Docker and deployment rules
+
 - Do not assume Docker or CI/CD unless repository evidence or project intent supports it.
 - Prefer reproducible local and server environments where relevant.
 - Keep environment variables explicit and documented.
@@ -208,6 +254,7 @@ If the repository contains multiple apps or packages:
 - Distinguish clearly between dev, staging, and production assumptions when those environments exist.
 
 ## Server and operations rules
+
 - Treat production-affecting scripts and infra changes as high risk.
 - Prefer reversible changes.
 - Consider logs, monitoring, restart behavior, and failure recovery.
@@ -216,6 +263,7 @@ If the repository contains multiple apps or packages:
 - Do not introduce operational complexity unless the project actually needs it.
 
 ## Security rules
+
 - Never expose secrets in code, commits, logs, examples, or docs.
 - Treat auth, permissions, input validation, file handling, and callbacks/webhooks as high risk.
 - Flag risky shell commands before running them.
@@ -223,9 +271,11 @@ If the repository contains multiple apps or packages:
 - Minimize secret access and never print env values unless explicitly required and safe.
 
 ## Testing and verification rules
+
 Use the smallest relevant verification set first, then expand if needed.
 
 Preferred order:
+
 1. format
 2. lint
 3. typecheck
@@ -235,6 +285,7 @@ Preferred order:
 7. build
 
 Rules:
+
 - Do not claim success without saying what was actually verified.
 - If something could not be run, say so explicitly.
 - For bug fixes, prefer reproducing the bug before fixing it.
@@ -243,20 +294,26 @@ Rules:
 - For integration work, verify both happy path and failure handling when practical.
 
 ### Verification by mode
+
 Light mode:
+
 - run the minimum relevant checks
 - avoid heavy verification if the project does not support it
 
 Standard mode:
+
 - run normal local verification for affected areas
 - expand to build/tests when risk is moderate
 
 Pro mode:
+
 - run broader verification where practical
 - treat build, integration, and deployment-sensitive checks as more important
 
 ## Documentation rules
+
 Update docs when any of the following changes:
+
 - setup
 - environment variables
 - API contract
@@ -267,6 +324,7 @@ Update docs when any of the following changes:
 - third-party integration behavior
 
 ## Git and change discipline
+
 - Prefer small, reviewable commits.
 - Avoid unrelated cleanup in the same change unless requested.
 - Preserve backward compatibility unless the task requires otherwise.
@@ -274,6 +332,7 @@ Update docs when any of the following changes:
 - If changing migrations, build tooling, CI, or deployment scripts, mention it explicitly in the summary.
 
 ## Token and context discipline
+
 - Do not dump large files unless necessary.
 - Read only relevant files for the task.
 - Summarize findings compactly.
@@ -282,6 +341,7 @@ Update docs when any of the following changes:
 - Prefer specialized agents or workflows over bloated single-thread reasoning.
 
 ## Preferred specialist usage
+
 Use these specialists when appropriate:
 
 - planner  
@@ -315,7 +375,9 @@ Use these specialists when appropriate:
   Use when implementation changed setup, workflows, or contracts.
 
 ## Project planning standard
+
 For larger tasks, use this sequence:
+
 1. repository scan
 2. choose mode
 3. short plan
@@ -326,11 +388,12 @@ For larger tasks, use this sequence:
 8. concise final summary
 
 ## Output expectations
+
 Final responses should usually include:
+
 - what changed
 - key files touched
 - what was verified
 - chosen project mode if relevant
 - risks or follow-ups
 - anything not completed
-

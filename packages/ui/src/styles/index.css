@@ -1,0 +1,11 @@
+/* index.css — single entry for the @workflo/ui design system stylesheet.
+ * Consume from apps via:  import '@workflo/ui/styles.css'
+ * Order matters: tokens (vars) → ported design classes → polish → our extensions.
+ */
+@import './tokens.css';
+@import './product.css';
+@import './polish.css';
+@import './components.css';
+@import './ia-roles.css';
+/* responsive overrides — MUST load last so @container rules win over component CSS */
+@import './product-responsive.css';

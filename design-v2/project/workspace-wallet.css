@@ -1,0 +1,76 @@
+/* workspace-wallet.css — G8 Client Wallet. Prefix: wfw- */
+
+/* dual balance hero */
+.wfw-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.wfw-bal { border: 1px solid var(--wf-border); border-radius: 14px; padding: 22px; position: relative; overflow: hidden; background: var(--wf-bg); }
+.wfw-bal::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; }
+.wfw-bal[data-kind="bonus"]::before { background: var(--wf-accent); }
+.wfw-bal[data-kind="money"]::before { background: var(--wf-fg); }
+.wfw-bal[data-kind="money"][data-owes="true"]::before { background: var(--wf-warning, #D97706); }
+.wfw-bal-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); padding-left: 12px; display: flex; align-items: center; gap: 7px; }
+.wfw-bal-v { font-family: 'JetBrains Mono', monospace; font-size: 38px; font-weight: 700; letter-spacing: -0.02em; color: var(--wf-fg); padding-left: 12px; margin-top: 6px; }
+.wfw-bal[data-kind="bonus"] .wfw-bal-v { color: var(--wf-accent); }
+.wfw-bal[data-owes="true"] .wfw-bal-v { color: var(--wf-warning, #D97706); }
+.wfw-bal-sub { font-size: 12.5px; color: var(--wf-fg-muted); padding-left: 12px; margin-top: 6px; }
+.wfw-bal-actions { display: flex; gap: 8px; padding-left: 12px; margin-top: 16px; }
+
+/* filter chips */
+.wfw-chips { display: flex; gap: 7px; margin: 16px 0 10px; flex-wrap: wrap; }
+.wfw-chip { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; padding: 5px 12px; border: 1px solid var(--wf-border); border-radius: 999px; color: var(--wf-fg-muted); cursor: pointer; background: var(--wf-bg); }
+.wfw-chip[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); border-color: var(--wf-fg); }
+
+/* ledger table — kind icon + running balance */
+.wfw-kind { display: inline-flex; align-items: center; gap: 7px; }
+.wfw-kind-ic { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wfw-kind-ic[data-k="payment"] { color: var(--wf-success, #1F8A5B); background: color-mix(in oklab, var(--wf-success, #1F8A5B) 12%, transparent); }
+.wfw-kind-ic[data-k="charge"]  { color: var(--wf-destructive, #DC2626); background: color-mix(in oklab, var(--wf-destructive, #DC2626) 12%, transparent); }
+.wfw-kind-ic[data-k="bonus"]   { color: var(--wf-accent); background: color-mix(in oklab, var(--wf-accent) 14%, transparent); }
+.wfw-amt { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.wfw-amt[data-pos="true"] { color: var(--wf-success, #1F8A5B); }
+.wfw-amt[data-pos="false"] { color: var(--wf-fg); }
+.wfw-amt[data-bonus="true"] { color: var(--wf-accent); }
+.wfw-alloc { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); border: 1px dashed var(--wf-border); border-radius: 4px; padding: 1px 6px; }
+
+/* statement timeline */
+.wfw-timeline { position: relative; padding-left: 28px; }
+.wfw-timeline::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: var(--wf-border); }
+.wfw-tl-item { position: relative; padding: 0 0 18px 0; }
+.wfw-tl-item::before { content: ""; position: absolute; left: -24px; top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--wf-bg); }
+.wfw-tl-item[data-k="payment"]::before { background: var(--wf-success, #1F8A5B); }
+.wfw-tl-item[data-k="charge"]::before { background: var(--wf-destructive, #DC2626); }
+.wfw-tl-item[data-k="bonus"]::before { background: var(--wf-accent); }
+.wfw-tl-head { display: flex; align-items: baseline; gap: 10px; }
+.wfw-tl-date { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-subtle); }
+.wfw-tl-title { font-size: 13.5px; font-weight: 500; color: var(--wf-fg); }
+.wfw-tl-amt { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; }
+.wfw-tl-note { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 3px; }
+
+/* rules */
+.wfw-rule { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--wf-border); }
+.wfw-rule:last-child { border-bottom: 0; }
+.wfw-rule-k { font-size: 13.5px; font-weight: 600; color: var(--wf-fg); width: 170px; flex-shrink: 0; }
+.wfw-rule-v { font-size: 13px; color: var(--wf-fg-secondary); line-height: 1.5; }
+
+/* admin company row */
+.wfw-co-money[data-owes="true"] { color: var(--wf-warning, #D97706); }
+.wfw-co-money[data-owes="false"] { color: var(--wf-fg); }
+
+/* referral tiers */
+.wfw-tier { display: grid; grid-template-columns: 120px 1fr 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; border: 1px solid var(--wf-border); border-radius: 11px; background: var(--wf-bg); margin-bottom: 9px; }
+.wfw-tier-name { font-size: 14px; font-weight: 700; color: var(--wf-fg); display: flex; align-items: center; gap: 8px; }
+.wfw-tier-badge { width: 9px; height: 9px; border-radius: 3px; }
+.wfw-tier-name[data-t="new"] .wfw-tier-badge { background: var(--wf-fg-subtle); }
+.wfw-tier-name[data-t="regular"] .wfw-tier-badge { background: oklch(0.58 0.11 235); }
+.wfw-tier-name[data-t="partner"] .wfw-tier-badge { background: var(--wf-accent); }
+.wfw-tier-name[data-t="vip"] .wfw-tier-badge { background: oklch(0.56 0.13 295); }
+.wfw-tier-k { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); }
+.wfw-tier-v { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; color: var(--wf-fg); }
+.wfw-formula { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px dashed color-mix(in oklab, var(--wf-accent) 40%, var(--wf-border)); border-radius: 11px; background: color-mix(in oklab, var(--wf-accent) 5%, transparent); margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+.wfw-formula .op { color: var(--wf-fg-muted); }
+.wfw-formula .res { color: var(--wf-accent); font-weight: 700; }
+
+/* adjust modal */
+.wfw-adj-preview { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 10px; background: color-mix(in oklab, var(--wf-fg) 3%, transparent); font-family: 'JetBrains Mono', monospace; }
+.wfw-adj-preview .v { font-size: 18px; font-weight: 700; color: var(--wf-fg); }
+
+@media (max-width: 900px) { .wfw-hero { grid-template-columns: 1fr; } }

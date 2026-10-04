@@ -1,0 +1,311 @@
+import { withTenant } from '@workflo/db'
+import { ApiErrorCode, AppError } from '@workflo/types'
+import type { FastifyPluginAsync } from 'fastify'
+import { clientSeesMoney } from '../../auth/companyAccess.js'
+import { assertTeamScope } from './access.js'
+import { coversOrder, getPermissions, hasPermission } from '../../auth/permissions.js'
+import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
+
+/** Prisma Decimal → JSON number (Decimal.toJSON() emits a string otherwise). */
+const num = (d: unknown): number | null => (d == null ? null : Number(d))
+
+/**
+ * GET /orders/:id — order detail. Client view hides internal fields (status,
+ * assignee, pricing internals); internal team (executor) sees everything.
+ * Tenant-guarded (ADR-004) + client IDOR check (must belong to the order's
+ * company; otherwise 404 to avoid leaking existence within the tenant).
+ */
+const getOrderRoute: FastifyPluginAsync = (fastify) => {
+  fastify.get<{ Params: { id: string } }>(
+    '/orders/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = request.user
+      const notFound = () => new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
+
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: {
+            id: true,
+            agencyId: true,
+            companyId: true,
+            title: true,
+            description: true,
+            type: true,
+            priority: true,
+            internalStatus: true,
+            clientStatus: true,
+            billingType: true,
+            nomenclatureId: true,
+            fixedPrice: true,
+            hourlyRate: true,
+            estimatedHours: true,
+            totalAmount: true,
+            currency: true,
+            deadline: true,
+            paidAt: true,
+            deletedAt: true,
+            onHoldReason: true,
+            cancelledReason: true,
+            requiresApproval: true,
+            approvalStatus: true,
+            approvalDecidedAt: true,
+            approvalComment: true,
+            // DSN-4 анкета клієнта (побажання при заявці)
+            category: true,
+            clientBudget: true,
+            preferredBilling: true,
+            deadlineFlexible: true,
+            preferredChannel: true,
+            createdAt: true,
+            updatedAt: true,
+            company: { select: { id: true, name: true } },
+            assignee: { select: { id: true, name: true } },
+            // мультивиконавці: співвиконавці ДОДАТКОВО до головного assignee
+            coAssignees: {
+              select: { profile: { select: { id: true, name: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
+            // ПРИЙМАННЯ: хто/коли здав і прийняв + білабельні год + звірка оплати по-виконавцях
+            submittedAt: true,
+            acceptedAt: true,
+            billableHours: true,
+            submittedBy: { select: { id: true, name: true } },
+            acceptedBy: { select: { id: true, name: true } },
+            settlements: {
+              select: {
+                profileId: true,
+                payableHours: true,
+                profile: { select: { id: true, name: true } },
+              },
+            },
+            // ПРИЙМАННЯ money-loop: причетні через ЗАДАЧІ замовлення (не лише order-level
+            // assignee/co-assignees) — щоб ростер звірки бачив і виконавців окремих задач.
+            internalTasks: {
+              select: {
+                assigneeId: true,
+                status: true,
+                coAssignees: { select: { profileId: true } },
+              },
+            },
+            project: { select: { id: true, name: true, billingModel: true, teamId: true } },
+            tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+            // S10-03: залежності — блокери цього замовлення + кого блокує воно
+            blockedBy: {
+              select: {
+                id: true,
+                dependsOn: { select: { id: true, title: true, internalStatus: true } },
+              },
+            },
+            dependents: {
+              select: {
+                id: true,
+                order: { select: { id: true, title: true, internalStatus: true } },
+              },
+            },
+            firstResponseDueAt: true,
+            resolutionDueAt: true,
+            firstRespondedAt: true,
+            slaBreachedAt: true,
+            stages: {
+              select: { id: true, title: true, description: true, status: true, position: true },
+              orderBy: { position: 'asc' },
+            },
+            // COV-UX-3: позиції кошторису — client-safe (це саме те, що клієнт погоджує);
+            // без них портал показував lump-sum без розбивки.
+            orderEstimateLines: {
+              select: { id: true, name: true, qty: true, unitPrice: true, position: true },
+              orderBy: { position: 'asc' },
+            },
+          },
+        })
+      )
+
+      if (!order || order.deletedAt) throw notFound()
+      assertSameTenant(user, order.agencyId)
+
+      const isInternal = isInternalTeam(user)
+      if (!isInternal && !user.memberships.some((m) => m.companyId === order.companyId)) {
+        throw notFound() // same tenant, different company → hide
+      }
+      // PERM-4: команда — лише замовлення в межах orders.view (інакше 404, як чужа компанія)
+      if (isInternal) await assertTeamScope(request, order.id, order.agencyId)
+      // PERM-4 (команда) + PORTAL-MEMBER (клієнт: власник / фінанси / погодження)
+      const showMoney = isInternal
+        ? (await hasPermission(request, 'orders.estimate')) ||
+          (await hasPermission(request, 'billing.view'))
+        : clientSeesMoney(user, order.companyId)
+      const money = (d: unknown) => (showMoney ? num(d) : null)
+
+      const clientView = {
+        id: order.id,
+        title: order.title,
+        description: order.description,
+        clientStatus: order.clientStatus,
+        priority: order.priority,
+        totalAmount: money(order.totalAmount),
+        currency: order.currency,
+        // 05-А: клієнт бачить статус оплати замовлення (рахунок + «Як оплатити»)
+        paidAt: order.paidAt,
+        dueDate: order.deadline,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        stages: order.stages,
+        // 02-А: the portal renders the approval block + audit row from these.
+        requiresApproval: order.requiresApproval,
+        approvalStatus: order.approvalStatus,
+        approvalDecidedAt: order.approvalDecidedAt,
+        approvalComment: order.approvalComment,
+        estimateLines: (order.orderEstimateLines ?? []).map((l) => ({
+          id: l.id,
+          name: l.name,
+          qty: num(l.qty),
+          unitPrice: money(l.unitPrice),
+        })),
+        // DSN-4 таб «Кошторис»: модель ціни, яку клієнт погоджує (02-А: для hourly —
+        // ставка + оцінка годин). Клієнтська ставка замовлення, НЕ ставка виконавця.
+        billingType: order.billingType,
+        hourlyRate: money(order.hourlyRate),
+        estimatedHours: num(order.estimatedHours),
+        intake: {
+          category: order.category ?? null,
+          clientBudget: money(order.clientBudget),
+          preferredBilling: order.preferredBilling ?? null,
+          deadlineFlexible: order.deadlineFlexible ?? false,
+          preferredChannel: order.preferredChannel ?? null,
+        },
+      }
+
+      if (!isInternal) {
+        return reply.send({ success: true, data: { order: clientView } })
+      }
+
+      // ПРИЙМАННЯ: збірка блоку звірки годин (internal-only). Факт — живий Σ TimeLog
+      // по-виконавцях; payable — з settlement (або дефолт = факт, якщо ще не звіряли).
+      const groups = await withTenant((tx) =>
+        tx.timeLog.groupBy({
+          by: ['executorId'],
+          where: { orderId: order.id },
+          _sum: { hours: true },
+        })
+      )
+      const trackedMap = new Map(groups.map((g) => [g.executorId, Number(g._sum.hours ?? 0)]))
+      const settleMap = new Map(order.settlements.map((s) => [s.profileId, Number(s.payableHours)]))
+      // Ростер звірки = ВСІ причетні, а не лише ті, хто залогував час: головний виконавець +
+      // співвиконавці замовлення + виконавці задач (assignee/co-assignees задач) + автори
+      // TimeLog + наявні звірки. Так owner може розподілити оплату на будь-кого залученого
+      // (напр. співвиконавець рев'юїв, але часу не бив), а не лише на тих, хто має факт.
+      const execIds: string[] = []
+      const seenExec = new Set<string>()
+      const addExec = (id: string | null | undefined) => {
+        if (id && !seenExec.has(id)) {
+          seenExec.add(id)
+          execIds.push(id)
+        }
+      }
+      addExec(order.assignee?.id)
+      for (const c of order.coAssignees ?? []) addExec(c.profile.id)
+      for (const t of order.internalTasks ?? []) {
+        addExec(t.assigneeId)
+        for (const ca of t.coAssignees ?? []) addExec(ca.profileId)
+      }
+      for (const id of trackedMap.keys()) addExec(id)
+      for (const id of settleMap.keys()) addExec(id)
+      const nameById = new Map<string, string>()
+      if (order.assignee) nameById.set(order.assignee.id, order.assignee.name)
+      for (const c of order.coAssignees) nameById.set(c.profile.id, c.profile.name)
+      for (const s of order.settlements) nameById.set(s.profileId, s.profile.name)
+      const missing = execIds.filter((id) => !nameById.has(id))
+      if (missing.length > 0) {
+        const ps = await withTenant((tx) =>
+          tx.profile.findMany({ where: { id: { in: missing } }, select: { id: true, name: true } })
+        )
+        for (const p of ps) nameById.set(p.id, p.name)
+      }
+      const executors = execIds.map((id) => ({
+        profileId: id,
+        name: nameById.get(id) ?? '—',
+        trackedHours: trackedMap.get(id) ?? 0,
+        payableHours: settleMap.has(id) ? (settleMap.get(id) as number) : (trackedMap.get(id) ?? 0),
+      }))
+      // TASK-COLUMNS: підказка «всі задачі виконані — час здавати на приймання» (рішення
+      // власника 10.07: задачі НЕ рухають статус замовлення автоматично, лише підказують).
+      const boardTasks = order.internalTasks ?? []
+      const allTasksDone = boardTasks.length > 0 && boardTasks.every((t) => t.status === 'done')
+      const acceptance = {
+        allTasksDone,
+        submittedAt: order.submittedAt,
+        submittedBy: order.submittedBy,
+        acceptedAt: order.acceptedAt,
+        acceptedBy: order.acceptedBy,
+        plannedHours: num(order.estimatedHours),
+        trackedHours: [...trackedMap.values()].reduce((a, b) => a + b, 0),
+        billableHours: num(order.billableHours),
+        executors,
+      }
+
+      // PERM-3: що глядач може з цим замовленням (UI не показує кнопок, що дали б 403).
+      const snap = await getPermissions(request)
+      const scopeOrder = {
+        assigneeId: order.assignee?.id ?? null,
+        coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profile.id),
+        projectTeamId: order.project?.teamId ?? null,
+      }
+      const viewerCan = {
+        accept:
+          snap != null &&
+          (await coversOrder(snap, snap.levels['orders.accept'], scopeOrder, user.sub)),
+        reconcile: snap?.levels['orders.reconcile'] === 'all',
+        settlePayouts: snap?.levels['payouts.manage'] === 'all',
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          order: {
+            ...clientView,
+            viewerCan,
+            internalStatus: order.internalStatus,
+            type: order.type,
+            billingType: order.billingType,
+            nomenclatureId: order.nomenclatureId,
+            fixedPrice: money(order.fixedPrice),
+            hourlyRate: money(order.hourlyRate),
+            estimatedHours: num(order.estimatedHours),
+            onHoldReason: order.onHoldReason,
+            cancelledReason: order.cancelledReason,
+            company: order.company,
+            assignee: order.assignee,
+            coAssignees: order.coAssignees.map((c) => c.profile),
+            project: order.project
+              ? {
+                  id: order.project.id,
+                  name: order.project.name,
+                  billingModel: order.project.billingModel,
+                }
+              : null,
+            tags: order.tags.map((t) => t.tag),
+            firstResponseDueAt: order.firstResponseDueAt,
+            resolutionDueAt: order.resolutionDueAt,
+            firstRespondedAt: order.firstRespondedAt,
+            slaBreachedAt: order.slaBreachedAt,
+            acceptance,
+            // S10-03: блокери/залежні + агрегатний прапорець для банера і гейта UI
+            blockedBy: (order.blockedBy ?? []).map((d) => ({ dependencyId: d.id, ...d.dependsOn })),
+            blocks: (order.dependents ?? []).map((d) => ({ dependencyId: d.id, ...d.order })),
+            isBlocked: (order.blockedBy ?? []).some(
+              (d) =>
+                d.dependsOn.internalStatus !== 'done' && d.dependsOn.internalStatus !== 'cancelled'
+            ),
+          },
+        },
+      })
+    }
+  )
+
+  return Promise.resolve()
+}
+
+export default getOrderRoute

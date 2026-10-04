@@ -1,0 +1,120 @@
+/* ia-roles.css — role-based sidebar menu, view-as banner, service group.
+   ТЗ Частина I §2.1–2.6. Reuses --wf-* tokens from the design system. */
+
+/* ── foot user → role switcher ── */
+.wfp-sb-user--menu { position: relative; padding: 0; }
+.wfp-sb-user-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; background: none; border: none; cursor: pointer;
+  border-radius: 10px; color: inherit; font: inherit; text-align: left;
+  transition: background .12s ease;
+}
+.wfp-sb-user-btn:hover { background: color-mix(in oklab, var(--wf-fg) 5%, transparent); }
+.wfp-sb-user-btn[data-open] { background: color-mix(in oklab, var(--wf-fg) 7%, transparent); }
+.wfp-sb-user-chev {
+  margin-left: 6px; font-size: 9px; opacity: .55; vertical-align: middle;
+}
+
+.wfp-sb-rolemenu-scrim { position: fixed; inset: 0; z-index: 40; }
+.wfp-sb-rolemenu {
+  position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); z-index: 41;
+  background: var(--wf-surface); border: 1px solid var(--wf-border);
+  border-radius: 12px; padding: 6px;
+  box-shadow: 0 16px 40px -12px color-mix(in oklab, var(--wf-fg) 40%, transparent),
+              0 2px 8px -2px color-mix(in oklab, var(--wf-fg) 20%, transparent);
+  animation: wfp-rolemenu-in .14s ease;
+}
+@keyframes wfp-rolemenu-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.wfp-sb-rolemenu-h {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--wf-fg-subtle); padding: 6px 10px 8px;
+}
+.wfp-sb-rolemenu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 8px 10px; background: none; border: none; cursor: pointer;
+  border-radius: 8px; color: var(--wf-fg); font: inherit; text-align: left;
+  transition: background .1s ease;
+}
+.wfp-sb-rolemenu-item:hover { background: color-mix(in oklab, var(--wf-fg) 6%, transparent); }
+.wfp-sb-rolemenu-item[data-on] { background: var(--wf-accent-soft); }
+.wfp-sb-rolemenu-item[data-on] .wfp-sb-rolemenu-item-t { color: var(--wf-accent); }
+.wfp-sb-rolemenu-item-t {
+  font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 5px;
+}
+.wfp-sb-rolemenu-item-s {
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: var(--wf-fg-muted); margin-top: 1px;
+}
+.wfp-sb-rolemenu-sep { height: 1px; background: var(--wf-border); margin: 5px 6px; }
+
+/* ── service / debug group is de-emphasised ── */
+.wfp-sb-group--muted { opacity: .55; }
+
+/* ── view-as banner (§2.6) ── */
+.wfp-viewas-banner {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  background: color-mix(in oklab, var(--wf-warning) 16%, var(--wf-bg));
+  border-bottom: 1px solid color-mix(in oklab, var(--wf-warning) 45%, var(--wf-border));
+  color: color-mix(in oklab, var(--wf-warning) 60%, var(--wf-fg));
+  font-size: 13px;
+}
+.wfp-viewas-banner strong { color: var(--wf-fg); font-weight: 600; }
+.wfp-viewas-ro {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--wf-fg-muted); margin-left: 2px;
+}
+.wfp-viewas-exit {
+  margin-left: auto; padding: 5px 12px; cursor: pointer;
+  background: var(--wf-fg); color: var(--wf-bg); border: none; border-radius: 7px;
+  font: inherit; font-size: 12px; font-weight: 600;
+  transition: opacity .12s ease;
+}
+.wfp-viewas-exit:hover { opacity: .85; }
+
+/* ── Portal «Секрети» (module 17) ── */
+.wfps-enc {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 16px; margin: 18px 0 22px;
+  border: 1px solid color-mix(in oklab, var(--wf-accent) 28%, var(--wf-border));
+  background: color-mix(in oklab, var(--wf-accent) 6%, transparent);
+  border-radius: 12px;
+}
+.wfps-enc-ico {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in oklab, var(--wf-accent) 14%, transparent);
+}
+.wfps-enc-t { font-size: 14px; font-weight: 600; color: var(--wf-fg); margin-bottom: 3px; }
+.wfps-enc-s { font-size: 12.5px; color: var(--wf-fg-secondary); line-height: 1.55; max-width: 760px; }
+
+.wfps-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: 3px 7px; border-radius: 6px; white-space: nowrap;
+}
+.wfps-tag--warn { color: color-mix(in oklab, var(--wf-warning) 55%, var(--wf-fg)); background: color-mix(in oklab, var(--wf-warning) 16%, transparent); }
+.wfps-tag--muted { color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 7%, transparent); }
+
+.wfps-shared {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--wf-fg-muted);
+  padding-top: 9px; border-top: 1px dashed var(--wf-border);
+}
+.wfps-foot-link { cursor: pointer; font-weight: 500; }
+.wfps-foot-link:hover { text-decoration: underline; }
+.wfps-foot-link--danger { color: var(--wf-destructive); }
+
+.wfps-otp { display: flex; gap: 8px; }
+.wfps-otp input {
+  width: 46px; height: 54px; text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600;
+  border: 1px solid var(--wf-border); border-radius: 10px;
+  background: var(--wf-bg); color: var(--wf-fg);
+}
+.wfps-otp input:focus { outline: none; border-color: var(--wf-accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--wf-accent) 20%, transparent); }

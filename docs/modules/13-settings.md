@@ -1,4 +1,9 @@
 # SETTINGS MODULE
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
@@ -53,7 +58,7 @@ multipart/form-data, file max 5MB, JPEG/PNG/WebP
 ```typescript
 {
   currentPassword: string
-  newPassword: string    // min 8 символів
+  newPassword: string // min 8 символів
   confirmPassword: string
 }
 ```
@@ -101,9 +106,9 @@ Company Owner може редагувати налаштування своєї 
   website: string | null
   phone: string | null
   address: string | null
-  taxId: string | null        // ЄДРПОУ/ІПН для документів
+  taxId: string | null // ЄДРПОУ/ІПН для документів
   preferredLanguage: 'uk' | 'en'
-  referralCode: string        // workflo-XXXXXX (readonly)
+  referralCode: string // workflo-XXXXXX (readonly)
   createdAt: string
 }
 ```
@@ -144,7 +149,8 @@ multipart/form-data, max 5MB → StorageAdapter → company.logoUrl
     isActive: boolean
     joinedAt: string
     permissions: CompanyMemberPermissions
-  }[]
+  }
+  ;[]
 }
 ```
 
@@ -174,12 +180,13 @@ multipart/form-data, max 5MB → StorageAdapter → company.logoUrl
 ### CompanyMemberPermissions
 
 ```typescript
+// Канон — packages/types tokens.ts (snake_case, рівно 5 ключів). Старі camelCase-набори — видалено.
 interface CompanyMemberPermissions {
-  canCreateOrders: boolean      // default: true
-  canViewBilling: boolean       // default: false
-  canViewDocuments: boolean     // default: true
-  canViewAllOrders: boolean     // default: false (тільки свої)
-  canInviteMembers: boolean     // default: false
+  can_create_tasks: boolean // default: true
+  can_view_all_tasks: boolean // default: false (інакше — лише свої)
+  can_view_billing: boolean // default: false
+  can_approve_estimates: boolean // default: false
+  can_invite_members: boolean // default: false
 }
 ```
 
@@ -279,6 +286,7 @@ interface CompanyMemberPermissions {
 ### Portal Settings
 
 Секції (tabs або sidebar):
+
 - "Профіль" — ім'я, аватар, мова, тема
 - "Компанія" — дані компанії, лого
 - "Команда" — члени компанії, запрошення
@@ -288,6 +296,7 @@ interface CompanyMemberPermissions {
 ### Workspace Settings
 
 Секції:
+
 - "Профіль" — ім'я, аватар, мова, тема
 - "Команда" — список executors, запрошення (→ модуль 12)
 - "Нотифікації" — toggles
@@ -321,31 +330,81 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 ## API Endpoints Summary
 
-| Метод | URL | Хто |
-|---|---|---|
-| `GET/PATCH` | `/settings/profile` | Всі |
-| `POST` | `/settings/profile/avatar` | Всі |
-| `POST` | `/settings/change-password` | Всі |
-| `GET/PATCH` | `/settings/notifications` | Всі |
-| `POST` | `/settings/telegram/link` | Всі |
-| `DELETE` | `/settings/telegram/unlink` | Всі |
-| `GET/PATCH` | `/settings/company` | Company Owner |
-| `POST` | `/settings/company/logo` | Company Owner |
-| `GET` | `/settings/company/members` | Company Owner |
-| `POST` | `/settings/company/members/invite` | Company Owner |
-| `PATCH/DELETE` | `/settings/company/members/:id` | Company Owner |
-| `GET/PATCH` | `/settings/system` | Owner (Workspace) |
-| `POST` | `/settings/system/refresh-rate` | Owner (Workspace) |
-| `GET` | `/settings/activity-log` | Owner (Workspace) |
+| Метод          | URL                                | Хто               |
+| -------------- | ---------------------------------- | ----------------- |
+| `GET/PATCH`    | `/settings/profile`                | Всі               |
+| `POST`         | `/settings/profile/avatar`         | Всі               |
+| `POST`         | `/settings/change-password`        | Всі               |
+| `GET/PATCH`    | `/settings/notifications`          | Всі               |
+| `POST`         | `/settings/telegram/link`          | Всі               |
+| `DELETE`       | `/settings/telegram/unlink`        | Всі               |
+| `GET/PATCH`    | `/settings/company`                | Company Owner     |
+| `POST`         | `/settings/company/logo`           | Company Owner     |
+| `GET`          | `/settings/company/members`        | Company Owner     |
+| `POST`         | `/settings/company/members/invite` | Company Owner     |
+| `PATCH/DELETE` | `/settings/company/members/:id`    | Company Owner     |
+| `GET/PATCH`    | `/settings/system`                 | Owner (Workspace) |
+| `POST`         | `/settings/system/refresh-rate`    | Owner (Workspace) |
+| `GET`          | `/settings/activity-log`           | Owner (Workspace) |
 
 ---
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Auth** | Зміна паролю, Telegram link через OTP |
-| **Files** | Upload аватару та логотипу |
-| **Notifications** | Налаштування каналів нотифікацій |
-| **Team** | Управління командою через Settings |
-| **Billing** | Системні налаштування білінгу (курс, ціни) |
+| Модуль            | Зв'язок                                    |
+| ----------------- | ------------------------------------------ |
+| **Auth**          | Зміна паролю, Telegram link через OTP      |
+| **Files**         | Upload аватару та логотипу                 |
+| **Notifications** | Налаштування каналів нотифікацій           |
+| **Team**          | Управління командою через Settings         |
+| **Billing**       | Системні налаштування білінгу (курс, ціни) |
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+Прибрати `telegramUsername` (немає); notifications PATCH → матриця 7×6 (`NotificationPreference`); `/settings/activity-log` читає `AuditLog` (не order-only ActivityLog); **канонічний members-endpoint** = `/companies/:id/members*` (видалити дубль у 13); per-agency system-settings (exchange/billing defaults — не глобальний singleton); password-change → revoke other sessions + `tokenVersion++` + audit + rate-limit; avatar SVG-guard.
+
+### B. Timezone + phone ✅ ЗБУДОВАНО (S9-06, 2026-07-13)
+
+- **`Profile.phone String?` + `Profile.timezone String?`** (обидва nullable, без default — порожнє = «не вказано»; міграція `20260722_tails2`).
+- `PATCH /profile` приймає обидва: phone тримається як є (порожнє→NULL); **timezone валідується через `new Intl.DateTimeFormat('en',{timeZone})`** у try/catch — невідома IANA-зона → `400 VALIDATION_ERROR` (щоб не зламати майбутнє форматування календаря/quiet-hours/рендеру). Поля протікають у `/auth/me` + gdprExport allow-list.
+- UI: спільна `ContactDetailsSection` (@workflo/app-core) — телефон (Input, regex `[+\d\s()-]`) + timezone-picker (`<select>` з `Intl.supportedValuesOf('timeZone')`, fallback-список), змонтована в settings обох апок (portal `/settings`, workspace `/profile`). Dirty-guard + toast + `reload()` після save.
+- Phone-verify через SMS OTP (для майбутнього SMS-каналу) — post-MVP, не зараз.
+
+### C. Data export (GDPR self-service) ✅ (S9-06, 2026-07-12 ЗБУДОВАНО)
+
+- `GET /profile/export` → synchronous JSON attachment (workflo-my-data.json) з даними: профіль/settings/членства/сповіщення/тікет-повідомлення/відсутності; без секретів. Без моделі `DataExportRequest` — обробка синхронна за один запит. `POST /profile/data-deletion-request` (future, S9) з password + email confirm; flow з RETENTION.md → anonymize, фін.документи зберігаються.
+
+### D. Appearance ✅
+
+- `theme(light|dark|system)` (є) + `density(compact|comfortable)` + `language(uk|en)` — персистимо на Profile, застосовуємо в усіх 3 apps.
+
+```
+Profile: + timezone, phone, density
+New: DataExportRequest
+```
+
+## Беклог-промоут (30.05) → у план
+
+- **Темна тема в Portal** (S9): зараз dark лише у workspace, портал «always light». `ThemeProvider` (packages/ui) вже існує — потрібно лише підключити токени + перемикач у `/settings`. Low-effort полиш. Промоут із беклогу.
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+Вердикт власника: «додаємо всі» — прийнято всі 4 пункти.
+
+| ID   | Рішення                                     | Вплив               | Нюанси власника                                                                                                |
+| ---- | ------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 13-А | **Робочі години + таймзона**                | [бек+екран дрібний] | Агенційні (модуль 20) + особиста TZ у профілі; враховуються в 07-Б («клієнт чекає»), дайджестах, майбутніх SLA |
+| 13-Б | **Матриця сповіщень UI**                    | [екран]             | Підняти з «відкладено» в найближчий UI-прохід (бекенд готовий)                                                 |
+| 13-В | **Дефолтна мова нових клієнтів** per-agency | [бек] копійка       | —                                                                                                              |
+| 13-Г | **Завантаження аватарки**                   | [бек+екран дрібний] | —                                                                                                              |
+
+Для ТЗ дизайнеру: екран матриці сповіщень (Б); аватар-аплоад у профілі (Г); поля роб. години/TZ в адмінці агенції + TZ у профілі (А).

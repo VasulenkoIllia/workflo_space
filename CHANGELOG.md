@@ -3,6 +3,11 @@
 > Формат: [Keep a Changelog](https://keepachangelog.com/uk/1.0.0/)
 > Версіонування: [SemVer](https://semver.org/lang/uk/)
 
+> ⚠️ **Цей файл відстав від реальності (аудит 2026-06).** Поточний достовірний стан —
+> `git log` + `TRACKER.md`. Приклади/чернетки нижче можуть містити застарілі рішення
+> (Bronze/Silver/Gold лояльність, react-pdf, GPT-4) — НЕ джерело істини. Наповнити
+> ретроспективно з git-тегів при першому релізі (v0.1.0), далі вести за правилами нижче.
+
 ---
 
 ## Як вести CHANGELOG
@@ -16,13 +21,13 @@
 
 ### Типи змін
 
-| Тип | Коли |
-|---|---|
-| `Added` | Нова функція |
-| `Changed` | Зміна існуючої функції |
-| `Fixed` | Виправлення бага |
-| `Removed` | Видалення функції |
-| `Security` | Виправлення вразливості |
+| Тип          | Коли                              |
+| ------------ | --------------------------------- |
+| `Added`      | Нова функція                      |
+| `Changed`    | Зміна існуючої функції            |
+| `Fixed`      | Виправлення бага                  |
+| `Removed`    | Видалення функції                 |
+| `Security`   | Виправлення вразливості           |
 | `Deprecated` | Застаріла функція (буде видалена) |
 
 ### Приклад запису
@@ -31,15 +36,18 @@
 ## [v0.2.0] - 2026-05-01
 
 ### Added
+
 - Auth: реєстрація, логін, refresh token rotation, invite flow
 - Orders: CRUD, статусна машина, призначення виконавців
 - Comments: чат з SSE real-time (PostgreSQL LISTEN/NOTIFY)
 - Files: завантаження файлів, LocalStorageAdapter
 
 ### Fixed
+
 - Auth: некоректний редирект після invite accept
 
 ### Changed
+
 - API: стандартизований error response формат `{success, error: {code, message}}`
 ```
 
@@ -50,6 +58,7 @@
 > Зміни що ще не потрапили в production release.
 
 ### Added
+
 - Повна документація проекту (16 модульних docs, infrastructure, frontend standards, UX pages, scaffold, git workflow)
 - Monorepo структура: Turborepo + pnpm workspaces, 5 apps + 8 packages
 - Налаштування CI/CD pipeline (GitHub Actions: staging + production)

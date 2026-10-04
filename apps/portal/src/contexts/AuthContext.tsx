@@ -1,0 +1,175 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { CompanyPermissionKey } from '@workflo/types'
+import { api, getAccessToken, refreshAccessToken, setAccessToken } from '@/lib/api'
+
+export interface AuthCompany {
+  id: string
+  name: string
+  slug: string
+  role: 'owner' | 'member'
+  /** PORTAL-MEMBER: прапорці учасника (власнику не потрібні — має все). */
+  permissions?: Partial<Record<CompanyPermissionKey, boolean>>
+}
+
+export interface AuthProfile {
+  id: string
+  email: string
+  displayName: string
+  role: 'owner' | 'executor' | 'client'
+  language?: string
+  theme?: string
+  avatarUrl?: string | null
+  phone?: string | null
+  timezone?: string | null
+  /** false → show the verify banner (S9). undefined on older payloads = don't nag. */
+  emailVerified?: boolean
+}
+
+export interface AuthState {
+  profile: AuthProfile
+  activeCompanyId?: string
+  companies: AuthCompany[]
+  /** 01-Д: тимчасовий пароль — показуємо банер «змініть пароль». */
+  mustChangePassword?: boolean
+  /** 01-Г: нова адреса, що чекає підтвердження лінком. */
+  pendingEmail?: string | null
+}
+
+interface AuthContextValue {
+  user: AuthState | null
+  loading: boolean
+  /** Password step. `twoFactorRequired` → caller shows the code step and calls verifyTwoFactor. */
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
+  /** 2FA step: exchange the challenge + code for a session. */
+  verifyTwoFactor: (code: string) => Promise<void>
+  /** Adopt a challenge that arrived out-of-band (OAuth redirect ?oauth2fa=). */
+  adoptTwoFactorChallenge: (challengeToken: string) => void
+  register: (input: RegisterInput) => Promise<void>
+  logout: () => Promise<void>
+  reload: () => Promise<void>
+}
+
+export interface RegisterInput {
+  email: string
+  password: string
+  displayName: string
+  companyName: string
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthState | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const reload = useCallback(async () => {
+    setUser(await api.get<AuthState>('/auth/me'))
+  }, [])
+
+  // Holds the short-lived challenge between the password step and the 2FA code step.
+  const challengeRef = useRef<string | null>(null)
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const data = await api.post<{
+        accessToken?: string
+        twoFactorRequired?: boolean
+        challengeToken?: string
+      }>('/auth/login', { email, password })
+      if (data.twoFactorRequired && data.challengeToken) {
+        challengeRef.current = data.challengeToken
+        return { twoFactorRequired: true }
+      }
+      if (data.accessToken) {
+        setAccessToken(data.accessToken)
+        await reload()
+      }
+      return { twoFactorRequired: false }
+    },
+    [reload]
+  )
+
+  const adoptTwoFactorChallenge = useCallback((challengeToken: string) => {
+    challengeRef.current = challengeToken
+  }, [])
+
+  const verifyTwoFactor = useCallback(
+    async (code: string) => {
+      const challengeToken = challengeRef.current
+      if (!challengeToken) throw new Error('Немає активної сесії підтвердження')
+      const data = await api.post<{ accessToken: string }>('/auth/2fa/login-verify', {
+        challengeToken,
+        code,
+      })
+      challengeRef.current = null
+      setAccessToken(data.accessToken)
+      await reload()
+    },
+    [reload]
+  )
+
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      const data = await api.post<{ accessToken: string }>('/auth/register', input)
+      setAccessToken(data.accessToken)
+      await reload()
+    },
+    [reload]
+  )
+
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout', {})
+    } catch {
+      /* ignore — clear local state regardless */
+    }
+    setAccessToken(null)
+    setUser(null)
+  }, [])
+
+  // Restore session on mount: refresh (httpOnly cookie) → /auth/me.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        // Single-flight refresh (спільний із auto-retry на 401): StrictMode монтує effect
+        // двічі ПАРАЛЕЛЬНО — два прямі /auth/refresh ротували токен, і другий ловив 401
+        // (reuse-detection) → сесія злітала на reload. refreshAccessToken() ділить один запит.
+        if (!getAccessToken() && !(await refreshAccessToken())) {
+          throw new Error('no session')
+        }
+        const me = await api.get<AuthState>('/auth/me')
+        if (!cancelled) setUser(me)
+      } catch {
+        if (!cancelled) setUser(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      login,
+      verifyTwoFactor,
+      adoptTwoFactorChallenge,
+      register,
+      logout,
+      reload,
+    }),
+    [user, loading, login, verifyTwoFactor, adoptTwoFactorChallenge, register, logout, reload]
+  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within <AuthProvider>')
+  return ctx
+}

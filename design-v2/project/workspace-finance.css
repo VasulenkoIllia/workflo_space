@@ -1,0 +1,64 @@
+/* workspace-finance.css — G9 Finance / Expenses. Prefix: wff- */
+
+.wff-overview { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 14px; align-items: stretch; }
+.wff-ocard { border: 1px solid var(--wf-border); border-radius: 14px; background: var(--wf-bg); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.wff-ocard-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); }
+.wff-ocard-v { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: var(--wf-fg); }
+.wff-ocard-v.is-income { color: var(--wf-success, #1F8A5B); }
+.wff-ocard-v.is-net { color: var(--wf-accent); }
+.wff-ocard-delta { font-family: 'JetBrains Mono', monospace; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+.wff-ocard-delta[data-up="true"] { color: var(--wf-success, #1F8A5B); }
+.wff-ocard-delta[data-up="false"] { color: var(--wf-destructive, #DC2626); }
+
+/* donut */
+.wff-donut-wrap { display: flex; align-items: center; gap: 20px; }
+.wff-donut { flex-shrink: 0; }
+.wff-donut-center-v { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; fill: var(--wf-fg); }
+.wff-donut-center-k { font-family: 'JetBrains Mono', monospace; font-size: 8px; fill: var(--wf-fg-muted); }
+.wff-legend { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.wff-legend-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.wff-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.wff-legend-label { color: var(--wf-fg-secondary); }
+.wff-legend-amt { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--wf-fg); }
+
+/* line chart */
+.wff-chart { border: 1px solid var(--wf-border); border-radius: 14px; background: var(--wf-bg); padding: 20px; }
+.wff-chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.wff-chart-legend { display: flex; gap: 16px; }
+.wff-chart-leg { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); }
+.wff-chart-leg .ln { width: 16px; height: 2.5px; border-radius: 2px; }
+.wff-period { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 8px; overflow: hidden; }
+.wff-period-opt { padding: 6px 13px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); cursor: pointer; background: var(--wf-bg); }
+.wff-period-opt[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); }
+.wff-svg-grid line { stroke: color-mix(in oklab, var(--wf-fg) 7%, transparent); stroke-width: 1; }
+.wff-svg-axis { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: var(--wf-fg-subtle); }
+
+/* category badge in table */
+.wff-cat { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.wff-cat-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.wff-freq { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--wf-border); color: var(--wf-fg-muted); }
+.wff-freq[data-f="monthly"] { color: var(--wf-accent); border-color: color-mix(in oklab, var(--wf-accent) 35%, transparent); }
+.wff-freq[data-f="quarterly"] { color: #22B8CF; border-color: color-mix(in oklab, #22B8CF 35%, transparent); }
+.wff-freq[data-f="yearly"] { color: #A78BFA; border-color: color-mix(in oklab, #A78BFA 35%, transparent); }
+.wff-paused { margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 8%, transparent); padding: 1px 6px; border-radius: 4px; }
+.wff-filters { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
+.wff-seg { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 8px; overflow: hidden; }
+.wff-seg-opt { padding: 6px 13px; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; background: transparent; border: none; border-right: 1px solid var(--wf-border); color: var(--wf-fg-secondary); transition: all .12s ease; }
+.wff-seg-opt:last-child { border-right: none; }
+.wff-seg-opt[data-on] { background: var(--wf-fg); color: var(--wf-bg); }
+.wff-catsel { height: 32px; padding: 0 10px; border: 1px solid var(--wf-border); border-radius: 8px; background: var(--wf-bg); color: var(--wf-fg); font: inherit; font-size: 12.5px; cursor: pointer; }
+
+/* margin breakdown (22-Д) */
+.wfmg-bar { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
+.wfmg-table tr[data-loss] td { background: color-mix(in oklab, var(--wf-destructive) 5%, transparent); }
+.wfmg-pct { font-family: 'JetBrains Mono', monospace; font-weight: 600; padding: 1px 7px; border-radius: 5px; background: color-mix(in oklab, var(--wf-accent) 14%, transparent); color: color-mix(in oklab, var(--wf-accent) 55%, var(--wf-fg)); }
+.wfmg-pct[data-loss] { background: color-mix(in oklab, var(--wf-destructive) 14%, transparent); color: var(--wf-destructive); }
+.wfmg-paid { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); }
+.wfmg-paid-bar { width: 54px; height: 6px; border-radius: 3px; background: color-mix(in oklab, var(--wf-fg) 10%, transparent); overflow: hidden; }
+.wfmg-paid-fill { display: block; height: 100%; background: var(--wf-success); }
+.wfmg-paid-fill[data-low] { background: var(--wf-warning); }
+.wfmg-total td { border-top: 2px solid var(--wf-border); font-weight: 600; background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent); }
+.wfmg-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding: 11px 14px; border-radius: 10px; background: var(--wf-accent-soft); border: 1px solid color-mix(in oklab, var(--wf-accent) 24%, var(--wf-border)); font-size: 12px; color: var(--wf-fg-secondary); line-height: 1.5; }
+
+/* expense modal conditional fields */
+.wff-cond { border-left: 2px solid color-mix(in oklab, var(--wf-accent) 40%, transparent); padding-left: 14px; margin-left: 2px; display: flex; flex-direction: column; gap: 12px; }

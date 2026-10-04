@@ -1,10 +1,26 @@
+# Traefik static config — КАНОН edge-конфігурації (AR-52, аудит 2026-06-11).
+#
+# Раніше цей файл описував letsencrypt/httpChallenge, тоді як ЖИВИЙ edge на сервері
+# (/var/www/proxy) використовує Cloudflare DNS-challenge (certresolver=cf) — відновити
+# сервер з репо було неможливо. Тепер репо відображає реальність; синхронізація на
+# сервер РУЧНА і свідома (live edge обслуговує і Mailcow — не зачіпати dynamic/):
+#
+#   scp infra/traefik/traefik.yml <host>:/var/www/proxy/traefik.yml
+#   docker compose -f /var/www/proxy/docker-compose.yml up -d --force-recreate traefik
+#
+# CF_DNS_API_TOKEN передається через environment контейнера (див. docker-compose.yml
+# поряд) — токен НЕ зберігається в цьому файлі.
+#
+# DNS-challenge (а не http) — бо так уже працює прод і це pre-req для wildcard
+# *.workflo.space (тенантські піддомени, TRACKER FDN-5).
+
 api:
   dashboard: true
   insecure: false
 
 entryPoints:
   web:
-    address: ":80"
+    address: ':80'
     http:
       redirections:
         entryPoint:
@@ -12,24 +28,40 @@ entryPoints:
           scheme: https
           permanent: true
   websecure:
-    address: ":443"
+    address: ':443'
     http:
       tls:
-        certResolver: letsencrypt
+        certResolver: cf
 
 certificatesResolvers:
-  letsencrypt:
+  # Канонічний resolver (live edge): Cloudflare DNS-01. Працює і для wildcard.
+  cf:
     acme:
       email: hello@workflo.space
       storage: /acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - '1.1.1.1:53'
+          - '8.8.8.8:53'
+  # Запасний HTTP-01 (для хостів поза Cloudflare; не використовується за замовчуванням).
+  letsencrypt:
+    acme:
+      email: hello@workflo.space
+      storage: /acme/acme-http.json
       httpChallenge:
         entryPoint: web
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
+    endpoint: 'unix:///var/run/docker.sock'
     exposedByDefault: false
     network: traefik_network
+  # Live edge також має file-provider для Mailcow (dynamic/mailcow.yml) — він
+  # серверний і НЕ синхронізується з репо. Розкоментувати за потреби:
+  # file:
+  #   directory: /etc/traefik/dynamic
+  #   watch: true
 
 log:
   level: WARN

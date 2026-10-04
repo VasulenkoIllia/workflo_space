@@ -9,43 +9,133 @@ datasource db {
 }
 
 model Profile {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  passwordHash         String
-  name                 String
-  role                 Role      @default(client)
-  avatarUrl            String?
-  language             Language  @default(uk)
-  theme                Theme     @default(system)
-  isActive             Boolean   @default(true)
-  telegramChatId       String?   @unique
-  telegramConnected    Boolean   @default(false)
-  telegramOtp          String?
-  telegramOtpExpiresAt DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                Role      @default(client)
+  avatarUrl           String?
+  language            Language  @default(uk)
+  theme               Theme     @default(system)
+  isActive            Boolean   @default(true)
+  // Email ownership proven (S9 email-verify): set by /auth/verify-email, invite
+  // accept (email-bound link) or password reset (mailbox-delivered link).
+  // null = unverified. Login is NOT blocked; sensitive actions may gate on it.
+  emailVerifiedAt     DateTime? @db.Timestamptz(3)
+  // Last agency a multi-agency staffer chose via /auth/switch-agency (ADR-004).
+  // Soft preference — always re-validated against current agencyMemberships at
+  // login/refresh, so a stale/dangling value harmlessly falls back to the first.
+  lastActiveAgencyId  String?
+  // 01-Б lockout: лічильник невдалих логінів + прогресивний лок (5+ фейлів → 15·30·60 хв).
+  // Успішний вхід скидає обидва. Generic 401 — існування локу не палимо.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.Timestamptz(3)
+  // 01-Г зміна email: нова адреса чекає підтвердження лінком (otp purpose=email_change).
+  pendingEmail        String?
+  // 01-Д: тимчасовий пароль → примусова зміна (знімається зміною пароля).
+  mustChangePassword  Boolean   @default(false)
+  // S9-06 (хвіст): контактний телефон + IANA-часовий пояс (self-service у settings).
+  phone               String?
+  timezone            String?
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
 
-  company              Company?              @relation("CompanyOwner")
-  companyMembership    CompanyMember[]
-  ordersAssigned       Order[]               @relation("OrderAssignee")
-  ordersCreated        Order[]               @relation("OrderCreatedBy")
-  comments             OrderComment[]
-  timeLogs             TimeLog[]
-  notificationSettings NotificationSettings?
-  refreshTokens        RefreshToken[]
-  invitesSent          Invite[]              @relation("InvitedBy")
-  executorRate         ExecutorRate?
-  blogPosts            BlogPost[]
-  uploadedFiles        OrderFile[]
-  notifications        Notification[]
-  activityLogsAsActor  ActivityLog[]
-  otpTokens            OtpToken[]
-  documentsCreated     Document[]            @relation("DocumentCreatedBy")
-  documentsForExecutor Document[]            @relation("DocumentExecutor")
+  companyMembership      CompanyMember[]
+  ordersAssigned         Order[]                   @relation("OrderAssignee")
+  ordersCreated          Order[]                   @relation("OrderCreatedBy")
+  ordersApprovalDecided  Order[]                   @relation("OrderApprovalDecidedBy")
+  chargesApprovalDecided ServiceCharge[]           @relation("ChargeApprovalDecidedBy")
+  internalTasksAssigned  InternalTask[]            @relation("InternalTaskAssignee")
+  comments               OrderComment[]
+  ticketMessages         TicketMessage[]
+  calendarEventsCreated  CalendarEvent[]           @relation("CalendarEventCreatedBy")
+  calendarAttendee       CalendarAttendee[]        @relation("CalendarAttendee")
+  orderCoAssignments     OrderAssignee[]           @relation("OrderCoAssignee")
+  taskCoAssignments      InternalTaskAssignee[]    @relation("TaskCoAssignee")
+  ordersSubmitted        Order[]                   @relation("OrderSubmittedBy")
+  ordersAccepted         Order[]                   @relation("OrderAcceptedBy")
+  orderSettlements       OrderExecutorSettlement[] @relation("OrderSettlementExecutor")
+  timeLogs               TimeLog[]
+  notificationSettings   NotificationSettings?
+  refreshTokens          RefreshToken[]
+  invitesSent            Invite[]                  @relation("InvitedBy")
+  executorRates          ExecutorRate[]
+  blogPosts              BlogPost[]
+  announcementReads      AnnouncementRead[]
+  uploadedFiles          OrderFile[]
+  notifications          Notification[]
+  activityLogsAsActor    ActivityLog[]
+  paymentsConfirmed      Payment[]                 @relation("PaymentConfirmedBy")
+  otpTokens              OtpToken[]
+  documentsCreated       Document[]                @relation("DocumentCreatedBy")
+  documentsForExecutor   Document[]                @relation("DocumentExecutor")
+  auditLogsAsActor       AuditLog[]
+  agenciesOwned          Agency[]                  @relation("AgencyOwner")
+  agencyMemberships      AgencyMember[]
+  orderChatReads         OrderChatRead[]
+  projectExecutorRates   ProjectExecutorRate[] // 12-А (S5.6 P-1)
+  credentialsCreated     CredentialVault[]         @relation("CredentialCreatedBy") // 17
+  twoFactor              TwoFactorAuth? // S9-01
+  oauthAccounts          OAuthAccount[] // S9 §E
+  commentReactions       CommentReaction[] // S10
+  leaveRequests          LeaveRequest[]            @relation("LeaveProfile") // S13-04
+  leaveReviews           LeaveRequest[]            @relation("LeaveReviewer")
+  agencyPermissions      AgencyMemberPermission[]  @relation("MemberPermissionProfile") // PERM-1
+  pushSubscriptions      PushSubscription[] // S12-03
+  broadcastsCreated      Broadcast[]               @relation("BroadcastCreatedBy") // S12-07
+  ledTeams               Team[]                    @relation("TeamLead") // TEAM-ADMIN-1
 
-  @@index([email])
   @@index([role])
   @@map("profiles")
+}
+
+/// S12-03 Web Push: підписка браузера (identity-scoped, як refresh_tokens — без
+/// tenant-RLS). endpoint глобально унікальний; повторна підписка перебиває profileId
+/// (той самий браузер, інший акаунт). 404/410 від пуш-сервісу → рядок видаляється.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([profileId])
+  @@map("push_subscriptions")
+}
+
+/// S12-05 (хвіст): suppression-список email-адрес (identity-scoped, без tenant-RLS —
+/// адреса глобальна, як Profile.email). Джерела: bounce (DSN у support-скриньці),
+/// unsubscribe (підписаний лінк у розсилці), complaint (майбутнє). notify() скіпає
+/// email-канал для адрес зі списку (reason 'suppressed').
+model EmailSuppression {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  reason    String // bounce | unsubscribe | complaint
+  /// Звідки прийшло (messageId DSN, 'unsubscribe_link', …) — для розбору.
+  source    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("email_suppressions")
+}
+
+// Social login (S9, canon 01-auth §E). One row per linked external identity;
+// (provider, providerAccountId) is the stable key Google/GitHub guarantee.
+// email is a snapshot of the provider-side address at link time (display only).
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  profileId         String
+  profile           Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String
+  email             String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([provider, providerAccountId])
+  @@index([profileId])
+  @@map("oauth_accounts")
 }
 
 model RefreshToken {
@@ -53,30 +143,42 @@ model RefreshToken {
   profileId String
   profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   token     String    @unique
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
+  expiresAt DateTime  @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
 
-  @@index([token])
+  // Session identity (S9-02). familyId is stable across rotations — one familyId =
+  // one device/session; rotation carries it (and firstIssuedAt) to the new row, so
+  // the sessions UI shows a device once with its original sign-in time.
+  familyId      String   @default(uuid())
+  userAgent     String?
+  ip            String?
+  firstIssuedAt DateTime @default(now()) @db.Timestamptz(3)
+
   @@index([profileId])
   @@map("refresh_tokens")
 }
 
 model Invite {
   id          String     @id @default(uuid())
+  agencyId    String?
+  agency      Agency?    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   email       String
   token       String     @unique @default(uuid())
   type        InviteType
   invitedById String
   invitedBy   Profile    @relation("InvitedBy", fields: [invitedById], references: [id])
   companyId   String?
+  company     Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   permissions Json?
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime   @default(now())
+  expiresAt   DateTime   @db.Timestamptz(3)
+  usedAt      DateTime?  @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
 
-  @@index([token])
+  @@index([agencyId])
   @@index([email])
+  @@index([invitedById])
+  @@index([companyId])
   @@map("invites")
 }
 
@@ -84,43 +186,85 @@ model PasswordResetToken {
   id        String    @id @default(uuid())
   email     String
   token     String    @unique @default(uuid())
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
 
-  @@index([token])
+  @@index([email])
   @@map("password_reset_tokens")
 }
 
 model Company {
-  id           String      @id @default(uuid())
-  name         String
-  slug         String      @unique
-  ownerId      String      @unique
-  owner        Profile     @relation("CompanyOwner", fields: [ownerId], references: [id])
-  language     Language    @default(uk)
-  currency     String      @default("USD")
-  notes        String?
-  loyaltyTier  LoyaltyTier @default(new)
-  totalSpent   Decimal     @default(0) @db.Decimal(12, 2)
-  bonusBalance Decimal     @default(0) @db.Decimal(12, 2)
-  referralCode String      @unique @default(uuid())
-  referredById String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                   String           @id @default(uuid())
+  agencyId             String
+  name                 String
+  // AR-22 (audit 2026-06-11): per-agency unique (@@unique below) — two tenants may both
+  // have an "acme" client. referralCode stays globally unique (uuid; agency-less lookup).
+  slug                 String
+  language             Language         @default(uk)
+  currency             String           @default("USD")
+  notes                String?
+  // 05-Г / В10 (P-4): default net payment terms (days) for this client's projects —
+  // cascade tier 2 (Project.paymentTermsDays → THIS → agency PaymentSettings). null → next tier.
+  paymentTermsDays     Int?
+  // 05-Б дунінг: «не надсилати цьому клієнту нагадування про оплату» (усна домовленість).
+  // Вимикає ЛИШЕ листи/сповіщення — overdue-статус нарахувань ставиться незалежно.
+  dunningOptOut        Boolean          @default(false)
+  // P-11 (PROJECTS_SPEC §8): per-client cost-approval defaults — the knob the owner sets
+  // once per client. null → inherit the agency floor. Project may override further.
+  approvalMode         ApprovalMode?
+  invoiceApprover      InvoiceApprover?
+  loyaltyTier          LoyaltyTier      @default(new)
+  tierOverride         LoyaltyTier? // manual tier pin; the recalc cron never clobbers it (module 10)
+  totalSpent           Decimal          @default(0) @db.Decimal(12, 2)
+  bonusBalance         Decimal          @default(0) @db.Decimal(12, 2)
+  moneyBalance         Decimal          @default(0) @db.Decimal(12, 2) // money-account (AR/prepaid): Σ confirmed payments − Σ charges (module 25)
+  referralCode         String           @unique @default(uuid())
+  referredById         String? // company-referral (module 09): another Company that referred this one
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): the EMPLOYEE who brought this client. Plain-String FK
+  // to Profile (project convention: no back-relation on Profile). Drives the referral
+  // bonus = net-income(client) × % accrued onto that employee's payout (PROJECTS_SPEC §4.2).
+  referredByEmployeeId String?
+  // 06-Б (P-3): the CLIENT's own legal requisites — the document "to" party (invoices/
+  // acts). The client fills these in Portal; the agency reads them at generation time.
+  // `legalIsComplete` (Юр-2 analog) gates S6 document generation, not work. One set per
+  // client (single legal entity); multi-entity-per-client is out of scope. Mirrors the
+  // agency-side LegalEntity (20-Д) field-for-field.
+  legalType            String? // 'fop'|'tov'|'individual'|'foreign' (free, П8)
+  legalName            String? // повна юр-назва для документів
+  taxId                String? // ЄДРПОУ/ІПН/РНОКПП
+  vatPayer             Boolean          @default(false)
+  vatId                String?
+  legalAddress         String?
+  bankName             String?
+  iban                 String?
+  signerName           String?
+  signerTitle          String?
+  documentEmail        String? // primary recipient for invoice/act PDFs (06-Г)
+  documentEmailCc      String? // optional бухгалтерія CC
+  legalIsComplete      Boolean          @default(false) // legalName+taxId+iban+signerName
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @db.Timestamptz(3)
 
-  members           CompanyMember[]
-  orders            Order[]
-  serviceAssigns    CompanyService[]
-  charges           ServiceCharge[]
-  payments          Payment[]
-  referralsSent     Referral[]       @relation("ReferrerCompany")
-  referralsReceived Referral[]       @relation("ReferredCompany")
-  documents         Document[]
+  members            CompanyMember[]
+  orders             Order[]
+  charges            ServiceCharge[]
+  payments           Payment[]
+  referralsSent      Referral[]           @relation("ReferrerCompany")
+  referralsReceived  Referral[]           @relation("ReferredCompany")
+  documents          Document[]
+  invites            Invite[]
+  walletTransactions WalletTransaction[]
+  loyaltyHistory     LoyaltyTierHistory[]
+  projects           Project[] // 05-ПРОЕКТИ (S5.6 P-1)
+  credentials        CredentialVault[] // 17-CREDENTIALS
+  agency             Agency               @relation(fields: [agencyId], references: [id])
+  tickets            Ticket[]
+  calendarEvents     CalendarEvent[]
 
-  @@index([slug])
-  @@index([ownerId])
-  @@index([referralCode])
+  @@unique([agencyId, slug])
+  @@index([agencyId])
+  @@index([referredByEmployeeId]) // P-9b: payout generation looks up an employee's referred clients
   @@map("companies")
 }
 
@@ -132,57 +276,226 @@ model CompanyMember {
   profile     Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
   role        CompanyMemberRole @default(member)
   permissions Json              @default("{}")
-  joinedAt    DateTime          @default(now())
+  joinedAt    DateTime          @default(now()) @db.Timestamptz(3)
 
   @@unique([companyId, profileId])
   @@index([companyId])
   @@index([profileId])
+  @@index([profileId, role])
   @@map("company_members")
 }
 
 model Order {
-  id             String              @id @default(uuid())
-  title          String
-  description    String?
-  type           OrderType           @default(client_order)
-  priority       OrderPriority       @default(medium)
-  companyId      String?
-  company        Company?            @relation(fields: [companyId], references: [id])
-  assigneeId     String?
-  assignee       Profile?            @relation("OrderAssignee", fields: [assigneeId], references: [id])
-  createdById    String
-  createdBy      Profile             @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  internalStatus OrderInternalStatus @default(new)
-  clientStatus   OrderClientStatus   @default(in_progress)
-  billingType    BillingType         @default(fixed)
-  fixedPrice     Decimal?            @db.Decimal(10, 2)
-  hourlyRate     Decimal?            @db.Decimal(10, 2)
-  estimatedHours Decimal?            @db.Decimal(8, 2)
-  totalAmount    Decimal?            @db.Decimal(10, 2)
-  currency       String              @default("USD")
-  deadline       DateTime?
-  paidAt         DateTime?
-  deletedAt      DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                  String               @id @default(uuid())
+  agencyId            String
+  title               String
+  description         String?
+  type                OrderType            @default(client_order)
+  priority            OrderPriority        @default(medium)
+  companyId           String?
+  company             Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assigneeId          String?
+  assignee            Profile?             @relation("OrderAssignee", fields: [assigneeId], references: [id])
+  createdById         String
+  createdBy           Profile              @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  internalStatus      OrderInternalStatus  @default(new)
+  clientStatus        OrderClientStatus    @default(in_progress)
+  billingType         BillingType          @default(fixed)
+  fixedPrice          Decimal?             @db.Decimal(10, 2)
+  hourlyRate          Decimal?             @db.Decimal(10, 2)
+  estimatedHours      Decimal?             @db.Decimal(8, 2)
+  totalAmount         Decimal?             @db.Decimal(10, 2)
+  currency            String               @default("USD")
+  deadline            DateTime?            @db.Timestamptz(3)
+  paidAt              DateTime?            @db.Timestamptz(3)
+  deletedAt           DateTime?            @db.Timestamptz(3)
+  onHoldReason        String?
+  cancelledReason     String?
+  // 02-А (S5.6 P-7): опційне погодження оцінки клієнтом. requiresApproval — snapshot ефективного
+  // прапорця на момент створення (дефолт проєкту/компанії); approvalStatus null = не подано/не
+  // потрібно; гейтить перехід → in_progress, поки клієнт не «Погодити». decidedBy/At + comment = audit.
+  requiresApproval    Boolean              @default(false)
+  approvalStatus      OrderApprovalStatus?
+  approvalDecidedAt   DateTime?            @db.Timestamptz(3)
+  approvalDecidedById String?
+  approvalDecidedBy   Profile?             @relation("OrderApprovalDecidedBy", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
+  approvalComment     String? // коментар клієнта при відхиленні (або примітка при погодженні)
+  // P-11 (PROJECTS_SPEC §8): resolved cost-approval mode snapshot at creation (immutable).
+  // requiresApproval above stays = (approvalMode == upfront) for the existing 02-А gate.
+  // approvedAmount = counter-offer (client OK'd a LOWER sum than quoted); the difference is
+  // recorded as a concession (P-10 manualDiscount) so quoted vs final-billed are both visible.
+  approvalMode        ApprovalMode         @default(none)
+  approvedAmount      Decimal?             @db.Decimal(10, 2)
+  // 05-ПРОЕКТИ (S5.6 P-1): опційна привʼязка до фін-проєкту (legacy-замовлення без проєкту валідні)
+  projectId           String?
+  project             Project?             @relation(fields: [projectId], references: [id])
+  // 02-Б НОМЕНКЛАТУРА (рішення власника 07.07): офіційна позиція «згідно КВЕД» — саме її
+  // назва друкується в рахунках/актах цього замовлення (вся сума одним рядком).
+  nomenclatureId      String?
+  nomenclature        Nomenclature?        @relation(fields: [nomenclatureId], references: [id], onDelete: SetNull)
+  zeroBilled          Boolean              @default(false) // В12: задача в абонплаті — НЕ білиться, але час → собівартість
+  // 18-В: відповідальний за тред (хто винен клієнту відповідь). Plain Profile id
+  // (project convention); null = «авто» — UI трактує як першого assignee.
+  chatOwnerId         String?
+  // S10-02 SLA (спека 02-orders §C): дедлайни реакції, штамповані при створенні з SlaPolicy
+  // пріоритету; firstRespondedAt = перший ПУБЛІЧНИЙ коментар команди; slaBreachedAt — cron.
+  firstResponseDueAt  DateTime?            @db.Timestamptz(3)
+  resolutionDueAt     DateTime?            @db.Timestamptz(3)
+  firstRespondedAt    DateTime?            @db.Timestamptz(3)
+  slaBreachedAt       DateTime?            @db.Timestamptz(3)
+  // ПРИЙМАННЯ РОБОТИ (07.07): виконавець здає (in_progress→review), owner/manager приймає
+  // (review→done, гейт ролей). submittedBy/acceptedBy — audit-хто. billableHours — год ДО
+  // ВИСТАВЛЕННЯ клієнту (погодинне; null = факт Σ TimeLog). Пооб'єктна оплата виконавцям —
+  // OrderExecutorSettlement. Факт (Σ TimeLog) ніколи не редагується — це правда/статистика.
+  submittedAt         DateTime?            @db.Timestamptz(3)
+  submittedById       String?
+  submittedBy         Profile?             @relation("OrderSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  acceptedAt          DateTime?            @db.Timestamptz(3)
+  acceptedById        String?
+  acceptedBy          Profile?             @relation("OrderAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  billableHours       Decimal?             @db.Decimal(8, 2)
+  // DSN-4 АНКЕТА КЛІЄНТА (портал /orders/new): побажання клієнта на момент заявки — орієнтир
+  // для оцінки команди, НЕ умови угоди. preferredBilling null = «обговорити»; clientBudget —
+  // у валюті замовлення. Фактичні billingType/fixedPrice/hourlyRate виставляє команда.
+  category            OrderCategory?
+  clientBudget        Decimal?             @db.Decimal(10, 2)
+  preferredBilling    BillingType?
+  deadlineFlexible    Boolean              @default(false)
+  preferredChannel    ContactChannel?
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
-  stages        OrderStage[]
-  comments      OrderComment[]
-  timeLogs      TimeLog[]
-  files         OrderFile[]
-  internalTasks InternalTask[]
-  activityLogs  ActivityLog[]
-  payments      Payment[]
-  documents     Document[]
+  stages             OrderStage[]
+  comments           OrderComment[]
+  timeLogs           TimeLog[]
+  files              OrderFile[]
+  internalTasks      InternalTask[]
+  coAssignees        OrderAssignee[]
+  settlements        OrderExecutorSettlement[] // ПРИЙМАННЯ: по-виконавцева звірка оплатних годин
+  estimateLine       EstimateLine? // P-6: the estimate position this zeroBilled task was spawned from
+  orderEstimateLines OrderEstimateLine[] // 02-Б: кошторис разового замовлення (qty × ціна)
+  activityLogs       ActivityLog[]
+  chatReads          OrderChatRead[]
+  payments           Payment[]
+  documents          Document[]
+  conversationStates ConversationState[]
+  tags               OrderTagAssignment[]
+  // S10-03: залежності — це замовлення заблоковане blockedBy, і саме блокує dependents
+  blockedBy          OrderDependency[]         @relation("DepOrder")
+  dependents         OrderDependency[]         @relation("DepBlocker")
+  agency             Agency                    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@index([agencyId])
+  @@index([agencyId, internalStatus]) // workspace kanban / status filter (S2)
+  @@index([agencyId, createdAt]) // tenant-scoped paginated list (S2)
+  @@index([agencyId, companyId]) // client's company order list (S2)
   @@index([companyId])
   @@index([assigneeId])
   @@index([internalStatus])
   @@index([clientStatus])
   @@index([type])
   @@index([createdAt])
+  @@index([createdById])
   @@index([deletedAt])
+  @@index([projectId])
+  @@index([nomenclatureId])
   @@map("orders")
+}
+
+// 18-Б: per-user conversation state of an order thread. muted → the outbox worker drops
+// chat.new_comment for this profile (mentions DELIBERATELY bypass mute); archivedAt →
+// «архівні» розділ у майбутній секції «Чати». profileId — plain Profile id (convention).
+model ConversationState {
+  id           String    @id @default(uuid())
+  agencyId     String
+  profileId    String
+  orderId      String
+  muted        Boolean   @default(false)
+  archivedAt   DateTime? @db.Timestamptz(3)
+  // 18-Б snooze: до цього часу тред схований з основних фільтрів хабу; після —
+  // повертається з ⏰-маркером. NULL = не відкладено.
+  snoozedUntil DateTime? @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, orderId])
+  @@index([orderId, muted])
+  @@index([agencyId])
+  @@map("conversation_state")
+}
+
+// S10-01: per-agency tag catalog for orders (спека 02-orders §B). Admin CRUD (owner);
+// assignment — team, через join-таблицю нижче.
+model OrderTag {
+  id        String   @id @default(uuid())
+  agencyId  String
+  name      String
+  color     String? // hex/токен для чіпа; null → нейтральний
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  assignments OrderTagAssignment[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("order_tags")
+}
+
+// agencyId продубльовано заради уніформного RLS (join-таблиці без tenant-колонки
+// політикою wf_in_tenant не накриваються).
+model OrderTagAssignment {
+  orderId  String
+  tagId    String
+  agencyId String
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tag      OrderTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  agency   Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, tagId])
+  @@index([tagId])
+  @@index([agencyId])
+  @@map("order_tag_assignments")
+}
+
+// S10-01: order creation presets (спека 02-orders §E). defaultStages/nomenclatureCode —
+// spec-compat, поки не використовуються (стадії/номенклатура — окремі зрізи).
+model OrderTemplate {
+  id                 String      @id @default(uuid())
+  agencyId           String
+  name               String
+  type               OrderType   @default(client_order)
+  defaultTitle       String
+  defaultDescription String?
+  defaultBillingType BillingType @default(fixed)
+  defaultPrice       Decimal?    @db.Decimal(10, 2)
+  defaultStages      Json?
+  nomenclatureCode   String?
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+  agency             Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("order_templates")
+}
+
+// S10-02: per-agency SLA-конфіг per-пріоритет (спека 02-orders §C). Хвилини до першої
+// відповіді команди та до розв'язання; замовлення штампується дедлайнами при створенні.
+model SlaPolicy {
+  id                String        @id @default(uuid())
+  agencyId          String
+  priority          OrderPriority
+  firstResponseMins Int
+  resolutionMins    Int
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+  agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, priority])
+  @@index([agencyId])
+  @@map("sla_policies")
 }
 
 model OrderStage {
@@ -193,187 +506,724 @@ model OrderStage {
   description String?
   status      StageStatus @default(pending)
   position    Int
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(3)
 
   @@index([orderId, position])
   @@map("order_stages")
 }
 
-model OrderComment {
-  id         String   @id @default(uuid())
+/// S10-03 (спека 02-D): «orderId не стартує, поки dependsOnId не done». Один тип
+/// звʼязку — blocks (колонки type нема свідомо, YAGNI). Гейт на перехід у
+/// in_progress + DFS cycle-guard при створенні; при done блокера — notify
+/// виконавцям повністю розблокованих замовлень.
+model OrderDependency {
+  id          String   @id @default(uuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order    @relation("DepOrder", fields: [orderId], references: [id], onDelete: Cascade)
+  dependsOnId String
+  dependsOn   Order    @relation("DepBlocker", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([orderId, dependsOnId])
+  @@index([agencyId])
+  @@index([dependsOnId])
+  @@map("order_dependencies")
+}
+
+/// Per-(order, profile) read marker for unread counts in chat-hub (modules 03/18).
+model OrderChatRead {
   orderId    String
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  authorId   String
-  author     Profile  @relation(fields: [authorId], references: [id])
-  content    String
-  isInternal Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime @db.Timestamptz(3)
 
+  @@id([orderId, profileId])
+  @@index([profileId])
+  @@map("order_chat_reads")
+}
+
+model OrderComment {
+  id          String         @id @default(uuid())
+  agencyId    String
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      Profile        @relation(fields: [authorId], references: [id])
+  content     String
+  isInternal  Boolean        @default(false)
+  // 03-чат (S10-04, зріз 03.07): reply-to — self-relation; видалення оригіналу лишає
+  // відповідь живою (SetNull → «повідомлення видалено» на фронті).
+  replyToId   String?
+  replyTo     OrderComment?  @relation("CommentReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     OrderComment[] @relation("CommentReply")
+  // Вкладення: OrderFile-и замовлення, прив'язані до цього повідомлення (03.07).
+  attachments OrderFile[]
+  // S10 @mention: profile-ids згаданих учасників (сервер валідовує видимість:
+  // клієнта не можна згадати у внутрішній нотатці). Масив, не relation.
+  mentionIds  String[]       @default([])
+  // 03-Г pin: ТЗ/реквізити/домовленості зверху чату. Пінить owner/команда;
+  // клієнт бачить (публічні). null = не закріплено.
+  pinnedAt    DateTime?      @db.Timestamptz(3)
+  pinnedById  String?
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  // editedAt = ФАКТ правки (показ «(відредаговано)»); updatedAt — технічний (канон 03-B).
+  editedAt    DateTime?      @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?      @db.Timestamptz(3)
+  agency      Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+
+  reactions CommentReaction[]
+
+  @@index([agencyId])
   @@index([orderId, createdAt])
   @@index([orderId, isInternal])
+  @@index([orderId, pinnedAt])
+  @@index([authorId])
+  @@index([replyToId])
   @@map("order_comments")
 }
 
+// Реакції на повідомлення чату (S10, канон 03-C). Емодзі валідовано проти
+// REACTION_EMOJIS (@workflo/types) — технічний набір до дизайнерського пака.
+model CommentReaction {
+  id        String       @id @default(uuid())
+  commentId String
+  comment   OrderComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([commentId, profileId, emoji])
+  @@index([commentId])
+  @@map("comment_reactions")
+}
+
 model OrderFile {
-  id         String   @id @default(uuid())
+  id         String        @id @default(uuid())
+  agencyId   String
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   uploadedBy String
-  uploader   Profile  @relation(fields: [uploadedBy], references: [id])
+  uploader   Profile       @relation(fields: [uploadedBy], references: [id])
   filename   String
   storedAs   String
   mimeType   String
   sizeBytes  Int
-  createdAt  DateTime @default(now())
+  sha256     String
+  // S10-06ч: ключ згенерованої мініатюри (webp) для зображень. null — не зображення
+  // або генерація не вдалась; серверний best-effort, апку не блокує.
+  thumbKey   String?
+  // 03-чат (03.07): файл, надісланий У ЧАТІ, лінкується до повідомлення. Файл лишається
+  // звичайним OrderFile (видно в табі «Файли»); SetNull при видаленні коментаря.
+  commentId  String?
+  comment    OrderComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  deletedAt  DateTime?     @db.Timestamptz(3)
+  agency     Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@index([commentId])
+  @@index([agencyId])
   @@index([orderId])
   @@map("order_files")
 }
 
 model InternalTask {
-  id         String             @id @default(uuid())
-  orderId    String
-  order      Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  title      String
-  assigneeId String?
-  status     InternalTaskStatus @default(todo)
-  position   Int                @default(0)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id          String                 @id @default(uuid())
+  agencyId    String
+  orderId     String
+  order       Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title       String
+  assigneeId  String?
+  assignee    Profile?               @relation("InternalTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  status      InternalTaskStatus     @default(todo)
+  position    Int                    @default(0)
+  // TEAM-BOARDS: команда задачі (таби дошки; null = видно лише в «Усі»)
+  teamId      String?
+  team        Team?                  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  // TASK-COLUMNS: кастомна колонка командної дошки; null = fallback-колонка свого kind
+  columnId    String?
+  column      TeamColumn?            @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
+  agency      Agency                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  coAssignees InternalTaskAssignee[]
 
+  @@index([agencyId])
   @@index([orderId])
+  @@index([assigneeId])
+  @@index([teamId])
+  @@index([columnId])
   @@map("internal_tasks")
 }
 
-model TimeLog {
-  id         String   @id @default(uuid())
-  orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  executorId String
-  executor   Profile  @relation(fields: [executorId], references: [id])
-  hours      Decimal  @db.Decimal(5, 2)
-  comment    String?
-  date       DateTime @db.Date
-  createdAt  DateTime @default(now())
+// МУЛЬТИВИКОНАВЦІ (рішення власника 07.07): співвиконавці замовлення ДОДАТКОВО до
+// головного (Order.assigneeId — «відповідальний», драйвить SLA/комісію/chat-owner/«мої»).
+// Час засікає будь-який член команди (TimeLog.executorId per-рядок) — маржа/години вже multi.
+model OrderAssignee {
+  id        String   @id @default(uuid())
+  agencyId  String
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile  @relation("OrderCoAssignee", fields: [profileId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 
+  @@unique([orderId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("order_assignees")
+}
+
+// ПРИЙМАННЯ (07.07): по-виконавцева звірка годин при прийманні замовлення. trackedHours —
+// знімок Σ TimeLog виконавця на момент приймання; payableHours — скільки год фіксуємо ДО
+// ОПЛАТИ виконавцю (owner/manager коригує; за замовч. = tracked). Джерело істини «оплатних
+// годин» для майбутнього погодинного payroll + звітів; факт (Σ TimeLog) лишається окремо.
+model OrderExecutorSettlement {
+  id           String   @id @default(uuid())
+  agencyId     String
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile  @relation("OrderSettlementExecutor", fields: [profileId], references: [id], onDelete: Cascade)
+  trackedHours Decimal  @default(0) @db.Decimal(8, 2)
+  payableHours Decimal  @default(0) @db.Decimal(8, 2)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([orderId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("order_executor_settlements")
+}
+
+// Співвиконавці задачі (InternalTask) — аналогічно замовленню.
+model InternalTaskAssignee {
+  id        String       @id @default(uuid())
+  agencyId  String
+  taskId    String
+  task      InternalTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   Profile      @relation("TaskCoAssignee", fields: [profileId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([taskId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("internal_task_assignees")
+}
+
+model TimeLog {
+  id                 String    @id @default(uuid())
+  agencyId           String
+  orderId            String
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  executorId         String
+  executor           Profile   @relation(fields: [executorId], references: [id])
+  hours              Decimal   @db.Decimal(5, 2)
+  comment            String?
+  date               DateTime  @db.Date
+  // 02-orders T2 (фінд.#7): таймерна модель поверх ручного hours. startedAt set + endedAt null
+  // = таймер біжить (1 активний на виконавця — серіалізується advisory-lock у сервісі, НЕ БД-
+  // констрейнтом, щоб не ламати drift-gate). Обидва null = звичайний ручний запис (back-compat).
+  startedAt          DateTime? @db.Timestamptz(3)
+  endedAt            DateTime? @db.Timestamptz(3)
+  // П5/П7 (P-5): снапшот резолвнутих ставок у МОМЕНТ логування — стабільна історія
+  // маржі при зміні ставок. costRateUsd — собівартість години в USD за курсом на дату.
+  clientRateSnapshot Decimal?  @db.Decimal(10, 2) // дохід/год (Project.clientHourlyRate; 0 для zeroBilled)
+  costRateSnapshot   Decimal?  @db.Decimal(10, 2) // собівартість/год (каскад §2.3)
+  costCurrency       String? // валюта costRateSnapshot
+  costRateUsd        Decimal?  @db.Decimal(10, 2) // собівартість/год у USD (курс на дату, П7)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  agency             Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+
+  @@index([agencyId])
   @@index([orderId])
   @@index([executorId])
   @@index([date])
+  // active-timer lookup: the running row per executor (endedAt IS NULL)
+  @@index([executorId, endedAt])
   @@map("time_logs")
 }
 
+// Lead/CRM (module 26). Tenant-scoped (RLS via agencyId). Plain-String FKs (assignee/company/
+// convertedOrder) per project convention (no back-relations); set companyId+convertedOrderId on
+// convert→order. Стадія воронки — LeadStage (custom per-agency, ХВІСТ-4). status лишається
+// coarse-прапорцем результату (open→new / won / lost) для конверсії/звітів; stageId = істина колонки.
+model Lead {
+  id               String     @id @default(uuid())
+  agencyId         String
+  name             String // client/company or deal name
+  contactName      String?
+  email            String?
+  phone            String?
+  source           String? // free: 'website'|'referral'|'telegram'|... (like Project.type)
+  status           LeadStatus @default(new)
+  // ХВІСТ-4: кастомна стадія воронки (per-agency). null у legacy-даних до бекфілу.
+  stageId          String?
+  stage            LeadStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  estimatedValue   Decimal?   @db.Decimal(12, 2)
+  currency         String     @default("USD")
+  notes            String?
+  assigneeId       String? // Profile (no relation, convention)
+  companyId        String? // set on convert
+  convertedOrderId String? // set on convert
+  lostReason       String?
+  position         Int        @default(0)
+  // 26-UTM: first-touch attribution captured on website intake (read-only in the app)
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmTerm          String?
+  utmContent       String?
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  agency           Agency     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  activities LeadActivity[]
+
+  @@index([agencyId])
+  @@index([agencyId, status])
+  @@index([stageId])
+  @@map("leads")
+}
+
+// ХВІСТ-4 (07.07): кастомні стадії воронки лідів per-agency. kind фіксує семантику:
+// open — редаговані проміжні стадії; won/lost — термінальні (по одній, не видаляються;
+// won досяжна лише через конвертацію в замовлення). Дошка = ці стадії за position.
+model LeadStage {
+  id        String        @id @default(uuid())
+  agencyId  String
+  name      String
+  kind      LeadStageKind @default(open)
+  position  Int           @default(0)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+  agency    Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("lead_stages")
+}
+
+// 26-ТАЙМЛАЙН: append-only journal of lead lifecycle events (created / stage_changed /
+// assigned / updated / converted). actorId is a plain Profile id (project convention,
+// no FK); null actor = system intake (website contact form).
+model LeadActivity {
+  id        String   @id @default(uuid())
+  agencyId  String
+  leadId    String
+  actorId   String?
+  type      String
+  metadata  Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([agencyId])
+  @@map("lead_activities")
+}
+
+// 17-CREDENTIALS: envelope-encrypted secrets bound to a client company.
+// AES-256-GCM; per-record DEK wrapped by a platform KEK held in env (CREDENTIALS_KEK_BASE64) —
+// never in the DB, so a table leak alone ≠ credential compromise. Plain metadata (label/service/
+// url/username/notes) is queryable; only the secret value is ciphertext. Access: agency OWNER
+// only (executors never), enforced in the route; RLS scopes by agencyId like every tenant table.
+model CredentialVault {
+  id                 String    @id @default(uuid())
+  agencyId           String
+  companyId          String
+  label              String // "Bitrix24 admin", "FTP клієнта" — plain
+  service            String? // "bitrix24"|"ftp"|"wordpress"|... — filter/icon
+  url                String? // login URL — plain
+  username           String? // plain (preview without reveal)
+  // 17-Д typed templates: resourceType = key of VAULT_RESOURCE_TYPES (null = legacy freeform
+  // row); publicFields = ordered non-secret fields [{kind,value}] (kinds from VAULT_FIELD_KINDS).
+  // The SECRET fields of a typed card are stored as an encrypted JSON array in ciphertext below.
+  resourceType       String?
+  publicFields       Json?
+  encryptedDek       Bytes // DEK wrapped by KEK (AES-256-GCM)
+  dekIv              Bytes // 12-byte IV for DEK wrap
+  dekAuthTag         Bytes // 16-byte GCM tag for DEK wrap
+  ciphertext         Bytes // secret encrypted with DEK
+  ciphertextIv       Bytes // 12-byte IV for ciphertext
+  ciphertextAuthTag  Bytes // 16-byte GCM tag for ciphertext
+  notes              String? // plain notes (no secrets!)
+  // 17-РОТАЦІЯ (спека §D): optional access expiry; the daily cron nags the agency owner
+  // when a secret is ≤7 days from (or past) expiresAt. rotationRemindedAt throttles the
+  // reminder to once per 7 days per secret.
+  expiresAt          DateTime? @db.Timestamptz(3)
+  rotationRemindedAt DateTime? @db.Timestamptz(3)
+  revokedAt          DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+  createdById        String
+  agency             Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  shares    CredentialShare[]
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy Profile           @relation("CredentialCreatedBy", fields: [createdById], references: [id])
+
+  @@index([agencyId])
+  @@index([companyId, revokedAt])
+  @@map("credential_vault")
+}
+
+// 17-SHARE (спека §C + рішення власника 05.07): owner grants an EXECUTOR read/reveal access —
+// either to ONE secret (credentialId set) or to ALL secrets of a client company (companyId set,
+// covers future secrets too). Exactly one of the two targets is set (route-enforced). Grants are
+// indefinite until revoked (owner decision 05.07); expiresAt is kept nullable for the spec's
+// auto-expiry — the access check already honors it, but no UI/API sets it yet.
+// executorId/grantedById are plain Profile ids (project convention, no FK).
+model CredentialShare {
+  id           String    @id @default(uuid())
+  agencyId     String
+  credentialId String?
+  companyId    String?
+  executorId   String
+  grantedById  String
+  revokedAt    DateTime? @db.Timestamptz(3)
+  expiresAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  credential CredentialVault? @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([executorId, revokedAt])
+  @@index([credentialId])
+  @@index([agencyId, companyId])
+  @@map("credential_shares")
+}
+
+// TOTP 2FA per profile (S9-01). The secret is KEK-encrypted with the SAME envelope
+// scheme as the vault (17) — so 2FA needs CREDENTIALS_KEK_BASE64 set. A row exists
+// only after setup starts; enabledAt null = pending (secret generated, first code
+// not yet confirmed) and does NOT gate login. Backup codes are one-time bcrypt hashes.
+model TwoFactorAuth {
+  profileId         String    @id
+  profile           Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  encryptedDek      Bytes
+  dekIv             Bytes
+  dekAuthTag        Bytes
+  ciphertext        Bytes // base32 TOTP secret encrypted with DEK
+  ciphertextIv      Bytes
+  ciphertextAuthTag Bytes
+  enabledAt         DateTime? @db.Timestamptz(3) // null = setup pending (does not gate login)
+  backupCodes       String[]  @default([]) // remaining one-time codes, bcrypt-hashed
+  lastTotpStep      Int? // last accepted TOTP step (replay guard, RFC 6238 §5.2)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("two_factor_auth")
+}
+
 model Service {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  agencyId        String?
+  name            String
+  description     String?
+  isActive        Boolean  @default(true)
+  isRecurring     Boolean  @default(true) // recurring-subscription service vs one-off (module 05)
+  defaultPriceUsd Decimal? @db.Decimal(10, 2) // catalog default price (reference; estimates — P-6)
+  estimatedHours  Decimal? @db.Decimal(8, 2) // P-6 (17.06): hours this service «takes» — seeds an EstimateLine budget
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
 
-  companyAssigns CompanyService[]
+  agency             Agency?             @relation(fields: [agencyId], references: [id])
+  estimateLines      EstimateLine[] // P-6: estimate positions referencing this catalog service
+  orderEstimateLines OrderEstimateLine[] // 02-Б: позиції кошторисів замовлень
 
+  @@index([agencyId])
   @@map("services")
 }
 
-model CompanyService {
-  id          String   @id @default(uuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  serviceId   String
-  service     Service  @relation(fields: [serviceId], references: [id])
-  customPrice Decimal  @db.Decimal(10, 2)
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
+// 02-Б НОМЕНКЛАТУРА (рішення власника 07.07): довідник офіційних позицій «згідно КВЕД»
+// («Консультації з питань інформатизації»…). Обирається на замовленні/проекті — її назва
+// друкується в рахунках і актах. vatRate ЗАКЛАДЕНО на майбутнє (05-Ж): розрахунок ПДВ
+// свідомо не реалізований — поле поки що довідкове.
+model Nomenclature {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  code      String? // код КВЕД (довідково)
+  vatRate   Decimal? @db.Decimal(5, 2) // % ПДВ; ПОКИ НЕ РАХУЄТЬСЯ (05-Ж на потім)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  charges ServiceCharge[]
+  orders   Order[]
+  projects Project[]
 
-  @@unique([companyId, serviceId])
-  @@index([companyId])
-  @@map("company_services")
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@map("nomenclature")
+}
+
+// 02-Б КОШТОРИС разового замовлення: позиція = послуга з каталогу АБО вільний рядок,
+// кількість × ціна за одиницю. Σ позицій автоматично стає fixedPrice замовлення
+// (одне джерело правди для погодження/авто-рахунку/PDF). Друкується ЛИШЕ у
+// специфікації (довільний формат); рахунок/акт друкують номенклатуру.
+model OrderEstimateLine {
+  id        String   @id @default(uuid())
+  agencyId  String
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceId String? // каталожна послуга; null = вільний рядок
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  name      String // денормалізована назва — стабільна в документах
+  qty       Decimal  @db.Decimal(8, 2)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([orderId, position])
+  @@index([serviceId])
+  @@map("order_estimate_lines")
+}
+
+/// Estimate line / project budget position (05-ПРОЕКТИ 02-Б, P-6). A service × hours
+/// on a Project's estimate; each line auto-spawns a zeroBilled kanban task (В12) where
+/// the work is logged (hours → margin cost). Σ(hours) reconciles against
+/// `Project.includedHoursCap` (soft indicator; overage billing is the P-2 cycle-engine).
+model EstimateLine {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId String? // catalog reference; null = free-text line
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  name      String // denormalized label — stable in documents even if the service is renamed
+  hours     Decimal  @db.Decimal(8, 2) // budgeted hours (the position's «time»)
+  amount    Decimal? @db.Decimal(10, 2) // optional line price in the project currency (null/0 = zero-billed)
+  // The zeroBilled task auto-created from this line. Deleting the line leaves the task
+  // (real logged work); SetNull keeps the task if the line goes away.
+  orderId   String?  @unique
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  position  Int      @default(0) // display order in the estimate
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId]) // FK scan
+  @@index([projectId, position]) // getEstimate: filter by project + ORDER BY position
+  @@index([serviceId]) // FK scan (service delete → SetNull)
+  @@map("estimate_lines")
 }
 
 model ServiceCharge {
-  id               String         @id @default(uuid())
-  companyId        String
-  company          Company        @relation(fields: [companyId], references: [id])
-  companyServiceId String
-  companyService   CompanyService @relation(fields: [companyServiceId], references: [id])
-  amount           Decimal        @db.Decimal(10, 2)
-  uahRate          Decimal?       @db.Decimal(8, 4)
-  month            DateTime       @db.Date
-  status           ChargeStatus   @default(pending)
-  dueDate          DateTime?
-  paidAt           DateTime?
-  notes            String?
-  createdAt        DateTime       @default(now())
+  id                   String               @id @default(uuid())
+  agencyId             String
+  companyId            String
+  company              Company              @relation(fields: [companyId], references: [id])
+  // 05-ПРОЕКТИ (S5.6 P-1 3b): нарахування походить З ПРОЄКТУ (CompanyService видалено).
+  projectId            String? // нарахування циклу проєкту (manual-разові — без проєкту)
+  project              Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  periodStart          DateTime?            @db.Date // межі циклу (для weekly `month` недостатньо)
+  periodEnd            DateTime?            @db.Date
+  kind                 String               @default("subscription") // 'subscription'|'hourly'|'overage' (P-2d): абон-аванс / погодинка / понадлімітне в одному періоді
+  amount               Decimal              @db.Decimal(10, 2)
+  baseAmount           Decimal?             @db.Decimal(10, 2) // pre-discount (module 10 loyalty)
+  discountPct          Decimal?             @db.Decimal(5, 2) // auto loyalty-tier discount
+  discountAmount       Decimal?             @db.Decimal(10, 2)
+  // 05-З (P-10): one-time MANUAL discount applied ON TOP of loyalty (owner-granted on a
+  // specific charge). Either/both a % of the post-loyalty net and/or a flat amount;
+  // `manualDiscountAmount` is the resolved absolute reduction folded into `totalAmount`.
+  manualDiscountPct    Decimal?             @db.Decimal(5, 2)
+  manualDiscountAmount Decimal?             @db.Decimal(10, 2)
+  totalAmount          Decimal?             @db.Decimal(10, 2) // post-discount amount owed (loyalty + manual)
+  currency             String               @default("USD")
+  uahRate              Decimal?             @db.Decimal(10, 4)
+  month                DateTime             @db.Date
+  status               ChargeStatus         @default(pending)
+  dueDate              DateTime?            @db.Timestamptz(3)
+  dunningLogs          DunningLog[]
+  paidAt               DateTime?            @db.Timestamptz(3)
+  // P-11 (PROJECTS_SPEC §8) — on_actuals invoice-approval gate. approvalStatus null = no gate
+  // (counts as owed immediately, today's behavior); pending = draft, EXCLUDED from moneyBalance
+  // / FIFO / revenue until released; approved = live; rejected = held, team revises. approvedAmount
+  // = counter-offer (released at a lower sum than billed; difference folded via manualDiscount).
+  approvalStatus       OrderApprovalStatus?
+  approvalDecidedAt    DateTime?            @db.Timestamptz(3)
+  approvalDecidedById  String?
+  approvalDecidedBy    Profile?             @relation("ChargeApprovalDecidedBy", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
+  approvalComment      String?
+  approvedAmount       Decimal?             @db.Decimal(10, 2)
+  notes                String?
+  // 05-В списання боргу (write-off): status='written_off' виключає з moneyBalance (AR-12);
+  // тут — аудит хто/коли/чому. kind='credit_note' + негативний totalAmount = кредит-нота.
+  writeOffReason       String?
+  writtenOffAt         DateTime?            @db.Timestamptz(3)
+  writtenOffById       String?
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  agency               Agency               @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
-  @@unique([companyServiceId, month])
+  allocations PaymentAllocation[]
+
+  @@unique([projectId, periodStart, kind]) // ідемпотентність per-цикл; kind розрізняє абон+overage в одному періоді (P-2d)
+  @@index([agencyId])
   @@index([companyId, month])
+  @@index([projectId])
   @@map("service_charges")
 }
 
+// 05-Б дунінг: журнал надісланих нагадувань — ідемпотентність cron (один лист на крок
+// на нарахування). escalatedAt = на цьому кроці пішла ескалація власнику.
+model DunningLog {
+  id          String        @id @default(uuid())
+  agencyId    String
+  chargeId    String
+  charge      ServiceCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  stepOffset  Int
+  escalatedAt DateTime?     @db.Timestamptz(3)
+  sentAt      DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([chargeId, stepOffset])
+  @@index([agencyId])
+  @@map("dunning_logs")
+}
+
 model Payment {
-  id                String      @id @default(uuid())
+  id                String        @id @default(uuid())
+  agencyId          String
   companyId         String
-  company           Company     @relation(fields: [companyId], references: [id])
+  company           Company       @relation(fields: [companyId], references: [id])
   orderId           String?
-  order             Order?      @relation(fields: [orderId], references: [id])
-  amount            Decimal     @db.Decimal(10, 2)
-  currency          String      @default("USD")
-  type              PaymentType @default(final)
-  provider          String      @default("manual")
+  order             Order?        @relation(fields: [orderId], references: [id])
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("USD")
+  amountUsd         Decimal?      @db.Decimal(10, 2) // FX snapshot at confirm-time (USD base); immutable. Loyalty lifetime + P&L revenue read this.
+  rateUsed          Decimal?      @db.Decimal(10, 4) // native→USD rate used for the snapshot (1 for USD-native)
+  type              PaymentType   @default(final)
+  status            PaymentStatus @default(confirmed)
+  provider          String        @default("manual")
   providerPaymentId String?
+  sourceType        String? // optional link to what this payment settles (e.g. 'charge')
+  sourceId          String?
   paymentLink       String?
   paymentMethod     String?
   paymentReference  String?
   note              String?
   confirmedBy       String
-  confirmedAt       DateTime    @default(now())
+  confirmer         Profile       @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
+  confirmedAt       DateTime      @default(now()) @db.Timestamptz(3)
+  agency            Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  // S13-06: юр-особа/канал, що ОТРИМАВ платіж (податок-на-дохід = amountUsd × її ставка).
+  // Каскад при confirm: явний вибір → проєкт замовлення → дефолтна юр-особа. NULL (легасі) = без податку.
+  legalEntityId     String?
+  legalEntity       LegalEntity?  @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
+  allocations PaymentAllocation[]
+  refunds     PaymentRefund[] // 05-В: повернення (повне/часткове)
+
+  // Webhook idempotency. Standard PG unique indexes treat each NULL as distinct, so
+  // multiple manual rows (providerPaymentId=NULL) are INTENTIONALLY allowed. Do NOT
+  // add NULLS NOT DISTINCT — it would reject existing manual payments.
+  @@unique([provider, providerPaymentId])
+  // Source-anchored idempotency for non-manual flows; manual rows leave source NULL
+  // (NULLs distinct → still allowed). Manual dedup is via the IdempotencyKey table.
+  @@unique([agencyId, sourceType, sourceId])
+  @@index([agencyId])
   @@index([companyId])
   @@index([orderId])
+  @@index([confirmedBy])
   @@index([confirmedAt])
+  @@index([status])
+  @@index([legalEntityId])
   @@map("payments")
 }
 
+// 05-В ПОВЕРНЕННЯ (рішення власника 07.07): повне або часткове повернення підтвердженого
+// платежу. amountUsd — USD-знімок для moneyBalance (paid − Σ refunds для confirmed-платежів).
+// Повне повернення (Σ refunds == payment.amountUsd) → Payment.status='refunded'.
+model PaymentRefund {
+  id           String   @id @default(uuid())
+  agencyId     String
+  paymentId    String
+  payment      Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount       Decimal  @db.Decimal(10, 2) // повернена сума (валюта платежу)
+  amountUsd    Decimal? @db.Decimal(10, 2) // USD-знімок для балансу (курс платежу)
+  reason       String?
+  method       String? // як повернено (банк/готівка/…)
+  refundedById String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([paymentId])
+  @@map("payment_refunds")
+}
+
 model PaymentSettings {
-  id              String   @id @default(cuid())
-  bankName        String?
-  iban            String?
-  accountName     String?
-  cryptoUsdt      String?
-  notes           String?
-  invoiceCurrency String   @default("UAH")
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  agencyId         String   @unique
+  agency           Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  bankName         String?
+  iban             String?
+  accountName      String?
+  cryptoUsdt       String?
+  notes            String?
+  invoiceCurrency  String   @default("UAH")
+  // 05-Г / В10 (P-4): agency-wide default net payment terms (days) — cascade tier 3
+  // (Project → Company → THIS). null → charge keeps its billing-model default dueDate.
+  paymentTermsDays Int?
+  // 05-Е (P-8): currency the bonus wallet is denominated in. The ledger operates in USD
+  // today (Company.bonusBalance); this is the declared setting — multi-currency wallet
+  // enforcement is future.
+  bonusCurrency    String   @default("USD")
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("payment_settings")
 }
 
 model ExecutorRate {
-  id                String   @id @default(uuid())
-  executorId        String   @unique
-  executor          Profile  @relation(fields: [executorId], references: [id], onDelete: Cascade)
-  monthlySalary     Decimal? @db.Decimal(10, 2)
-  commissionPercent Decimal  @default(0) @db.Decimal(5, 2)
-  updatedAt         DateTime @updatedAt
+  id                String    @id @default(uuid())
+  agencyId          String
+  executorId        String
+  executor          Profile   @relation(fields: [executorId], references: [id], onDelete: Cascade)
+  monthlySalary     Decimal?  @db.Decimal(10, 2)
+  hourlyRate        Decimal?  @db.Decimal(10, 2) // 12-КОМПЕНСАЦІЇ (P-5): собівартість години (каскад §2.3) + СТАВКА ОПЛАТИ погодинника (payout hourlyEarned, 07.07 S5-D6)
+  zeroCostDefault   Boolean   @default(false) // 22 (P-5): глобальна «нульова собівартість» (owner/партнери); каскад tier 3
+  currency          String    @default("USD") // currency of monthlySalary/hourlyRate — needed for P&L (module 22)
+  commissionPercent Decimal   @default(0) @db.Decimal(5, 2)
+  effectiveFrom     DateTime  @default(now()) @db.Timestamptz(3) // rate validity window for historical P&L
+  effectiveUntil    DateTime? @db.Timestamptz(3)
+  // (audit-M6: колишнє ExecutorRate.hireDate видалено — accrual читає AgencyMember.hireDate)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@unique([executorId, effectiveFrom]) // one rate row per (executor, validity-start); enables historical-rate windows (modules 19/22)
+  @@index([agencyId])
   @@map("executor_rates")
 }
 
 model Referral {
   id          String   @id @default(uuid())
+  // AR-21 (audit 2026-06-11): referrals are intra-agency only (S5-06 enforces it at
+  // accrual) — the row carries the tenant explicitly so column-scoped RLS applies
+  // instead of the weaker referrer-side-only join policy.
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   referrerId  String
   referrer    Company  @relation("ReferrerCompany", fields: [referrerId], references: [id])
   referredId  String
   referred    Company  @relation("ReferredCompany", fields: [referredId], references: [id])
   totalEarned Decimal  @default(0) @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   bonuses ReferralBonus[]
 
   @@unique([referrerId, referredId])
+  @@index([agencyId])
   @@index([referrerId])
+  @@index([referredId])
   @@map("referrals")
 }
 
@@ -385,36 +1235,127 @@ model ReferralBonus {
   percent    Decimal  @db.Decimal(5, 2)
   sourceType String
   sourceId   String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
+  @@unique([sourceType, sourceId]) // idempotency: a given source (payment/charge) accrues a referral bonus at most once (SPEC §5)
   @@index([referralId])
   @@map("referral_bonuses")
 }
 
 model NotificationSettings {
-  id                     String  @id @default(uuid())
-  profileId              String  @unique
-  profile                Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  emailOnStatusChange    Boolean @default(true)
-  emailOnNewComment      Boolean @default(true)
-  emailOnPayment         Boolean @default(true)
-  telegramOnStatusChange Boolean @default(true)
-  telegramOnNewComment   Boolean @default(false)
-  telegramOnPayment      Boolean @default(true)
+  id               String    @id @default(uuid())
+  profileId        String    @unique
+  profile          Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language         Language  @default(uk)
+  telegramChatId   String?   @unique
+  telegramLinkedAt DateTime? @db.Timestamptz(3)
+  // S12-06: тихі години (Kyiv, 0–23; null = вимкнено) — некритичні email/telegram/push
+  // у вікні пропускаються (in_app лишається; вікно може переходити північ 22→8)
+  quietFrom        Int?
+  quietTo          Int?
+  // S12-06: ранковий email-дайджест непрочитаних in-app сповіщень (cron 08:00 Kyiv)
+  digestDaily      Boolean   @default(false)
+  lastDigestAt     DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  preferences NotificationPreference[]
+  logs        NotificationLog[]
 
   @@map("notification_settings")
 }
 
+/// Matrix: settingsId × category × channel → enabled.
+/// CRITICAL_EVENTS (auth/billing email) bypass this table via resolver logic.
+model NotificationPreference {
+  id         String               @id @default(uuid())
+  settingsId String
+  settings   NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  category   String // matches NotificationCategory in @workflo/types
+  channel    String // matches NotificationChannel in @workflo/types
+  enabled    Boolean              @default(true)
+  updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([settingsId, category, channel])
+  @@index([settingsId])
+  @@map("notification_preferences")
+}
+
+/// Delivery log — every dispatch attempt (success/fail/skipped/rolled_up).
+/// Used by rollup detection (≥3 events / 10s) and adapter retry tracking.
+model NotificationLog {
+  id             String               @id @default(uuid())
+  settingsId     String
+  settings       NotificationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  event          String // matches NotificationEvent string literal
+  channel        String // NotificationChannel
+  status         String // 'sent' | 'failed' | 'skipped' | 'rolled_up'
+  errorCode      String? // adapter-specific: 'blocked', 'invalid_chat', 'rate_limited', ...
+  rollupTargetId String? // when status='rolled_up', points to the consolidated message log row
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([settingsId, createdAt])
+  @@index([settingsId, event, createdAt]) // rollup detection window query
+  @@map("notification_logs")
+}
+
+/// Audit log for can() denials, ownership transfers, credential reveals, etc.
+/// Retention: 365 days (see docs/RETENTION.md).
+model AuditLog {
+  id           String   @id @default(uuid())
+  agencyId     String?
+  actorId      String?
+  actor        Profile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action       String // e.g. 'order.create', 'company.transfer_ownership'
+  resourceType String? // 'company' | 'order' | 'credentials' | ...
+  resourceId   String?
+  result       String // 'allowed' | 'denied' | 'error'
+  metadata     Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  agency       Agency?  @relation(fields: [agencyId], references: [id])
+
+  @@index([agencyId])
+  @@index([actorId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+/// Transactional outbox event (ADR topic #2-3). Worker claims due rows
+/// (FOR UPDATE SKIP LOCKED), runs the handler, and marks done/failed; on
+/// failure it backs off (nextAttemptAt) until maxAttempts, then → dead (DLQ).
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  agencyId      String?
+  type          String // domain event type, e.g. 'order.created', 'notification.dispatch'
+  payload       Json
+  status        OutboxStatus @default(pending)
+  attempts      Int          @default(0)
+  maxAttempts   Int          @default(8)
+  nextAttemptAt DateTime     @default(now()) @db.Timestamptz(3)
+  lastError     String?
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime?    @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@index([agencyId])
+  @@map("outbox_events")
+}
+
 model Notification {
-  id        String   @id @default(uuid())
-  profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  type      String
-  title     String
-  body      String
-  isRead    Boolean  @default(false)
-  metadata  Json?
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid())
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type         String
+  title        String
+  body         String
+  isRead       Boolean   @default(false)
+  metadata     Json?
+  // 18-Б snooze: «повернути непрочитаною о T». GET ліниво скидає прострочені
+  // (isRead=false, snoozedUntil=null) — без крона.
+  snoozedUntil DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([profileId, isRead])
   @@index([profileId, createdAt])
@@ -423,47 +1364,113 @@ model Notification {
 
 model ActivityLog {
   id        String   @id @default(uuid())
+  agencyId  String
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   actorId   String
   actor     Profile  @relation(fields: [actorId], references: [id])
   action    String
   metadata  Json?
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
 
+  @@index([agencyId])
   @@index([orderId, createdAt])
   @@map("activity_logs")
 }
 
 model Document {
-  id          String         @id @default(uuid())
-  type        DocumentType
-  number      String
-  orderId     String?
-  order       Order?         @relation(fields: [orderId], references: [id])
-  companyId   String
-  company     Company        @relation(fields: [companyId], references: [id])
-  status      DocumentStatus @default(draft)
-  storedAs    String?
-  sentAt      DateTime?
-  generatedAt DateTime       @default(now())
-  createdById String
-  createdBy   Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
-  executorId  String?
-  executor    Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+  id               String         @id @default(uuid())
+  agencyId         String
+  type             DocumentType
+  number           String
+  orderId          String?
+  order            Order?         @relation(fields: [orderId], references: [id])
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id])
+  status           DocumentStatus @default(draft)
+  storedAs         String?
+  sentAt           DateTime?      @db.Timestamptz(3)
+  // 06-ПІДПИС: прийняття клієнтом (typed signature) — ПІБ/час/IP/акаунт.
+  // acceptedById — plain Profile id (project convention, без FK).
+  acceptedAt       DateTime?      @db.Timestamptz(3)
+  acceptedById     String?
+  acceptedByName   String?
+  acceptedIp       String?
+  // 06-ДОГОВІР-2: договір, підписаний поза системою (власний номер + дата +
+  // файл у storedAs або посилання). Одразу accepted.
+  signedExternally Boolean        @default(false)
+  contractDate     DateTime?      @db.Timestamptz(3)
+  externalUrl      String?
+  // 06-Д: непередбачуваний токен публічної сторінки рахунку (null = лінка нема)
+  publicToken      String?        @unique
+  generatedAt      DateTime       @default(now()) @db.Timestamptz(3)
+  createdById      String
+  createdBy        Profile        @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  executorId       String?
+  executor         Profile?       @relation("DocumentExecutor", fields: [executorId], references: [id])
+  agency           Agency         @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  legalEntityId    String? // 20-Д: від якої юр-особи агенції виставлено (резолв каскадом у S6)
+  legalEntity      LegalEntity?   @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
 
+  @@unique([companyId, type, number])
+  @@index([agencyId])
   @@index([companyId])
   @@index([orderId])
   @@index([type])
+  @@index([createdById])
+  @@index([executorId])
+  @@index([legalEntityId])
   @@map("documents")
 }
 
 model DocumentCounter {
-  type  DocumentType @id
-  count Int          @default(0)
-  year  Int
+  agencyId String
+  agency   Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  type     DocumentType
+  year     Int
+  count    Int          @default(0)
 
+  @@id([agencyId, type, year])
   @@map("document_counters")
+}
+
+// 06-А (рішення власника 06.07): per-agency шаблони документів. body JSONB:
+// contract → {sections:[{title,body}]} з {{змінними}}; інші типи → {note?, purpose?}.
+// Один шаблон на тип (v1); нема рядка = системний шаблон (2-рівнева резолюція).
+model DocumentTemplate {
+  id          String       @id @default(uuid())
+  agencyId    String
+  agency      Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  type        DocumentType
+  body        Json
+  updatedById String? // plain Profile id (project convention)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, type])
+  @@index([agencyId])
+  @@map("document_templates")
+}
+
+// 08-EMAIL (рішення власника 06.07): owner-override листів — ТЕМА + ВСТУПНИЙ ТЕКСТ
+// поверх системного макета, окремо uk/en, лише бізнес-листи (auth — системні).
+// event — NotificationEvent-ключ або псевдо-ключ ('reports.client_monthly').
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  event       String
+  locale      String // 'uk' | 'en'
+  subject     String?
+  intro       String?
+  updatedById String? // plain Profile id (project convention)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, event, locale])
+  @@index([agencyId])
+  @@map("email_templates")
 }
 
 model BlogPost {
@@ -481,34 +1488,219 @@ model BlogPost {
   author      Profile      @relation(fields: [authorId], references: [id])
   published   Boolean      @default(false)
   featured    Boolean      @default(false)
-  publishedAt DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  publishedAt DateTime?    @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
-  @@index([slug])
   @@index([type, published])
   @@index([publishedAt])
+  @@index([authorId])
   @@map("blog_posts")
 }
 
+// ANNOUNCEMENTS (07-В, Фаза B, 11.07): оголошення агенції — sticky-банер у workspace/porталі
+// за аудиторією (team/clients/all) + read-receipt (✕ банера) + % прочитань в owner-адмінці.
+model Announcement {
+  id         String               @id @default(uuid())
+  agencyId   String
+  agency     Agency               @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  title      String
+  body       String
+  audience   AnnouncementAudience @default(all)
+  published  Boolean              @default(false)
+  archivedAt DateTime?            @db.Timestamptz(3)
+  createdAt  DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
+  reads      AnnouncementRead[]
+
+  @@index([agencyId, published])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  agencyId       String
+  agency         Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  profileId      String
+  profile        Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([announcementId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@map("announcement_reads")
+}
+
+// S12-07: сегмент email-розсилки — всі клієнти / боржники (moneyBalance<0) / loyalty-тір
+enum BroadcastSegment {
+  all
+  debtors
+  tier
+}
+
+enum BroadcastStatus {
+  draft
+  sending
+  sent
+}
+
+/// S12-07 BULK-РОЗСИЛКИ: owner-лист сегменту клієнтів. Одержувачі — власники
+/// компаній сегмента (дедуп по профілю); доставка через outbox (broadcast.send)
+/// → notify-матриця (event system.broadcast; вимкнений system-email поважається).
+model Broadcast {
+  id             String           @id @default(uuid())
+  agencyId       String
+  agency         Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  subject        String
+  body           String // плоский текст; \n\n → абзаци в email-шаблоні
+  segment        BroadcastSegment @default(all)
+  tier           LoyaltyTier? // обовʼязковий при segment=tier
+  status         BroadcastStatus  @default(draft)
+  recipientCount Int              @default(0)
+  sentCount      Int              @default(0)
+  createdById    String
+  createdBy      Profile          @relation("BroadcastCreatedBy", fields: [createdById], references: [id])
+  sentAt         DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, status])
+  @@index([createdById]) // audit-M7: FK на profiles (RESTRICT) без індексу → seq-scan
+  @@map("broadcasts")
+}
+
+// S13-04: тип відсутності (дизайн calendar-plus WsLeaves: відпустка/лікарняний/відгул + без збереження)
+enum LeaveType {
+  vacation
+  sick
+  dayoff
+  unpaid
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+/// S13-04/05 LEAVE: заявка на відсутність. Self-service будь-якого internal-члена →
+/// owner/manager approve/reject. days = РОБОЧІ дні (пн–пт), рахуються на створенні;
+/// свята per-agency — 23-Б follow-up. Баланс відпустки обчислюваний (без таблиці):
+/// accrued = Agency.vacationDaysPerYear × місяці стажу в поточному році / 12,
+/// used = Σ days approved vacation цього року; guard на approve.
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  agencyId     String
+  agency       Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile     @relation("LeaveProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  type         LeaveType   @default(vacation)
+  startDate    DateTime    @db.Date // день, не мить — відпустка по днях
+  endDate      DateTime    @db.Date
+  days         Int // робочі дні періоду (сніпшот на створенні)
+  status       LeaveStatus @default(pending)
+  reason       String?
+  rejectReason String?
+  reviewedById String?
+  reviewedBy   Profile?    @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?   @db.Timestamptz(3)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, status])
+  @@index([profileId, startDate])
+  @@index([reviewedById]) // audit-M7: FK на profiles (SET NULL) без індексу → seq-scan
+  @@map("leave_requests")
+}
+
+// PERM-1 ПРАВА ДОСТУПУ (рішення власника 27.09.2026): каталог прав і дефолти ролей живуть у
+// коді (@workflo/types PERMISSIONS / ROLE_PERMISSION_DEFAULTS). У БД — лише ВІДХИЛЕННЯ від
+// дефолтів: для ролі агенції (редагована матриця) і для конкретної людини (персональний
+// грант/відкликання). owner — завжди все (не редагується). `permission` — рядковий ключ
+// каталогу (валідує застосунок): нове право не потребує міграції.
+// Резолюція: персональне → рольове → дефолт ролі → none. lead = executor, що є Team.leadId.
+model AgencyRolePermission {
+  id          String          @id @default(uuid())
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  role        PermissionRole
+  permission  String
+  level       PermissionLevel
+  updatedById String? // plain Profile id (конвенція проєкту) — хто змінив
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, role, permission])
+  @@map("agency_role_permissions")
+}
+
+model AgencyMemberPermission {
+  id          String          @id @default(uuid())
+  agencyId    String
+  agency      Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile         @relation("MemberPermissionProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  permission  String
+  level       PermissionLevel
+  updatedById String?
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, profileId, permission])
+  @@index([profileId])
+  @@map("agency_member_permissions")
+}
+
+// TESTIMONIALS (Фаза B, 11.07): відгуки клієнтів для лендінга. Platform-рівень (без
+// agencyId, як BlogPost) — редагує owner через /content, лендінг читає published.
+model Testimonial {
+  id         String   @id @default(uuid())
+  authorName String
+  authorRole String?
+  company    String?
+  text       String
+  rating     Int      @default(5)
+  featured   Boolean  @default(false)
+  published  Boolean  @default(false)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([published, featured])
+  @@map("testimonials")
+}
+
 model ContactForm {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  message   String
-  source    String?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  name        String
+  email       String
+  message     String
+  source      String?
+  isRead      Boolean  @default(false)
+  // 26-UTM: attribution of the visit that produced this submission + link to the
+  // auto-created CRM lead (nullable — intake is best-effort, the message survives anyway)
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+  page        String?
+  referrer    String?
+  leadId      String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([isRead, createdAt])
   @@map("contact_forms")
 }
 
 model ExchangeRate {
-  id        String   @id @default("singleton")
-  usdToUah  Decimal  @db.Decimal(8, 4)
-  eurToUah  Decimal? @db.Decimal(8, 4)
-  updatedAt DateTime @updatedAt
+  id        String   @id @default(uuid())
+  agencyId  String   @unique
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  usdToUah  Decimal  @db.Decimal(10, 4)
+  eurToUah  Decimal? @db.Decimal(10, 4)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
   updatedBy String?
 
   @@map("exchange_rates")
@@ -521,12 +1713,11 @@ model OtpToken {
   code      String
   purpose   OtpPurpose
   channel   OtpChannel
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime   @default(now())
+  expiresAt DateTime   @db.Timestamptz(3)
+  usedAt    DateTime?  @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
 
-  @@index([profileId, purpose])
-  @@index([code, purpose])
+  @@unique([profileId, purpose])
   @@map("otp_tokens")
 }
 
@@ -539,10 +1730,262 @@ model BillingPlan {
   maxMembers Int?
   features   Json
   isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  agencies Agency[]
 
   @@map("billing_plans")
+}
+
+/// Agency SaaS subscription lifecycle (per-agency plan on workflo). Phase 0:
+/// the platform agency sits in `active`; new external agencies start `trialing`.
+enum AgencySubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  suspended
+}
+
+model Agency {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  ownerId   String?
+  owner     Profile? @relation("AgencyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // ── SaaS (ADR-004 Phase 1 / SAAS.md F1) — nullable forward-compat, unused
+  //    until SaaS enablement; laid now so the live tenant table needs no later
+  //    migration. `plan` references the existing BillingPlan catalog (not an enum).
+  subdomain          String?                  @unique
+  customDomain       String?                  @unique
+  planId             String?
+  plan               BillingPlan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscriptionStatus AgencySubscriptionStatus @default(active)
+  trialEndsAt        DateTime?                @db.Timestamptz(3)
+  billingCustomerId  String?
+  suspendedAt        DateTime?                @db.Timestamptz(3)
+  limits             Json?
+
+  // P-11 (PROJECTS_SPEC §8): agency-tier floor of the cost-approval cascade (non-null so
+  // the cascade always terminates). Company/Project may override; null at those tiers inherits.
+  defaultApprovalMode    ApprovalMode    @default(none)
+  defaultInvoiceApprover InvoiceApprover @default(client)
+
+  // 2FA-POLICY (рішення власника 05.07): when set, every INTERNAL member (owner/manager/
+  // executor) must have TOTP 2FA. Grace = 7 days from this timestamp; past it, sessions
+  // carry tfaDue and the API gate only lets /auth/* through until setup completes.
+  // Portal clients are never affected. null = policy off.
+  requireTwoFactorAt DateTime? @db.Timestamptz(3)
+
+  // S11 scheduled email-звіти: owner-тумблер «місячний звіт на email». Cron шле
+  // власникам дайджест за попередній місяць; lastSentAt гейтить одну відправку на місяць.
+  monthlyReportEnabled          Boolean   @default(false)
+  monthlyReportLastSentAt       DateTime? @db.Timestamptz(3)
+  // 19-Г: місячний звіт КЛІЄНТАМ (PDF-документ + email) — окремий тумблер
+  clientMonthlyReportEnabled    Boolean   @default(false)
+  clientMonthlyReportLastSentAt DateTime? @db.Timestamptz(3)
+  // 06-ПІДПИС: «без прийнятого договору робота не стартує» (рамковий договір компанії)
+  requireSignedContract         Boolean   @default(false)
+  // 06-А PDF-брендинг: лого (storage-key) + акцентний hex-колір на всіх PDF
+  pdfLogoKey                    String?
+  pdfAccentColor                String?
+  // 05-Б дунінг: офсети кроків нагадувань від dueDate у днях (відʼємні = до терміну).
+  // null → дефолтний ланцюжок [-3,0,3,7,14] (рішення власника 07.07); [] → дунінг вимкнено.
+  dunningSteps                  Json?
+  // АВТО-РАХУНОК (рішення власника 07.07): разове замовлення (без проекту) перейшло в
+  // done → draft-invoice + in-app власнику. Увімкнено за замовчуванням.
+  autoInvoiceOneTime            Boolean   @default(true)
+  // S13-05: річна квота відпустки (робочих днів/рік) — база accrual балансу
+  vacationDaysPerYear           Int       @default(24)
+
+  members           AgencyMember[]
+  nomenclature      Nomenclature[]
+  documentTemplates DocumentTemplate[]
+  emailTemplates    EmailTemplate[]
+  companies         Company[]
+  orders            Order[]
+  payments          Payment[]
+  documents         Document[]
+  serviceCharges    ServiceCharge[]
+  orderComments     OrderComment[]
+  orderFiles        OrderFile[]
+  timeLogs          TimeLog[]
+  services          Service[]
+  executorRates     ExecutorRate[]
+  auditLogs         AuditLog[]
+  internalTasks     InternalTask[]
+  activityLogs      ActivityLog[]
+  invites           Invite[]
+  documentCounters  DocumentCounter[]
+  paymentSettings   PaymentSettings?
+  exchangeRate      ExchangeRate?
+  usageCounters     UsageCounter[]
+  featureFlags      AgencyFeatureFlag[]
+  tickets           Ticket[]
+  calendarEvents    CalendarEvent[]
+
+  // Sprint 5 — financial core
+  walletTransactions   WalletTransaction[]
+  paymentAllocations   PaymentAllocation[]
+  referralSettings     ReferralSettings?
+  loyaltyHistory       LoyaltyTierHistory[]
+  executorPayouts      ExecutorPayout[]
+  expenses             Expense[]
+  referrals            Referral[] // AR-21 (S5.5)
+  legalEntities        LegalEntity[] // 20-Д (S5.6 P-1б)
+  projects             Project[] // 05-ПРОЕКТИ (S5.6 P-1)
+  estimateLines        EstimateLine[] // 02-Б (S5.6 P-6)
+  projectExecutorRates ProjectExecutorRate[] // 12-А (S5.6 P-1)
+  leads                Lead[] // 26 (CRM)
+  leadStages           LeadStage[] // ХВІСТ-4: кастомні стадії воронки
+  teams                Team[] // TEAM-BOARDS (Фаза B, 10.07)
+  teamColumns          TeamColumn[] // TASK-COLUMNS (10.07)
+  announcements        Announcement[] // 07-В (11.07)
+  announcementReads    AnnouncementRead[]
+  leaveRequests        LeaveRequest[] // S13-04 (11.07)
+  rolePermissions      AgencyRolePermission[] // PERM-1 (27.09): відхилення матриці ролей
+  memberPermissions    AgencyMemberPermission[] // PERM-1: персональні гранти/відкликання
+  orderDependencies    OrderDependency[] // S10-03 (11.07)
+  broadcasts           Broadcast[] // S12-07 (11.07)
+  leadActivities       LeadActivity[] // 26-ТАЙМЛАЙН
+  credentials          CredentialVault[] // 17-CREDENTIALS
+  credentialShares     CredentialShare[] // 17-SHARE
+  conversationStates   ConversationState[] // 18-Б
+  orderTags            OrderTag[] // S10-01
+  orderTagAssignments  OrderTagAssignment[] // S10-01
+  orderTemplates       OrderTemplate[] // S10-01
+  slaPolicies          SlaPolicy[] // S10-02
+
+  @@index([planId])
+  @@map("agencies")
+}
+
+model AgencyMember {
+  id                  String           @id @default(uuid())
+  agencyId            String
+  agency              Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  profileId           String
+  profile             Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role                AgencyMemberRole @default(executor)
+  // 12-ПЛАН-ФАКТ (capacity norm): planned billable hours per week for this member.
+  // null → the agency default (DEFAULT_WEEKLY_CAPACITY) is used in the hours report.
+  weeklyCapacityHours Int?
+  // TEAM-BOARDS: команда члена (null = поза командами; SetNull при видаленні команди)
+  teamId              String?
+  team                Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  // S13-05: дата найму — база accrual відпустки (null → фолбек createdAt)
+  hireDate            DateTime?        @db.Date
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([agencyId, profileId])
+  @@index([agencyId])
+  @@index([profileId])
+  @@index([teamId])
+  @@map("agency_members")
+}
+
+// TEAM-BOARDS (Фаза B, 10.07): команди агенції — таби глобальної дошки задач
+// (workspace-board.jsx: dev/design/marketing + агрегатна «Усі»). Кастомні колонки
+// per-team — follow-up (патерн LeadStage); поки колонки = 3 фіксовані статуси.
+model Team {
+  id        String         @id @default(uuid())
+  agencyId  String
+  agency    Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name      String
+  color     String? // hex-акцент таба (крапка wfb-board-dot)
+  position  Int            @default(0)
+  // TEAM-ADMIN-1: тімлід підрозділу — головний у команді (мусить бути її членом;
+  // права: бачить підрозділ, налаштовує його дошку). SetNull — лід пішов, команда живе.
+  leadId    String?
+  lead      Profile?       @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+  members   AgencyMember[]
+  tasks     InternalTask[]
+  columns   TeamColumn[]
+  projects  Project[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@index([leadId])
+  @@map("teams")
+}
+
+// TASK-COLUMNS (рішення власника 10.07): кастомні колонки командної дошки з МАПІНГОМ на
+// канонічний статус (kind = InternalTaskStatus) — рівно патерн LeadStage.kind. Колонок
+// скільки завгодно; drag у колонку дзеркалить status=kind → головна дошка («Усі», 3 канонічні
+// колонки-якорі) і клієнтський рівень (статус ЗАМОВЛЕННЯ) завжди консистентні.
+model TeamColumn {
+  id        String             @id @default(uuid())
+  agencyId  String
+  agency    Agency             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String
+  kind      InternalTaskStatus @default(todo)
+  position  Int                @default(0)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @db.Timestamptz(3)
+  tasks     InternalTask[]
+
+  @@unique([teamId, name])
+  @@index([agencyId])
+  @@index([teamId])
+  @@map("team_columns")
+}
+
+enum AgencyMemberRole {
+  owner
+  manager // 20-А (MOD-4): orders/chats/clients — так; finance/settings — ні
+  executor
+}
+
+/// Per-agency usage metering substrate for SaaS quotas/billing (SAAS.md F2/E4).
+/// Recorded now (even while `assertWithinQuota` is a no-op) so historical usage
+/// accrues before monetization. `period` = 'YYYY-MM' (resets monthly) or 'total'.
+/// `resource` matches QuotaResource in apps/api/src/saas/limits.ts.
+model UsageCounter {
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  resource  String
+  period    String
+  value     BigInt   @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@id([agencyId, resource, period])
+  @@index([agencyId])
+  @@map("usage_counters")
+}
+
+/// Per-agency feature toggle (SAAS.md E7). Read by `featureEnabled()` once SaaS
+/// enablement lands; absent flag = fall back to plan default.
+model AgencyFeatureFlag {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  flag      String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([agencyId, flag])
+  @@index([agencyId])
+  @@map("agency_feature_flags")
+}
+
+/// Transactional outbox (ADR topic #2-3): durable domain-event queue for
+/// reliable notify / webhook / search-index delivery with retry + DLQ.
+/// Producers INSERT in the same tx as the state change; a worker drains it.
+enum OutboxStatus {
+  pending
+  processing
+  done
+  failed
+  dead
 }
 
 enum Role {
@@ -554,6 +1997,12 @@ enum Role {
 enum Language {
   uk
   en
+}
+
+// 06-Е: комплект документів юр-особи — ua (український) чи eu (EN/VAT-layout)
+enum DocKit {
+  ua
+  eu
 }
 
 enum Theme {
@@ -589,7 +2038,7 @@ enum OrderPriority {
 enum OrderInternalStatus {
   new
   clarification
-  estimated
+  estimating
   in_progress
   review
   revision
@@ -605,9 +2054,67 @@ enum OrderClientStatus {
   cancelled
 }
 
+// 02-А (S5.6 P-7): стан погодження оцінки клієнтом. Окремий від clientStatus, бо стосується
+// САМЕ оцінки (estimating → in_progress), а не приймання готової роботи (review → pending_approval).
+enum OrderApprovalStatus {
+  pending // команда подала оцінку, чекаємо рішення клієнта
+  approved // клієнт погодив — команда може стартувати
+  rejected // клієнт відхилив (з коментарем) — повертається команді
+}
+
+// P-11 (PROJECTS_SPEC §8): режим погодження вартості — один вибір на каскаді
+// Agency→Company→Project→Order. upfront=02-А (гейт перед стартом, вже є);
+// on_actuals=Гейт-2 (погодження ФАКТичної суми перед випуском рахунку); none=без погодження.
+enum ApprovalMode {
+  none
+  upfront
+  on_actuals
+}
+
+// P-11: хто погоджує суму у режимі on_actuals — клієнт (портал, як 02-А) або
+// внутрішня команда (self-review власника/фінансиста перед відправкою рахунку).
+enum InvoiceApprover {
+  client
+  internal
+}
+
 enum BillingType {
   fixed
   hourly
+}
+
+// PERM-1: рівень доступу — none · own (лише призначене/своє) · team (свій підрозділ) · all.
+enum PermissionLevel {
+  none
+  own
+  team
+  all
+}
+
+// PERM-1: ролі з редагованою матрицею (owner — завжди все, не редагується).
+enum PermissionRole {
+  manager
+  lead
+  executor
+}
+
+// DSN-4: категорія заявки клієнта (портал /orders/new) — таксономія з design-v2.
+enum OrderCategory {
+  web
+  integration
+  bot
+  ai
+  data
+  crm
+  other
+}
+
+// DSN-4: бажаний канал звʼязку по замовленню (інфо для команди; сповіщення — матриця профілю).
+enum ContactChannel {
+  system
+  telegram
+  email
+  phone
 }
 
 enum StageStatus {
@@ -622,10 +2129,30 @@ enum InternalTaskStatus {
   done
 }
 
+// Leads/CRM pipeline (module 26). status — coarse-результат (open→new/won/lost); стадії
+// воронки тепер кастомні (LeadStage, ХВІСТ-4).
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  proposal
+  won
+  lost
+}
+
+// ХВІСТ-4: семантика кастомної стадії воронки.
+enum LeadStageKind {
+  open
+  won
+  lost
+}
+
 enum ChargeStatus {
   pending
+  partial
   paid
   overdue
+  written_off
 }
 
 enum InviteType {
@@ -638,18 +2165,29 @@ enum BlogPostType {
   case_study
 }
 
+enum AnnouncementAudience {
+  team
+  clients
+  all
+}
+
 enum DocumentType {
   contract
   advance_invoice
   invoice
   completion_act
   specification
+  reconciliation_act
+  // 19-Г: місячний звіт клієнту (company-scoped, orderId null)
+  monthly_report
 }
 
 enum DocumentStatus {
   draft
   generated
   sent
+  // 06-ПІДПИС: клієнт прийняв (договір/акт) — клік + ПІБ у порталі
+  accepted
 }
 
 enum PaymentType {
@@ -658,15 +2196,501 @@ enum PaymentType {
   partial
 }
 
+enum PaymentStatus {
+  pending
+  confirmed
+  failed
+  refunded
+}
+
 enum OtpPurpose {
   telegram_link
   two_fa
   phone_verify
   email_verify
+  magic_link
+  email_change
 }
 
 enum OtpChannel {
   email
   telegram
   sms
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint 5 — Financial core (migration s5_00_financial_core). See docs/S5_PLAN.md.
+// All tenant tables carry `agencyId` + get RLS `tenant_isolation` in the migration.
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Bonus-account ledger (module 25). Append-only; `balanceAfter` is the running
+/// balance snapshot computed under a FOR UPDATE lock on the company row.
+model WalletTransaction {
+  id           String          @id @default(uuid())
+  agencyId     String
+  agency       Agency          @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  companyId    String
+  company      Company         @relation(fields: [companyId], references: [id])
+  type         WalletTxnType
+  source       WalletTxnSource
+  amount       Decimal         @db.Decimal(12, 2)
+  balanceAfter Decimal         @db.Decimal(12, 2)
+  currency     String          @default("USD")
+  sourceId     String?
+  note         String?
+  createdById  String?
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
+  @@index([agencyId])
+  @@map("wallet_transactions")
+}
+
+/// Money-account: links a confirmed payment to the charge(s) it settles (module 25).
+model PaymentAllocation {
+  id        String        @id @default(uuid())
+  agencyId  String
+  agency    Agency        @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  paymentId String
+  payment   Payment       @relation(fields: [paymentId], references: [id])
+  chargeId  String
+  charge    ServiceCharge @relation(fields: [chargeId], references: [id])
+  amount    Decimal       @db.Decimal(12, 2)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([paymentId, chargeId])
+  @@index([chargeId])
+  @@index([agencyId])
+  @@map("payment_allocations")
+}
+
+/// Per-agency referral % tiers (module 09/25). Editable; `tiers` = JSON tier table.
+model ReferralSettings {
+  id                      String   @id @default(uuid())
+  agencyId                String   @unique
+  agency                  Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  enabled                 Boolean  @default(true)
+  tiers                   Json     @default("[]") // company-referral tiers (module 09)
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b, PROJECTS_SPEC §4.2): single flat % of a referred
+  // client's net income paid to the employee who brought them (П4: one % per client).
+  employeeReferralPercent Decimal  @default(0) @db.Decimal(5, 2)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+  updatedBy               String?
+
+  @@map("referral_settings")
+}
+
+/// Audit trail of loyalty-tier changes (module 10). Append-only.
+model LoyaltyTierHistory {
+  id        String       @id @default(uuid())
+  agencyId  String
+  agency    Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromTier  LoyaltyTier?
+  toTier    LoyaltyTier
+  reason    String?
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
+  @@index([agencyId])
+  @@map("loyalty_tier_history")
+}
+
+/// Per-executor, per-period payroll settlement (module 12). One row per
+/// (executor, period) → idempotent generation; status draft→approved→paid.
+model ExecutorPayout {
+  id                  String       @id @default(uuid())
+  agencyId            String
+  agency              Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  executorId          String
+  period              String // 'YYYY-MM'
+  baseSalary          Decimal      @default(0) @db.Decimal(10, 2)
+  billableHours       Decimal      @default(0) @db.Decimal(8, 2) // Σ TimeLog у періоді (залоговано, інфо)
+  // ПРИЙМАННЯ→PAYROLL (07.07): оплатні год = Σ прийнятих payableHours (order.acceptedAt у періоді);
+  // hourlyEarned = paidHours × ExecutorRate.hourlyRate (для погодинних; для окладних hourlyRate null).
+  paidHours           Decimal      @default(0) @db.Decimal(8, 2)
+  hourlyEarned        Decimal      @default(0) @db.Decimal(10, 2)
+  commissionAmount    Decimal      @default(0) @db.Decimal(10, 2)
+  // 12-РЕФЕРАЛ-ПРАЦІВНИКА (P-9b): % of net income from clients this executor referred
+  // (PROJECTS_SPEC §4.2) — a separate payout line, recomputed with the rest of a draft.
+  referralBonusAmount Decimal      @default(0) @db.Decimal(10, 2)
+  total               Decimal      @default(0) @db.Decimal(10, 2)
+  currency            String       @default("USD")
+  status              PayoutStatus @default(draft)
+  approvedBy          String?
+  paidAt              DateTime?    @db.Timestamptz(3)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+
+  // AR-20 (audit 2026-06-11): tenant-scoped — a multi-agency staffer needs a payout
+  // per agency for the same period (the global key collided with a row the other
+  // agency cannot even see under RLS).
+  @@unique([agencyId, executorId, period])
+  @@index([agencyId])
+  @@map("executor_payouts")
+}
+
+/// Operating expenses for P&L (module 22). `source=executor_rate` rows are derived
+/// from ExecutorRate (salary) and must NOT duplicate a manual salary line.
+model Expense {
+  id          String            @id @default(uuid())
+  agencyId    String
+  agency      Agency            @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  type        ExpenseType
+  category    ExpenseCategory
+  source      ExpenseSource     @default(manual)
+  vendor      String?
+  amount      Decimal           @db.Decimal(10, 2)
+  currency    String            @default("USD")
+  frequency   ExpenseFrequency?
+  startDate   DateTime          @db.Date
+  endDate     DateTime?         @db.Date
+  executorId  String?
+  companyId   String?
+  isActive    Boolean           @default(true)
+  createdById String
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([agencyId, category])
+  @@map("expenses")
+}
+
+/// Header-based request idempotency (module 05). One stored response per
+/// (key, endpoint); replayed on retry. Swept after `expiresAt` (24h TTL).
+/// `agencyId` is a plain column (RLS-scoped) — ephemeral, no FK relation needed.
+model IdempotencyKey {
+  key            String
+  endpoint       String
+  agencyId       String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime @db.Timestamptz(3)
+
+  @@id([key, endpoint])
+  @@index([expiresAt])
+  @@index([agencyId])
+  @@map("idempotency_keys")
+}
+
+/// Юр-особа агенції (20-Д, S5.6 P-1б). Реквізити для документів і договорів.
+/// N на агенцію, ≥1 дефолтна (provisionAgency). Project.legalEntityId — у P-1.
+model LegalEntity {
+  id       String @id @default(uuid())
+  agencyId String
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  name         String // внутрішня назва («ФОП Іваненко», «ТОВ Workflo»)
+  legalType    String // 'fop' | 'tov' | 'individual' | 'foreign' (вільний — як Project.type, П8)
+  legalName    String // повна юр-назва для документів
+  taxId        String? // ЄДРПОУ / ІПН / РНОКПП
+  vatPayer     Boolean @default(false) // платник ПДВ (звʼязок 05-Ж VAT-поля)
+  vatId        String? // ІПН платника ПДВ / EU VAT ID (EE…, DE…)
+  legalAddress String?
+  bankName     String?
+  iban         String?
+  // 06-Е: комплект документів цієї юр-особи (eu = EN/VAT-layout, інший формат,
+  // не переклад) + BIC/SWIFT для EU-переказів у платіжному блоці.
+  docKit       DocKit  @default(ua)
+  bic          String?
+  // S13-06: податок-на-дохід каналу — % від отриманих платежів цієї юр-особи
+  // (ФОП 5% / крипта-картка 0%; рішення власника 18.06 — НЕ класичний ПДВ).
+  // Лінія «податок» у P&L/маржі рахується з Payment.legalEntityId × ця ставка.
+  incomeTaxPct Decimal @default(0) @db.Decimal(5, 2)
+  signerName   String? // ПІБ, хто підписує
+  signerTitle  String? // посада («директор», «ФОП»)
+  stampUrl     String? // печатка/підпис (storage key)
+
+  isDefault  Boolean  @default(false) // дефолтна юр-особа агенції (Юр-3 каскад)
+  isComplete Boolean  @default(false) // обчислюється: legalName+taxId+iban+signerName (Юр-2 gate)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  documents Document[] // від якої юр-особи виставлено (Document.legalEntityId)
+  payments  Payment[] // S13-06: платежі, отримані цією юр-особою/каналом (податок-на-дохід)
+  projects  Project[] // 20-Д: проєкти, що виставляють від цієї юр-особи (Юр-3 каскад)
+
+  @@unique([agencyId, name])
+  @@index([agencyId])
+  @@index([agencyId, isDefault])
+  @@map("legal_entities")
+}
+
+/// Фінансовий проєкт клієнта (05-ПРОЕКТИ, S5.6 P-1). Контейнер фін-моделі між
+/// Company та Orders/Charges: договір, валюта, цикл, ставки, маржа — все per-проєкт.
+model Project {
+  id        String  @id @default(uuid())
+  agencyId  String
+  agency    Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  // TEAM-ADMIN-1: команда-виконавець проекту (клієнту НЕ віддається — портальні DTO без team)
+  teamId    String?
+  team      Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name      String // «Оренда», «Програмування», …
+  type      String? // П8: вільний текст-категорія (довідник — на SaaS-фазі)
+
+  billingModel     ProjectBillingModel
+  currency         String              @default("USD") // per-проєкт (В3), НЕ Company.currency
+  abonAmount       Decimal?            @db.Decimal(12, 2) // fixed_monthly_advance: сума абонплати за цикл
+  clientHourlyRate Decimal?            @db.Decimal(10, 2) // hourly_*: клієнтська ставка
+
+  billingCycle ProjectBillingCycle @default(monthly_day_n)
+  cycleDay     Int? // 1..28 для monthly_day_n
+  cycleWeekday Int? // 1..7 (ISO; 1=понеділок) для weekly_day_x
+  nextCycleAt  DateTime?           @db.Timestamptz(3) // якір наступного закриття; null для manual
+
+  paymentTermsDays Int? // 05-Г; null → дефолт компанії → дефолт агенції
+  legalEntityId    String? // 20-Д: юр-особа агенції; null → дефолтна юр-особа (Юр-3)
+  legalEntity      LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+
+  contractRequired   Boolean @default(false) // дефолт залежить від billingModel (PROJECTS_SPEC §5)
+  contractDocumentId String? // Document(type=contract) / завантажений підписаний
+
+  requiresApproval Boolean? // 02-А (legacy, P-11 deprecates → approvalMode); null → дефолт компанії
+  advanceGatePct   Decimal?         @db.Decimal(5, 2) // 02-В; для hourly_prepaid (і fixed — аванс 100%)
+  // P-11 (PROJECTS_SPEC §8): per-project cost-approval override (null → inherit company → agency).
+  // approvalMode supersedes the legacy requiresApproval boolean (upfront ≡ requiresApproval=true).
+  approvalMode     ApprovalMode?
+  invoiceApprover  InvoiceApprover?
+
+  includedHoursCap Decimal? @db.Decimal(8, 2) // ГІБРИД: абонплата покриває N год; понад ліміт → clientHourlyRate. Генерація overage — P-2 cycle-engine
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // 02-Б: номенклатура для рахунків/актів циклів цього проєкту (SetNull — довідник живе окремо)
+  nomenclatureId String?
+  nomenclature   Nomenclature? @relation(fields: [nomenclatureId], references: [id], onDelete: SetNull)
+
+  executorRates ProjectExecutorRate[]
+  orders        Order[]
+  charges       ServiceCharge[] // нарахування циклів (05-ПРОЕКТИ, P-1 3b)
+  estimateLines EstimateLine[] // P-6: кошторис-позиції проєкту
+
+  @@unique([companyId, name])
+  @@index([agencyId])
+  @@index([agencyId, active])
+  @@index([companyId])
+  @@index([legalEntityId])
+  @@index([nomenclatureId])
+  @@index([teamId])
+  @@map("projects")
+}
+
+/// Override ставки-СОБІВАРТОСТІ виконавця на проєкті (12-А, S5.6 P-1). Без рядка —
+/// fallback на персональну ставку працівника (ExecutorRate.hourlyRate — у P-5).
+model ProjectExecutorRate {
+  id             String   @id @default(uuid())
+  agencyId       String
+  agency         Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executorId     String
+  executor       Profile  @relation(fields: [executorId], references: [id], onDelete: Cascade)
+  costHourlyRate Decimal? @db.Decimal(10, 2) // собівартість год на ЦЬОМУ проєкті
+  currency       String   @default("USD")
+  zeroCost       Boolean  @default(false) // 22: «без собівартості / весь дохід агенції»
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([projectId, executorId])
+  @@index([agencyId])
+  @@map("project_executor_rates")
+}
+
+enum ProjectBillingModel {
+  fixed_monthly_advance // абонплата; нарахування ЗАВЖДИ авансом на початку циклу
+  hourly_prepaid // погодинка з авансом (гейт 02-В)
+  hourly_postpaid // погодинка по факту: нарахування при закритті циклу
+}
+
+enum ProjectBillingCycle {
+  monthly_day_n // кожного N-числа місяця (cycleDay)
+  weekly_day_x // щотижня у день X (cycleWeekday)
+  manual // «здав проєкт — закрив руками — сформував документи»
+}
+
+enum WalletTxnType {
+  credit
+  debit
+}
+
+enum WalletTxnSource {
+  referral_bonus
+  manual_adjustment
+  invoice_payment
+  refund
+}
+
+enum PayoutStatus {
+  draft
+  approved
+  paid
+}
+
+enum ExpenseType {
+  recurring
+  one_time
+}
+
+enum ExpenseCategory {
+  infrastructure
+  software
+  salary
+  contractor
+  rent
+  tax
+  marketing
+  other
+}
+
+enum ExpenseSource {
+  manual
+  executor_rate
+}
+
+enum ExpenseFrequency {
+  monthly
+  quarterly
+  annual
+  one_time
+}
+
+enum ChargeFrequency {
+  monthly
+  quarterly
+  annual
+}
+
+// ── 29 SUPPORT (тікети підтримки — звернення поза замовленням) ────────────────
+enum TicketStatus {
+  open
+  pending // чекаємо відповіді клієнта
+  resolved
+  closed
+}
+
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+/// Тікет підтримки: клієнт звертається ПОЗА замовленням (загальне питання/проблема/запит).
+/// Команда веде зі статусами/пріоритетами/призначенням. Клієнт бачить лише свої тікети
+/// й лише public-повідомлення (internal-нотатки — leak-guard, як OrderComment).
+model Ticket {
+  id              String         @id @default(uuid())
+  agencyId        String
+  companyId       String? // компанія-клієнт (null = звернення без компанії, рідко)
+  openedById      String // Profile, що відкрив
+  subject         String
+  category        String? // пресет MVP (питання/проблема/запит/інше); конфіговані — потім
+  priority        TicketPriority @default(normal)
+  status          TicketStatus   @default(open)
+  assignedToId    String? // executor
+  source          String         @default("portal") // portal | email | telegram
+  firstResponseAt DateTime?      @db.Timestamptz(3) // перша team-відповідь (SLA-хук на майбутнє)
+  resolvedAt      DateTime?      @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+
+  agency   Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  company  Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  messages TicketMessage[]
+
+  @@index([agencyId, status])
+  @@index([companyId])
+  @@index([assignedToId])
+  @@map("tickets")
+}
+
+/// Повідомлення треду тікета — дзеркалить OrderComment (isInternal leak-guard + edit/delete + SSE).
+model TicketMessage {
+  id              String    @id @default(uuid())
+  agencyId        String
+  ticketId        String
+  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId        String
+  author          Profile   @relation(fields: [authorId], references: [id])
+  content         String
+  isInternal      Boolean   @default(false) // team-only нотатка (клієнт не бачить)
+  // S12-05 EMAIL-INBOUND: RFC Message-ID листа, що породив це повідомлення. @unique →
+  // ідемпотентність повторного полінгу; тредінг вхідних (In-Reply-To шукає цей ID).
+  sourceMessageId String?   @unique
+  editedAt        DateTime? @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([agencyId])
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// ── 24 CALENDAR (зустрічі команда↔команда і команда↔клієнт) ───────────────────
+enum CalendarEventType {
+  internal_meeting // команда↔команда
+  client_meeting // команда↔клієнт
+}
+
+enum AttendeeResponse {
+  pending
+  accepted
+  declined
+}
+
+/// Зустріч у календарі. Дедлайни замовлень і відпустки — read-only проєкції у
+/// /calendar/view, окремих рядків тут НЕ створюємо (без дублю стану). timezone —
+/// IANA per-event (ризик R5): зберігаємо, рендеримо у TZ глядача.
+model CalendarEvent {
+  id          String            @id @default(uuid())
+  agencyId    String
+  title       String
+  description String?
+  type        CalendarEventType
+  startsAt    DateTime          @db.Timestamptz(3)
+  endsAt      DateTime          @db.Timestamptz(3)
+  timezone    String            @default("Europe/Kyiv")
+  location    String? // фіз. адреса
+  meetingUrl  String? // Zoom/Meet/Telegram-call
+  companyId   String? // для client_meeting
+  createdById String
+  cancelledAt DateTime?         @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  agency    Agency             @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  company   Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy Profile            @relation("CalendarEventCreatedBy", fields: [createdById], references: [id])
+  attendees CalendarAttendee[]
+
+  @@index([agencyId, startsAt])
+  @@index([companyId, startsAt])
+  @@index([createdById])
+  @@map("calendar_events")
+}
+
+/// Запрошений на зустріч (MVP — лише Profile; зовнішні email-гості — Фаза 2 через D2).
+model CalendarAttendee {
+  id          String           @id @default(uuid())
+  agencyId    String
+  eventId     String
+  event       CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  profileId   String
+  profile     Profile          @relation("CalendarAttendee", fields: [profileId], references: [id])
+  response    AttendeeResponse @default(pending)
+  respondedAt DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([eventId, profileId])
+  @@index([agencyId])
+  @@index([profileId, eventId])
+  @@map("calendar_attendees")
 }

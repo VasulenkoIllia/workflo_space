@@ -1,0 +1,114 @@
+/* workspace-project360.css — Project Card 360° (05) additions.
+ * Prefix wpj-. Token-driven, matches wfc-/wfl- engineer's-cut vocabulary. */
+
+/* avatar chip */
+.wpj-av { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--wf-fg); color: var(--wf-bg); font-family: 'JetBrains Mono', monospace; font-weight: 600; letter-spacing: -0.02em; flex-shrink: 0; text-transform: uppercase; }
+
+/* avatar stack (list) */
+.wpj-stack { display: inline-flex; align-items: center; }
+.wpj-stack-av { width: 26px; height: 26px; border-radius: 50%; background: var(--wf-subtle); border: 1.5px solid var(--wf-surface); color: var(--wf-fg-secondary); display: inline-flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 600; text-transform: uppercase; margin-left: -7px; }
+.wpj-stack-av:first-child { margin-left: 0; }
+.wpj-stack-more { margin-left: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-subtle); }
+
+/* agency ⇄ client view segmented toggle */
+.wpj-viewseg { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 9px; padding: 3px; gap: 3px; background: var(--wf-surface); }
+.wpj-viewseg button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 12px; color: var(--wf-fg-secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.wpj-viewseg button[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); font-weight: 500; }
+
+/* client-view banner */
+.wpj-clientbanner { display: flex; align-items: center; gap: 11px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--wf-accent); border-radius: 11px; background: var(--wf-accent-soft); font-size: 13px; color: var(--wf-fg-secondary); line-height: 1.5; }
+
+/* generic inline note */
+.wpj-note { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: 10px; background: var(--wf-subtle); border: 1px solid var(--wf-border); font-size: 12.5px; color: var(--wf-fg-secondary); line-height: 1.55; }
+
+/* retainer includes grid */
+.wpj-includes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.wpj-inc { display: flex; gap: 11px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--wf-border); border-radius: 11px; background: var(--wf-surface); }
+.wpj-inc-ck { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--wf-accent-soft); color: var(--wf-fg); }
+.wpj-inc-t { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.wpj-inc-d { font-size: 11.5px; color: var(--wf-fg-muted); margin-top: 3px; line-height: 1.45; }
+
+/* recurring tasks */
+.wpj-recur { display: flex; flex-direction: column; gap: 9px; }
+.wpj-recur-row { display: grid; grid-template-columns: 36px 1fr auto auto auto; gap: 14px; align-items: center; padding: 12px 15px; border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-surface); }
+.wpj-recur-ico { width: 36px; height: 36px; border-radius: 9px; background: var(--wf-subtle); display: flex; align-items: center; justify-content: center; color: var(--wf-fg-secondary); }
+.wpj-recur-t { font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em; }
+.wpj-recur-m { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); margin-top: 3px; }
+.wpj-recur-drop, .wpj-recur-next { display: flex; flex-direction: column; gap: 4px; }
+.wpj-recur-k { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wf-fg-subtle); }
+@media (max-width: 880px) { .wpj-recur-row { grid-template-columns: 36px 1fr; } .wpj-recur-drop, .wpj-recur-next { display: none; } }
+
+/* auto/manual toggle */
+.wpj-toggle { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--wf-border); border-radius: 999px; background: var(--wf-surface); font: inherit; font-size: 11.5px; color: var(--wf-fg-muted); padding: 5px 12px 5px 9px; cursor: pointer; }
+.wpj-toggle-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wf-border-strong); }
+.wpj-toggle--on { border-color: var(--wf-accent); color: var(--wf-fg); background: var(--wf-accent-soft); }
+.wpj-toggle--on .wpj-toggle-dot { background: var(--wf-accent); }
+
+/* kind segmented control (list) */
+.wpj-kindseg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--wf-border); border-radius: 11px; background: var(--wf-surface); margin-bottom: 16px; }
+.wpj-kindseg button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; font: inherit; font-size: 13px; color: var(--wf-fg-secondary); padding: 8px 15px; border-radius: 8px; cursor: pointer; }
+.wpj-kindseg button[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); font-weight: 500; }
+.wpj-kindseg-c { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; opacity: 0.7; }
+.wpj-kindseg button[data-on="true"] .wpj-kindseg-c { opacity: 0.85; }
+
+/* contract block in wizard */
+.wpj-contract { border: 1px solid var(--wf-border); border-radius: 12px; padding: 14px; background: var(--wf-subtle); display: flex; flex-direction: column; gap: 12px; }
+.wpj-contract-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-surface); }
+.wpj-contract-seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--wf-fg-secondary); padding: 8px 12px; border-radius: 7px; cursor: pointer; }
+.wpj-contract-seg button[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); font-weight: 500; }
+.wpj-contract-note { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; color: var(--wf-fg-muted); line-height: 1.5; padding: 2px 2px 0; }
+.wpj-contract-note[data-warn="true"] { color: var(--wf-destructive, #c0392b); }
+
+/* file dropzone (attach existing contract) */
+.wpj-drop { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1.5px dashed var(--wf-border-strong); border-radius: 11px; background: var(--wf-surface); cursor: pointer; transition: border-color .12s, background .12s; }
+.wpj-drop:hover { border-color: var(--wf-accent); }
+.wpj-drop--filled { border-style: solid; border-color: var(--wf-accent); background: var(--wf-accent-soft); }
+.wpj-drop-ic { width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--wf-subtle); color: var(--wf-fg-secondary); }
+.wpj-drop-ic[data-ok="true"] { background: var(--wf-fg); color: var(--wf-bg); }
+.wpj-drop-t { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.wpj-drop-d { font-size: 11px; color: var(--wf-fg-muted); margin-top: 3px; }
+
+/* disabled primary in wizard */
+.wfp-btn--primary:disabled, .wfp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* wizard checkbox row (includes) */
+.wpj-checkrow { display: flex; align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid var(--wf-border); border-radius: 10px; background: var(--wf-surface); cursor: pointer; font-size: 13px; transition: border-color .12s, background .12s; }
+.wpj-checkrow[data-on="true"] { border-color: var(--wf-accent); background: var(--wf-accent-soft); }
+.wpj-checkrow-box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--wf-border-strong); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--wf-fg); }
+.wpj-checkrow[data-on="true"] .wpj-checkrow-box { border-color: var(--wf-accent); background: var(--wf-accent); }
+
+/* service editor axis blocks */
+.wpj-axis { border: 1px solid var(--wf-border); border-radius: 12px; padding: 14px; margin-bottom: 14px; background: var(--wf-subtle); }
+.wpj-axis-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; margin-bottom: 10px; }
+.wpj-axis-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 400; color: var(--wf-fg-subtle); text-transform: lowercase; }
+.wpj-margin-preview { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--wf-fg-secondary); }
+
+/* service picker (wizard scope step) */
+.wpj-svcpick { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 14px; }
+.wpj-svc { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid var(--wf-border); border-radius: 11px; background: var(--wf-surface); cursor: pointer; transition: border-color .12s, background .12s; }
+.wpj-svc[data-on="true"] { border-color: var(--wf-accent); background: var(--wf-accent-soft); }
+.wpj-svc-t { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.wpj-svc-d { font-size: 11px; color: var(--wf-fg-muted); margin-top: 3px; }
+.wpj-svc-bill { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: var(--wf-fg-secondary); white-space: nowrap; }
+.wpj-svc-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-subtle); margin-bottom: 12px; }
+.wpj-svc-summary > div { display: flex; flex-direction: column; gap: 4px; }
+.wpj-svc-sk { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wf-fg-subtle); }
+.wpj-svc-sv { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* service economics chips inside project billing tab */
+.wpj-inc-econ { display: inline-flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+
+/* per-service task config (wizard scope) */
+.wpj-svc-item { display: flex; flex-direction: column; }
+.wpj-svc-cfg { margin: 6px 0 2px; padding: 12px 13px; border: 1px solid var(--wf-accent); border-top: 0; border-radius: 0 0 11px 11px; background: var(--wf-accent-soft); }
+.wpj-svc-cfg-h { display: flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--wf-fg-muted); margin-bottom: 9px; }
+.wpj-svc-cfg-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
+.wpj-svc-cfg-f label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wf-fg-subtle); margin-bottom: 4px; }
+.wpj-svc-cfg-f .wfl-select { width: 100%; font-size: 12px; padding: 7px 9px; }
+.wpj-svc-cfg-hint { margin-top: 9px; font-size: 11px; color: var(--wf-fg-muted); }
+@media (max-width: 720px) { .wpj-svc-cfg-row { grid-template-columns: 1fr; } }
+
+/* inline editable selects in project recurring rows */
+.wpj-recur-sel { font-size: 12px; padding: 5px 8px; max-width: 170px; }
+.wpj-econ-chip { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; padding: 2px 7px; border-radius: 5px; background: var(--wf-subtle); border: 1px solid var(--wf-border); color: var(--wf-fg-muted); }
+.wpj-econ-chip[data-tone="accent"] { color: var(--wf-accent); border-color: var(--wf-accent); }

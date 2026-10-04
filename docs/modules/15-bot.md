@@ -1,4 +1,9 @@
 # TELEGRAM BOT MODULE
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Bot (grammY) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/notifications`
@@ -32,7 +37,7 @@ if (process.env.BOT_MODE === 'webhook') {
   const { webhookCallback } = await import('grammy')
   // webhook mode
 } else {
-  await bot.start()  // long polling
+  await bot.start() // long polling
 }
 ```
 
@@ -46,13 +51,17 @@ await bot.api.setWebhook(`${process.env.BOT_WEBHOOK_URL}/bot/webhook`, {
 
 // Fastify endpoint для webhook
 // apps/api/src/routes/bot-webhook.ts
-fastify.post('/bot/webhook', {
-  config: { rawBody: true },
-  preHandler: verifyWebhookSecret,
-}, async (req, reply) => {
-  await webhookHandler(req.body)
-  return reply.send({ ok: true })
-})
+fastify.post(
+  '/bot/webhook',
+  {
+    config: { rawBody: true },
+    preHandler: verifyWebhookSecret,
+  },
+  async (req, reply) => {
+    await webhookHandler(req.body)
+    return reply.send({ ok: true })
+  }
+)
 ```
 
 > Webhook отримує повідомлення через API (Fastify), а не окремий порт бота — спрощує Traefik конфіг.
@@ -79,7 +88,7 @@ fastify.post('/bot/webhook', {
 
 ```typescript
 bot.command('start', async (ctx) => {
-  const startPayload = ctx.match  // OTP code після /start
+  const startPayload = ctx.match // OTP code після /start
 
   if (startPayload) {
     const otp = await db.otpToken.findFirst({
@@ -87,8 +96,8 @@ bot.command('start', async (ctx) => {
         token: startPayload,
         purpose: 'telegram_link',
         usedAt: null,
-        expiresAt: { gt: new Date() }
-      }
+        expiresAt: { gt: new Date() },
+      },
     })
 
     if (!otp) {
@@ -102,15 +111,17 @@ bot.command('start', async (ctx) => {
         data: {
           telegramChatId: String(ctx.chat.id),
           telegramUsername: ctx.from?.username ?? null,
-        }
+        },
       }),
       db.otpToken.update({
         where: { id: otp.id },
-        data: { usedAt: new Date() }
+        data: { usedAt: new Date() },
       }),
     ])
 
-    await ctx.reply('✅ Telegram успішно прив\'язано до вашого акаунту Workflo.Space!\n\nТепер ви будете отримувати сповіщення тут.')
+    await ctx.reply(
+      "✅ Telegram успішно прив'язано до вашого акаунту Workflo.Space!\n\nТепер ви будете отримувати сповіщення тут."
+    )
   } else {
     await ctx.reply('👋 Привіт! Я бот Workflo.Space...')
   }
@@ -216,7 +227,7 @@ class TelegramAdapter implements NotificationAdapter {
       if (error.error_code === 403) {
         await db.profile.updateMany({
           where: { telegramChatId: chatId },
-          data: { telegramChatId: null }
+          data: { telegramChatId: null },
         })
       }
       logger.error('Telegram send failed', { chatId, error })
@@ -268,13 +279,13 @@ CMD ["node", "dist/index.js"]
 
 ## ENV Variables
 
-| Variable | Значення |
-|---|---|
-| `BOT_TOKEN` | Telegram Bot token від @BotFather |
-| `BOT_MODE` | `polling` (dev) / `webhook` (prod) |
-| `BOT_WEBHOOK_URL` | `https://api.workflo.space` (prod) |
-| `BOT_WEBHOOK_SECRET` | Секрет для верифікації webhook |
-| `DATABASE_URL` | PostgreSQL connection string |
+| Variable             | Значення                           |
+| -------------------- | ---------------------------------- |
+| `BOT_TOKEN`          | Telegram Bot token від @BotFather  |
+| `BOT_MODE`           | `polling` (dev) / `webhook` (prod) |
+| `BOT_WEBHOOK_URL`    | `https://api.workflo.space` (prod) |
+| `BOT_WEBHOOK_SECRET` | Секрет для верифікації webhook     |
+| `DATABASE_URL`       | PostgreSQL connection string       |
 
 ---
 
@@ -310,10 +321,128 @@ workflo.space — платформа для управління замовле�
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Auth** | `/start OTP` — прив'язка Telegram до профілю |
+| Модуль            | Зв'язок                                        |
+| ----------------- | ---------------------------------------------- |
+| **Auth**          | `/start OTP` — прив'язка Telegram до профілю   |
 | **Notifications** | `TelegramAdapter` — відправка всіх нотифікацій |
-| **Orders** | Посилання на замовлення в повідомленнях |
-| **Billing** | Повідомлення про рахунки та платежі |
-| **Documents** | Повідомлення про нові документи |
+| **Orders**        | Посилання на замовлення в повідомленнях        |
+| **Billing**       | Повідомлення про рахунки та платежі            |
+| **Documents**     | Повідомлення про нові документи                |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### OTP rate limit
+
+`/start <code>` flow для Telegram linking:
+
+- 5 attempts / 15 min per (chat_id OR ip).
+- 6-digit code, 10 min TTL у `otp_tokens`.
+- Wrong code → `otp_tokens.attempts++`, при `attempts >= 5` → invalidate token.
+- Audit log: `auth.otp_failed` per attempt; `auth.otp_blocked` коли rate-limited.
+
+```typescript
+const recentAttempts = await prisma.otpToken.count({
+  where: {
+    purpose: 'telegram_link',
+    createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
+    metadata: { path: ['ip'], equals: requestIp },
+  },
+})
+if (recentAttempts >= 5) {
+  return ctx.reply('Забагато спроб. Спробуйте через 15 хв.')
+}
+```
+
+### BOT_WEBHOOK_SECRET — fail-fast
+
+При старті bot процесу:
+
+```typescript
+import { loadTelegramConfig } from '@workflo/notifications'
+
+const cfg = loadTelegramConfig()
+if (process.env.NODE_ENV !== 'development' && !cfg.BOT_WEBHOOK_SECRET) {
+  console.error('FATAL: BOT_WEBHOOK_SECRET required in non-dev environments')
+  process.exit(1)
+}
+```
+
+У dev (Mailpit / local PG) — webhook не використовується, працюємо в long-polling. У staging/prod — обов'язковий webhook з secret для верифікації:
+
+```typescript
+fastify.post('/bot/webhook', async (req, reply) => {
+  const secret = req.headers['x-telegram-bot-api-secret-token']
+  if (secret !== env.BOT_WEBHOOK_SECRET) {
+    return reply.code(401).send({ error: 'invalid_secret' })
+  }
+  await bot.handleUpdate(req.body)
+  return { ok: true }
+})
+```
+
+### Bot commands
+
+| Command           | Опис                                                  |
+| ----------------- | ----------------------------------------------------- |
+| `/start [<code>]` | Welcome / link account if code provided               |
+| `/help`           | Показує доступні команди                              |
+| `/orders`         | Список активних orders (для linked client)            |
+| `/timer`          | Поточний таймер (для linked executor)                 |
+| `/balance`        | Баланс company (для linked client)                    |
+| `/unsubscribe`    | Розриває link (chatId removed з NotificationSettings) |
+
+`/unsubscribe` flow:
+
+1. Bot отримує команду.
+2. Знаходить `NotificationSettings` за `telegramChatId`.
+3. Set `telegramChatId = null`, `telegramLinkedAt = null`.
+4. Disable всі telegram preference rows для цих settings.
+5. Audit log: `notifications.telegram_unsubscribed`.
+6. Reply "Ви відписані. Знову підключити можна у /profile/settings."
+
+### Sentry для bot
+
+Окремий DSN (`SENTRY_DSN_BOT`). Tag `tag.module=bot`. Captures unhandled errors з grammY handlers.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+`OtpToken`: поле `code` (не `token`) + додати `attempts Int` + `ipAddress` (rate-limit query зараз не працює); дозволити переви́дачу telegram-link токена (unique `(profileId,purpose)` → або allow-reissue). **Telegram split-brain**: `NotificationSettings.telegramChatId` = авторитетне для dispatch; bot пише туди; прибрати inline-adapter дубль (використовувати shipped `TelegramAdapter`). Webhook: dedup по update-id (Telegram-retry). Інтерактивні команди = **Phase** (не «готово»).
+
+### B. Інтерактивні команди ✅
+
+- grammY-хендлери: `/orders` (активні), `/timer` (поточний таймер, start/stop), `/balance` (баланс компанії), `/help`. Rate-limit per-user. Linked-only.
+
+### C. Inline-кнопки (швидкі дії) ✅
+
+- Callback-кнопки під повідомленнями: approve/reject оцінку, «відповісти» (force-reply → коментар), «позначити виконано». Безпека: callback несе підписаний payload + перевірка прав через `can()`.
+
+### D. Сповіщення для виконавців ✅
+
+- Окремий executor-потік (нове призначення/дедлайн/згадка) через матрицю telegram-каналу. Виконавець лінкує Telegram так само (OTP).
+
+```
+OtpToken: + attempts, ipAddress (поле code канонічне)
+NotificationSettings.telegramChatId = single source of truth
+```
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+Вердикт власника: ✅ ПІДТВЕРДЖЕНО — «можна все додати».
+
+| ID   | Рішення                                                                                                              | Вплив               | Нюанси власника                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------- |
+| 15-А | **Швидкі дії з нотифікацій (inline-кнопки) + відповідь у чат замовлення прямо з Telegram** (reply → коментар у тред) | [бек помітний]      | —                                                  |
+| 15-Б | **SaaS-закладка: бот per-tenant** (структура під власний токен тенанта; дефолт — спільний бот платформи)             | [бек]               | «копійка зараз»                                    |
+| 15-Д | **Вхідні повідомлення клієнта боту → тред підтримки** (тікет/чат-хаб, звʼязка з 29/18)                               | [бек середній]      | —                                                  |
+| 15-В | **Telegram Mini App** (портал у Telegram)                                                                            | [великий, на потім] | зафіксовано як МАЙБУТНЮ ціль, не в найближчий план |

@@ -1,0 +1,240 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
+
+const refreshTokenFindUnique = vi.fn()
+const refreshTokenUpdate = vi.fn()
+const refreshTokenUpdateMany = vi.fn()
+const refreshTokenCreate = vi.fn()
+const companyMemberFindMany = vi.fn()
+const agencyMemberFindMany = vi.fn()
+const companyFindUnique = vi.fn()
+const auditLogCreate = vi.fn()
+const transaction = vi.fn()
+
+vi.mock('@workflo/db', () => ({
+  prisma: {
+    refreshToken: {
+      findUnique: refreshTokenFindUnique,
+      update: refreshTokenUpdate,
+      updateMany: refreshTokenUpdateMany,
+      create: refreshTokenCreate,
+    },
+    companyMember: { findMany: companyMemberFindMany },
+    agencyMember: { findMany: agencyMemberFindMany },
+    company: { findUnique: companyFindUnique },
+    auditLog: { create: auditLogCreate },
+    $transaction: transaction,
+  },
+  tenantTransaction: (client: { $transaction: (fn: unknown) => unknown }, fn: unknown) =>
+    client.$transaction(fn),
+  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+}))
+
+vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
+
+const { buildApp } = await import('../src/app.js')
+
+const COOKIE = 'refresh_token=valid-token-123'
+
+function wireValidToken() {
+  refreshTokenFindUnique.mockResolvedValue({
+    id: 'rt-1',
+    profileId: 'profile-1',
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    profile: { id: 'profile-1', email: 'u@e.com', role: 'client', isActive: true },
+  })
+  companyMemberFindMany.mockResolvedValue([{ companyId: 'company-1', role: 'owner' }])
+  agencyMemberFindMany.mockResolvedValue([]) // client → tenant via active company
+  companyFindUnique.mockResolvedValue({ agencyId: 'agency-1' })
+  // Execute the real callback with a complete tx so issueRefreshToken() runs
+  // (it calls tx.refreshToken.create and returns its own random token).
+  transaction.mockImplementation(async (cb: (tx: Record<string, unknown>) => unknown) =>
+    cb({ refreshToken: { updateMany: refreshTokenUpdateMany, create: refreshTokenCreate } })
+  )
+  refreshTokenUpdateMany.mockResolvedValue({ count: 1 })
+  refreshTokenCreate.mockResolvedValue({})
+  auditLogCreate.mockResolvedValue({})
+}
+
+describe('POST /auth/refresh', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.clearAllMocks())
+
+  it('rotates the token and returns a new access token', async () => {
+    wireValidToken()
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      headers: { cookie: COOKIE },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(typeof res.json().data.accessToken).toBe('string')
+    // old token revoked atomically (conditional on revokedAt:null) + new issued
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'rt-1', revokedAt: null } })
+    )
+    expect(refreshTokenCreate).toHaveBeenCalledOnce()
+    // a fresh cookie is set, and it is NOT the old token value
+    const setCookie = String(res.headers['set-cookie'])
+    expect(setCookie).toContain('refresh_token=')
+    expect(setCookie).not.toContain('valid-token-123')
+    // AR-31: the DB row holds a sha256 hex digest, never the raw cookie value.
+    const storedToken = (refreshTokenCreate.mock.calls[0][0] as { data: { token: string } }).data
+      .token
+    expect(storedToken).toMatch(/^[0-9a-f]{64}$/)
+    expect(setCookie).not.toContain(storedToken)
+    await app.close()
+  })
+
+  it('returns 401 when no cookie present', async () => {
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/refresh' })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('returns 401 for an unknown token', async () => {
+    refreshTokenFindUnique.mockResolvedValue(null)
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      headers: { cookie: COOKIE },
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('detects reuse of a revoked token → 401 + revokes the whole family', async () => {
+    refreshTokenFindUnique.mockResolvedValue({
+      id: 'rt-1',
+      profileId: 'p1',
+      revokedAt: new Date(), // already rotated → presenting it again = theft signal
+      expiresAt: new Date(Date.now() + 100000),
+      familyId: 'fam-1',
+      firstIssuedAt: new Date(),
+      profile: { id: 'p1', email: 'u@e.com', role: 'client', isActive: true },
+    })
+    refreshTokenUpdateMany.mockResolvedValue({ count: 2 })
+    auditLogCreate.mockResolvedValue({})
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      headers: { cookie: COOKIE },
+    })
+    expect(res.statusCode).toBe(401)
+    // reuse-detection: kill the whole family (also revokes the attacker's live successor)
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { familyId: 'fam-1', revokedAt: null } })
+    )
+    expect(refreshTokenCreate).not.toHaveBeenCalled() // no new token for a stale credential
+    await app.close()
+  })
+
+  it('returns 401 for an expired token', async () => {
+    refreshTokenFindUnique.mockResolvedValue({
+      id: 'rt-1',
+      profileId: 'p1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() - 1000),
+      profile: { id: 'p1', email: 'u@e.com', role: 'client', isActive: true },
+    })
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      headers: { cookie: COOKIE },
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('returns 403 when the account is deactivated', async () => {
+    refreshTokenFindUnique.mockResolvedValue({
+      id: 'rt-1',
+      profileId: 'p1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 100000),
+      profile: { id: 'p1', email: 'u@e.com', role: 'client', isActive: false },
+    })
+    const app = buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      headers: { cookie: COOKIE },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('POST /auth/logout', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.clearAllMocks())
+
+  const CLAIMS = {
+    sub: 'profile-1',
+    email: 'u@e.com',
+    role: 'client',
+    activeCompanyId: null,
+    memberships: [],
+  }
+
+  it('requires authentication → 401 without a token', async () => {
+    const app = buildApp()
+    const res = await app.inject({ method: 'POST', url: '/auth/logout', payload: {} })
+    expect(res.statusCode).toBe(401)
+    expect(refreshTokenUpdateMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('revokes a single token scoped to the authenticated user + clears cookie', async () => {
+    refreshTokenUpdateMany.mockResolvedValue({ count: 1 })
+    auditLogCreate.mockResolvedValue({})
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS as never)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { refreshToken: 'some-token' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.loggedOut).toBe(true)
+    // Scoped to profileId — a leaked token can't log out someone else.
+    // AR-31: the DB stores sha256 digests — the WHERE must carry the hash, not the raw value.
+    const { createHash } = await import('node:crypto')
+    const hashedToken = createHash('sha256').update('some-token').digest('hex')
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: hashedToken, profileId: 'profile-1', revokedAt: null },
+      })
+    )
+    expect(String(res.headers['set-cookie'])).toContain('refresh_token=')
+    await app.close()
+  })
+
+  it('revokes ALL the user tokens when no body token (logout everywhere)', async () => {
+    refreshTokenUpdateMany.mockResolvedValue({ count: 3 })
+    auditLogCreate.mockResolvedValue({})
+    const app = buildApp()
+    await app.ready()
+    const token = app.jwt.sign(CLAIMS as never)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(200)
+    expect(refreshTokenUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { profileId: 'profile-1', revokedAt: null } })
+    )
+    await app.close()
+  })
+})

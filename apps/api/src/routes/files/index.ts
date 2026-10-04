@@ -1,0 +1,275 @@
+import { randomUUID } from 'node:crypto'
+import '@fastify/multipart'
+import { withTenant } from '@workflo/db'
+import {
+  ApiErrorCode,
+  AppError,
+  isAllowedFileMimeType,
+  magicMatchesMime,
+  MAX_FILES_PER_ORDER,
+} from '@workflo/types'
+import { buildOrderFileKey, safeExt, sha256Hex } from '@workflo/storage'
+import type { FastifyPluginAsync } from 'fastify'
+import { assertWithinQuota } from '../../saas/limits.js'
+import { writeAuditAsync } from '../../services/audit.js'
+import { getStorage } from '../../services/storage.js'
+import { isThumbnailable, makeThumbnail } from '../../services/imageThumbnail.js'
+import { requireOrderParticipant } from '../orders/access.js'
+import { FILE_META_SELECT, requireFileAccess, serializeFileMeta } from './access.js'
+import { hasPermission } from '../../auth/permissions.js'
+
+/** RFC 5987 Content-Disposition; always `attachment` (no inline render → no stored-XSS). */
+function attachmentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+const fileRoutes: FastifyPluginAsync = (fastify) => {
+  // ── Upload (multipart, one file) ─────────────────────────────────────────
+  fastify.post<{ Params: { id: string } }>(
+    '/orders/:id/files',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const access = await requireOrderParticipant(request, request.params.id)
+
+      const part = await request.file()
+      if (!part) throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Файл відсутній', 400)
+      if (!isAllowedFileMimeType(part.mimetype)) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Тип файлу не дозволено', 415)
+      }
+
+      const existing = await withTenant((tx) =>
+        tx.orderFile.count({
+          where: { orderId: access.orderId, deletedAt: null },
+        })
+      )
+      if (existing >= MAX_FILES_PER_ORDER) {
+        throw new AppError(
+          ApiErrorCode.CONFLICT,
+          `Ліміт ${MAX_FILES_PER_ORDER} файлів на замовлення`,
+          409
+        )
+      }
+
+      let buffer: Buffer
+      try {
+        buffer = await part.toBuffer()
+      } catch (err) {
+        if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
+          throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Файл перевищує ліміт розміру', 413)
+        }
+        throw err
+      }
+
+      // Magic-bytes guard: the declared MIME is client-controlled, so verify the
+      // actual bytes match its category (a renamed script → 415). Audit 2026-06.
+      if (!magicMatchesMime(buffer, part.mimetype)) {
+        throw new AppError(ApiErrorCode.VALIDATION_ERROR, 'Вміст файлу не відповідає типу', 415)
+      }
+
+      // F2: storage quota seam (no-op Phase 0; checks plan bytes in Phase 1).
+      await assertWithinQuota(access.agencyId, 'storage', buffer.length)
+
+      const fileId = randomUUID()
+      const key = buildOrderFileKey(access.agencyId, access.orderId, fileId, safeExt(part.filename))
+      await getStorage().upload({ key, buffer, contentType: part.mimetype })
+
+      // S10-06ч: для зображень — best-effort webp-прев'ю (окремий blob поруч з
+      // оригіналом). Збій генерації/заливки не валить upload — просто без прев'ю.
+      let thumbKey: string | null = null
+      if (isThumbnailable(part.mimetype)) {
+        const thumb = await makeThumbnail(buffer)
+        if (thumb) {
+          const tKey = `${key}.thumb.webp`
+          try {
+            await getStorage().upload({ key: tKey, buffer: thumb, contentType: 'image/webp' })
+            thumbKey = tKey
+          } catch (err) {
+            request.log.warn({ err, fileId }, 'thumbnail upload failed (non-fatal)')
+          }
+        }
+      }
+
+      let file
+      try {
+        file = await withTenant((tx) =>
+          tx.orderFile.create({
+            data: {
+              id: fileId,
+              agency: { connect: { id: access.agencyId } },
+              order: { connect: { id: access.orderId } },
+              uploader: { connect: { id: request.user.sub } },
+              filename: part.filename,
+              storedAs: key,
+              mimeType: part.mimetype,
+              sizeBytes: buffer.length,
+              sha256: sha256Hex(buffer),
+              thumbKey,
+            },
+            select: FILE_META_SELECT,
+          })
+        )
+      } catch (err) {
+        // DB insert failed after the blob landed → remove the orphan blob(s).
+        await getStorage()
+          .delete(key)
+          .catch(() => undefined)
+        if (thumbKey)
+          await getStorage()
+            .delete(thumbKey)
+            .catch(() => undefined)
+        throw err
+      }
+
+      writeAuditAsync(request.log, {
+        actorId: request.user.sub,
+        agencyId: access.agencyId,
+        action: 'order.file_uploaded',
+        resourceType: 'order',
+        resourceId: access.orderId,
+        result: 'allowed',
+        metadata: { fileId, sizeBytes: buffer.length, mimeType: part.mimetype },
+      })
+
+      return reply.status(201).send({ success: true, data: { file: serializeFileMeta(file) } })
+    }
+  )
+
+  // ── List an order's files ────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/orders/:id/files',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const access = await requireOrderParticipant(request, request.params.id)
+      const files = await withTenant((tx) =>
+        tx.orderFile.findMany({
+          where: {
+            orderId: access.orderId,
+            deletedAt: null,
+            // leak-гард: клієнт не бачить вкладень командних нотаток у табі «Файли».
+            // Звичайні файли (commentId=null) і вкладення публічних повідомлень — видно.
+            ...(access.isInternal
+              ? {}
+              : { OR: [{ commentId: null }, { comment: { isInternal: false } }] }),
+          },
+          orderBy: { createdAt: 'desc' },
+          select: FILE_META_SELECT,
+        })
+      )
+      return reply.send({ success: true, data: { files: files.map(serializeFileMeta) } })
+    }
+  )
+
+  // ── File metadata ────────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/files/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { file } = await requireFileAccess(request, request.params.id)
+      return reply.send({
+        success: true,
+        data: {
+          file: {
+            id: file.id,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            sizeBytes: file.sizeBytes,
+            sha256: file.sha256,
+            uploadedBy: file.uploadedBy,
+            createdAt: file.createdAt,
+          },
+        },
+      })
+    }
+  )
+
+  // ── Serve binary content (access-checked, forced download) ───────────────
+  fastify.get<{ Params: { id: string } }>(
+    '/files/:id/content',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { file } = await requireFileAccess(request, request.params.id)
+
+      let buffer: Buffer
+      try {
+        // `storedAs` is a DB value, never user input; the adapter still guards traversal.
+        buffer = await getStorage().read(file.storedAs)
+      } catch (err) {
+        request.log.error({ err, fileId: file.id }, 'file blob read failed')
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Файл недоступний', 404)
+      }
+
+      return reply
+        .header('Content-Type', file.mimeType)
+        .header('Content-Disposition', attachmentDisposition(file.filename))
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, no-store')
+        .send(buffer)
+    }
+  )
+
+  // ── Serve thumbnail (webp, inline — sharp-перекодоване, тож XSS-безпечно) ──
+  fastify.get<{ Params: { id: string } }>(
+    '/files/:id/thumb',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { file } = await requireFileAccess(request, request.params.id)
+      if (!file.thumbKey) throw new AppError(ApiErrorCode.NOT_FOUND, 'Прев’ю недоступне', 404)
+
+      let buffer: Buffer
+      try {
+        buffer = await getStorage().read(file.thumbKey)
+      } catch (err) {
+        request.log.error({ err, fileId: file.id }, 'thumb blob read failed')
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Прев’ю недоступне', 404)
+      }
+
+      // Inline-рендер безпечний: прев'ю — растровий webp, перекодований sharp'ом
+      // (жодного оригінального SVG/HTML). Приватний кеш на годину.
+      return reply
+        .header('Content-Type', 'image/webp')
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, max-age=3600')
+        .send(buffer)
+    }
+  )
+
+  // ── Soft delete (uploader or internal team) ──────────────────────────────
+  fastify.delete<{ Params: { id: string } }>(
+    '/files/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { file, access } = await requireFileAccess(request, request.params.id)
+      // PERM-4: чужий файл — лише команда з orders.edit (раніше будь-хто з команди)
+      if (
+        file.uploadedBy !== request.user.sub &&
+        !(access.isInternal && (await hasPermission(request, 'orders.edit')))
+      ) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Видаляти може лише автор або керівництво', 403)
+      }
+
+      await withTenant((tx) =>
+        tx.orderFile.update({
+          where: { id: file.id },
+          data: { deletedAt: new Date() },
+        })
+      )
+
+      writeAuditAsync(request.log, {
+        actorId: request.user.sub,
+        agencyId: access.agencyId,
+        action: 'order.file_deleted',
+        resourceType: 'order',
+        resourceId: file.orderId,
+        result: 'allowed',
+        metadata: { fileId: file.id },
+      })
+
+      return reply.send({ success: true, data: { id: file.id } })
+    }
+  )
+
+  return Promise.resolve()
+}
+
+export default fileRoutes

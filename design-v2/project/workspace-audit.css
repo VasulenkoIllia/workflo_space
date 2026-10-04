@@ -1,0 +1,15 @@
+/* workspace-audit.css — prototype coverage map */
+.wfau-note { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0 18px; padding: 11px 14px; border-radius: 10px; background: var(--wf-accent-soft); border: 1px solid color-mix(in oklab, var(--wf-accent) 24%, var(--wf-border)); font-size: 12.5px; color: var(--wf-fg-secondary); line-height: 1.5; }
+.wfau-group { margin-bottom: 22px; }
+.wfau-group-h { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wf-fg-muted); margin-bottom: 10px; }
+.wfau-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.wfau-card { text-align: left; cursor: pointer; border: 1px solid var(--wf-border); border-left-width: 3px; border-radius: 10px; padding: 12px 13px; background: var(--wf-surface); font: inherit; display: flex; flex-direction: column; gap: 6px; transition: border-color .12s ease, box-shadow .12s ease, transform .08s ease; }
+.wfau-card:hover { box-shadow: 0 4px 14px -6px color-mix(in oklab, var(--wf-fg) 30%, transparent); }
+.wfau-card[data-st="ready"] { border-left-color: var(--wf-success); }
+.wfau-card[data-st="partial"] { border-left-color: var(--wf-warning); }
+.wfau-card[data-st="demo"] { border-left-color: var(--wf-border); }
+.wfau-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wfau-card-name { font-size: 13.5px; font-weight: 600; color: var(--wf-fg); }
+.wfau-card-note { font-size: 11.5px; color: var(--wf-fg-muted); line-height: 1.45; min-height: 30px; }
+.wfau-card-go { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-subtle); display: inline-flex; align-items: center; gap: 3px; }
+.wfau-card:hover .wfau-card-go { color: var(--wf-accent); }

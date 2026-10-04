@@ -1,0 +1,292 @@
+# Reusable deploy pipeline (AUDIT_2026-09-cicd N4). ONE source of truth for staging and
+# production — the two ~330-line copies had already drifted (staging had no rollback and
+# no scripts/ sync). Callers (staging.yml / production.yml) pass only env-specific inputs;
+# the server-side half lives in scripts/deploy-remote.sh (shellcheck-able, one code path).
+#
+#   gates (check ‖ db ‖ smoke) → build → [approval] → deploy → verify → [rollback] → notify
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: staging | production — runtime dir, compose file, health targets
+        type: string
+        required: true
+      compose_project:
+        type: string
+        required: true
+      vite_api_url:
+        description: API origin baked into the SPA bundles (portal/workspace)
+        type: string
+        required: true
+      api_host:
+        description: API host — legacy Traefik router conflict cleanup
+        type: string
+        required: true
+      router_suffix:
+        description: "'-staging' | '' — legacy Traefik router names"
+        type: string
+        default: ''
+      tls_hosts:
+        description: space-separated host|path pairs that must serve a non-default cert
+        type: string
+        required: true
+      apps:
+        description: JSON array of apps to build + roll out; the rest keep their running tag
+        type: string
+        default: '["landing","portal","workspace","api","bot"]'
+      seed:
+        description: idempotent baseline seed after migrate (staging only)
+        type: boolean
+        default: false
+      require_approval:
+        description: gate the rollout on the GitHub environment's required reviewers
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  RUNTIME_DIR: /var/www/srv/workflo/${{ inputs.environment }}
+  NEW_TAG: sha-${{ github.sha }}
+
+jobs:
+  check:
+    name: Type check & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @workflo/db db:generate
+
+      - name: Type check
+        run: pnpm turbo type-check
+
+      - name: Lint
+        run: pnpm turbo lint
+
+      - name: Test
+        run: pnpm turbo test
+
+  # AR-01: real-PG gate (migration smoke + drift + RLS isolation + money invariants) on the
+  # actual delivery path, not only on pull requests.
+  db:
+    name: DB gate
+    uses: ./.github/workflows/db-gate.yml
+
+  # Pre-deploy smoke: ephemeral stack + drive the implemented screens. Blocks the deploy if a
+  # key page crashes / loses data / regresses auth. Ephemeral, not the live (IP-allowlisted) URL.
+  smoke:
+    name: Smoke
+    uses: ./.github/workflows/smoke.yml
+
+  build:
+    name: Build ${{ matrix.app }}
+    needs: [check, db, smoke]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJSON(inputs.apps) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Normalize registry owner (lowercase)
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Authenticated Docker Hub pulls — raises the anonymous 100/6h rate limit that was
+      # timing out buildkit + base-image (node/nginx) pulls on shared runner IPs.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.value }}/workflo-${{ matrix.app }}:${{ env.NEW_TAG }}
+          # Baked into the SPA bundles (portal/workspace); api/bot/landing don't declare the ARG.
+          build-args: |
+            VITE_API_URL=${{ inputs.vite_api_url }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  approval:
+    name: Waiting for approval
+    if: ${{ inputs.require_approval }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Approved
+        run: echo "${{ inputs.environment }} deployment approved"
+
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    needs: [build, approval]
+    # approval is skipped when not required — still deploy; never after a rejection/failure.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # scripts/ ride along so ops fixes (deploy-remote, rollback, backup, restore) reach the box.
+      - name: Sync runtime manifests
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7 — pinned by SHA (SSH key access)
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: 'docker-compose.${{ inputs.environment }}.yml,infra/maintenance/**,infra/postgres/**,scripts/deploy-remote.sh,scripts/rollback.sh,scripts/healthcheck.sh,scripts/backup.sh,scripts/restore.sh,scripts/install-backup-cron.sh'
+          target: ${{ env.RUNTIME_DIR }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — third-party action with HETZNER_SSH_KEY access: pin by SHA, not moving tag
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          # Pulling several GHCR images can exceed the 10m default when a layer stalls;
+          # deploy-remote.sh retries pulls (3 × 6m) inside this budget.
+          command_timeout: 20m
+          script: |
+            set -e
+            cd "${{ env.RUNTIME_DIR }}"
+            ENVIRONMENT='${{ inputs.environment }}' \
+            COMPOSE_PROJECT='${{ inputs.compose_project }}' \
+            REGISTRY_OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+            NEW_TAG='${{ env.NEW_TAG }}' \
+            APPS='${{ join(fromJSON(inputs.apps), ' ') }}' \
+            SEED='${{ inputs.seed && '1' || '0' }}' \
+            TLS_HOSTS='${{ inputs.tls_hosts }}' \
+            API_HOST='${{ inputs.api_host }}' \
+            ROUTER_SUFFIX='${{ inputs.router_suffix }}' \
+            bash scripts/deploy-remote.sh deploy
+
+  verify:
+    name: Verify
+    needs: deploy
+    # Explicit: with the default success() a SKIPPED ancestor (approval off on staging) skips
+    # this job too — the 04.10 staging run deployed fine but never verified/recorded.
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Health check
+        run: ./scripts/healthcheck.sh --env ${{ inputs.environment }} --delay 20 --retries 6 --retry-delay 10
+
+      # AR-05: record the tag as last-known-good ONLY after verification passed, so a failed
+      # deploy can never poison the rollback bookkeeping.
+      - name: Record verified deploy
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — pinned by SHA (SSH key access)
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd "${{ env.RUNTIME_DIR }}"
+            ENVIRONMENT='${{ inputs.environment }}' \
+            COMPOSE_PROJECT='${{ inputs.compose_project }}' \
+            REGISTRY_OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+            NEW_TAG='${{ env.NEW_TAG }}' \
+            APPS='${{ join(fromJSON(inputs.apps), ' ') }}' \
+            bash scripts/deploy-remote.sh record
+
+  # Runs when the rollout itself or its verification failed (not when a gate/build failed —
+  # then nothing on the server changed). Staging got this too: a stuck staging blocked testing.
+  rollback:
+    name: Auto rollback
+    needs: [deploy, verify]
+    if: ${{ failure() && (needs.deploy.result == 'failure' || needs.verify.result == 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Roll back to the previous verified tag
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — pinned by SHA (SSH key access)
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -e
+            cd "${{ env.RUNTIME_DIR }}"
+            ENVIRONMENT='${{ inputs.environment }}' \
+            COMPOSE_PROJECT='${{ inputs.compose_project }}' \
+            REGISTRY_OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+            APPS='${{ join(fromJSON(inputs.apps), ' ') }}' \
+            ROLLBACK_TO=last-verified \
+            bash scripts/deploy-remote.sh rollback
+
+  # Silent failures are how the 27.09 staging deploy stayed broken for a week (AUDIT N1).
+  # Needs repo secrets TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID; without them it only warns.
+  notify:
+    name: Notify
+    needs: [check, db, smoke, build, approval, deploy, verify, rollback]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Telegram
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_ALERT_CHAT_ID }}
+          ENV_NAME: ${{ inputs.environment }}
+          FAILED: ${{ contains(needs.*.result, 'failure') }}
+          VERIFIED: ${{ needs.verify.result == 'success' }}
+          ROLLBACK: ${{ needs.rollback.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "$FAILED" == true ]]; then
+            case "$ROLLBACK" in
+              success) status="❌ деплой впав — відкочено на попередню версію" ;;
+              failure) status="🔥 деплой впав, і ВІДКАТ теж — потрібна ручна дія" ;;
+              *) status="❌ не розгорнуто (впали перевірки або збірка) — на сервері без змін" ;;
+            esac
+          elif [[ "$VERIFIED" == true ]]; then
+            status="✅ розгорнуто й перевірено"
+          else
+            exit 0 # e.g. approval pending/rejected without failures — nothing to report
+          fi
+          text="$(printf '%s · %s\n%s\n%s' "$ENV_NAME" "$status" "${SHA:0:7} ${COMMIT_MSG%%$'\n'*}" "$RUN_URL")"
+          if [[ -z "$TG_TOKEN" || -z "$TG_CHAT" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_ALERT_CHAT_ID not set — skipping notification"
+            echo "$text"
+            exit 0
+          fi
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT}" \
+            --data-urlencode "text=${text}" \
+            --data-urlencode "disable_web_page_preview=true" >/dev/null

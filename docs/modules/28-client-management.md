@@ -1,0 +1,96 @@
+# CLIENT MANAGEMENT MODULE (агенція керує клієнтами)
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
+> App: Workspace (work.workflo.space) / API · Залежить від: **01-auth** (Profile/Company/CompanyMember), **17-credentials**, **26-leads** (конверсія→клієнт).
+> Статус: **Спец** · Створено: 1.06.2026 · Модуль **28** (новий — закриває прогалину аудиту 1.06).
+> Заповнює діру: зараз керування командою компанії — лише **self-service власника** (13-settings, з Portal). Агенційного боку (owner керує клієнтом) **немає**; 26-leads уже посилається на цей модуль.
+
+---
+
+> 🔄 **design-v2 (2026-06-20):** доставлено **client360** — 15 екранів картки клієнта ([`workspace-client360.jsx`](../../design-v2/project/workspace-client360.jsx) + `-tabs` + data). ⚠️ **Бекенд-блокер (звірено grep'ом 2026-06-20):** top-level clients-CRUD route **відсутній** — `CompanyService` викинуто в P-1e; «клієнт» = `Company` + `Profile(role:client)`, твориться лише через `/auth/register`. Це **П1-№1** і головний W2-блокер. **Рішення власника: НЕ підтягуємо наперед** (за планом S6–S13). Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
+## 0. Навіщо
+
+Owner/команда агенції мусять **повноцінно вести клієнта** з воркспейсу: редагувати картку компанії-клієнта, **скинути пароль** користувачу клієнта, керувати **командою клієнта** (запросити/зняти/змінити роль), (де)активувати/офбордити клієнта. Зараз `/clients/:id` — read-only + `notes`. Це CRM-адмінування, окреме від self-service клієнта.
+
+Tenant: усе agency-scoped (`agencyId` + `isInternalTeam`) + кожна дія в `audit_logs` (чутливі операції над чужим акаунтом).
+
+---
+
+## 1. Функції / API (Workspace, `isInternalTeam` + agency-scoped)
+
+| Метод    | URL                                                               | Опис                                                                                                       | Право                |
+| -------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------- |
+| `POST`   | `/workspace/companies`                                            | Заводить компанію-клієнта (clients.manage); body: {name, currency?, language?, notes?}                     | clients.manage       |
+| `GET`    | `/workspace/companies`                                            | Список клієнтів з агрегатами: ordersTotal, ordersActive, lastActivityAt, (з billing.view) totalValue, debt | team                 |
+| `GET`    | `/workspace/clients`                                              | Список клієнтів (Company) агенції + фільтри/пошук/lTV/лояльність                                           | team                 |
+| `GET`    | `/workspace/clients/:companyId`                                   | Картка: інфо + члени + замовлення + білінг + credentials + lead-джерело                                    | team                 |
+| `PATCH`  | `/workspace/clients/:companyId`                                   | Редагувати картку (name/notes/currency/language/tierOverride/реквізити)                                    | owner/admin          |
+| `GET`    | `/workspace/clients/:companyId/members`                           | Команда клієнта                                                                                            | team                 |
+| `GET`    | `/workspace/clients/:companyId/activity`                          | 360° «Активність» — агрег. timeline (замовлення+платежі+документи)                                         | internal-non-manager |
+| `POST`   | `/workspace/clients/:companyId/members/invite`                    | Запросити користувача клієнта (agency-side)                                                                | owner/admin          |
+| `PATCH`  | `/workspace/clients/:id/members/:profileId/permissions`           | Управління правами учасника (can_view_billing, can_approve_estimates, can_invite_members)                  | clients.manage       |
+| `PATCH`  | `/workspace/clients/:companyId/members/:profileId`                | Змінити роль/права члена клієнта                                                                           | owner/admin          |
+| `DELETE` | `/workspace/clients/:companyId/members/:profileId`                | Зняти члена (профіль лишається)                                                                            | owner/admin          |
+| `POST`   | `/workspace/clients/:companyId/members/:profileId/reset-password` | **Адмін-скидання пароля** (див. §2)                                                                        | owner/admin          |
+| `POST`   | `/workspace/clients/:companyId/deactivate`                        | Деактивувати клієнта (read-only, не видаляти)                                                              | owner                |
+| `POST`   | `/workspace/clients/:companyId/export`                            | Експорт даних клієнта (GDPR, на запит) → RETENTION.md                                                      | owner                |
+
+> Перевикористовує наявне: invite-флоу (`createMemberInvite`), `provisionAgency`-стиль провіжну, credentials (17). Не дублює self-service (13-settings) — це агенційний паралель. **D4-флоу:** компанію, заведену агенцією, першим інвайтом приймає людина і стає власником; далі — звичайні учасники ( 27.09.2026).
+
+### Portal — управління членами компанії (власник)
+
+| Метод    | URL                                              | Опис                                                                                      | Право |
+| -------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----- |
+| `GET`    | `/portal/company/members`                        | Список членів компанії з правами та активністю                                            | team  |
+| `PATCH`  | `/portal/company/members/:profileId/permissions` | Управління правами учасника (can_view_billing, can_approve_estimates, can_invite_members) | owner |
+| `DELETE` | `/portal/company/members/:profileId`             | Видалити учасника (не себе, не власника)                                                  | owner |
+
+## 2. Admin password reset — рішення: **обидва (link + temp-fallback)** (зафіксовано 1.06)
+
+`POST /workspace/clients/:companyId/members/:profileId/reset-password` body `{ mode: 'link' | 'temp' }`:
+
+- **`link` (за замовч., рекоменд.):** генерує `PasswordResetToken` (як forgot-password) → юзеру лист із reset-посиланням. **Owner НІКОЛИ не бачить пароль.** Безпечно; вимагає email-доступу юзера.
+- **`temp` (fallback для юзерів без email):** генерує одноразовий тимчасовий пароль, **показує owner'у РІВНО раз** у відповіді (не зберігаємо plaintext) + ставить `mustChangePassword=true` → примус зміни при першому вході.
+
+Обидва режими: інвалідувати наявні сесії (`tokenVersion++` → всі refresh-токени мертві), `audit_logs(action='client.password_reset_by_admin', metadata={mode})`, notify юзера (email/in-app: «адміністратор скинув ваш пароль»). UI: модалка з вибором режиму + попередження.
+
+> Потрібна схема-дельта: `Profile.mustChangePassword Boolean @default(false)` (login повертає прапор → форс-зміна). Закласти разом із реалізацією модуля.
+
+## 3. Lifecycle клієнта (агенційний бік)
+
+- **Активний → Деактивований** (read-only): замовлення лишаються, нові — ні; клієнт не логіниться. Зворотно.
+- **Офбординг:** контрольований експорт (owner на запит клієнта) + (за згодою/політикою) видалення → LIFECYCLE.md + RETENTION.md (anonymize vs purge).
+- Конверсія **лід→клієнт** (26-leads §4) створює Company тут.
+
+## 4. Безпека
+
+- Усе `isInternalTeam` + agency-scoped; крос-тенант неможливий.
+- Адмін-дії над акаунтом клієнта (reset/deactivate/role) — **owner/admin-only** через `can()` + **обовʼязковий audit**.
+- Reset-пароля не розкриває пароль owner'у (варіант A).
+
+## 5. Фази
+
+- **P1:** клієнт-CRUD (картка/notes/tierOverride), agency-side member-mgmt (invite/role/remove), **admin-reset-password**, deactivate.
+- **P2:** офбординг-експорт-флоу, bulk-операції, сегменти клієнтів.
+- API — design-independent (backend-фаза); екрани — фронтенд-прохід (картка клієнта вже є в UX_PAGES `/companies/:id`).
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+| ID   | Рішення                                                                                                                  | Вплив               | Нюанси власника                                                                                                                                              |
+| ---- | ------------------------------------------------------------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 28-Б | **⭐ Картка клієнта 360°** — таби Огляд / Люди / Проєкти / Фінанси (борг, LTV, маржа) / Документи / Секрети / Активність | [екран великий]     | Наголос власника: «особливо важлива для розуміння всіх даних про клієнта і створення проєктів» — ЦЕНТРАЛЬНИЙ екран усього проходу, найбільше дизайн-завдання |
+| 28-А | **Адмін-дії над клієнтом**: скидання пароля, деактивація, зміна email, видалення члена (запит з 09)                      | [бек+панель]        | —                                                                                                                                                            |
+| 28-В | **Внутрішні нотатки + таймлайн** по клієнту                                                                              | [бек дрібний+екран] | —                                                                                                                                                            |
+| 28-Г | **Прапорці ризику** (борг/неактивність/овердʼю) — бейджі + attention-дашборд                                             | [бек] дрібний       | —                                                                                                                                                            |
+| 28-Д | **Теги клієнтів + сегменти**                                                                                             | [бек дрібний]       | —                                                                                                                                                            |
+
+**Для ТЗ дизайнеру:** картка клієнта 360° (Б) — ПРІОРИТЕТ №1 серед усіх нових екранів; панель адмін-дій (А); таймлайн нотаток (В); бейджі ризику (Г).

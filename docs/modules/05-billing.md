@@ -1,14 +1,22 @@
 # MODULE 05 — BILLING
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: api.workflo.space / workspace (work.workflo.space) / portal (portal.workflo.space)
 > Статус: MVP
 > Залежить від: [01-auth, 02-companies, 03-orders, 04-services]
-> Оновлено: 12 квітня 2026
+> Оновлено: 2 червня 2026 (doc-sync)
 
 ---
+
+> 🔄 **design-v2 (2026-06-20):** доставлено **service-catalog** — бібліотека білабельних послуг (категорії, kind work/resource/fixed, cost/bill, recurring, makesTask): [`workspace-svccatalog.jsx`](../../design-v2/project/workspace-svccatalog.jsx) + data. 🟢 **бекенд готовий** (звірено): `services/catalog.ts` повний CRUD + `Service`/`ServiceCharge` моделі. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
 
 ## Огляд
 
 Модуль відповідає за повний фінансовий цикл платформи:
+
 - Розрахунок вартості замовлень (fixed і hourly)
 - Recurring послуги з щомісячними нарахуваннями
 - Аванси та фінальну оплату
@@ -18,6 +26,7 @@
 - Адаптер-паттерн для платіжних провайдерів (ManualProvider MVP, LiqPay/Stripe Phase 2)
 
 Борг компанії не зберігається окремим полем — завжди розраховується на льоту:
+
 ```
 debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
      - SUM(payments.amount WHERE companyId = X)
@@ -27,13 +36,13 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 
 ## Актори та доступ
 
-| Актор | Права |
-|---|---|
-| owner | Повний доступ: підтверджує оплати, редагує реквізити, бачить всі фінанси |
-| executor | Не має доступу до білінгу клієнтів |
-| Company Owner | Бачить борг, реквізити, recurring послуги, платежі своєї компанії |
-| Company Member з `can_view_billing=true` | Тільки читання: борг + реквізити |
-| Company Member без `can_view_billing` | Не бачить фінансів взагалі |
+| Актор                                    | Права                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| owner                                    | Повний доступ: підтверджує оплати, редагує реквізити, бачить всі фінанси |
+| executor                                 | Не має доступу до білінгу клієнтів                                       |
+| Company Owner                            | Бачить борг, реквізити, recurring послуги, платежі своєї компанії        |
+| Company Member з `can_view_billing=true` | Тільки читання: борг + реквізити                                         |
+| Company Member без `can_view_billing`    | Не бачить фінансів взагалі                                               |
 
 ---
 
@@ -42,6 +51,7 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ### 1. Типи білінгу замовлення
 
 #### Fixed Price
+
 - Owner встановлює `orders.totalAmount` після завершення роботи (або заздалегідь)
 - Клієнт бачить фіксовану суму в portal
 - Час не впливає на суму (але може логуватися для внутрішніх потреб)
@@ -54,6 +64,7 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ```
 
 #### Hourly
+
 - Ставка клієнта зберігається в `companies.defaultHourlyRateUsd` (можна перевизначити на рівні замовлення в `orders.hourlyRate`)
 - Виконавці логують час через time logs
 - `totalAmount` = `hourlyRate × SUM(time_logs.hours)` — перераховується автоматично при кожному новому time log
@@ -68,23 +79,29 @@ debt = SUM(orders.totalAmount WHERE payment_status != 'paid')
 ```
 
 **Коли перераховувати `totalAmount` при hourly:**
+
 - При додаванні / редагуванні / видаленні time log
 - Не перераховувати якщо owner вручну зафіксував суму (`manualAmountOverride = true`)
 
 ### 2. Recurring Services
 
 #### Каталог послуг (таблиця `services`)
+
 Owner створює базові послуги із базовою ціною. Приклади:
+
 - "Обслуговування сервера" — $50/міс базова ціна
 - "Технічна підтримка 10 год/міс" — $200/міс базова ціна
 
 #### Призначення клієнту (таблиця `company_services`)
+
 При призначенні послуги конкретному клієнту встановлюється індивідуальна ціна:
+
 ```
 company_services.customPrice = 65.00  ← перевизначає services.defaultPriceUsd
 ```
 
 Один клієнт може мати кілька різних recurring послуг одночасно:
+
 ```
 Компанія "Acme Corp":
   → Обслуговування сервера   $65.00/міс   (customPrice)
@@ -92,6 +109,7 @@ company_services.customPrice = 65.00  ← перевизначає services.defa
 ```
 
 #### pg_cron — генерація service_charges
+
 Щомісяця 1-го числа о 00:01 UTC pg_cron запускає функцію генерації нарахувань:
 
 ```sql
@@ -124,6 +142,7 @@ SELECT cron.schedule(
 ### 3. Аванс і фінальна оплата
 
 #### Workflow авансу:
+
 1. Клієнт домовляється про передоплату
 2. Owner генерує `advance_invoice` PDF (Документи → генерувати)
 3. Клієнт платить (переказ/крипта)
@@ -131,24 +150,26 @@ SELECT cron.schedule(
 5. `balance_due` перераховується миттєво
 
 #### Розрахунок balance_due:
+
 ```typescript
 const advanceTotal = await prisma.payment.aggregate({
   where: { orderId, type: 'advance' },
   _sum: { amount: true },
-});
+})
 
-const balanceDue = order.totalAmount - (advanceTotal._sum.amount ?? 0);
+const balanceDue = order.totalAmount - (advanceTotal._sum.amount ?? 0)
 
 // Якщо balanceDue = 0 → order повністю оплачено
 if (balanceDue <= 0) {
   await prisma.order.update({
     where: { id: orderId },
     data: { paidAt: new Date(), paymentStatus: 'paid' },
-  });
+  })
 }
 ```
 
 #### Відображення в portal:
+
 ```
 Сума замовлення:   $1,000.00 / ₴41,500.00
 Сплачено авансом:  $300.00
@@ -156,6 +177,7 @@ if (balanceDue <= 0) {
 ```
 
 #### Типи платежів (`payments.type`):
+
 - `advance` — передоплата до початку або під час роботи, прив'язана до `orderId`
 - `final` — фінальна оплата по завершенні
 - `partial` — часткова оплата без статусу аванс (наприклад, погашення боргу по рахунку)
@@ -163,9 +185,11 @@ if (balanceDue <= 0) {
 ### 4. Валюта та курс обміну
 
 #### Зберігання
+
 Всі суми в БД зберігаються в **USD** (базова валюта). UAH — тільки для відображення.
 
-#### ExchangeRate (singleton)
+#### ExchangeRate (per-agency, S-D2)
+
 НБУ API оновлюється автоматично щодня о 09:10 за Києвом:
 
 ```
@@ -174,23 +198,24 @@ URL: https://bank.gov.ua/NBU_Exchange/exchange_site?valcode=USD&json
 ```
 
 ```typescript
-// Приклад відповіді НБУ API:
-[{ "r030": 840, "txt": "Долар США", "rate": 41.5, "cc": "USD", "exchangedate": "12.04.2026" }]
-
-// Оновлення в БД:
+// Курс — per-agency (S-D2), НЕ глобальний singleton. Upsert по agencyId:
 await prisma.exchangeRate.upsert({
-  where: { id: 'singleton' },
-  create: { id: 'singleton', usdToUah: 41.5, updatedAt: new Date() },
-  update: { usdToUah: 41.5, updatedAt: new Date() },
-});
+  where: { agencyId },
+  create: { agencyId, usdToUah: 41.5 },
+  update: { usdToUah: 41.5, updatedBy: 'cron' },
+})
 ```
+
+> ⚠️ **Застаріле `id: 'singleton'` видалено** — `ExchangeRate.agencyId @unique` (міграція `20260602_sd234`). НБУ-курс об'єктивно один, але per-agency дає override + ізоляцію.
 
 **Fallback:** якщо НБУ API недоступне — використовується попереднє значення з БД. Логується попередження в Sentry.
 
 #### Відображення в UI:
+
 ```
 $500 / ₴20,750
 ```
+
 ```
 // helpers/currency.ts
 export function formatDualCurrency(usdAmount: number, usdToUah: number): string {
@@ -200,6 +225,7 @@ export function formatDualCurrency(usdAmount: number, usdToUah: number): string 
 ```
 
 #### PDF рахунки:
+
 ```
 500 USD за курсом 41.50 = 20,750.00 UAH
 ```
@@ -208,9 +234,10 @@ export function formatDualCurrency(usdAmount: number, usdToUah: number): string 
 
 ### 5. PaymentSettings — реквізити
 
-Singleton-запис в таблиці `payment_settings`. Редагується тільки owner в `/settings/billing`.
+Один запис **на агенцію** (`PaymentSettings.agencyId @unique`, S-D2) у таблиці `payment_settings`. Редагується тільки owner в `/settings/billing`.
 
 **Поля:**
+
 ```
 bankName        — назва банку (напр. "ПриватБанк")
 iban            — IBAN рахунок (напр. "UA213996220000026001052678856")
@@ -264,55 +291,39 @@ async function getCompanyDebt(companyId: string): Promise<number> {
       where: { companyId },
       _sum: { amount: true },
     }),
-  ]);
+  ])
 
-  const totalCharged = Number(ordersAgg._sum.totalAmount ?? 0);
-  const totalPaid = Number(paymentsAgg._sum.amount ?? 0);
-  return Math.max(0, totalCharged - totalPaid);
+  const totalCharged = Number(ordersAgg._sum.totalAmount ?? 0)
+  const totalPaid = Number(paymentsAgg._sum.amount ?? 0)
+  return Math.max(0, totalCharged - totalPaid)
 }
 ```
 
 ### 8. Loyalty Tier Update
 
-Оновлюється при кожному підтвердженні оплати:
+> ⚠️ **SUPERSEDED — канон лояльності НЕ тут.** Пороги/відсотки нижче (500/2k/5k @ 0/5/10/15)
+> застарілі. Єдине джерело істини — `@workflo/types` `LOYALTY_DISCOUNT_PCT`
+> (NEW/REGULAR/PARTNER/VIP @ **0/3/7/12%** від **$0/1k/5k/15k**) + модуль
+> [`10-loyalty.md`](10-loyalty.md). Не реалізовувати з прикладу нижче.
 
-```typescript
-// Тири:
-// new       → до $500 total spent      → знижка 0%
-// regular   → $500 – $2,000            → знижка 5%
-// partner   → $2,000 – $5,000          → знижка 10%
-// vip       → $5,000+                  → знижка 15%
+Канонічні правила (звіряй з кодом `packages/types/src/constants.ts`):
 
-async function updateLoyaltyTier(companyId: string, paidAmount: number): Promise<void> {
-  const company = await prisma.company.update({
-    where: { id: companyId },
-    data: { totalSpent: { increment: paidAmount } },
-  });
+- Тири і знижки: див. `LOYALTY_DISCOUNT_PCT` / `LOYALTY_TIER_THRESHOLDS` у `@workflo/types`.
+- `Company.totalSpent` має **єдиного писаря** — cron перерахунку лояльності (модуль 10),
+  а НЕ `increment` на кожному платежі (анти-подвійний-запис, аудит 10-loyalty §КРИТИЧНО).
+- Подія: `loyalty.tier_upgraded` (не `loyalty_tier_changed`).
+- Override: `Company.tierOverride` + `LoyaltyTierHistory` (S5).
 
-  const newTier = calculateTier(Number(company.totalSpent));
-  const oldTier = company.loyaltyTier;
-
-  if (newTier !== oldTier) {
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { loyaltyTier: newTier },
-    });
-    // Відправити нотифікацію loyalty_tier_changed
-    await notify(company.ownerId, 'loyalty_tier_changed', { oldTier, newTier });
-  }
-}
-
-function calculateTier(totalSpent: number): LoyaltyTier {
-  if (totalSpent >= 5000) return 'vip';
-  if (totalSpent >= 2000) return 'partner';
-  if (totalSpent >= 500)  return 'regular';
-  return 'new';
-}
-```
-
-**Важливо:** Owner може перевизначити tier вручну в workspace (з причиною). При цьому `manuallyOverridden = true` і автоматичне оновлення при наступних платежах ігнорується доки owner не скасує override.
+**Важливо:** Owner може перевизначити tier вручну (`tierOverride`) — тоді автоперерахунок
+cron'ом ігнорується, доки override не знято.
 
 ### 9. Referral Bonus при оплаті
+
+> ⚠️ **SUPERSEDED — канон рефералів у [`09-referral.md`](09-referral.md).** Нарахування
+> йде ЄДИНИМ шляхом через wallet (`walletCredit`, ledger `WalletTransaction`) з
+> ідемпотентністю `UNIQUE(sourceType,sourceId)` (закладено в схемі), а НЕ прямим
+> `bonusBalance: { increment }` нижче. Ставки/пороги — теж у 09-referral (звіряй з кодом).
+> Приклад нижче лишено історично, не реалізовувати.
 
 При підтвердженні оплати (depth=1 — тільки прямий реферер, без мультирівнів в MVP):
 
@@ -322,14 +333,14 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
   const referral = await prisma.referral.findFirst({
     where: { referredCompanyId: companyId, status: 'qualified' },
     include: { referrerCompany: true },
-  });
+  })
 
-  if (!referral) return;
+  if (!referral) return
 
   // Прогресивна ставка по зароблених бонусах реферера
-  const totalEarned = Number(referral.referrerCompany.bonusBalance);
-  const rate = totalEarned >= 500 ? 0.15 : totalEarned >= 200 ? 0.12 : 0.10;
-  const bonusAmount = paidAmount * rate;
+  const totalEarned = Number(referral.referrerCompany.bonusBalance)
+  const rate = totalEarned >= 500 ? 0.15 : totalEarned >= 200 ? 0.12 : 0.1
+  const bonusAmount = paidAmount * rate
 
   await prisma.$transaction([
     prisma.company.update({
@@ -345,17 +356,18 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
         rewardedAt: new Date(),
       },
     }),
-  ]);
+  ])
 
   // Відправити нотифікацію реферерові
   await notify(referral.referrerCompany.ownerId, 'referral_bonus', {
     bonusAmount,
     fromCompanyName: '...',
-  });
+  })
 }
 ```
 
 **Прогресивна ставка:**
+
 ```
 Зароблено $0 – $200    → 10%
 Зароблено $200 – $500  → 12%
@@ -369,42 +381,42 @@ async function processReferralBonus(companyId: string, paidAmount: number): Prom
 ```typescript
 // packages/types/src/billing.ts
 export interface PaymentProvider {
-  name: string;
-  createPaymentLink(params: CreatePaymentParams): Promise<PaymentLinkResult>;
-  handleWebhook(payload: unknown): Promise<WebhookResult>;
-  verifySignature(payload: string, signature: string): boolean;
+  name: string
+  createPaymentLink(params: CreatePaymentParams): Promise<PaymentLinkResult>
+  handleWebhook(payload: unknown): Promise<WebhookResult>
+  verifySignature(payload: string, signature: string): boolean
 }
 
 export interface CreatePaymentParams {
-  orderId: string;
-  amount: number;
-  currency: string;
-  description: string;
-  returnUrl: string;
+  orderId: string
+  amount: number
+  currency: string
+  description: string
+  returnUrl: string
 }
 
 export interface PaymentLinkResult {
-  paymentLink: string;
-  providerPaymentId: string;
+  paymentLink: string
+  providerPaymentId: string
 }
 ```
 
 ```typescript
 // apps/api/src/providers/manual.provider.ts — MVP
 export class ManualProvider implements PaymentProvider {
-  name = 'manual';
+  name = 'manual'
 
   async createPaymentLink(): Promise<PaymentLinkResult> {
     // Manual flow — немає посилання для оплати
-    return { paymentLink: '', providerPaymentId: '' };
+    return { paymentLink: '', providerPaymentId: '' }
   }
 
   async handleWebhook(): Promise<WebhookResult> {
-    throw new Error('ManualProvider does not support webhooks');
+    throw new Error('ManualProvider does not support webhooks')
   }
 
   verifySignature(): boolean {
-    return true; // Manual — підтверджується власником вручну
+    return true // Manual — підтверджується власником вручну
   }
 }
 
@@ -449,36 +461,14 @@ enum PaymentType {
 }
 ```
 
-### Таблиця `payment_settings` (singleton)
+### Таблиці `payment_settings` + `exchange_rates` (per-agency, S-D2)
 
-```prisma
-model PaymentSettings {
-  id              String   @id @default(cuid())
-  bankName        String?
-  iban            String?
-  accountName     String?
-  cryptoUsdt      String?  // USDT TRC20 адреса
-  notes           String?
-  invoiceCurrency String   @default("UAH")  // UAH | USD | EUR
-  updatedAt       DateTime @updatedAt
-
-  @@map("payment_settings")
-}
-```
-
-### Таблиця `exchange_rates` (singleton)
-
-```prisma
-model ExchangeRate {
-  id        String   @id @default("singleton")
-  usdToUah  Decimal  @db.Decimal(8, 4)
-  eurToUah  Decimal? @db.Decimal(8, 4)
-  updatedAt DateTime @updatedAt
-  updatedBy String?  // profileId або 'cron'
-
-  @@map("exchange_rates")
-}
-```
+> **Канон — `packages/db/prisma/schema.prisma`** (міграція `20260602_sd234`). Обидві — **per-agency**, не глобальні singletons:
+>
+> - `PaymentSettings` — `agencyId String @unique` + FK (реквізити агенції: `bankName/iban/accountName/cryptoUsdt/invoiceCurrency`).
+> - `ExchangeRate` — `agencyId String @unique` + FK; `id @default(uuid())` (НЕ `"singleton"`); `usdToUah`/`eurToUah Decimal(10,4)`; `updatedBy`.
+>
+> ⚠️ Глобальний `id='singleton'` + `Decimal(8,4)` — **видалено** (S-D2: крос-тенант реквізити/курс = катастрофа). `DocumentCounter` теж per-agency (`@@id([agencyId,type,year])`, модуль 06).
 
 ### Таблиця `service_charges`
 
@@ -519,20 +509,19 @@ enum ChargeStatus {
 ```
 GET  /billing/summary
 ```
+
 Повертає: борг, recurring services, payments total, loyalty tier, bonus balance.
 
 ```json
 {
   "data": {
-    "debt": 700.00,
-    "debtUah": 29050.00,
-    "services": [
-      { "name": "Обслуговування сервера", "priceUsd": 65.00, "priceUah": 2697.50 }
-    ],
-    "totalPaid": 1300.00,
+    "debt": 700.0,
+    "debtUah": 29050.0,
+    "services": [{ "name": "Обслуговування сервера", "priceUsd": 65.0, "priceUah": 2697.5 }],
+    "totalPaid": 1300.0,
     "loyaltyTier": "regular",
     "discountPercent": 5,
-    "bonusBalance": 45.00,
+    "bonusBalance": 45.0,
     "paymentSettings": {
       "bankName": "ПриватБанк",
       "iban": "UA213996220000026001052678856",
@@ -556,18 +545,21 @@ GET  /billing/payment-settings  — реквізити (публічно, без
 ```
 GET  /workspace/billing/overview
 ```
+
 Повертає: загальний борг всіх клієнтів, суму за поточний місяць, топ боржників.
 
 ```
 POST /workspace/billing/payments
 ```
+
 Body:
+
 ```json
 {
   "companyId": "uuid",
-  "orderId": "uuid",          // optional
-  "amount": 700.00,
-  "type": "final",            // advance | final | partial
+  "orderId": "uuid", // optional
+  "amount": 700.0,
+  "type": "final", // advance | final | partial
   "paymentMethod": "bank_transfer",
   "paymentReference": "UA20240412001",
   "note": "Оплата по рахунку INV-2026-0042"
@@ -575,16 +567,17 @@ Body:
 ```
 
 Відповідь 201:
+
 ```json
 {
   "data": {
     "id": "uuid",
     "companyId": "uuid",
-    "amount": 700.00,
+    "amount": 700.0,
     "type": "final",
     "confirmedAt": "2026-04-12T10:30:00Z",
     "newDebt": 0,
-    "orderPaidAt": "2026-04-12T10:30:00Z"  // якщо balance_due = 0
+    "orderPaidAt": "2026-04-12T10:30:00Z" // якщо balance_due = 0
   }
 }
 ```
@@ -597,6 +590,21 @@ PATCH /workspace/settings/payment       — оновити реквізити
 GET  /workspace/settings/exchange-rate  — поточний курс + дата оновлення
 PATCH /workspace/settings/exchange-rate — вручну оновити курс (owner)
 POST /workspace/settings/exchange-rate/refresh — примусово оновити з НБУ API
+```
+
+### Workspace — Financial Projects (billing module, 05-ПРОЕКТИ, owner + billing.view)
+
+```
+GET    /workspace/projects                            — список проєктів агенції (опц. ?companyId=uuid)
+GET    /workspace/projects/:id                        — деталі + stats {cycle:{from,to,hoursUsed}, nextCycleAt, openOrders}
+POST   /workspace/projects                            — створити новий проєкт
+PATCH  /workspace/projects/:id                        — оновити проєкт
+```
+
+### Portal — Financial Projects (client side)
+
+```
+GET    /portal/projects                               — список проєктів компанії + stats; nextCycleAt тепер кінець поточного вікна
 ```
 
 ### Workspace — Services Management (owner)
@@ -690,43 +698,49 @@ Modal:
 
 ## Notifications
 
-| Подія | Отримувач | Канал |
-|---|---|---|
-| Оплата підтверджена | Company Owner | email + telegram |
-| Нарахована recurring послуга | Company Owner | email |
-| Підвищення loyalty tier | Company Owner | email + telegram |
-| Referral бонус нарахований | Referrer Company Owner | email + telegram |
-| Борг прострочений (Phase 2) | Company Owner | email |
+| Подія                        | Отримувач              | Канал            |
+| ---------------------------- | ---------------------- | ---------------- |
+| Оплата підтверджена          | Company Owner          | email + telegram |
+| Нарахована recurring послуга | Company Owner          | email            |
+| Підвищення loyalty tier      | Company Owner          | email + telegram |
+| Referral бонус нарахований   | Referrer Company Owner | email + telegram |
+| Борг прострочений (Phase 2)  | Company Owner          | email            |
 
 ---
 
 ## Edge Cases
 
 **1. Аванс більше totalAmount**
+
 - Якщо `SUM(advance) > totalAmount` — `balance_due` = 0 (клієнт переплатив)
 - Переплата зараховується як бонус або повертається вручну (вирішується owner окремо)
 - UI попереджує owner при підтвердженні аванс > totalAmount
 
 **2. totalAmount змінюється після часткової оплати**
+
 - `balance_due` перераховується автоматично при кожному запиті
 - Якщо після зміни `totalAmount` balance_due < 0 → показати warning owner'у
 
 **3. pg_cron не запустився (збій)**
+
 - `service_charges` з `UNIQUE(companyServiceId, month)` захищають від дублів
 - Ручний запуск через workspace: `POST /workspace/billing/charges/generate { month: "2026-04-01" }`
 - Логується в Sentry
 
 **4. НБУ API недоступне**
+
 - Використовується попередній курс з `exchange_rates`
 - Якщо `updatedAt` > 3 дні — показувати warning в workspace settings
 - Sentry alert при HTTP помилці від НБУ
 
 **5. Company Owner підтверджує оцінку з loyalty знижкою**
+
 - При `billingType=fixed` і наявному тирі — UI показує: `$1000 → -5% → $950`
 - `discountAppliedPercent` зберігається на order
 - Знижка застосовується тільки якщо manually не override
 
 **6. Компанія призупинена (`is_active = false`)**
+
 - pg_cron пропускає `company_services` де `company.isActive = false`
 - Нові `service_charges` не генеруються
 
@@ -740,3 +754,328 @@ Modal:
 - **Інвойс scheduling:** клієнт обирає дату виставлення рахунку
 - **Multi-currency:** додати EUR як третю валюту
 - **Partial payment allocation:** розподіл часткової оплати між кількома замовленнями
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Payment race guard
+
+**Проблема:** клієнт натискає "Confirm payment" двічі → дві Payment rows для одного charge → balance подвоюється.
+
+**Рішення:**
+
+1. **UNIQUE(sourceType, sourceId)** на `payments` — два payments не можуть посилатися на той самий external source (bank transaction id, Stripe charge id, manual confirmation token).
+2. **SELECT FOR UPDATE** на `service_charges` всередині Serializable transaction.
+3. Idempotency key required для всіх POST payment endpoints (`Idempotency-Key` header, valid 24h per key+endpoint).
+
+```typescript
+await prisma.$transaction(
+  async (tx) => {
+    await tx.$executeRaw`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`
+    const charge = await tx.$queryRaw`
+    SELECT * FROM service_charges WHERE id = ${chargeId} FOR UPDATE
+  `
+    if (charge.status === 'paid') {
+      throw new ConflictError('charge_already_paid')
+    }
+    // ... insert payment + update charge.status='paid'
+  },
+  { isolationLevel: 'Serializable' }
+)
+```
+
+Duplicate payment INSERT → unique constraint error → 409 to caller з reference до існуючого payment.
+
+### Auto-invoicing flow
+
+Owner налаштовує **recurring billing** для company:
+
+- Frequency: monthly / quarterly / annual.
+- Items: fixed nomenclature codes + quantities.
+- Day of month: 1st / 15th / last (configurable).
+
+Cron `C02:recurring_billing` (щодня 00:30):
+
+- Знаходить всі `company_billing_subscriptions` де `next_invoice_at <= now()`.
+- Для кожної: create `Document(type='invoice')` + `ServiceCharge` + send via `notify(event='billing.invoice_sent')`.
+- Update `next_invoice_at` = next period.
+
+Idempotency: cron записує lock у `cron_runs.metadata.processed_ids` — повторний run skip-ить уже processed.
+
+### Debtors dashboard
+
+Див. **19-reports.md → секція "3. Debtors Report"**. UI у `/workspace/reports/debtors`.
+
+Auto-notification: cron `C07:invoice_overdue_marker` ставить `service_charges.status = 'overdue'` де `due_date < now()` AND `status = 'pending'`. Тригер `notify(event='billing.invoice_overdue')` до company owner.
+
+### Acts of reconciliation
+
+Новий document type `reconciliation_act` (добавлено в S1-03 migration).
+
+Owner генерує сверку:
+
+1. `POST /companies/:id/reconciliation-acts { from, to }`
+2. Backend агрегує всі invoices + payments + adjustments за період.
+3. Generates PDF з branding (модуль 20).
+4. Save як `Document(type='reconciliation_act', status='generated')`.
+5. Owner reviews → "Send to client" → `notify(event='documents.reconciliation_act_ready')`.
+
+### Currency handling
+
+- `payments.amount_native` — у валюті operation.
+- `payments.amount_usd` — конвертовано через `exchange_rates` на дату payment (захоплюємо моментальний rate, не latest, щоб history стабільна).
+- `service_charges` similarly зберігає `base_amount_native + base_amount_usd + currency_native`.
+- Reports завжди в USD (single source of truth для KPI).
+
+---
+
+## Payment Type Classification (аудит-уточнення, 29 травня 2026)
+
+Узгодження двох видів оплат, щоб не плодити конкуруючі моделі (архітектурний ризик R3).
+
+### Два канонічні види
+
+| Вид                       | Що це                                      | Модель даних                                                  | Тригер         |
+| ------------------------- | ------------------------------------------ | ------------------------------------------------------------- | -------------- |
+| **One-time**              | разова оплата за замовлення (fixed/hourly) | `Order` → `Payment{type: advance\|final\|partial}`            | manual confirm |
+| **Recurring (абонплата)** | щомісячна/квартальна/річна послуга         | `Service` → `CompanyService` → `ServiceCharge{month, status}` | cron C02       |
+
+### КАНОНІЧНА модель recurring — `Service / CompanyService / ServiceCharge`
+
+> ⚠️ **SUPERSEDED у S5.6 (рішення власника 12.06, `PROJECTS_SPEC.md`):** `CompanyService`
+> **замінюється моделлю `Project`** (фінмодель 2.0). Recurring-підписка = проєкт типу
+> `fixed_monthly_advance`. Абонплат у системі ще немає → чиста заміна без міграції (П6).
+> `Service`-каталог лишається як довідник. Нижче — як було ДО S5.6 (історичний контекст);
+> новий канон — `PROJECTS_SPEC.md` §2-3 + TRACKER P-1.
+
+**Рішення (R3, до S5.6):** `Service`/`CompanyService`/`ServiceCharge` — джерело істини для
+recurring-доходу. Чернетку `company_billing_subscription` зі старої S1-alignment-секції
+**відкидаємо** (вона дублювала те саме). Debtors-звіт + P&L + portal billing читають
+`service_charges` — одне джерело.
+
+### Підтримка не-місячної частоти
+
+Якщо потрібна квартальна/річна абонплата, додаємо у `CompanyService` (НЕ нову таблицю):
+
+```prisma
+model CompanyService {
+  // ...наявні поля
+  frequency    BillingFrequency @default(monthly)  // monthly|quarterly|annual
+  nextChargeAt DateTime         @db.Timestamptz(3) // коли генерувати наступний ServiceCharge
+}
+```
+
+Cron C02 обробляє `WHERE nextChargeAt <= now()` замість фіксованого «1-го числа», і зсуває `nextChargeAt` на наступний період. Дешево додати зараз (компанії ще не на планах) — болісно ретрофітити пізніше. Див. BACKLOG «do-now D4».
+
+### Зв'язок Company ↔ BillingPlan (передумова для підписок платформи)
+
+`BillingPlan` зараз — каталог без зв'язку з компанією. Для підписки на саму платформу (не на послуги агенції) потрібна `CompanySubscription{companyId, planId, status, currentPeriodStart/End, canceledAt}`. Додаємо коли реалізуємо платформні підписки (S5+). Зараз — лише зафіксувати в схемі-плані (BACKLOG «S1.5 schema prep»).
+
+### Автосписання (Фаза 2)
+
+`PaymentProvider`-адаптер (Manual MVP → Stripe/LiqPay) робить авто-charge recurring підписок drop-in замінною, без переписування. Manual confirm достатньо для MVP.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Деталі foundational-фіксів — у `docs/archive/MODULE_AUDIT.md` (T3).
+
+### A. Обов'язкові reconcile (T3)
+
+VAT/ПДВ-колонки (`taxRatePct/taxAmount/netAmount` + tax-inclusive) + `agency.defaultTaxRatePct`; `Payment.amountUsd+amountNative+rateUsed`; idempotency `UNIQUE(sourceType,sourceId)` на payments/referral_bonuses/wallet_transactions; `ServiceCharge.{baseAmount,discountPct,discountAmount,totalAmount}` + first-class line-items; `CompanyService.frequency+nextChargeAt`; `ServiceCharge.status='written_off'`; **один канонічний debt** (= wallet moneyBalance, не три); refund/credit-note модель; `agencyId` + per-agency `PaymentSettings`/`ExchangeRate`; loyalty-тіри — один constants (05↔10).
+
+### B. Online payments — провайдери ✅ (Monobank, Stripe, WayForPay/Fondy)
+
+- Розширити `packages/payments` `PaymentProvider` до повного: `createPaymentLink(params)`, `handleWebhook(payload, sig)`, `verifySignature()`, `refund(paymentId, amount)`.
+- Адаптери: `ManualProvider` (є), `MonobankProvider`, `StripeProvider`, `WayForPayProvider`. Вибір per-agency (`PaymentSettings.providers`).
+- `PaymentIntent { id, agencyId, companyId, chargeId/invoiceId, provider, providerIntentId, amount, currency, status(created|pending|paid|failed|expired), paymentLink, createdAt }`.
+- Webhook: `POST /webhooks/payments/:provider` — verifySignature → idempotent upsert (provider event-id UNIQUE) → on paid: створити `Payment(status=confirmed)` + allocation. **Webhook-доставка через outbox** (тема #2).
+- **«Оплата з сервісу»**: клієнт у portal на рахунку → `POST /invoices/:id/pay` → createPaymentLink → редірект. Зараз default — manual/по рахунках; провайдери вмикаються per-agency пізніше.
+
+### C. Dunning (авто-нагадування) ✅
+
+- `DunningPolicy { id, agencyId, steps Json }` — `steps: [{offsetDays: -3|0|3|7|14, channel, tone}]` (per-agency у admin).
+- Cron `C-dunning` (щодня): для кожного pending/overdue charge надсилає крок, якщо настав його offset від `dueDate` (idempotent — `DunningLog{chargeId, step, sentAt}`). Event `billing.payment_reminder`. Ескалація owner'у на останньому кроці.
+
+### D. Розстрочка / графік оплат ✅
+
+- `PaymentSchedule { id, invoiceId/chargeId, agencyId } + PaymentScheduleItem { scheduleId, dueDate, amount, status(pending|paid|overdue) }`.
+- При створенні рахунку owner може розбити на N частин (напр. 50%/50%). Кожен item — окремий «під-charge» для dunning + AR-станів. Оплата зараховується через `PaymentAllocation` на item.
+
+### E. Мультивалютні інвойси ✅ (= арх. тема #11)
+
+- `Document/ServiceCharge.currency` (валюта виставлення: UAH/USD/EUR) + `amountNative`; `amountUsd` (нормалізація для звітів) + `rateUsed` (FX на дату). Клієнт бачить рахунок у своїй валюті; owner-звіти — USD. `exchange_rates` per-agency.
+
+### Schema-зміни (foundation-міграція)
+
+```
+Payment: + amountUsd, amountNative, rateUsed, sourceType, sourceId, taxRatePct, taxAmount, agencyId
+ServiceCharge: + baseAmount, discountPct, discountAmount, totalAmount, currency, status+written_off, agencyId
+CompanyService: + frequency, nextChargeAt
+New: PaymentIntent, ChargeLine(line-items), DunningPolicy, DunningLog, PaymentSchedule(+Item),
+     CreditNote/Refund; per-agency PaymentSettings/ExchangeRate
+```
+
+> **→ BACKLOG (не обрано):** купони/промокоди; LiqPay-адаптер.
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+| ID   | Рішення                                                                                                                                                                                | Вплив               | Нюанси власника                                                                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| 05-А | **Онлайн-оплата: ЗАКЛАСТИ фундамент** (кнопка/стани в Portal, webhook-сім, PaymentLink-модель) — але провайдера ще НЕ підключати                                                       | [бек+екран]         | «можна закласти але не буду ще підключати» — увімкнення = окреме пізнє рішення               |
+| 05-Б | **Overdue + dunning З НАЛАШТУВАННЯМИ** (ланцюжок нагадувань, інтервали/тексти конфігуруються)                                                                                          | [бек] + бейджі      |                                                                                              |
+| 05-В | **Сторнування / повернення / СПИСАННЯ боргу** — повний набір: refund, credit-note, write-off («мені можуть і не заплатити — щоб не висів просто борг»), клавбек реферального бонуса    | [бек+екран дрібний] | `written_off` у схемі вже є і вже виключений з боргу (AR-12) — потрібен UI/flow              |
+| 05-Г | **Термін оплати (payment terms)**: скільки днів на оплату після виставлення рахунку — НАЛАШТОВУЄТЬСЯ (per-agency дефолт + per-company/рахунок) → задає dueDate → звʼязка з dunning (Б) | [бек]               | ⚠️ Власник переозначив Г: це САМЕ payment terms, НЕ розстрочка (розстрочку не підтверджував) |
+| 05-Е | **EUR як валюта** платежів/нарахувань (курс eurToUah вже синкається)                                                                                                                   | [бек] копійка       | USDT — НЕ валюта, а метод оплати (`paymentMethod='usdt'` як USD) — рішення зафіксовано       |
+| 05-Ж | **VAT/ПДВ-поля** (ставка %, сума окремо) у нарахуваннях/рахунках                                                                                                                       | [бек]               |                                                                                              |
+| 05-З | **Разові знижки** (ручна знижка на нарахування/замовлення поверх loyalty)                                                                                                              | [бек+екран дрібний] |                                                                                              |
+| 05-Д | **Автосписання з передоплати** — нове нарахування автоматично гаситься з `moneyBalance` (опція per-company)                                                                            | [бек] дрібний       | Підтверджено власником 11.06 (через уточнення)                                               |
+
+### 05-ПРОЕКТИ ⭐ ВЕЛИКЕ НОВЕ: «Фінансові проєкти клієнта» (кілька фін-моделей на 1 клієнта)
+
+Вимога власника (дослівно за змістом): відносно ОДНОГО клієнта може бути ДЕКІЛЬКА
+паралельних фінансових моделей — «проєктів»/інстансів, кожен зі своїми договором,
+рахунками, валютою і правилами:
+
+- Приклад: (1) «Оренда» — щомісячне фіксоване АВАНСОВЕ нарахування, свій договір/рахунки;
+  (2) «Програмування» — чисто погодинні роботи, своя ставка; (3) інші послуги — інша
+  ставка/абонплата, інший договір.
+- **Абонплати — ЗАВЖДИ авансові. Погодинні — авансові АБО по факту** (налаштування моделі).
+- Різні проєкти одного клієнта — можуть бути в РІЗНИХ валютах.
+- Договір: для якихось типів обовʼязковий, для якихось опційний — продумати обовʼязковість полів.
+- **Маржа per-проєкт/per-виконавець**: клієнт платить $30/год по проєкту → програміст
+  отримує $10/год → агенція лишає $20. Ставка-собівартість: на рівні проєкту/людини/відділу —
+  СТРУКТУРУ ПРОДУМАТИ (власник відкритий: або привʼязка до проєкту, або чисто на стороні
+  працівників). Звʼязати з уже запланованим S13-06 (cost allocation / маржа по клієнтах).
+
+**Напрям реалізації (попередній, на детальну міні-спеку):** нова сутність
+`Project`/Engagement між Company і Orders/Charges: `{ companyId, name,
+billingModel(fixed_monthly_advance | hourly_prepaid | hourly_postpaid), currency,
+rate/abonAmount, contractRequired?, contractDocumentId?, активність }`;
+Order.projectId? / TimeLog → ставка резолвиться з проєкту; recurring charge →
+привʼязка до проєкту (еволюція наявного CompanyService); executor cost-rate
+(per-project override → fallback ставка працівника). **Потребує окремої міні-спеки
+до фінального плану** + ТЗ дизайнеру (екрани налаштування проєктів клієнта в
+Workspace, розрізи в Portal-білінгу).
+
+**Для ТЗ дизайнеру:** кнопка «Оплатити» + стани платіжного лінка в Portal (А);
+бейджі overdue + таймлайн нагадувань (Б); дії сторно/повернення/списання в Workspace-білінгу (В);
+налаштування payment terms (Г); знижка на нарахування (З); БЛОК ЕКРАНІВ «Проєкти клієнта» (05-ПРОЕКТИ).
+
+---
+
+## UPDATE (07.07.2026) — 05-Б дунінг: overdue + ланцюжок нагадувань ✅
+
+> Рішення власника (вікторина 07.07): обʼєкт — **нарахування** (ServiceCharge.dueDate);
+> дефолтний ланцюжок **-3 / 0 / +3 / +7 / +14** (редагований per-agency); канали
+> **email + in-app** (telegram — якщо привʼязаний, через notify-пайплайн);
+> **per-company вимикач** «не надсилати нагадування» (глушить лише листи).
+
+- **Модель:** `DunningLog { agencyId, chargeId, stepOffset, escalatedAt?, sentAt }`,
+  `@@unique([chargeId, stepOffset])` (ідемпотентність), RLS. `Agency.dunningSteps Json?`
+  (null → дефолт, [] → вимкнено), `Company.dunningOptOut`. Міграція `20260707_dunning`.
+- **Cron `C-dunning`** (щогодини, boot 90с; `cron/dunning.ts`):
+  1. **B-D1 закрито:** pending/partial з минулим dueDate і додатним боргом →
+     `status=overdue` (та сама семантика, що deriveChargeState; кредитні рядки і
+     on_actuals-драфти approvalStatus=pending/rejected не чіпаються). Ставиться
+     незалежно від opt-out.
+  2. **Кроки:** надсилається лише ОСТАННІЙ насталий крок (catch-up без спаму по
+     пропущених); лог пишеться ДО відправки — конкурентний прогін упирається в unique.
+     Фази листа: upcoming (до терміну) / due (у день) / overdue (+N днів). Лист —
+     `billing.payment_reminder` (у CRITICAL_EVENTS; тема+вступ редагуються через
+     08-EMAIL), отримувачі — всі учасники компанії.
+  3. **Ескалація:** на фінальному додатному кроці власники агенції отримують
+     `billing.invoice_overdue` (лист + in-app «клієнт не платить», лінк на картку
+     клієнта); `escalatedAt` на лог-рядку.
+- **API (owner-only):** GET/PUT `/workspace/agency/dunning-settings` `{steps: number[]|null}`
+  (цілі -30..60, ≤10; null = повернути дефолт); GET/PATCH
+  `/workspace/companies/:companyId/dunning` `{optOut}`.
+- **UI:** /settings картка «Нагадування про оплату» (кроки через кому + «Повернути
+  дефолт»); картка клієнта → Фінанси → тумблер «Не надсилати нагадування про оплату».
+
+---
+
+## UPDATE (07.07.2026) — АВТО-РАХУНОК разових замовлень ✅
+
+> Рішення власника (вікторина 07.07): тригер — **перехід замовлення в done**; результат —
+> **чернетка + in-app власнику** («перевір і надішли», клієнту нічого не летить);
+> hourly = **факт TimeLog-годин × ставка** (не оцінка); per-agency тумблер,
+> **увімкнено за замовчуванням**.
+
+- `Agency.autoInvoiceOneTime @default(true)`, міграція `20260707_auto_invoice`.
+- `services/autoInvoice.ts` → `maybeAutoInvoiceOnDone`: викликається з outbox-воркера
+  на `order.status_changed` з to=done (durable; збій ковтається — ретрай події не дублює
+  клієнтські сповіщення, сам сервіс ідемпотентний через guard «invoice по замовленню
+  вже існує»). Скоуп: замовлення БЕЗ проекту (проектні білляться recurringCharges) і з
+  компанією. Сума: fixed → approvedAmount ?? fixedPrice ?? totalAmount; hourly →
+  Σ TimeLog.hours × hourlyRate. Немає суми/годин → рахунок не створюється, власник
+  отримує in-app з причиною. `order.totalAmount` доштамповується (PDF рахунку читає
+  суму з замовлення). Нумерація — той самий race-safe DocumentCounter.
+- Подія `billing.invoice_draft_ready` (без email-шаблону → лише in-app).
+- Тумблер: GET/PATCH `/workspace/agency/workflow-settings` += `autoInvoiceOneTime`;
+  чекбокс у картці «Воркфлоу» /settings.
+
+---
+
+## UPDATE (07.07.2026) — 05-В сторнування / повернення / списання ✅
+
+> Рішення власника (вікторина 07.07): refund — **повний+частковий**; кредит-нота —
+> **внутрішнє коригування** (негативне нарахування, без PDF); реферальний бонус —
+> **авто-клавбек**; сповіщення — **клієнту** (refund + write-off; кредит-нота теж).
+> Закриває беклог **B-D2** («enum refunded мертвий»).
+
+- **Моделі** (міграція `20260707_reversals`, RLS): `PaymentRefund {agencyId, paymentId,
+amount, amountUsd?, reason?, method?, refundedById}`; `ServiceCharge` += `writeOffReason`,
+  `writtenOffAt`, `writtenOffById`. Кредит-нота = ServiceCharge з `kind='credit_note'` і
+  негативним totalAmount. Енуми `refunded`/`written_off` та `WalletTxnSource.REFUND` — уже були.
+- **`services/reversals.ts`** (tx-pure): `refundPayment` — валідація ≤ залишку, USD-знімок
+  пропорційно платежу, повне повернення → `status='refunded'`; **клавбек**: пропорційно
+  поверненню відкочує company-реферальний бонус з wallet референта (clamp до наявного
+  балансу — решта бізнес-втрата; employee-бонус рахується наживо при виплаті і
+  скоригується сам). `writeOffCharge` — `status='written_off'` + аудит. `createCreditNote` —
+  негативне нарахування.
+- **moneyBalance** (allocation.recomputeMoneyBalance): `paid = Σ(confirmed) − Σ(refund.amountUsd
+для confirmed-платежів)`. Повне повернення флипає status → воно випадає з обох сум (без
+  подвійного віднімання). Order-платіж: refund знімає `paidAt`, якщо замовлення знову
+  недоплачене.
+- **API (owner-only):** POST `/workspace/billing/payments/:id/refund`,
+  `/workspace/billing/charges/:id/write-off`, `/workspace/billing/credit-notes`. Події
+  `billing.payment_refunded` / `debt_written_off` / `credit_note_issued` (email+in-app
+  клієнту; перші дві — editable у 08-EMAIL).
+- **UI (BillingPage):** «Повернути» на confirmed-платежі (модалка сума+спосіб+причина,
+  дефолт=залишок) + бейдж «повернено X»/«повністю повернено»; «Списати» на відкритому
+  нарахуванні (причина); «+ Кредит-нота» (клієнт+сума+причина). Всі owner-only.
+- **Тести:** інтеграційні (real PG) — частковий/повний refund + баланс + status,
+  над-повернення 400, write-off + 409, кредит-нота, клавбек бонусу.
+
+---
+
+## UPDATE (07.07.2026) — 05-А (рахунок замовлення в порталі) + 05-Д (bonus-spend UI) ✅
+
+> Рішення власника (07.07): **05-А** — механізм оплати НЕ беремо; клієнт бачить рахунок
+> по замовленню + реквізити «Як оплатити» (без шлюзу). **05-Д** — переозначено як
+> «списувати бонуси»: клієнт-власник гасить нарахування бонусами (сервіс+роут S5-08
+> уже були — додано лише кнопку в порталі); вручну.
+
+- **05-А (portal):** getOrder clientView += `paidAt`. OrderDetailPage — картка «Рахунок»
+  (сума до сплати · статус «Очікує оплати»/«Сплачено ✓») + кнопка «Оплатити» →
+  `PayInfoModal`: лінк на PDF-рахунок (останній sent/accepted invoice замовлення через
+  useOrderDocuments) + реквізити агенції «Як оплатити» (usePortalSummary.paymentSettings).
+  Без платіжного шлюзу — оплата за реквізитами, оператор підтверджує вручну.
+- **05-Д (portal):** BillingPage — на відкритому нарахуванні (не paid/written_off,
+  approval null/approved, борг>0) кнопка «Оплатити бонусом» (лише company owner +
+  bonus>0) → `BonusSpendModal` (спишеться min(борг, бонус)) → POST
+  `/portal/invoices/:chargeId/pay-with-bonus` (наявний). Реюз `spendBonusOnCharge`
+  (envelope: debit + bonus-backed allocation атомарно, без овердрафту/переплати).
+- **Гейт:** turbo 56/56 (бекенд без нової логіки — лише DTO-поле paidAt; bonus-spend
+  уже покритий інтеграційним `bonusSpend.test.ts`). Вживу: клієнт-власник списав 80
+  бонусів на нарахування 120 → charge partial (outstanding 40), bonus 0, wallet-debit
+  invoice_payment; портал показав картку «Рахунок» + «Як оплатити» з реквізитами і
+  кнопку «Оплатити бонусом» (модалка «Списати $50»).

@@ -1,275 +1,217 @@
-# EMAIL TEMPLATES MODULE
-> App: API (api.workflo.space) / Mailcow
-> Статус: MVP
-> Залежить від: `packages/notifications`, `packages/i18n`
-> Оновлено: 12 квітня 2026
+# EMAIL MODULE (канал notify-матриці)
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
+> App: API (api.workflo.space) / Mailcow · Залежить від: **07-notifications** (notify-матриця), `packages/notifications`, `packages/i18n`.
+> Статус: **REWRITE-done** (doc-sync 1.06) · Оновлено: 1 червня 2026
+> ⚠️ Стара версія цього доку (EmailLog-модель, file-HTML-шаблони, 9 листів, `replaceAll`-без-escape) — **фікція**, видалена. Канон нижче.
 
 ---
 
-## Огляд
+## 0. Суть: email — це **канал**, а не окремий модуль
 
-Модуль відповідає за відправку транзакційних email-повідомлень через Nodemailer → Mailcow (self-hosted поштовий сервер на Hetzner). Шаблони email написані на HTML з inline CSS (максимальна сумісність з email клієнтами). Підтримка двох мов: UA + EN.
+Email не має власного «модуля відправки». Це **один із каналів матриці сповіщень** (модуль **07-notifications**). Жоден доменний модуль не викликає Nodemailer напряму — усе йде через `notify()`:
+
+```
+notify(event, recipients, payload)
+  → resolver (матриця 07 × NotificationPreference × ADR-003 CRITICAL_EVENTS email-lock)
+    → dispatch.renderEmailForEvent()  (лише для подій, що мають email-шаблон)
+      → EmailAdapter.sendEmail()
+        → getMailer() → Nodemailer → Mailcow SMTP → клієнт
+```
+
+> Наслідок: «хто шле email» вирішує **матриця + преференції користувача**, а не доменний код. Більшість подій (order/payment/document/referral) ідуть **telegram/in-app**; email мають лише події, для яких є шаблон (нижче).
 
 ---
 
-## Інфраструктура
+## 1. Шаблони — TypeScript-функції (не HTML-файли)
 
-```
-API (Nodemailer)
-  → Mailcow SMTP (mail.workflo.space:587, STARTTLS)
-    → Доставка клієнту
-```
+Шаблони живуть у `packages/notifications/src/email/templates/*.ts` як **render-функції**, зібрані з примітивів `render.ts` (`renderLayout` / `renderButton` / `renderHeading` / `renderParagraph` / `renderMuted`). Реально існують **7** (S6-07 додав `renderOrderStatusChangedEmail` · `renderNewCommentEmail` · `renderInvoiceSentEmail`, uk+en, вплетені в `dispatch.renderEmailForEvent`; палітра — warm **stone+lime**, не IBM-Carbon):
 
-### Nodemailer конфігурація
+| Функція                          | Подія                           | Змінні (приклад)                          |
+| -------------------------------- | ------------------------------- | ----------------------------------------- |
+| `renderWelcomeEmail`             | `auth.welcome`                  | `name`, `portalUrl`                       |
+| `renderPasswordResetEmail`       | `auth.password_reset`           | `name`, `resetUrl`, `expiresIn`           |
+| `renderInviteExecutorEmail`      | `system.invite_sent` (executor) | `inviterName`, `acceptUrl`                |
+| `renderInviteCompanyMemberEmail` | `system.invite_sent` (member)   | `inviterName`, `companyName`, `acceptUrl` |
+
+- **XSS:** усі змінні екрануються `escapeText` / `escapeAttr` (`render.ts`) — **обов'язково**. Жодного `replaceAll`-без-escape.
+- **Layout:** `renderLayout()` (програмний, inline-CSS для сумісності) — preheader, бренд із i18n `common.brand`, кольори `PRIMARY_COLOR/TEXT_COLOR/MUTED_COLOR`.
+- Подія без email-шаблону → email просто **не надсилається** (канал пропускається; залишаються telegram/in-app).
+
+> Нові email-шаблони додаються як render-функції + рядок у матриці 07, не як HTML-файли.
+
+### 1.1. Заплановані шаблони (за дизайном r2 — `DESIGN_SYSTEM.md §5.6`)
+
+Дизайн повернув **15 HTML-мокапів** ([`design-v2/project/email-templates.jsx`](../../design-v2/project/email-templates.jsx)). 4 з них реалізовані вище; **11 — заплановані** для S3+ (frontend integration phase). Кожен має готовий мокап у фірмовому стилі (лайм/stone/Geist) — імплементація = пере-вираження мокапу через `render*`-примітиви + reuse `renderLayout()`.
+
+**Transactional (5):**
+
+| Функція (план)                  | Подія (07)                               | Реалізовано? | Дизайн                    |
+| ------------------------------- | ---------------------------------------- | ------------ | ------------------------- |
+| `renderInvitePortalEmail`       | `system.invite_sent` (member)            | ✅ (= вище)  | `email-invite`            |
+| `renderOrderReceivedEmail`      | `orders.created` (підтвердження клієнту) | ❌           | `email-order`             |
+| `renderInvoiceSentEmail`        | `billing.invoice_sent`                   | ✅ S6-07     | `email-invoice` (pay CTA) |
+| `renderOrderStatusChangedEmail` | `orders.status_changed`                  | ✅ S6-07     | status email              |
+| `renderNewCommentEmail`         | `chat.new_comment`                       | ✅ S6-07     | comment email             |
+| `renderPaymentOkEmail`          | `billing.invoice_paid`                   | ❌           | `email-payment` (receipt) |
+| `renderDeadlineReminderEmail`   | `billing.invoice_overdue` (warning)      | ❌           | `email-deadline`          |
+
+**Auth + безпека (6):**
+
+| Функція (план)               | Подія (07)                               | Реалізовано? | Дизайн                    |
+| ---------------------------- | ---------------------------------------- | ------------ | ------------------------- |
+| `renderEmailVerifyEmail`     | `auth.email_verification`                | ❌           | `email-verify` (код)      |
+| `renderPasswordResetEmail`   | `auth.password_reset`                    | ✅ (= вище)  | `email-reset`             |
+| `renderPasswordChangedEmail` | `auth.password_changed` (security alert) | ❌           | `email-pwd-changed`       |
+| `renderNewLoginEmail`        | `auth.login_from_new_device`             | ❌           | `email-new-login` (alert) |
+| `renderOtpEmail`             | `auth.otp_code` (2FA login)              | ❌           | `email-otp`               |
+| `renderEmailChangeEmail`     | `auth.email_change_confirm`              | ❌           | `email-change`            |
+
+**Системні + інфо (4):**
+
+| Функція (план)              | Подія (07)                         | Реалізовано? | Дизайн                      |
+| --------------------------- | ---------------------------------- | ------------ | --------------------------- |
+| `renderInviteExecutorEmail` | `system.invite_sent` (executor)    | ✅ (= вище)  | `email-team-invite`         |
+| `renderMentionEmail`        | `chat.mention`                     | ❌           | `email-mention`             |
+| `renderDocReadyEmail`       | `documents.completion_act_ready`   | ❌           | `email-doc-ready`           |
+| `renderDigestEmail`         | `weekly_digest` (новий event у 07) | ❌           | `email-digest` (stat-сітка) |
+
+**Інтеграційні (r4, додано в дизайні):**
+
+| Функція (план)                      | Подія (07)              | Реалізовано? | Дизайн                                                     |
+| ----------------------------------- | ----------------------- | ------------ | ---------------------------------------------------------- |
+| `renderRefundIssuedEmail` (від G13) | `billing.refund_issued` | ❌           | у `round4-billing.jsx`                                     |
+| `renderWelcomeEmail`                | `auth.welcome`          | ✅ (= вище)  | _окремого мокапу нема — використовується дефолтний layout_ |
+
+> **Total:** 15 у дизайні · 4 ✅ у коді · **11 todo** + inline-CSS існуючих 4 треба пере-перевірити проти токенів §3 (DESIGN_SYSTEM) — фактично виконано через `render.ts` primitives.
+>
+> **Імплементація:** для кожного нового шаблону — нова TS-функція + рядок у матриці модуля 07 (`docs/modules/07-notifications.md §матриця`). HTML-структура + inline-CSS береться з відповідного компонента у [`email-templates.jsx`](../../design-v2/project/email-templates.jsx) і перевиражається через `renderLayout`/`renderButton`/`renderHeading`/`renderParagraph`/`renderMuted` для XSS-безпеки.
+
+---
+
+## 2. Транспорт
 
 ```typescript
 // packages/notifications/src/email/mailer.ts
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,      // mail.workflo.space
-  port: Number(process.env.SMTP_PORT),  // 587
-  secure: false,                    // STARTTLS
-  auth: {
-    user: process.env.SMTP_USER,    // noreply@workflo.space
-    pass: process.env.SMTP_PASS,
-  },
-})
-
-// Перевірка при старті
-await transporter.verify()
+getMailer(override?)  // Nodemailer singleton; override → per-agency SMTP (white-label)
+  → host/port/secure/auth з config.ts (Zod-валідований: SMTP_HOST/PORT/USER/PASS/FROM/FROM_NAME)
+verifyMailer()        // verify() на старті
 ```
 
-### Mailpit (локальна розробка)
-
-В dev середовищі SMTP_HOST=mailpit:1025 → всі листи потрапляють на http://localhost:8025 (Mailpit UI) — не відправляються реальним адресатам.
+- **Прод:** Mailcow SMTP (`mail.workflo.space:587`, STARTTLS). From за замовч. `noreply@workflo.space`, Reply-To `hello@workflo.space`; SPF/DKIM/DMARC у Mailcow.
+- **Dev:** Mailpit (`SMTP_HOST=mailpit:1025`) → UI `http://localhost:8025`, реальним адресатам не йде.
+- **Multi-tenant:** `getMailer(override)` дозволяє per-agency SMTP (див. §D — per-agency домен).
 
 ---
 
-## Шаблони листів
+## 3. Логування
 
-Всі шаблони в `packages/notifications/src/email/templates/`:
-
-```
-templates/
-├── base.html              // Base layout (header, footer, logo, unsubscribe)
-├── welcome/
-│   ├── uk.html
-│   └── en.html
-├── password-reset/
-│   ├── uk.html
-│   └── en.html
-├── invite/
-│   ├── uk.html
-│   └── en.html
-├── order-status/
-│   ├── uk.html
-│   └── en.html
-├── invoice/
-│   ├── uk.html
-│   └── en.html
-├── document-sent/
-│   ├── uk.html
-│   └── en.html
-├── payment-received/
-│   ├── uk.html
-│   └── en.html
-├── subscription-expiring/
-│   ├── uk.html
-│   └── en.html
-└── referral-bonus/
-    ├── uk.html
-    └── en.html
-```
-
-### Template рендеринг
-
-```typescript
-// packages/notifications/src/email/renderTemplate.ts
-export function renderEmailTemplate(
-  templateName: string,
-  language: 'uk' | 'en',
-  variables: Record<string, string | number>
-): string {
-  const templatePath = join(__dirname, 'templates', templateName, `${language}.html`)
-  let html = readFileSync(templatePath, 'utf8')
-
-  // Простий string replace для MVP: {{variable}}
-  for (const [key, value] of Object.entries(variables)) {
-    html = html.replaceAll(`{{${key}}}`, String(value))
-  }
-
-  return html
-}
-```
-
-> В Phase 2 — перехід на Handlebars або Mjml для більш складних шаблонів.
+Факт відправки — у **`NotificationLog`** (НЕ окрема `EmailLog`): `event`, `channel`, `status(sent|failed|skipped|rolled_up)`, `errorCode`, `rollupTargetId`, `metadata`. **Персистити `messageId`** від SMTP для трасування. Тіло листа не зберігаємо (GDPR/розмір).
 
 ---
 
-## Список листів та їх змінні
+## 4. Мультимовність
 
-### `welcome`
-```
-{{name}}           — ім'я клієнта
-{{loginUrl}}       — посилання на вхід
-{{supportEmail}}   — hello@workflo.space
-```
+Мова листа — `recipient.locale ?? 'uk'` (dispatch, i18n `LocaleKey`); fallback `uk`. Переклади — `packages/i18n` (+ PDF-i18n окремо в `packages/templates`).
 
-### `password-reset`
-```
-{{name}}
-{{resetUrl}}       — https://portal.workflo.space/reset-password?token=...
-{{expiresIn}}      — "1 година"
-```
+---
 
-### `invite` (для executors і company members)
-```
-{{name}}
-{{inviterName}}    — хто запросив
-{{role}}           — "виконавець" або "член команди"
-{{inviteUrl}}      — посилання для прийняття
-{{expiresAt}}      — дата закінчення запрошення
-```
+## 5. Зв'язки з іншими модулями
 
-### `order-status`
-```
-{{orderTitle}}
-{{orderNumber}}    — #UUID-short або порядковий номер
-{{oldStatus}}
-{{newStatus}}
-{{orderUrl}}       — посилання на замовлення в portal
-{{comment}}        — опціонально, коментар до зміни
-```
+| Модуль                            | Зв'язок                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **07-notifications**              | **Власник** каналу: матриця, resolver, ADR-003 email-lock, dispatch, `EmailAdapter`              |
+| **01-auth**                       | Емітить події `auth.welcome` / `auth.password_reset` / `system.invite_sent` (мають email-шаблон) |
+| Orders/Billing/Documents/Referral | Емітять `notify()`-події; **резолвер** вирішує email vs telegram/in-app — не шлють email напряму |
 
-### `invoice`
-```
-{{orderTitle}}
-{{invoiceNumber}}  — INV-2026-0042
-{{totalAmount}}    — $500.00
-{{totalAmountUah}} — ₴20,750
-{{dueDate}}
-{{downloadUrl}}    — посилання на PDF
-```
+---
 
-### `document-sent`
-```
-{{documentType}}   — "Акт виконаних робіт"
-{{documentNumber}}
-{{orderTitle}}
-{{downloadUrl}}
-{{signUrl}}        — посилання для підписання (portal)
-```
+## Аудит-фіналізація (30 травня 2026) — REWRITE + нові фічі
 
-### `payment-received`
-```
-{{amount}}
-{{amountUah}}
-{{orderTitle}}
-{{paymentDate}}
-{{balanceDue}}
-```
+> ⚠️ Стара частина доку **матеріально неправильна** (EmailLog-модель, file-HTML-шаблони, 9 шаблонів) → ВИДАЛИТИ в doc-sync. Реальність: 4 TS-шаблони (`renderWelcome/PasswordReset/Invite*`), логування через `NotificationLog`, escape через `escapeText/Attr`.
 
-### `subscription-expiring`
-```
-{{planName}}
-{{expiresAt}}
-{{daysLeft}}       — "3 дні"
-{{renewUrl}}
-```
+### A. Обов'язкові reconcile
 
-### `referral-bonus`
+Прибрати `EmailLog` + file-templates + `replaceAll`-без-escape приклад. Per-agency sender (multi-SMTP), `messageId` персистити в NotificationLog для трасування.
+
+### B. Inbound email → задача/коментар ✅ (= арх. тема #14)
+
+- Mailcow inbound → `POST /webhooks/email/inbound` (parse MIME). Routing: `Reply-To`/`+token@` адреса несе `{orderId, profileId}` → створює `OrderComment`; `support@agency` → новий order/тикет (триаж).
+- Дедуп по Message-ID; вкладення → OrderFile; spam-фільтр (SPF/SpamAssassin score). `agencyId` з домену отримувача.
+
+### C. Bounce / suppression ✅ ЗБУДОВАНО (S12-05, 2026-07-13)
+
+- **Модель `EmailSuppression { id, email @unique, reason, source?, createdAt }`** — **identity-scoped, БЕЗ tenant-RLS** (як `push_subscriptions`/`refresh_tokens`): suppression прив'язана до email-адреси, а не до агенції; той самий адресат не має отримувати ще й в іншій агенції. `@@map("email_suppressions")`.
+- **Bounce/DSN-детект** (не Mailcow-webhook, а сам IMAP-полер inbound-скриньки — `detectBounce()` у `inboundEmail.ts`): `multipart/report; report-type=delivery-status` **або** відправник `mailer-daemon@`/`postmaster@` → витягуємо адресу з `X-Failed-Recipients` або `Final-Recipient` → upsert `EmailSuppression{reason:'bounce', source:messageId}`, тікет НЕ створюється.
+- **Suppression-guard у `notify()`**: перед EMAIL-каналом `deps.emailSuppressed(email)` → якщо suppressed, `{status:'skipped', reason:'suppressed'}` (лог, без відправки). Hook у `buildNotifyDeps` читає `EmailSuppression` raw prisma (identity-таблиця).
+- **Unsubscribe (HMAC без стану)** — `makeUnsubscribeToken(email)` = `base64url(email).HMAC-SHA256(email, UNSUBSCRIBE_SECRET||JWT_SECRET)`, `verifyUnsubscribeToken` звіряє constant-time. No-auth роут `GET/POST /public/unsubscribe/:token` (rate-limit 30/min): **GET** → HTML-підтвердження (людина з листа), **POST** → one-click JSON (RFC 8058; scoped `application/x-www-form-urlencoded` content-parser, тіло ігнорується). Обидва upsert `EmailSuppression{reason:'unsubscribe', source:'unsubscribe_link'}` + audit `actorId:'public'`.
+- **Broadcast-листи (`system.broadcast`)** несуть заголовки `List-Unsubscribe: <url>` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (вимога Gmail/Yahoo) + футер-лінк «Відписатися». `unsubscribeUrl` = `API_PUBLIC_URL||https://api.workflo.space` + `/public/unsubscribe/<token>`.
+- **DKIM-surface** (не блокуємо, попереджаємо): inbound `Authentication-Results` → `dkim=pass/fail/none`; при `fail` — `⚠️` префікс у титулі нотифікації команди + `(DKIM не пройдено)` у тілі, щоб чутливі запити звіряли іншим каналом.
+- **Per-poll cap 200** повідомлень/прохід (анти-мейлбомба) — решта UNSEEN дочекається наступного тіку.
+
+### D. Per-agency домен відправки ✅ (white-label)
+
+- `AgencyEmailDomain { agencyId, domain, dkimSelector, verifiedAt }`. DNS-верифікація (SPF/DKIM/DMARC records видаються агенції). `from`/`reply-to`/DKIM per-agency. Дефолт — платформний домен поки агенція не верифікувала свій.
+
 ```
-{{referredCompanyName}}
-{{bonusAmount}}
-{{bonusType}}      — "знижка 10%" або "бонус $50"
+New: SuppressedEmail, AgencyEmailDomain; NotificationLog + messageId
 ```
 
 ---
 
-## Base Layout
+## Прохід власника (11.06.2026) — прийняті розширення
 
-```html
-<!-- packages/notifications/src/email/templates/base.html -->
-<!DOCTYPE html>
-<html lang="{{lang}}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{subject}}</title>
-  <style>
-    /* Inline styles для максимальної сумісності */
-    body { font-family: -apple-system, Arial, sans-serif; background: #f5f5f5; margin: 0; }
-    .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; }
-    .header { background: #1a1a2e; padding: 24px; text-align: center; }
-    .logo { color: #fff; font-size: 24px; font-weight: 700; }
-    .content { padding: 32px 24px; }
-    .btn { display: inline-block; padding: 12px 24px; background: #4f46e5; color: #fff;
-           text-decoration: none; border-radius: 6px; font-weight: 600; }
-    .footer { padding: 16px 24px; text-align: center; color: #999; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">Workflo.Space</div>
-    </div>
-    <div class="content">
-      {{content}}
-    </div>
-    <div class="footer">
-      <p>© 2026 Workflo.Space | <a href="{{unsubscribeUrl}}">Відписатися</a></p>
-      <p>hello@workflo.space</p>
-    </div>
-  </div>
-</body>
-</html>
-```
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+| ID   | Рішення                                                                                                                                                                                                                                                                                                                                                                                                                       | Вплив                   | Нюанси власника                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------ |
+| 08-А | **Керований SMTP для транзакційних листів** (Postmark/Resend/SES — обрати) поверх/замість Mailcow для критичних подій                                                                                                                                                                                                                                                                                                         | [бек]                   | Mailcow лишається для скриньок |
+| 08-В | **Bounce/suppression — підняти пріоритет** (з S12 ближче); звʼязати з трекінгом документів 06-Г                                                                                                                                                                                                                                                                                                                               | [бек]                   |                                |
+| 08-Г | **SaaS-пошта тенанта — дворівнева модель** (рішення зафіксовано, питання власника закрито): (1) дефолт — з домену платформи; (2) «свій домен» — тенант додає лише DNS DKIM/SPF (генеруємо через API провайдера), шле наша інфра від його імені; (3) BYO SMTP — тенант підключає власний хост/логін/пароль. + **Матриця «які категорії листів з якого відправника»** (вимога власника). Поштовий сервіс тенанту НЕ розгортаємо | [бек+екран налаштувань] | Розширює наявний smtp_senders  |
+
+**Відхилено:** Б (email-міст у чат: reply на сповіщення → коментар) — остаточно (відкладався з 03).
+
+**Для ТЗ дизайнеру:** налаштування пошти тенанта: 3 рівні підключення + статус DNS-верифікації + матриця категорія→відправник (Г).
 
 ---
 
-## Логування відправок
+## UPDATE (06.07.2026) — 08-EMAIL: owner-редаговані шаблони листів ✅
 
-```prisma
-model EmailLog {
-  id         String   @id @default(uuid())
-  to         String
-  subject    String
-  template   String
-  status     String   // 'sent' | 'failed'
-  error      String?
-  profileId  String?
-  createdAt  DateTime @default(now())
+> Рішення власника (вікторина 06.07): **лише бізнес-листи** (auth-критичні — системні
+> назавжди), редагується **тема + вступний абзац** поверх системного макета, **uk та en
+> окремо**. Порожнє поле/локаль = системний текст.
 
-  @@index([profileId])
-  @@index([createdAt])
-}
-```
-
-Зберігаємо факт відправки для дебагу. Тіло листа **не зберігаємо** (GDPR, розмір).
-
----
-
-## Дозволи та захист
-
-- **Rate limit:** максимум 5 email / 10 хвилин на один email-адрес (захист від spam abuse)
-- **From address:** завжди `noreply@workflo.space`
-- **Reply-To:** `hello@workflo.space`
-- **SPF/DKIM/DMARC:** налаштовані в Mailcow для `workflo.space`
-
----
-
-## Мультимовність
-
-Мова листа визначається з `profile.preferredLanguage` (встановлюється при реєстрації, можна змінити в налаштуваннях). Fallback — `uk`.
-
----
-
-## Зв'язки з іншими модулями
-
-| Модуль | Що надсилає |
-|---|---|
-| **Auth** | welcome, password-reset, invite |
-| **Orders** | order-status |
-| **Billing** | invoice, payment-received, subscription-expiring |
-| **Documents** | document-sent |
-| **Referral** | referral-bonus |
-| **Notifications** | `EmailAdapter` — конкретна реалізація відправки |
+- **Модель:** `EmailTemplate { agencyId, event, locale, subject?, intro?, updatedById }`,
+  `@@unique([agencyId, event, locale])`, RLS `wf_in_tenant`. Міграція
+  `20260707_email_templates` (drift-free). Нема рядка = системний лист.
+- **Каталог:** `EDITABLE_EMAIL_EVENTS` (services/emailTemplates.ts) — 12 подій
+  (orders.created/status_changed/assigned/approval_requested/approval_decided,
+  chat.new_comment/mentioned, billing.invoice_sent/invoice_paid,
+  documents.completion_act_ready, reports.monthly + псевдо-подія reports.client_monthly)
+  з label та списком `{{змінних}}` (= ключі vars події; невідомий токен лишається видимим).
+- **Пакет notifications:** `EmailOverride { subject?, intro? }`; `applyEmailOverride`
+  підставляє `{{vars}}` у тему, а вступ (html-екранований) підміняє ПЕРШИЙ
+  `<p style="margin:0 0 16px;…">` фіксованого макета — верстку зламати неможливо.
+  `NotifyInput.emailOverrides` per-locale; `dispatchEmail` бере override за
+  `recipient.locale`.
+- **Резолв:** `resolveEmailOverrides(profileId, event)` — агенція з agencyMember або
+  companyMember→company.agencyId; читає через `withTenant` (email_templates під FORCE
+  RLS; у воркері контекст bypass, у запиті — tenant-GUC). Викликається у
+  `dispatchNotification` (fire-and-forget) і в **outbox-воркері** (обидва notify-шляхи:
+  status_changed-цикл і deliverToRecipients) — збій резолву ніколи не блокує доставку.
+  Cron клієнтського місячного звіту накладає override псевдо-події reports.client_monthly.
+- **API (owner-only):** GET/PUT/DELETE `/workspace/agency/email-templates[/:event]` —
+  events+templates; PUT приймає `{uk?, en?}`, обидва поля локалі порожні → deleteMany
+  локалі; невідома/auth-подія → 400; аудит-лог. UI: картка «Email-шаблони» у /settings
+  (селект події, бейдж системний/кастомний, підказка змінних, uk/en тема+вступ,
+  Зберегти/Скинути до системного).
+- **Verify вживу:** PUT override chat.new_comment → коментар власника → Mailpit-лист
+  клієнту з темою «[TEST-08] Workflo Owner написав у «Google Sheets дашборд продажів»» і
+  кастомним вступом з підставленим {{preview}}; системний вступ зник, решта макета ціла.
+  Reset з UI повернув «системний». Знайдено й виправлено дорогою: (1) резолв сирим prisma
+  упирався в RLS → withTenant; (2) чат/білінг-події шле outbox-воркер повз
+  dispatchNotification → override резолвиться і у воркері.

@@ -1,0 +1,667 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long!!'
+process.env.CREDENTIALS_KEK_BASE64 = Buffer.alloc(32, 7).toString('base64')
+
+// Credentials Vault (module 17), agency-side. Real crypto (KEK above) — reveal actually decrypts.
+const db = {
+  company: { findFirst: vi.fn() },
+  credentialVault: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  auditLog: { findMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+  profile: { findUnique: vi.fn() },
+  // TOTP-first step-up: isEnabled() probes the 2FA row (null → password fallback)
+  twoFactorAuth: { findUnique: vi.fn().mockResolvedValue(null) },
+  credentialShare: {
+    findMany: vi.fn().mockResolvedValue([]),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  agencyMember: { findFirst: vi.fn() },
+}
+
+vi.mock('@workflo/db', () => ({
+  prisma: db,
+  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+  withTenant: (fn: (tx: unknown) => unknown) => fn(db),
+  tenantTransaction: (_p: unknown, fn: (tx: unknown) => unknown) => fn(db),
+}))
+vi.mock('@workflo/notifications', () => ({ notify: vi.fn() }))
+vi.mock('../src/services/audit.js', () => ({ writeAuditAsync: vi.fn() }))
+const verifyPassword = vi.fn()
+vi.mock('../src/auth/password.js', () => ({ verifyPassword }))
+
+const { buildApp } = await import('../src/app.js')
+const { encryptSecret, getKek } = await import('../src/services/credentialCrypto.js')
+const { issueRevealGrant } = await import('../src/services/vaultGrant.js')
+const GRANT = () => issueRevealGrant(OWNER.sub).grant
+
+const AGENCY = 'agency-1'
+const COMPANY = 'company-1'
+const CRED = 'cred-1'
+
+const OWNER = {
+  sub: 'owner-1',
+  email: 'o@e.com',
+  role: 'owner' as const,
+  activeAgencyId: AGENCY,
+  activeCompanyId: null,
+  agencyMemberships: [{ agencyId: AGENCY, role: 'owner' as const }],
+  memberships: [] as Array<{ companyId: string; role: 'owner' | 'member' }>,
+}
+const EXECUTOR = {
+  ...OWNER,
+  sub: 'exec-1',
+  role: 'executor' as const,
+  agencyMemberships: [{ agencyId: AGENCY, role: 'executor' as const }],
+}
+
+async function authed(claims: unknown) {
+  const app = buildApp()
+  await app.ready()
+  return { app, token: app.jwt.sign(claims as object) }
+}
+
+const base = `/workspace/clients/${COMPANY}/credentials`
+const metaRow = {
+  id: CRED,
+  label: 'Bitrix24 admin',
+  service: 'bitrix24',
+  url: 'https://b24',
+  username: 'admin',
+  notes: null,
+  revokedAt: null,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+  createdById: OWNER.sub,
+}
+
+beforeEach(() => vi.clearAllMocks())
+afterEach(() => vi.clearAllMocks())
+
+describe('GET /workspace/clients/:id/credentials — list', () => {
+  it('owner lists metadata, no ciphertext/secret leaks', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findMany.mockResolvedValue([metaRow])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const c = res.json().data.credentials[0]
+    expect(c).toMatchObject({ id: CRED, label: 'Bitrix24 admin', revoked: false })
+    expect(JSON.stringify(res.json())).not.toMatch(/ciphertext|encryptedDek|secret/)
+    await app.close()
+  })
+
+  it('executor WITHOUT shares gets an empty list (17-SHARE graceful tab)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialShare.findMany.mockResolvedValue([])
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credentials).toEqual([])
+    expect(db.credentialVault.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('cross-tenant company → 404', async () => {
+    db.company.findFirst.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('GET /workspace/vault — global (17-ГЛОБАЛ)', () => {
+  it('owner lists secrets across clients with company name, no plaintext', async () => {
+    db.credentialVault.findMany.mockResolvedValue([
+      { ...metaRow, companyId: COMPANY, company: { name: 'Acme' } },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/vault',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    const c = res.json().data.credentials[0]
+    expect(c).toMatchObject({ id: CRED, companyId: COMPANY, companyName: 'Acme' })
+    expect(JSON.stringify(res.json())).not.toMatch(/ciphertext|encryptedDek|secret/)
+    await app.close()
+  })
+
+  it('executor without shares gets an empty vault (17-SHARE)', async () => {
+    db.credentialShare.findMany.mockResolvedValue([])
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/workspace/vault',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    // 17-SHARE: no shares → honest empty vault (nav stays usable), not a 403
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credentials).toEqual([])
+    expect(db.credentialVault.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+describe('POST /workspace/clients/:id/credentials — create', () => {
+  it('encrypts the secret before storing (no plaintext persisted)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.create.mockResolvedValue(metaRow)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { label: 'Bitrix24 admin', service: 'bitrix24', secret: 'hunter2' },
+    })
+    expect(res.statusCode).toBe(201)
+    const data = db.credentialVault.create.mock.calls[0][0].data
+    expect(Buffer.isBuffer(data.ciphertext)).toBe(true)
+    expect(data.secret).toBeUndefined()
+    // the stored ciphertext must not contain the plaintext
+    expect(data.ciphertext.toString('utf8')).not.toContain('hunter2')
+    expect(res.json().data.credential.label).toBe('Bitrix24 admin')
+    await app.close()
+  })
+
+  it('rejects an empty label (400)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { label: '', secret: 'x' },
+    })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('accepts null for empty optional fields → 201 (client sends null, not undefined)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.create.mockResolvedValue(metaRow)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      // порожні опційні поля фронт шле як null — схема .nullish() має пропустити (не 400)
+      payload: {
+        label: 'key crm',
+        service: null,
+        url: null,
+        username: 'admin',
+        secret: 'p',
+        notes: null,
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const data = db.credentialVault.create.mock.calls[0][0].data
+    expect(data.notes).toBeNull()
+    expect(data.service).toBeNull()
+    await app.close()
+  })
+
+  it('503 when the vault KEK is not configured', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    const saved = process.env.CREDENTIALS_KEK_BASE64
+    delete process.env.CREDENTIALS_KEK_BASE64
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { label: 'x', secret: 'y' },
+    })
+    expect(res.statusCode).toBe(503)
+    process.env.CREDENTIALS_KEK_BASE64 = saved
+    await app.close()
+  })
+})
+
+describe('POST …/:credId/reveal — decrypt one secret', () => {
+  function encRow(secret: string, revokedAt: Date | null = null) {
+    const kek = getKek()!
+    return { id: CRED, revokedAt, ...encryptSecret(secret, kek) }
+  }
+
+  it('returns the decrypted secret + Cache-Control no-store (with a valid grant)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('s3cr3t-пароль'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.secret).toBe('s3cr3t-пароль')
+    expect(res.headers['cache-control']).toBe('no-store')
+    await app.close()
+  })
+
+  it('without a step-up grant → 403 STEP_UP_REQUIRED (no decrypt)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('STEP_UP_REQUIRED')
+    expect(db.credentialVault.findFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a non-string grant is rejected as 403, not a 500 (hardened body cast)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: 12345 },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('STEP_UP_REQUIRED')
+    await app.close()
+  })
+
+  it('throttles at 10 reveals/hour per owner → 429 (no decrypt)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.auditLog.count.mockResolvedValueOnce(10) // already at the cap this window
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(429)
+    expect(db.credentialVault.findFirst).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('a grant minted for another profile is rejected (403)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x'))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: issueRevealGrant('someone-else').grant },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  it('refuses to reveal a revoked secret (409)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRow('x', new Date('2026-01-02T00:00:00Z')))
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(409)
+    await app.close()
+  })
+
+  it('missing secret → 404', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(null)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('POST /workspace/vault/step-up — password re-entry', () => {
+  it('correct password → 200 + grant', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'correct horse' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(typeof res.json().data.grant).toBe('string')
+    expect(res.headers['cache-control']).toBe('no-store')
+    await app.close()
+  })
+
+  it('wrong password → 401', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(false)
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'nope' },
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('executor CAN step-up (17-SHARE: reveal within shares needs a grant too)', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'x' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.grant).toContain(EXECUTOR.sub)
+    await app.close()
+  })
+
+  it('a step-up grant actually unlocks reveal end-to-end', async () => {
+    db.profile.findUnique.mockResolvedValue({ passwordHash: 'hash' })
+    verifyPassword.mockResolvedValue(true)
+    const { app, token } = await authed(OWNER)
+    const stepUp = await app.inject({
+      method: 'POST',
+      url: '/workspace/vault/step-up',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { password: 'correct horse' },
+    })
+    const grant = stepUp.json().data.grant
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(encRowStandalone('unlocked'))
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.secret).toBe('unlocked')
+    await app.close()
+  })
+})
+
+// helper reused by the end-to-end step-up test (outside the reveal describe scope)
+function encRowStandalone(secret: string) {
+  const kek = getKek()!
+  return { id: CRED, revokedAt: null, ...encryptSecret(secret, kek) }
+}
+
+describe('GET …/:credId/audit — access journal (17-Б)', () => {
+  it('owner sees reveal/change history with actor + ip', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue({ id: CRED })
+    db.auditLog.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        action: 'credentials.revealed',
+        result: 'allowed',
+        createdAt: new Date('2026-02-01T10:00:00Z'),
+        actorId: OWNER.sub,
+        actor: { name: 'Ілля' },
+        metadata: { ip: '1.2.3.4', companyId: COMPANY },
+      },
+    ])
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.entries[0]).toMatchObject({
+      action: 'credentials.revealed',
+      actorName: 'Ілля',
+      ip: '1.2.3.4',
+    })
+    expect(db.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { resourceType: 'credential', resourceId: CRED },
+      })
+    )
+    await app.close()
+  })
+
+  it('404 when the credId does not belong to this company (no cross-company journal leak)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.findFirst.mockResolvedValue(null) // cred belongs to another company
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(db.auditLog.findMany).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('executor is forbidden (403)', async () => {
+    const { app, token } = await authed(EXECUTOR)
+    const res = await app.inject({
+      method: 'GET',
+      url: `${base}/${CRED}/audit`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+})
+
+describe('revoke + delete', () => {
+  it('revoke sets revokedAt (200)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 1 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/revoke`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ revoked: CRED })
+    await app.close()
+  })
+
+  it('revoke of an already-revoked/missing secret → 404', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 0 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/revoke`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('delete removes the row (200)', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.deleteMany.mockResolvedValue({ count: 1 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `${base}/${CRED}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ deleted: CRED })
+    await app.close()
+  })
+
+  it('delete of a missing secret → 404', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.deleteMany.mockResolvedValue({ count: 0 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `${base}/${CRED}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+})
+
+describe('17-Д typed templates (agency side)', () => {
+  it('typed create stores public fields plain + secrets encrypted; reveal returns fields', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.create.mockResolvedValue({
+      ...metaRow,
+      resourceType: 'api',
+      publicFields: [{ kind: 'url', value: 'https://api.x' }],
+    })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'Stripe',
+        resourceType: 'api',
+        fields: [
+          { kind: 'url', value: 'https://api.x' },
+          { kind: 'api_key', value: 'sk_live_42' },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(201)
+    const arg = db.credentialVault.create.mock.calls[0]![0] as { data: Record<string, unknown> }
+    expect(arg.data.resourceType).toBe('api')
+    expect(arg.data.publicFields).toEqual([{ kind: 'url', value: 'https://api.x' }])
+    expect(JSON.stringify(arg.data.publicFields)).not.toContain('sk_live_42')
+    expect(JSON.stringify(res.json())).not.toContain('sk_live_42')
+
+    // reveal returns the structured secret fields
+    const enc = encryptSecret(JSON.stringify([{ kind: 'api_key', value: 'sk_live_42' }]), getKek()!)
+    db.credentialVault.findFirst.mockResolvedValue({
+      id: CRED,
+      revokedAt: null,
+      resourceType: 'api',
+      ...enc,
+    })
+    const rev = await app.inject({
+      method: 'POST',
+      url: `${base}/${CRED}/reveal`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { grant: GRANT() },
+    })
+    expect(rev.statusCode).toBe(200)
+    expect(rev.json().data.secretFields).toEqual([{ kind: 'api_key', value: 'sk_live_42' }])
+    await app.close()
+  })
+
+  it('typed create without secret fields → 400', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: base,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: 'X',
+        resourceType: 'crm',
+        fields: [{ kind: 'login', value: 'admin' }],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(db.credentialVault.create).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+// ── 17-РОТАЦІЯ: expiry PATCH ────────────────────────────────────────────────
+describe('PATCH /workspace/clients/:id/credentials/:credId/expiry', () => {
+  it('owner sets a term (resets the reminder window), clears with null', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 1 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: '2026-08-01T00:00:00.000Z' },
+    })
+    expect(res.statusCode).toBe(200)
+    const arg = db.credentialVault.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>
+      data: Record<string, unknown>
+    }
+    expect(arg.where).toEqual({ id: CRED, companyId: COMPANY })
+    expect(arg.data.rotationRemindedAt).toBeNull()
+    expect(arg.data.expiresAt).toBeInstanceOf(Date)
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: null },
+    })
+    expect(cleared.statusCode).toBe(200)
+    await app.close()
+  })
+
+  it('404 for a secret outside the company, 403 for executor', async () => {
+    db.company.findFirst.mockResolvedValue({ id: COMPANY })
+    db.credentialVault.updateMany.mockResolvedValue({ count: 0 })
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `${base}/cred-foreign/expiry`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expiresAt: null },
+    })
+    expect(res.statusCode).toBe(404)
+
+    const etoken = app.jwt.sign(EXECUTOR as object)
+    const denied = await app.inject({
+      method: 'PATCH',
+      url: `${base}/${CRED}/expiry`,
+      headers: { authorization: `Bearer ${etoken}` },
+      payload: { expiresAt: null },
+    })
+    expect(denied.statusCode).toBe(403)
+    await app.close()
+  })
+})

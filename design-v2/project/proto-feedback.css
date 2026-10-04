@@ -1,0 +1,28 @@
+/* proto-feedback.css — global toast layer for click-through audit */
+.wf-toast-host {
+  position: fixed; right: 18px; bottom: 18px; z-index: 99999;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  pointer-events: none;
+}
+.wf-toast {
+  display: flex; align-items: center; gap: 10px;
+  max-width: 360px; padding: 10px 14px;
+  border-radius: 10px; font-size: 13px; line-height: 1.4;
+  background: var(--wf-fg, #0C0A09); color: var(--wf-bg, #fff);
+  box-shadow: 0 10px 30px -8px rgba(0,0,0,0.4);
+  opacity: 0; transform: translateY(10px) scale(0.98);
+  transition: opacity .22s ease, transform .22s ease;
+  font-family: 'Geist', system-ui, sans-serif;
+}
+.wf-toast.in { opacity: 1; transform: translateY(0) scale(1); }
+.wf-toast-ic {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+.wf-toast[data-kind="stub"] { background: #1C1917; }
+.wf-toast[data-kind="stub"] .wf-toast-ic { background: color-mix(in oklab, #F59E0B 90%, transparent); color: #0C0A09; }
+.wf-toast[data-kind="ok"] .wf-toast-ic { background: color-mix(in oklab, #A3D90D 90%, transparent); color: #0C0A09; }
+.wf-toast[data-kind="info"] .wf-toast-ic { background: color-mix(in oklab, #22B8CF 90%, transparent); color: #0C0A09; }
+.wf-toast[data-kind="warn"] .wf-toast-ic { background: color-mix(in oklab, #EF4444 90%, transparent); color: #fff; }
+.wf-toast-msg { font-weight: 500; }

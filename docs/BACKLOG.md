@@ -1,0 +1,214 @@
+# BACKLOG
+
+**Призначення:** capture-буфер. Не плутати з `TRACKER.md` (спрінти) чи `SPEC.md`/модульними доками (стабільні рішення).
+
+**Стан (30.05.2026):** після помодульного пропрацювання беклогу кожен пункт отримав **явну диспозицію** — або промоут у план (`TRACKER.md`), або підтверджене відкладення з тригером перегляду, або genuine-research. Лімбо немає.
+
+Формат: `- [контекст] Опис. User value. (created: YYYY-MM-DD)`
+
+---
+
+## 💬 Чат / повідомлення (2026-07-04)
+
+- [feature] **Окрема секція «Чати» (unified messenger).** Зараз чат живе лише всередині замовлення, а інбокс — це feed сповіщень (клік → перехід до джерела; без inline-reply, без групування — «все на купу»). Ідея: окремий розділ **«Чати»** — ліворуч список розмов, згрупований **клієнт → замовлення → тред** (unread-бейджі + прев'ю останнього повідомлення), праворуч — сам чат з inline-відповіддю. Розмежування: **інбокс = увага/події, «Чати» = розмови**. **User value:** вести всі клієнтські розмови з одного місця (стиль Front/Missive/Slack-threads), не стрибаючи по замовленнях. **Ми технічно готові:** права панель = вже спільний `OrderChat` (декомпозиція C) + хуки `orderChat.ts`; лишається новий ендпоінт «мої треди + last-message + unread-лічильник» і master-detail список. **Рішення до старту:** модель групування (per-order тред; client-level чат — імовірно не треба); перетин з інбоксом (два входи в ту саму розмову — ок). ~середній зріз. (created: 2026-07-04)
+- [feature] **Хвости інбоксу (модуль 18):** mute/archive розмов (18-Б), відповідальний за тред (18-В), «без відповіді > N год» (18-Г). Розглянути разом із секцією «Чати». (created: 2026-07-04)
+
+---
+
+## 🛠 Аудит інфраструктури / DevOps 26.06.2026 ([`AUDIT_INFRA_DEVOPS_2026-06.md`](AUDIT_INFRA_DEVOPS_2026-06.md)) — відкладено цілим блоком
+
+> Цільовий серверний аудит (4 агенти, крос-верифіковано по коду). Вердикт: **механіка деплою
+> сучасна й добра**; прогалина — в **операційній стійкості** (підтверджує «DR = нуль» з AUDIT_FULL).
+> Рішення власника 26.06: **весь блок у беклог**, у роботу не зараз. **Загальний тригер промоуту:
+> перед першим зовнішнім платним тенантом** (збігається з [ops] SA-5 / [ops] OPS-D1 нижче).
+> Повний фазовий план + докази — в аудит-доку. Рекомендований перший зріз — **INFRA-DR1**.
+
+- [ops] **INFRA-DR1 disaster-recovery бекапів (P0):** _(03.07: repo-частина ЗРОБЛЕНА — restore.sh+drill+cron, uploads-volume+tar, --clean у дампах, project-name фікс у backup.sh; лишилось на сервері: restic init + перший drill — SERVER_UPDATE_2026-07 крок 7)_ `restore.sh` + щомісячний restore-drill (gunzip останнього дампу в throwaway-БД, assert row-counts, звіт у Telegram); активувати офсайт **restic** (код є, сховище ні); `--clean --if-exists` у денні дампи; **змонтувати + бекапити uploads** (`STORAGE_TYPE=local` + нема volume → файли клієнтів губляться при recreate). Перетворює «втрата боксу = кінець» на виміряний RTO. ~1.5–2 дні. (created: 2026-06-26)
+- [ops] **INFRA-DR2 infrastructure-as-code (P0):** Ansible/cloud-init на сервер (Docker, Traefik, pg_cron, backup-cron, `.env`-скелет) — зараз 0 IaC, сервер «pet», rebuild = ручна археологія. ~1–2 дні. (created: 2026-06-26)
+- [ops] **INFRA-OBS1 моніторинг/алертинг (P1)** — _(04.10: notify-on-failure ✅ — job `notify` у `deploy.yml`, потрібні секрети `TELEGRAM_BOT_TOKEN`/`TELEGRAM_ALERT_CHAT_ID`; лишився uptime-моніторинг)_ _розширює [ops] OPS-D1_: увімкнути Sentry (`SENTRY_DSN` порожній на проді); UptimeRobot на `/ready`; **notify-on-failure** крок у деплой-воркфлоу (через наш Telegram-бот) — зараз навіть провал авто-rollback тихий. ~1 день. (created: 2026-06-26)
+- [sec] **INFRA-SEC1 supply-chain пайплайну (P0):** _(02.07: appleboy ssh/scp запінено по SHA — лишились Dependabot + host-key fingerprint)_ пін усіх third-party екшенів на commit-SHA + Dependabot (`appleboy/ssh-action@v1`, `scp-action@v0.1.7` тримають **prod SSH-ключ** на floating-тегу) + SSH host-key fingerprint (зараз TOFU). ~0.5 дня. (created: 2026-06-26)
+- [sec] **INFRA-SEC2 edge-hardening (P1):** Traefik security-headers (HSTS/X-Frame-Options/CSP) + `rateLimit` middleware + явний `tls.options minVersion`; ті ж headers у nginx SPA-конфіги. Зараз edge має лише cert+redirect. ~0.5 дня. (created: 2026-06-26)
+- [ci] ~~**INFRA-OPS1 staging-rollback + health→/ready (P1):**~~ ✅ 04.10 — спільний `deploy.yml` дає staging той самий verify+auto-rollback, що й прод (rollback → останній перевірений тег). портувати prod-патерн `verify`+`if:failure()`+`.previous_deploy` у `staging.yml` (зараз staging без rollback → застрягає); перенаправити post-deploy health з `/health` (liveness) на `/ready` (DB-backed) → API без БД фейлить гейт. ~0.5 дня. (created: 2026-06-26)
+- [docs] **INFRA-DOC1 серверні рунбуки (P1):** `OPS_RUNBOOK.md` (deploy-stuck / DB-down / ротація секрету / severity+escalation) + `DISASTER_RECOVERY.md` (rebuild з нуля, RTO-drill); виправити `INFRASTRUCTURE.md §5` (застаріла на 2 покоління: inline-`docker run` міграції замість `migrate`-сервісу) + мертві шляхи `infra/scripts/...` (канон `scripts/`); ADR-009 на топологію деплою. ~1 день. (created: 2026-06-26)
+- [infra] **INFRA-HARD1 container/Dockerfile hardening (P2):** multi-stage bot/landing (як AR-50b для api); `HEALTHCHECK` у Dockerfile'ах + compose-healthcheck для bot/worker; `no-new-privileges`/`cap_drop`/`read_only` на сервісах; пін баз на digest; ротація Traefik access-log; docker-socket-proxy перед Traefik. Збирати разом, коли візьмемо INFRA-блок. (created: 2026-06-26)
+
+> **Уже в беклозі, підтверджені цим аудитом** (не дублюю — підбирати в межах INFRA-блоку):
+> [infra] **AR-50b** (true prod-prune api-образу) · [ci] **CI-D1** (affected-only build + image-promotion staging→prod) · [ci] **CI-D2** (trivy-скан + GHCR retention) · [ops] **OPS-D1** (моніторинг — поглинається INFRA-OBS1) · [ops] **SA-5** (рознесення серверів / zero-downtime).
+
+---
+
+## 🔍 Повний аудит 11.06.2026 ([`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md)) — відкладене з диспозицією
+
+> Виправлене — спринт **S5.5** (TRACKER, AR-01…AR-60). Нижче — свідомо відкладене.
+
+- [test] **FE-T1 фронтенд-тести: Playwright-смоук (~10 спек) + компонентні** (HIGH-цінність, рішення власника — пізніший прохід): portal login→orders→чат · workspace login→kanban→time-log · один payment-confirm. Тригер: перед SaaS-рефакторингом або після фронтенд-проходу S5-11/12. (created: 2026-06-11)
+- [saas] **SA-1 імперсонація для підтримки** («login as tenant»: super-admin → тенант, аудит-трейл + банер + TTL). Ніде не специфіковано; для SaaS-підтримки must. Тригер: E5 super-admin (SAAS.md Phase 1). (created: 2026-06-11)
+- [saas] **SA-2 імпорт даних при онбордингу тенанта** (CSV клієнтів/замовлень мінімум). Часто вирішує SaaS-конверсію більше за фічі. Тригер: E1 onboarding wizard. (created: 2026-06-11)
+- [saas] **SA-3 email-верифікація на signup + анти-абʼюз** (зараз email-verify у S9-03): для самостійного SaaS-signup потрібна з дня 1. Тригер: E1. (created: 2026-06-11)
+- [ops] **SA-4 email-доставність як продукт**: per-tenant DKIM/SPF, bounce/suppression (S12-05), розглянути керований SMTP (Postmark/SES) замість/поряд Mailcow до відправки від імені тенантів. Тригер: перший зовнішній тенант. (created: 2026-06-11)
+- [ops] **SA-5 рознесення серверів**: staging і/або Postgres з прод-хоста (зараз prod+staging+PG+Mailcow+бекапи на одному Hetzner); PgBouncer + 2 репліки API (закриє і zero-downtime деплой; повʼязано з SC-D1). Тригер: перед зовнішнім тенантом. (created: 2026-06-11)
+- [sec] **SA-6 2FA команди ДО credentials vault**: модуль 17 зберігає чужі секрети — послідовність S9-01 (TOTP) перед увімкненням 17. Фіксація порядку, не нова робота. (created: 2026-06-11)
+- [sec] **SA-7 платформ-адмін**: замінити string-рівність `ADMIN_EMAIL` на роль/таблицю + аудит. Тригер: E5 super-admin. (created: 2026-06-11)
+- [ci] **CI-D2 trivy-скан образів (fail on critical CVE) + GHCR retention** (delete-package-versions, last N). LOW-зусилля. (created: 2026-06-11)
+- [infra] **AR-50b true prod-prune образів api/landing/bot** (LOW поки): AR-50 виправив шарування (manifests→deps→src; verified docker build), але runtime досі несе devDeps+сорці — compose `migrate` ганяє prisma CLI (devDep @workflo/db) з api-образу. Потрібен dedicated migrate-stage/образ + `pnpm deploy --prod` з копією generated prisma client. Тригер: розмір/pull-time почне муляти. (created: 2026-06-11)
+- [ops] **OPS-D1 провіжининг моніторингу**: UptimeRobot/Netdata досі чекбокси; notify-on-failure крок у деплой-воркфлоу. <1 год кожне. (created: 2026-06-11)
+- [billing] **B-D1 overdue-маркування + dunning** (unpaid charge вічно pending) · ~~**B-D2 refund/credit-note/clawback шлях**~~ ✅ ЗАКРИТО 2026-07-07 (05-В) · **B-D3 VAT-готовність**. Тригер: S14-03 payments go-live або перший конфліктний кейс. (created: 2026-06-11)
+- [arch] **P-D1 storage stream/presigned seam** (зараз Buffer-only, 100MB у памʼяті; S3-адаптер S10-06 його вимагатиме). (created: 2026-06-11)
+- [fe] **FE-D1 eslint react-hooks/jsx-a11y у трьох React-апках** · **FE-D2 Zod-помилки EN в UA-UI** (карта повідомлень або locale-aware errorMap). (created: 2026-06-11)
+
+## 🧩 Фінмодель 2.0 follow-ups (17.06.2026)
+
+- [projects] **FM-T1 регламентні (повторювані) задачі-шаблони** (рішення власника 17.06 — у беклог): шаблон задачі на проєкті, що **авто-створюється щоциклу** (напр. щомісяця «оновлення», «резервне копіювання») як `zeroBilled`-задача в канбан — для абон-проєктів обслуговування. User value: не створювати руками типові задачі щомісяця. Залежить від cycle-engine (P-2) — генерувати разом із закриттям/відкриттям циклу. Тригер: після P-2 + P-6 (кошторис-позиції як джерело шаблонів). (created: 2026-06-17)
+
+## ⚙️ CI/CD + DX (9.06.2026)
+
+- [ci] **CI-D1 affected-only Docker build** (LOW, ~1–1.5 хв на дрібних змінах): build-матриця staging/prod білдить ВСІ 5 образів (`landing/portal/workspace/api/bot`) щоразу, навіть якщо змінився лише `api`. Не баг — Docker layer-cache (`type=gha`) робить незмінні білди швидкими, матриця паралельна, незнижуваний пол ~3 хв (push GHCR → pull → migrate-контейнер → recreate → health `sleep`). Опт: фільтрувати матрицю за зміненими апками — `turbo run build --filter='...[HEAD^1]'` (visited-packages) або `dorny/paths-filter@v3` per-app → skip незмінні. Тригер: коли деплої почнуть муляти або зросте к-сть апок. (created: 2026-06-09)
+
+## 🧮 S5 follow-ups (аудит 9.06.2026 — `archive/S5_AUDIT.md`)
+
+> Реальні баги/security вже виправлено (коміти `6941cd3`/`586d0bd`). Нижче — свідомо відкладена косметика/perf, БЕЗ баг-ризику (дублі коректні).
+
+- [arch] **S5-DRY1 консолідувати period/date-хелпери** (MEDIUM-maint): `startOfMonthUtc`/`addFrequency`/`endOfMonthUtc`/`periodBounds`/`periodOf`/`monthsInRange`/`monthFilter`/`firstOfNextMonth` розкидані по payout/pnl/recurringCharges/overview/charges/assignments (`Date.UTC(y,m,1)-1` у 3 копіях). Винести в `apps/api/src/lib/period.ts`. Зробити поки споживачів ~6. (created: 2026-06-09)
+- [arch] **S5-DRY2 спільні RBAC/портал хелпери** (MEDIUM): `assertInternalTeam`/`assertAgencyOwner` (дубль ~14×) + `requirePortalCompany(user,agencyId)` (дубль ~7×) у `auth/tenant.ts`. (created: 2026-06-09)
+- [arch] **S5-DRY3 hoist schema-примітиви** (MEDIUM): `moneyAmount`/`priceAmount`/`isoDate`/`monthString` у `schemas/common.ts` (зараз пере-оголошені у 4 файлах — ризик дрейфу валідації). (created: 2026-06-09)
+- [arch] **S5-D4 split `allocation.ts`** (MEDIUM): виділити `chargeState.ts`(derive+toStored) + `moneyBalance.ts`(recompute) → focused `allocation.ts` ~200 рядків. (created: 2026-06-09)
+- [arch] **S5-D5 `cron/scheduler.ts` factory** (MEDIUM): `scheduleDaily`/`scheduleMonthly` — прибрати дубль lifecycle-boilerplate у 3 кронах. (created: 2026-06-09)
+- [perf] **S5-P1 N+1 у loyaltyRecalc / fifoTargets** (LOW, MVP-scale ок): per-company/per-charge aggregate у циклі → один `GROUP BY`. Тригер: обсяги. (created: 2026-06-09)
+- [db] **S5-D6 `ExecutorRate.hourlyRate`** (LOW): додати колонку → payout `hourlyEarned = billableHours × hourlyRate` (зараз 0; `billableHours` уже пишеться). (created: 2026-06-09)
+- [ops] **S5-D7 IdempotencyKey TTL-sweep cron** (LOW): прибирати протермінований (24h) ключі. Об'єднати з retention-кронами (SC-D2). (created: 2026-06-09)
+- [test] **S5-D8 enum-drift inverse-check** (LOW): drift-тест не ловить Prisma-only enum (`OutboxStatus` юзається як raw-SQL літерал в `outbox.ts`). Додати reverse-перевірку. (created: 2026-06-09)
+- [notify] **S5→S6 активувати відкладені нотифікації** (промоут у S6, не лімбо): outbox-події `billing.invoice_paid/invoice_sent`, `wallet.credited/debited`, `payment_confirmed`, `loyalty.tier_upgraded` — enqueue в money-tx + handler у `buildDispatch`. Зараз `// S6:` seam-коментарі; ledger-рядки вже durable. (created: 2026-06-09)
+
+---
+
+## 🔧 Аудит S0-S2 (1.06.2026) — відкладені пункти
+
+> Повний аудит + 6 виправлених проблем — `AUDIT_S0_S2.md`. Нижче — те, що свідомо відкладено (severity · тригер).
+
+**До розростання роутів (FDN-follow-up, бажано до/на старті S3):**
+
+- [arch] **T-D1 outbox-drain воркер** (HIGH): `transitionOrderStatus` enqueue-ить у прод, drain нема → події копляться. Завести мінімальний drain+handler-registry у **S6** (або раніше, якщо S5-білінг стартує). (created: 2026-06-01)
+- [arch] **T-D2 `requireOrderForWrite` loader** (HIGH-maint): прибрати дубльований inline-IDOR з 5 прямих order-роутів (зараз безпечно через `assertSameTenant`, але дублювання). (created: 2026-06-01)
+- [arch] **T-D3 RLS + Prisma `$extends`-seam + tenant-context middleware** (HIGH, SAAS.md F4): закласти seam, поки роутів ~25; політики per-table — перед зовнішнім тенантом. (created: 2026-06-01)
+- [arch] **T-D4** — ✅ **F2 quota-seam зроблено 1.06** (`apps/api/src/saas/limits.ts` no-op + виклик у `orders.create`); лишилось: виклики у files.upload/members.invite (з фічами) + **F5 tenant-rate-limit-key** (per-route post-auth). (MEDIUM, SAAS.md) (created: 2026-06-01)
+- [notify] **N-D1 уніфікувати 3 шляхи нотифікацій** (MEDIUM): auth=direct / orders=outbox / chat=нічого. ADR-правило + перевести на outbox коли запрацює drain. (created: 2026-06-01)
+
+**Schema hardening (перед Phase 1 / multi-agency):**
+
+- [db] ~~**S-D1** `orders.agencyId` → NOT NULL + FK `RESTRICT`~~ ✅ **зроблено 1.06** (міграція `20260601_sd1_orders_agencyid_notnull`, verified throwaway). (HIGH) (created: 2026-06-01)
+- [db] **S-D2** singletons без `agencyId`: `PaymentSettings`/`DocumentCounter`(спільна нумерація!)/`ExchangeRate`. (HIGH) (created: 2026-06-01)
+- [db] **S-D3** `InternalTask`+`ActivityLog` без `agencyId` (виняток F6) + ADR «audit vs activity». (MEDIUM) (created: 2026-06-01)
+- [db] **S-D4** `order_chat_reads` без FK на orders/profiles → ghost-рядки. (MEDIUM) (created: 2026-06-01)
+- [db] **S-D5** `Service.agencyId`/`Referral` agencyId; money `CHECK (>=0)`. (LOW) (created: 2026-06-01)
+
+**Перформанс / масштаб (коли зʼявляться обсяги):**
+
+- [db] **I-D1** composite-індекси `order_comments(orderId,deletedAt,isInternal,createdAt)`, `order_files(orderId,deletedAt,createdAt)`; прибрати надлишкові одинарні на `orders`. (HIGH) (created: 2026-06-01)
+- [db] **I-D2** `listOrders` OFFSET → cursor; ILIKE → GIN tsvector. (HIGH) (created: 2026-06-01)
+- [db] **I-D3** `comments` 3-query → batch; `timeLogs`/`internalTasks` `take`; `totalHours` SQL-aggregate. (MEDIUM) (created: 2026-06-01)
+- [scale] **SC-D1** PrismaClient `connection_limit`/PgBouncer (горизонт. скейл). (HIGH перед multi-replica) (created: 2026-06-01)
+- [scale] **SC-D2** retention-крони (audit 365д/notif 90д/outbox 7д) — інфра-крон. (MEDIUM) (created: 2026-06-01)
+
+**Concurrency:**
+
+- [db] **C-D1** status-transition `FOR UPDATE`/version (concurrent double-PATCH). (MEDIUM) (created: 2026-06-01)
+- [db] **C-D2** `orderChatRead.upsert` → `ON CONFLICT DO UPDATE GREATEST`. (LOW) (created: 2026-06-01)
+
+**Якість/підтримка:**
+
+- [code] **M-D1** `deleteOrder`/`assignOrder` провести через `can()` (ADR-002). (MEDIUM) (created: 2026-06-01)
+- [code] **M-D2** `login.ts` уніфікувати з `loadMemberships`+`resolveActiveAgencyId`. (MEDIUM) (created: 2026-06-01)
+- [code] **M-D3** `assertAgencyMember` винести в `orders/access.ts`. · **M-D4** magic-рядки → enum. · **M-D5** тести per-`it` `buildApp` → `beforeAll`. · **M-D6** notify per-event zod. (LOW) (created: 2026-06-01)
+
+**Безпека (hardening, не активні):**
+
+- [sec] **SEC-D1** MIME magic-byte sniffing. · **SEC-D2** `avatarUrl` domain-allowlist. · **SEC-D3** `Invite.token` без `@default(uuid())`. · **SEC-D4** dev-CVE `pnpm update` (vite/esbuild/postcss/turbo). · ~~**SEC-D5** `Profile.role='owner'` → `isInternalTeam()`~~ ✅ **виправлено 1.06** (`isInternalTeam()` на базі `agencyMemberships` у 8 order-роутах + `can()`; owner більше не заблокований; +regression-тест). (LOW-MEDIUM) (created: 2026-06-01)
+
+---
+
+## ✅ Закрито / промоутнуто в план (історія)
+
+> Прибрано з активного беклогу.
+
+**Реалізовано (код):** D1 `can()`-permissions, D2 `notifyRecipient()`, D5 enum-drift test, centralized error-formatter, Payment.status enum, ExecutorRate-поля. (S1/S1.5)
+**Абсорбовано у модулі (фіналізація 30.05):** bot-inline (15), reports-PDF/XLSX (19), credentials-2FA-reveal (17), /status-page (21), S3/R2-adapter-рішення (04), payment-providers-архітектура (05).
+**Промоутнуто в TRACKER (вікторина 30.05):**
+
+- Quiet-hours / digest → **S12-06** (модуль 07).
+- Bulk-розсилки → **S12-07** (модуль 07).
+- Темна тема Portal → **S9-07** (модуль 13).
+- Retention-аналітика → **S11-07** (модуль 19).
+- Soft-delete restore UI → **S10-07** (модуль 02).
+- Migration smoke-test → **S8-06**; On-call runbook → **S8-07**; Public API Swagger → **S11-07**.
+
+---
+
+## ✅ Підтверджено відкладено (вікторина 30.05) — revisit post-launch
+
+> Свідоме рішення «не зараз». Тригер перегляду — після живого MVP / коли зʼявиться потреба. Кожне має готову архітектурну зачіпку в доку модуля.
+
+| Фіча                                       | Модуль | Тригер перегляду                        |
+| ------------------------------------------ | ------ | --------------------------------------- |
+| Coupons / промокоди                        | 05     | коли потрібен маркетинг-інструмент      |
+| LiqPay провайдер                           | 05     | разом із go-live online-оплати (S14)    |
+| Cash-out бонусів (виведення грішми)        | 09/25  | коли обсяг бонусів суттєвий             |
+| Multi-level реферал (2-й рівень)           | 09     | якщо реферальна програма «вистрелить»   |
+| Scheduled blog publishing                  | 11     | коли контент-потік регулярний           |
+| Skills-matrix виконавців (авто-розподіл)   | 12     | коли команда > ~10 виконавців           |
+| Держсвята UA (auto-exclude робочих днів)   | 23/24  | разом із accrual-точністю відпусток     |
+| Версіонування файлів                       | 04     | коли часті ітерації дизайн-файлів       |
+| Virus-scan завантажень (ClamAV)            | 04     | перед широким клієнтським file-exchange |
+| Slack notification adapter                 | 07     | коли зʼявиться клієнт зі Slack-командою |
+| Geo login-audit (IP→місто + new-loc alert) | 01     | post-launch security-hardening          |
+
+---
+
+## 🔍 Audit S0-S1 follow-ups (31.05.2026) — див. `archive/AUDIT_S0_S1.md`
+
+> Знайдено критичним аудитом; баги/security вже виправлено. Нижче — покращення під масштаб + supply-chain (потребують власного verify-циклу).
+
+- ✅ [dep] **dep-CVE updates** — DONE: fastify→5.8.5, @fastify/jwt→10.1.0, next→15.5.18 (verify green). (2026-05-31)
+- ✅ [arch] **tenant-enforcement** — DONE: `apps/api/src/auth/tenant.ts` (`tenantWhere`/`tenantData`/`requireActiveAgency`/`assertSameTenant`) + ADR-004 amendment + tests. Mandatory для S2-хендлерів. (2026-05-31)
+- ✅ [db] **Композитні tenant-індекси (orders)** — DONE: `(agencyId,internalStatus)`,`(agencyId,createdAt)`,`(agencyId,companyId)`. payments/documents/audit-композити — з їхніми спрінтами (S5/S6/S7). (2026-05-31)
+- [db] **agencyId NOT NULL + ON DELETE RESTRICT** на hot/resource-таблицях — до multi-agency (Phase 1); у Phase 0 всі backfilled. (created: 2026-05-31)
+- [db] **PaymentSettings.agencyId** (зараз глобальний singleton) — до S5/multi-agency. (created: 2026-05-31)
+- [db] **UUIDv7** для high-volume PK (notification_logs/audit_logs/time_logs/outbox_events) — фрагментація UUIDv4. (created: 2026-05-31)
+- [api] **`createSession(tx, profile, reply)`** DRY — register/login/refresh дублюють claims+memberships+agency+refresh+cookie. (created: 2026-05-31)
+- [api] **env → один typed Zod-схема** — COOKIE_DOMAIN/ADMIN_EMAIL/PORTAL_URL/CORS валідувати при старті (зараз розкидані `process.env.X ?? default`). (created: 2026-05-31)
+- [api] **Спільний allowed-origins** для cors.ts + refresh CSRF-guard (зараз розходяться при unset CORS_ALLOWED_ORIGINS). (created: 2026-05-31)
+- ✅ [ops] **rate-limit single-replica** — DONE (constraint задокументовано: коментар у rateLimiting.ts + ADR-004 amendment). Redis-store — коли зʼявиться horizontal scale. (2026-05-31)
+
+---
+
+## 🌱 Foundation seams (рішення задокументоване, код у плані)
+
+- [D3] Спільний date-range primitive leave+calendar (док 23/24; код S13). (created: 2026-05-29)
+- [D4] Recurring-billing на CompanyService/ServiceCharge (док 05; код S5). (created: 2026-05-29)
+- [chat] @-mention picker — participants endpoint + explicit `mentionedUserIds` (док 03; код S10-05). (created: 2026-05-29)
+- [api] DRY session helper `createSession(tx, profileId, reply)` (S1.6/рефактор). (created: 2026-05-29)
+- [api] `can()` executor-management під admin-guard (модулі 12/13; S5). (created: 2026-05-29)
+- [expense] Expense immutability — `validFrom`/`validUntil` + FK замість `sourceRef` + soft-delete (модуль 22; S13). (created: 2026-05-29)
+
+---
+
+## 🗄 DB hardening (заплановано S1.6 — S16-07/08)
+
+- telegramChatId dedup (NotificationSettings authoritative). • Відсутні FK-індекси (Invite/PasswordResetToken/Referral/Payment/Document/BlogPost/OrderComment). • drop `OtpToken @@index([code,purpose])`. • explicit `onDelete` Order.company. • `Decimal(10,4)` для exchange-rate. • UUIDv7/BIGINT PK для НОВИХ high-volume таблиць. (created: 2026-05-29)
+
+---
+
+## 🧪 Genuine research (бізнес-рішення, не білд)
+
+- [billing] Go-live провайдер: Monobank Acquiring vs Stripe (UA-резиденство/комісії/payout). Архітектура `PaymentProvider` готова. → рішення перед S14. (created: 2026-04-15)
+- [storage] Тригер переходу local FS → Cloudflare R2 (обсяг/CDN-потреба). Адаптер готовий (04). (created: 2026-04-16)
+- [rbac] Повний CASL vs `can()` shim для enterprise (task #24, post all-modules-stable). (created: 2026-04-19)
+
+---
+
+## 🐛 Виявлені баги (без severity SEV0/1)
+
+- _(порожньо — критичні з аудиту виправлено в 711f506)_
+
+---
+
+> **Правило:** ідея у BACKLOG > 90 днів без обговорень — видаляємо. Не реалізовано = не потрібно зараз.

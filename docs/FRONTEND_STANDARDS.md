@@ -1,6 +1,15 @@
 # FRONTEND STANDARDS
+
 > Стандарти і рішення для Portal та Workspace (React Vite SPA)
 > Версія: 1.0 | Оновлено: 12 квітня 2026
+
+> ⚠️ **ЧАСТКОВО SUPERSEDED (аудит 2026-06) — звіряй із реальним стеком.** Реалізація
+> пішла від цього доку. Канон UI — `DESIGN_SYSTEM.md` + `UI_COMPONENTS.md` + код
+> `packages/ui`. Фактично використано: **портований дизайн-CSS (класи `.wfp-*` +
+> токени `--wf-*`)**, React Hook Form + Zod, TanStack Query, React Router, Sonner.
+> **НЕ використано** (попри згадки нижче): **Tailwind, Radix UI, Zustand,
+> TanStack Table** — рішення зафіксувати окремим ADR. Auth/API-client секції
+> (Bearer + in-memory access + 401-refresh) лишаються чинними.
 
 ---
 
@@ -24,20 +33,20 @@
 
 Принцип: **прості, перевірені інструменти з великою спільнотою**. Без експериментів.
 
-| Задача | Рішення | Чому |
-|---|---|---|
-| Server state | **TanStack Query v5** | Кешування, refetch, loading/error стани — з коробки |
-| Client state | **Zustand** | Мінімум бойлерплейту, простий API |
-| Routing | **React Router v6** | Найзріліший, великий ecosystem |
-| Форми | **React Hook Form + Zod** | Мінімум ре-рендерів, Zod схеми вже є в packages/types |
-| Таблиці | **TanStack Table v8** | Headless, гнучкий, сортування/фільтрація |
-| Дати | **date-fns + date-fns-tz** | Tree-shakeable, без глобального стану |
-| Toast | **Sonner** | Найпростіший, гарний, dark mode |
-| Drag & Drop | **dnd-kit** | Сучасний, доступний (замість abandon react-beautiful-dnd) |
-| UI primitives | **Radix UI** | Accessible без стилів, стилізуємо через Tailwind |
-| Файли | **react-dropzone** | Стандарт для upload |
-| Онбординг тур | **react-joyride** | Lightweight tooltip tour |
-| Іконки | **lucide-react** | Консистентний набір, tree-shakeable |
+| Задача        | Рішення                    | Чому                                                      |
+| ------------- | -------------------------- | --------------------------------------------------------- |
+| Server state  | **TanStack Query v5**      | Кешування, refetch, loading/error стани — з коробки       |
+| Client state  | **Zustand**                | Мінімум бойлерплейту, простий API                         |
+| Routing       | **React Router v6**        | Найзріліший, великий ecosystem                            |
+| Форми         | **React Hook Form + Zod**  | Мінімум ре-рендерів, Zod схеми вже є в packages/types     |
+| Таблиці       | **TanStack Table v8**      | Headless, гнучкий, сортування/фільтрація                  |
+| Дати          | **date-fns + date-fns-tz** | Tree-shakeable, без глобального стану                     |
+| Toast         | **Sonner**                 | Найпростіший, гарний, dark mode                           |
+| Drag & Drop   | **dnd-kit**                | Сучасний, доступний (замість abandon react-beautiful-dnd) |
+| UI primitives | **Radix UI**               | Accessible без стилів, стилізуємо через Tailwind          |
+| Файли         | **react-dropzone**         | Стандарт для upload                                       |
+| Онбординг тур | **react-joyride**          | Lightweight tooltip tour                                  |
+| Іконки        | **lucide-react**           | Консистентний набір, tree-shakeable                       |
 
 ### Vite конфіг (portal + workspace ідентично)
 
@@ -55,7 +64,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3001,  // 3002 для workspace
+    port: 3001, // 3002 для workspace
     proxy: {
       '/api': {
         target: 'http://localhost:4000',
@@ -78,7 +87,7 @@ export default defineConfig({
 // apps/portal/src/lib/api.ts (аналогічно в workspace)
 import type { ApiErrorCode } from '@workflo/types'
 
-const BASE_URL = import.meta.env.VITE_API_URL  // http://localhost:4000 або https://api.workflo.space
+const BASE_URL = import.meta.env.VITE_API_URL // http://localhost:4000 або https://api.workflo.space
 
 // Access token живе в модульній змінній (не в стані — щоб не перемальовувати всі компоненти)
 let _accessToken: string | null = null
@@ -95,7 +104,7 @@ export class ApiError extends Error {
     public code: ApiErrorCode,
     public message: string,
     public details?: unknown,
-    public status?: number,
+    public status?: number
   ) {
     super(message)
     this.name = 'ApiError'
@@ -106,7 +115,7 @@ async function refreshAccessToken(): Promise<boolean> {
   try {
     const res = await fetch(`${BASE_URL}/auth/refresh`, {
       method: 'POST',
-      credentials: 'include',  // відправляє httpOnly cookie
+      credentials: 'include', // відправляє httpOnly cookie
     })
     if (!res.ok) return false
     const { data } = await res.json()
@@ -117,11 +126,7 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {},
-  _retry = true,
-): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, _retry = true): Promise<T> {
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     credentials: 'include',
@@ -151,7 +156,10 @@ async function request<T>(
     // Refresh не вдався → редирект на логін
     setAccessToken(null)
     window.location.href = '/login'
-    throw new ApiError('TOKEN_EXPIRED' as ApiErrorCode, 'Сесія закінчилася. Будь ласка, увійдіть знову.')
+    throw new ApiError(
+      'TOKEN_EXPIRED' as ApiErrorCode,
+      'Сесія закінчилася. Будь ласка, увійдіть знову.'
+    )
   }
 
   // 204 No Content
@@ -168,8 +176,7 @@ async function request<T>(
 
 // Зручний API об'єкт
 export const api = {
-  get: <T>(url: string, options?: RequestInit) =>
-    request<T>(url, { method: 'GET', ...options }),
+  get: <T>(url: string, options?: RequestInit) => request<T>(url, { method: 'GET', ...options }),
 
   post: <T>(url: string, body?: unknown, options?: RequestInit) =>
     request<T>(url, { method: 'POST', body: JSON.stringify(body), ...options }),
@@ -188,7 +195,7 @@ export const api = {
     request<T>(url, {
       method: 'POST',
       body: formData,
-      headers: {},  // НЕ встановлюємо Content-Type — браузер сам додасть boundary
+      headers: {}, // НЕ встановлюємо Content-Type — браузер сам додасть boundary
     }),
 }
 ```
@@ -196,30 +203,39 @@ export const api = {
 ### TanStack Query інтеграція
 
 ```typescript
-// src/lib/queryClient.ts
-import { QueryClient } from '@tanstack/react-query'
-import { ApiError } from './api'
+// packages/app-core/src/queryClient.ts (апки ре-експортують через @/lib/queryClient)
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
+import { ApiErrorCode } from '@workflo/types'
 import { toast } from 'sonner'
+import { ApiError, apiErrorMessage } from './api.js'
 
+const NON_RETRYABLE = new Set([400, 401, 403, 404, 409, 422])
+
+// Єдиний конвеєр помилок (див. §8). Кожен fail проходить тут — компоненти НЕ додають
+// власні generic error-тости. apiErrorMessage бере повідомлення сервера (+ поля валідації).
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (query.meta?.suppressGlobalToast) return
+      if (error instanceof ApiError && error.status === 401) return // auth bootstrap/redirect
+      toast.error(apiErrorMessage(error, 'Помилка завантаження даних'))
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _v, _c, mutation) => {
+      if (mutation.meta?.suppressGlobalToast) return
+      // step-up (vault reveal) розв'язується паролем, не тостом
+      if (error instanceof ApiError && error.code === (ApiErrorCode.STEP_UP_REQUIRED as string))
+        return
+      toast.error(apiErrorMessage(error, 'Сталася помилка. Спробуйте ще раз.'))
+    },
+  }),
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,   // дані свіжі 5 хвилин
-      retry: (failureCount, error) => {
-        // Не ретраємо 401, 403, 404 — це очікувані помилки
-        if (error instanceof ApiError && [401, 403, 404].includes(error.status ?? 0)) return false
-        return failureCount < 2
-      },
-    },
-    mutations: {
-      onError: (error) => {
-        // Глобальний toast для всіх mutation помилок
-        if (error instanceof ApiError) {
-          toast.error(error.message)
-        } else {
-          toast.error('Щось пішло не так. Спробуйте ще раз.')
-        }
-      },
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: (count, error) =>
+        error instanceof ApiError && NON_RETRYABLE.has(error.status) ? false : count < 2,
     },
   },
 })
@@ -322,6 +338,24 @@ export function ProtectedRoute() {
 }
 ```
 
+### Рольова навігація та route-gating (canon)
+
+Канон ролей — `packages/types` `tokens.ts` + `apps/api/src/auth/can.ts`: **команда агенції** `owner | manager | executor` (`AgencyRole`; `manager` має enforced `MANAGER_BLOCKED`-набір), **членство в компанії** `owner | member` + 5 snake_case permission-флагів. `AccessClaims.role` (`owner|executor|client`) — **лише UI-підказка**; staff-vs-client = `isInternalTeam()`. Старий `superadmin/lead` — не використовувати.
+
+**Workspace nav** — один `WORKSPACE_NAV` з per-item/per-group тегом `roles: 'omx'` (o=owner, m=manager, x=executor), фільтрований `navVisibleForRole(items, role)`: лишаємо item якщо `!roles || roles.includes(roleChar)`, потім прибираємо порожні group-заголовки. **Фільтруємо app-side** (перед передачею в `<Sidebar>`), щоб `@workflo/ui` лишався presentational. Portal nav — без рольового фільтра (там company-switcher).
+
+**Route-gating дзеркалить nav** (прихований пункт == заблокований route): `RoleRoute allow={[...]}` виводиться з тих самих `roles`-тегів — де дизайн дає `m`, додаємо `manager` до allow-list.
+
+```typescript
+function RoleRoute({ allow }: { allow: AgencyRole[] }) {
+  const { role } = useAuth() // role: AgencyRole
+  if (!allow.includes(role)) return <Navigate to="/" replace />
+  return <Outlet />
+}
+```
+
+**Хаби** — кілька екранів під одним nav-пунктом через під-таб-бар (`.wfp-subtabs`); канонічний склад хабів — `DESIGN_SYSTEM.md §5.13.1`.
+
 ### Auto-refresh access token
 
 Access token живе 15 хвилин. Замість перехоплення 401 — можна додатково refresh за 1 хв до expire:
@@ -338,12 +372,12 @@ Access token живе 15 хвилин. Замість перехоплення 4
 
 **Правило: 2 рівні стану — server та client.**
 
-| Тип стану | Інструмент | Приклади |
-|---|---|---|
-| Server state | TanStack Query | Замовлення, профіль, нотифікації |
-| UI / client state | Zustand | Відкриті модалі, sidebar collapsed, theme |
-| Form state | React Hook Form | Форма замовлення, форма профілю |
-| URL state | React Router | Фільтри, активна вкладка, сторінка пагінації |
+| Тип стану         | Інструмент      | Приклади                                     |
+| ----------------- | --------------- | -------------------------------------------- |
+| Server state      | TanStack Query  | Замовлення, профіль, нотифікації             |
+| UI / client state | Zustand         | Відкриті модалі, sidebar collapsed, theme    |
+| Form state        | React Hook Form | Форма замовлення, форма профілю              |
+| URL state         | React Router    | Фільтри, активна вкладка, сторінка пагінації |
 
 ### Zustand store (приклад)
 
@@ -440,14 +474,14 @@ packages/ui/src/
     --foreground: 222 47% 11%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --primary: 238 83% 67%;       /* #4f46e5 indigo */
+    --primary: 238 83% 67%; /* #4f46e5 indigo */
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
     --accent: 210 40% 96%;
-    --destructive: 0 84% 60%;     /* red */
-    --warning: 38 92% 50%;        /* amber */
-    --success: 142 76% 36%;       /* green */
+    --destructive: 0 84% 60%; /* red */
+    --warning: 38 92% 50%; /* amber */
+    --success: 142 76% 36%; /* green */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 238 83% 67%;
@@ -498,20 +532,15 @@ interface ButtonProps {
 ```tsx
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
-  error?: string            // текст помилки під полем (червоний)
-  hint?: string             // підказка під полем (сірий)
+  error?: string // текст помилки під полем (червоний)
+  hint?: string // підказка під полем (сірий)
   leftIcon?: ReactNode
   rightIcon?: ReactNode
   required?: boolean
 }
 
 // Інтеграція з React Hook Form:
-<Input
-  label="Назва замовлення"
-  error={errors.title?.message}
-  required
-  {...register('title')}
-/>
+;<Input label="Назва замовлення" error={errors.title?.message} required {...register('title')} />
 ```
 
 #### Badge
@@ -522,7 +551,7 @@ type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'out
 interface BadgeProps {
   variant?: BadgeVariant
   size?: 'sm' | 'md'
-  dot?: boolean             // кольорова крапка перед текстом
+  dot?: boolean // кольорова крапка перед текстом
   children: ReactNode
 }
 ```
@@ -537,7 +566,7 @@ interface StatusBadgeProps {
 }
 
 // Приклад:
-<StatusBadge status="in_progress" view="client" />
+;<StatusBadge status="in_progress" view="client" />
 // → зелений бейдж "В роботі"
 
 // Маппінг статусів → кольори і тексти — в packages/types/src/constants.ts
@@ -548,9 +577,9 @@ interface StatusBadgeProps {
 ```tsx
 interface AvatarProps {
   src?: string | null
-  name: string              // для initials fallback
+  name: string // для initials fallback
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-  showOnline?: boolean      // зелена крапка
+  showOnline?: boolean // зелена крапка
 }
 
 // Логіка:
@@ -569,11 +598,11 @@ interface ModalProps {
   description?: string
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   children: ReactNode
-  footer?: ReactNode        // кнопки внизу
+  footer?: ReactNode // кнопки внизу
 }
 
 // Використання:
-<Modal open={isOpen} onClose={() => setIsOpen(false)} title="Нове замовлення" size="lg">
+;<Modal open={isOpen} onClose={() => setIsOpen(false)} title="Нове замовлення" size="lg">
   <CreateOrderForm onSuccess={() => setIsOpen(false)} />
 </Modal>
 ```
@@ -588,13 +617,13 @@ interface ConfirmDialogProps {
   onCancel: () => void
   title: string
   description: string
-  confirmLabel?: string     // default: "Підтвердити"
-  confirmVariant?: 'primary' | 'danger'  // default: 'danger'
+  confirmLabel?: string // default: "Підтвердити"
+  confirmVariant?: 'primary' | 'danger' // default: 'danger'
   loading?: boolean
 }
 
 // Використання:
-<ConfirmDialog
+;<ConfirmDialog
   open={showDeleteConfirm}
   title="Видалити замовлення?"
   description="Цю дію неможливо скасувати."
@@ -642,12 +671,12 @@ interface EmptyStateProps {
 ```tsx
 interface FileDropzoneProps {
   onFilesAccepted: (files: File[]) => void
-  accept?: Record<string, string[]>    // MIME types
-  maxSize?: number                     // bytes, default 50MB
-  maxFiles?: number                    // default 10
+  accept?: Record<string, string[]> // MIME types
+  maxSize?: number // bytes, default 50MB
+  maxFiles?: number // default 10
   disabled?: boolean
-  uploading?: boolean                  // показує progress
-  existingFiles?: FileDTO[]            // вже завантажені файли
+  uploading?: boolean // показує progress
+  existingFiles?: FileDTO[] // вже завантажені файли
   onRemoveExisting?: (fileId: string) => void
 }
 ```
@@ -675,8 +704,8 @@ type Theme = 'light' | 'dark' | 'system'
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Зчитуємо з user profile (при логіні) або localStorage (fallback)
-  const [theme, setTheme] = useState<Theme>(() =>
-    (localStorage.getItem('theme') as Theme) || 'system'
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem('theme') as Theme) || 'system'
   )
 
   useEffect(() => {
@@ -690,11 +719,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('theme', theme)
   }, [theme])
 
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  )
+  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
 }
 
 export const useTheme = () => useContext(ThemeContext)
@@ -708,14 +733,14 @@ export const useTheme = () => useContext(ThemeContext)
 
 ### Правила
 
-| Ситуація | Підхід |
-|---|---|
-| Перше завантаження сторінки | Skeleton (компонент-скелетон) |
+| Ситуація                        | Підхід                                       |
+| ------------------------------- | -------------------------------------------- |
+| Перше завантаження сторінки     | Skeleton (компонент-скелетон)                |
 | Повторне завантаження (refetch) | Нічого не показуємо — старі дані залишаються |
-| Кнопка Submit / Save | Spinner всередині кнопки, кнопка disabled |
-| Завантаження файлу | Progress bar |
-| Видалення рядка в таблиці | Рядок стає прозорим (opacity-50) |
-| Глобальний стан | НЕ використовуємо глобальний spinner |
+| Кнопка Submit / Save            | Spinner всередині кнопки, кнопка disabled    |
+| Завантаження файлу              | Progress bar                                 |
+| Видалення рядка в таблиці       | Рядок стає прозорим (opacity-50)             |
+| Глобальний стан                 | НЕ використовуємо глобальний spinner         |
 
 ### Skeleton приклади
 
@@ -901,28 +926,38 @@ export function NotificationBell() {
         <div className="flex items-center justify-between p-3 border-b">
           <span className="font-semibold">Сповіщення</span>
           {unreadCount > 0 && (
-            <button onClick={() => { api.patch('/notifications/read-all'); markAllRead() }}
-              className="text-xs text-primary hover:underline">
+            <button
+              onClick={() => {
+                api.patch('/notifications/read-all')
+                markAllRead()
+              }}
+              className="text-xs text-primary hover:underline"
+            >
               Позначити всі прочитаними
             </button>
           )}
         </div>
 
         {items.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">
-            Немає нових сповіщень
-          </div>
+          <div className="p-6 text-center text-muted-foreground text-sm">Немає нових сповіщень</div>
         ) : (
-          items.map(n => (
-            <button key={n.id} onClick={() => handleNotificationClick(n)}
-              className={cn('w-full text-left p-3 hover:bg-muted border-b last:border-0 transition-colors',
-                !n.isRead && 'bg-primary/5')}>
+          items.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              className={cn(
+                'w-full text-left p-3 hover:bg-muted border-b last:border-0 transition-colors',
+                !n.isRead && 'bg-primary/5'
+              )}
+            >
               <div className="flex items-start gap-2">
                 {!n.isRead && <span className="w-2 h-2 bg-primary rounded-full mt-1.5 shrink-0" />}
                 <div className={!n.isRead ? '' : 'ml-4'}>
                   <p className="text-sm font-medium">{n.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{formatRelative(n.createdAt)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatRelative(n.createdAt)}
+                  </p>
                 </div>
               </div>
             </button>
@@ -938,13 +973,46 @@ export function NotificationBell() {
 
 ## 8. ОБРОБКА ПОМИЛОК НА FRONTEND
 
-### Рівні обробки
+### Єдиний конвеєр помилок (queryClient) — головне правило
+
+**Усі** помилки `useQuery`/`useMutation` проходять через ОДИН глобальний handler у
+`packages/app-core/src/queryClient.ts` (`QueryCache.onError` + `MutationCache.onError`).
+Він показує **повідомлення сервера** через `apiErrorMessage(error, fallback)` — бек уже
+віддає людяний UA-текст (+ назви полів для `VALIDATION_ERROR`), тож фронт нічого не
+перекладає, а показує те, що прийшло. Це дзеркало бекового central error-handler
+([`ENGINEERING_STANDARDS §7`](ENGINEERING_STANDARDS.md)).
+
+**Інваріант:** компоненти НЕ пишуть власний `onError: () => toast.error('Не вдалося…')` —
+це подвоїть тост (RQ v5 запускає і глобальний, і локальний) і сховає конкретне
+повідомлення сервера за generic-рядком.
+
+```ts
+// ❌ НЕ так — дублює глобальний тост, ховає причину
+useMutation({ mutationFn, onError: () => toast.error('Не вдалося зберегти') })
+foo.mutate(vars, { onError: () => toast.error('Не вдалося') })
+
+// ✅ Так — глобальний конвеєр сам покаже повідомлення сервера
+useMutation({ mutationFn })
+foo.mutate(vars)
+```
+
+Винятки (локальна обробка) → додай `meta: { suppressGlobalToast: true }`:
+
+- inline-помилка у формі (auth/register/reset) → `setError(...)`, не тост
+- прев'ю/віджет із власним станом помилки (напр. invite-preview)
+- крок-логіка (vault reveal → step-up-модалка; глобальний handler окремо **пропускає**
+  `STEP_UP_REQUIRED` і `401` — їх розв'язує prompt/redirect, не тост)
+
+**Сирі промайси** (`fetch(...).catch`, `openDocumentPdf(...).catch`) конвеєр НЕ ловить —
+там обробляй явно: `.catch((err) => toast.error(apiErrorMessage(err, 'fallback')))`.
+
+### Рівні обробки (від дефолту до винятку)
 
 ```
-1. TanStack Query onError (глобальний) → toast.error(message)
-2. ErrorBoundary (per-page) → fallback UI
-3. Inline error в формах (React Hook Form + Zod)
-4. Network offline → banner
+1. queryClient global onError → toast зі server-message (apiErrorMessage)  ← дефолт
+2. suppressGlobalToast + локальний onError → inline / крок-логіка          ← виняток
+3. ErrorBoundary (per-page/global) → fallback UI на render-помилки
+4. OfflineBanner → навігатор офлайн
 ```
 
 ### ErrorBoundary
@@ -992,7 +1060,10 @@ export function OfflineBanner() {
     const off = () => setIsOnline(false)
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
   }, [])
 
   if (isOnline) return null
@@ -1005,24 +1076,17 @@ export function OfflineBanner() {
 }
 ```
 
-### Переклад API error кодів → повідомлення
+### Повідомлення — джерело правди на беку
 
-```typescript
-// packages/i18n/src/uk/errors.json — маппінг кодів на зрозумілі повідомлення
-{
-  "INVALID_CREDENTIALS": "Невірний email або пароль",
-  "ACCOUNT_INACTIVE": "Акаунт деактивовано. Зверніться до підтримки.",
-  "EMAIL_TAKEN": "Ця адреса вже використовується",
-  "ORDER_NOT_FOUND": "Замовлення не знайдено або у вас немає доступу",
-  "INVALID_STATUS_TRANSITION": "Неможливо змінити статус на цьому етапі",
-  "FILE_TOO_LARGE": "Файл завеликий. Максимальний розмір: 50 МБ",
-  "FILE_TYPE_NOT_ALLOWED": "Цей тип файлу не підтримується",
-  "INSUFFICIENT_LOYALTY_POINTS": "Недостатньо бонусних балів",
-  "AI_GENERATION_TIMEOUT": "Генерація зайняла надто довго. Введіть текст вручну або спробуйте ще раз.",
-  "INTERNAL_ERROR": "Щось пішло не так. Ми вже розбираємося.",
-  "SERVICE_UNAVAILABLE": "Сервіс тимчасово недоступний. Спробуйте через хвилину."
-}
-```
+Клієнт **НЕ** тримає мапу «код → текст». Бек ([`AppError`, ENGINEERING_STANDARDS §7](ENGINEERING_STANDARDS.md))
+віддає готовий UA-`message` у кожній помилці — конкретний до контексту («Лише власник
+агенції має доступ до звітів», «Компанію не знайдено», «Реквізити доступні лише власнику»).
+`apiErrorMessage(err, fallback)` бере саме цей `message`; `fallback`-рядок у виклику —
+лише для мережевих/невідомих помилок без `message`. Для `VALIDATION_ERROR` helper додає
+назви полів з `error.details[]` (напр. «Перевірте правильність введених даних (label)»).
+
+**Щоб покращити конкретну помилку — правимо `AppError`-текст на беку**, і він автоматично
+доходить до юзера через конвеєр (жодних змін на фронті). 401 не тостимо (auth-redirect).
 
 ---
 
@@ -1045,12 +1109,23 @@ export function toKyivTime(date: Date | string): Date {
   return toZonedTime(new Date(date), KYIV_TZ)
 }
 
-export function formatKyiv(date: Date | string, fmt = 'dd.MM.yyyy HH:mm', lang: 'uk' | 'en' = 'uk'): string {
-  return formatTz(toZonedTime(new Date(date), KYIV_TZ), fmt, { timeZone: KYIV_TZ, locale: getLocale(lang) })
+export function formatKyiv(
+  date: Date | string,
+  fmt = 'dd.MM.yyyy HH:mm',
+  lang: 'uk' | 'en' = 'uk'
+): string {
+  return formatTz(toZonedTime(new Date(date), KYIV_TZ), fmt, {
+    timeZone: KYIV_TZ,
+    locale: getLocale(lang),
+  })
 }
 
 // Portal: браузерна timezone
-export function formatLocal(date: Date | string, fmt = 'dd.MM.yyyy HH:mm', lang: 'uk' | 'en' = 'uk'): string {
+export function formatLocal(
+  date: Date | string,
+  fmt = 'dd.MM.yyyy HH:mm',
+  lang: 'uk' | 'en' = 'uk'
+): string {
   return format(new Date(date), fmt, { locale: getLocale(lang) })
 }
 
@@ -1155,16 +1230,17 @@ export function Avatar({ src, name, size = 'md' }: AvatarProps) {
 
 ### Стек
 
-| Інструмент | Призначення |
-|---|---|
-| **Vitest** | Unit + integration тести (швидкий, ESM, той самий конфіг що і Vite) |
-| **React Testing Library** | Компонентні тести |
-| **MSW (Mock Service Worker)** | Мокаємо API в frontend тестах |
-| **Playwright** | E2E тести тільки критичних flows |
+| Інструмент                    | Призначення                                                         |
+| ----------------------------- | ------------------------------------------------------------------- |
+| **Vitest**                    | Unit + integration тести (швидкий, ESM, той самий конфіг що і Vite) |
+| **React Testing Library**     | Компонентні тести                                                   |
+| **MSW (Mock Service Worker)** | Мокаємо API в frontend тестах                                       |
+| **Playwright**                | E2E тести тільки критичних flows                                    |
 
 ### Що тестуємо
 
 **Unit (Vitest) — packages/types:**
+
 ```typescript
 // packages/types/src/__tests__/orderStatus.test.ts
 describe('mapToClientStatus', () => {
@@ -1180,6 +1256,7 @@ describe('ALLOWED_TRANSITIONS', () => {
 ```
 
 **Integration (Vitest + реальна DB) — API routes:**
+
 ```typescript
 // apps/api/src/__tests__/orders.test.ts
 // Використовуємо тестову БД (DATABASE_URL_TEST) + seed перед кожним тестом
@@ -1202,6 +1279,7 @@ describe('POST /orders', () => {
 ```
 
 **Component (RTL + MSW) — критичні компоненти:**
+
 ```typescript
 // apps/portal/src/__tests__/LoginForm.test.tsx
 describe('LoginForm', () => {
@@ -1220,6 +1298,7 @@ describe('LoginForm', () => {
 ```
 
 **E2E (Playwright) — тільки критичні flows:**
+
 ```typescript
 // e2e/auth.spec.ts
 test('client can register, create order, see status', async ({ page }) => {
@@ -1235,13 +1314,13 @@ test('client can register, create order, see status', async ({ page }) => {
 
 ### Coverage ціль
 
-| Пакет | Ціль |
-|---|---|
-| `packages/types` | **90%** (pure logic, легко тестувати) |
-| `packages/notifications` | **80%** |
-| `apps/api` (routes) | **70%** (integration tests) |
-| `apps/portal` (компоненти) | **50%** (тільки критичні) |
-| `apps/workspace` | **50%** |
+| Пакет                      | Ціль                                  |
+| -------------------------- | ------------------------------------- |
+| `packages/types`           | **90%** (pure logic, легко тестувати) |
+| `packages/notifications`   | **80%**                               |
+| `apps/api` (routes)        | **70%** (integration tests)           |
+| `apps/portal` (компоненти) | **50%** (тільки критичні)             |
+| `apps/workspace`           | **50%**                               |
 
 ### vitest.config.ts
 
@@ -1252,7 +1331,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',  // для API тестів
+    environment: 'node', // для API тестів
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

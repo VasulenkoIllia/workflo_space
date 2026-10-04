@@ -1,260 +1,595 @@
-# WORKFLO.SPACE — Tracker
-> Оновлено: 12 квітня 2026 (S0 infra automation prepared)
+# WORKFLO.SPACE — Tracker (спрінти)
+
+> Оновлено: **21 червня 2026** (Sprint 5.6 backend ✅ + перші S5.6-екрани S5-11/S5-12 ✅ + аудит стану).
 > Статуси: ⬜ pending | 🔄 in progress | ✅ done | 🧪 tested | 🚀 deployed | ❌ blocked
+> `SPEC.md` = ЩО будуємо. Цей файл = У ЯКОМУ ПОРЯДКУ. Канон БД — `schema.prisma`; код — git.
 
 ---
 
-## SPRINT 0 — Foundation (Тиждень 1)
-> Ціль: CI зелений, БД на staging, dev environment у всіх 5 людей
-> 30 задач
+> ⚠️ **«Стан зараз» живе в [`ROADMAP.md`](ROADMAP.md)** («Готово нещодавно» + черга) — оновлюється
+> кожен зріз. Блок нижче — **історичний знімок на 21.06.2026**; збудоване пізніше (T2-таймер,
+> Leads/CRM, Vault, Reports, Картка 360°) сюди свідомо не вносилось і не вноситиметься.
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S0-01 | pnpm workspace + turbo.json | Infra | — | ✅ | — | — |
-| S0-02 | tsconfig.base.json + eslint-config | Infra | — | ✅ | — | — |
-| S0-03 | packages/types — enums, DTOs, constants | [types] | — | ✅ | — | — |
-| S0-04 | packages/db — schema.prisma фінальна | [db] | — | ✅ | — | — |
-| S0-05 | Перша міграція (prisma migrate dev) | [db] | — | ✅ | — | — |
-| S0-06 | packages/db seed.ts | [db] | — | ✅ | — | — |
-| S0-07 | docker-compose.dev.yml (postgres + mailpit) | Infra | — | ✅ | — | — |
-| S0-08 | .env.example повний | Infra | — | ✅ | — | — |
-| S0-09 | GitHub repo + branch protection rules | Infra | — | ✅ | — | — |
-| S0-10 | GitHub Secrets заповнені | Infra | — | 🔄 | — | — |
-| S0-11 | GitHub Environment "production" + reviewer | Infra | — | ✅ | — | — |
-| S0-12 | Hetzner сервер — PostgreSQL 16 + pg_cron | Infra | — | 🔄 | — | — |
-| S0-13 | Hetzner — deploy user + SSH key | Infra | — | 🔄 | — | — |
-| S0-14 | Hetzner — UFW firewall rules | Infra | — | 🔄 | — | — |
-| S0-15 | Traefik launch + traefik_network | Infra | — | 🔄 | — | — |
-| S0-16 | DNS records (всі домени → Hetzner IP) | Infra | — | 🔄 | — | — |
-| S0-17 | Mailcow install + SPF/DKIM/DMARC | Infra | — | 🔄 | — | — |
-| S0-18 | staging.yml GitHub Actions | Infra | — | ✅ | — | — |
-| S0-19 | production.yml GitHub Actions | Infra | — | ✅ | — | — |
-| S0-20 | Skeleton apps — Dockerfiles для всіх 5 | Infra | — | ✅ | — | — |
-| S0-21 | GET /health endpoint (всі сервіси) | [Infra] | — | ✅ | ⬜ | — |
-| S0-22 | Fastify plugins: CORS, rate-limit, error handler, Pino | [Infra] | — | ✅ | — | — |
-| S0-23 | AppError клас + ApiErrorCode enum в packages/types | [types] | — | ✅ | — | — |
-| S0-24 | Zod схеми для базових DTO в packages/types | [types] | — | ✅ | — | — |
-| S0-25 | Husky + lint-staged налаштування | [Infra] | — | ✅ | — | — |
-| S0-26 | .env.example — повний файл в репо | [Infra] | — | ✅ | — | — |
-| S0-27 | CODEOWNERS + PR template в .github/ | [Infra] | — | ✅ | — | — |
-| S0-28 | Branch protection rules (main + dev) | [Infra] | — | ✅ | — | — |
-| S0-29 | turbo build без помилок (CI green) | Infra | — | ✅ | — | — |
-| S0-30 | Перший деплой на staging | Infra | — | 🔄 | — | 🚀 |
+## 🧭 СТАН ЗАРАЗ — історичний знімок (21 червня 2026)
 
----
+**✅ ГОТОВО (закодовано + verified, гілка `dev`):**
 
-## SPRINT 1 — Auth + Core API (Тиждень 2-3)
-> Ціль: реєстрація, логін, JWT, invite flow
+- **S0** Foundation (monorepo/CI/Hetzner/Traefik/DNS/schema+seed/health) 🚀
+- **S1 + S1.5** Auth+Core (register/login/logout/refresh+rotation/reset/me/invites/profile) + hardening 🚀🧪
+- **S1.6** Tenancy (Agency/AgencyMember, `agencyId` скрізь) + Outbox+drain + web/worker split 🧪
+- **S2** Orders+Chat+Files API (CRUD, 9-станова машина, SSE-чат, файли, time-logs, activity) 🧪
+- **S3** Portal frontend: auth-екрани, /orders (список+деталь+SSE-чат+файли+activity), /settings, /team, /invite + дизайн-система `@workflo/ui` 🧪
+- **S4** Workspace frontend (role-based shell, executor-kanban+order-detail+time, owner dashboard/orders/clients) + IP-whitelist 🧪
+- **S5 Billing+Wallet+Finance+Team — ✅ ЗАВЕРШЕНО (фінансове ядро, backend, гілка `dev`):** усі S5-01…S5-10 + міграція `s5_00_financial_core` + 4-вимірний аудит з ремедіацією. Деталі — нижче «S5 РОЗГОРНУТО» та [`S5_AUDIT.md`](archive/S5_AUDIT.md). Гейт: type-check 21/21 · lint 13/13 · **test (api 343 unit + 57 gated integration на реальному PG16) + types 46** · build 13/13. **Запушено** (звірено 11.06: `origin/dev` синхронний; staging redeploy тригернуто `0ecefdb`); **не протестовано вручну на staging** — план: [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md), оновлення сервера: [`SERVER_UPDATE_S5.md`](archive/SERVER_UPDATE_S5.md).
+- **Аудит-ремедіація (S0-S4, 11 комітів, 2026-06-07):** read+write RLS через `withTenant`/`tenantTransaction` + **тест крос-тенантної ізоляції** (CI-гейт `db-integration`) · `/auth/switch-agency` (multi-agency) · схема-hardening · Sentry (guarded) + CI migrate-diff drift-gate · спільний CORS/CSRF allowlist · magic-bytes · runtime-branding seam · exec-доки.
+- **S5.6 «Фінансова модель 2.0» — ✅ BACKEND ЗАВЕРШЕНО (гілка `dev`):** усі P-0…P-11 + MOD-1…MOD-4. Project замінив CompanyService (P-1e drop, БЕЗ backfill); LegalEntity; гібрид cycle-engine (fixed/hourly_prepaid/hourly_postpaid · monthly/weekly/manual); маржа-движок; payment-terms→dueDate; EUR+бонус-валюта; контракт-гейт; estimate-lines (P-6); approval 02-А (upfront) + **P-11 погодження вартості 3 режими** (`approvalMode` none/upfront/on_actuals + `invoiceApprover` client/internal + counter-offer); роль `manager` у `can()` (MANAGER_BLOCKED: finance/settings/credentials/payment.confirm). Гейт: api **572** real-PG · type-check 23 · lint 14 · build 14 · drift-free. Деталі — РЕПЛАН нижче + [`PROJECTS_SPEC.md`](PROJECTS_SPEC.md) §8.
+- **S5.6 FRONTEND (перші екрани, S5-11/S5-12, ✅):** portal `/billing` (фінанси клієнта + on_actuals-погодження), workspace `/billing` (фінанси команди + черга випуску on_actuals), workspace `/projects` (конфіг фін-проєкту — self-service enabler), `GET /workspace/companies` (пікер компаній). Решта S5.6-екранів (project360/client360/margin/service-catalog/reports) — далі за `design-v2/`.
+- **S5.6 FRONTEND — ✅ ПОВНІСТЮ ЗАКРИТО (2026-06-24, per [`ROADMAP.md`](ROADMAP.md) Фаза A, 7 зрізів):** юр-особи (`LegalEntity` CRUD у `/settings`) · екран проєкту `/projects/:id` (білінг + селектор юр-особи + per-project маржа + manual close-cycle) · Orders **Timeline**-view · **задачі замовлення** (per-order `InternalTask` kanban, таб «Задачі») · **margin per-executor** (таб «За виконавцями») · **chat-фільтр** «Усі/внутрішні» · **реквізити компанії** (portal `/settings`). Дорогою fix контракт-багів `createExpenseSchema`/`createLegalEntitySchema` (`.optional()`→`.nullish()`); form-submit smoke у CI на кожен зріз. **Backend-blocked → S6+ (Фаза B):** `client360` (clients-CRUD, рішення власника), глобальна командна дошка, notify-feed, documents-PDF, vault. `zeroCost`-тумблер чекає EditMember-UI. **Наступне — S6** (Documents+Notifications+Bot).
+- **🔎 Аудит стану (2026-06-21) + ремедіація S5.6-AR ✅:** 5-вимірний (security/finance/types/frontend/docs). Фін-ядро — інваріанти коректні (0 crit/high у грошах). Знайдено й **ВИПРАВЛЕНО** (рішення власника: повний finance-блок manager + усі фікси одним проходом): manager-блок на нових S5.6-роутах (projects/estimates/companies/requisites), FE-баги (`formatMoney(NaN)`, chat mark-read write-storm), контракт-дрейф (approval DTO нормалізовано; `FinProject`+5 полів), M2-M8 (currency-enum, approvalMode-каскад, discount-гарди, date-ISO). Гейт зелений (type-check 23 · lint 14 · api 425 · build 14); code-review 0 crit/high. Запис — [`AUDIT_S5.6_2026-06.md`](AUDIT_S5.6_2026-06.md).
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S1-01 | packages/notifications — email functions | [07-notifications] | — | ⬜ | — | — |
-| S1-02 | packages/notifications — telegram adapter | [07-notifications] | — | ⬜ | — | — |
-| S1-03 | packages/notifications — notify() unified | [07-notifications] | — | ⬜ | — | — |
-| S1-04 | POST /auth/register (profile + company) | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-05 | POST /auth/login | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-06 | POST /auth/logout | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-07 | POST /auth/refresh (token rotation) | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-08 | POST /auth/forgot-password | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-09 | POST /auth/reset-password | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-10 | GET /auth/me | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-11 | JWT middleware + role guard | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-12 | Rate limiting /auth/* (10 req/15min) | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-13 | PATCH /profile, /profile/password | [13-settings] | — | ⬜ | ⬜ | — |
-| S1-14 | PATCH /profile/notifications | [13-settings] | — | ⬜ | — | — |
-| S1-15 | POST /workspace/team/invite (executor) | [12-team] | — | ⬜ | ⬜ | — |
-| S1-16 | GET /invite/:token + прийняти запрошення | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-17 | POST /company/members/invite | [01-auth] | — | ⬜ | ⬜ | — |
-| S1-18 | Welcome email при реєстрації | [08-email] | — | ⬜ | ⬜ | — |
-| S1-19 | Invite email (executor + company member) | [08-email] | — | ⬜ | ⬜ | — |
-| S1-20 | Reset password email | [08-email] | — | ⬜ | ⬜ | — |
-| S1-21 | packages/i18n — uk/en локалі базові | [13-settings] | — | ⬜ | — | — |
-| S1-22 | Deploy Sprint 1 → staging | Infra | — | ⬜ | — | 🚀 |
+**🔜 ДАЛІ (рекомендований порядок для соло-фази «продукт для себе»):**
 
----
+1. ~~S5.5 Audit-ремедіація~~ ✅ ЗАВЕРШЕНО 11.06 (див. секцію нижче). **Ручне тестування S5 на staging** за [`S5_MANUAL_TEST_PLAN.md`](S5_MANUAL_TEST_PLAN.md) — досі висить.
+2. **Прохід модулів власником ✅ 11.06** → [`MODULE_REVIEW_2026-06.md`](MODULE_REVIEW_2026-06.md). **Відкриті питання ✅ закрито 12.06** → [`OPEN_QUESTIONS_2026-06.md`](OPEN_QUESTIONS_2026-06.md); [`PROJECTS_SPEC.md`](PROJECTS_SPEC.md) **затверджено** (P-0 ✅). Лишилось передати **[`DESIGN_TZ_2026-06.md`](DESIGN_TZ_2026-06.md) дизайнеру** (П1 — картка клієнта 360°).
+3. **S5.6 «Фінансова модель 2.0»** (новий, спека затверджена — старт P-1; див. РЕПЛАН нижче) — ПЕРЕД S6.
+4. **S6 (розширений) Documents+Notifications+Bot** — зокрема активувати відкладені S5-нотифікації + IdempotencyKey TTL-sweep cron.
+5. **S7 (розширений) Landing+Blog+ChatHub**, **S8 QA+launch v0.1.0**.
 
-## SPRINT 2 — Orders API (Тиждень 3-4)
-> Ціль: повний CRUD замовлень, коментарі SSE, файли
+> 🔒 **Прицільний тест+полір модулів** — окремий подієвий трек (паралельно спринтам), коли модуль дозрів:
+> канон [`MODULE_HARDENING.md`](MODULE_HARDENING.md), черга — [«Харден-гейт модулів»](#-харден-гейт-модулів-прицільний-тестполір-коли-модуль-готовий) у РЕПЛАН-секції.
+> **Можна вже зараз** (Хвиля 1, щойно дизайн модуля стане РЕЮЗ): **07 Notifications · 13 Settings · 16 Search**.
+> **Хвиля 2** (05/02/06/12/22/25/09/19/28) розблоковується **після P-1 (`Project`) у `dev`** — раніше fin-coupled не чіпаємо.
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S2-01 | GET /orders, POST /orders | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-02 | GET /orders/:id | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-03 | POST /orders/:id/approve | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-04 | POST /orders/:id/accept | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-05 | GET/POST /orders/:id/comments | [03-chat] | — | ⬜ | ⬜ | — |
-| S2-06 | GET /orders/:id/comments/stream (SSE) | [03-chat] | — | ⬜ | ⬜ | — |
-| S2-07 | packages/storage — LocalStorageAdapter | [04-files] | — | ⬜ | ⬜ | — |
-| S2-08 | POST /orders/:id/files (multipart) | [04-files] | — | ⬜ | ⬜ | — |
-| S2-09 | GET /orders/:id/files | [04-files] | — | ⬜ | ⬜ | — |
-| S2-10 | GET /files/serve/:key (authenticated download) | [04-files] | — | ⬜ | ⬜ | — |
-| S2-11 | DELETE /orders/:id/files/:fileId | [04-files] | — | ⬜ | ⬜ | — |
-| S2-12 | GET/POST/PATCH/DELETE /workspace/orders | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-13 | PATCH /workspace/orders/:id/status | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-14 | Internal status → client status mapping | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-15 | CRUD internal tasks | [02-orders] | — | ⬜ | ⬜ | — |
-| S2-16 | CRUD time logs | [12-team] | — | ⬜ | ⬜ | — |
-| S2-17 | Activity log — запис при кожній дії | [03-chat] | — | ⬜ | — | — |
-| S2-18 | Notification при зміні статусу | [07-notifications] | — | ⬜ | ⬜ | — |
-| S2-19 | Deploy Sprint 2 → staging | Infra | — | ⬜ | — | 🚀 |
+### 📐 DESIGN-V2 ДОСТАВЛЕНО (2026-06-20) — дизайн-гейт оновлено
+
+Дизайнер повернув новий бандл [`design-v2/`](../design-v2/) (імпорт через Claude Design MCP), що реалізує спеку 29 модулів ([`DESIGN_TZ_2026-06.md`](DESIGN_TZ_2026-06.md)). Повна матриця готовності **дизайн✅ × бекенд** (звірено grep'ом) — [`DESIGN_SYSTEM.md §5.13`](DESIGN_SYSTEM.md). Ключове для плану:
+
+- **W0 — НОВА фронт-задача (раніше не було в TRACKER):** рольовий **hub-shell** + порт дизайн-CSS у `@workflo/ui` + примітиви (Drawer / Table / Tabs / Kanban-card / Chat-composer). design-v2 переустроїв IA: **7 хабів** (`workspace-hubs.jsx`), рольова нав `o/m/x` (`ia-roles.css` · `navVisibleForRole()`), словник **`superadmin/lead → owner/manager/executor`**. ⚠️ **Існуючий S3/S4 shell будувався ДО design-v2 → потребує звірки/реворку під нову хаб-IA та рольовий словник.**
+- **W1 — готово кодити одразу (дизайн✅ + бекенд✅):** `margin` · `orders-v2` · `service-catalog` · `order-chat`(core) · `fin-projects`(core) · `board`(фікс-колонки `InternalTask`) · `project360`(ready-таби) · `reports`(P&L).
+- **W2 — блок-бекенд → за планом S6–S13.** 🚦 **Рішення власника (2026-06-20): clients-CRUD + Document-route НЕ підтягуємо наперед.** Модулі: `client360` (clients CRUD — `CompanyService` викинуто в P-1e) · `documents-eu` (Document route + PDF-движок) · `portal-secrets`(vault) · `support` · `calendar` · `testimonials` · `case-editor` · `notify`-feed (модель є, read/mark-read API нема).
+- **Дизайн-гапи** (дрібні, не блокери) → [`DESIGN_TODO.md §0`](DESIGN_TODO.md).
+
+### S5 РОЗГОРНУТО (10 тасків, усі ✅ + verified на реальному PG)
+
+| Таск     | Що                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------- |
+| S5-01    | `@workflo/payments` PaymentProvider + ManualProvider + RaceGuard                            |
+| s5_00    | міграція financial-core (7 таблиць + 8 enum + дельти + RLS)                                 |
+| S5-02    | idempotent POST payments (Idempotency-Key + SELECT…FOR UPDATE + FX-снапшот) + billing reads |
+| S5-03a/b | NBU exchange-rate cron · Services CRUD + assign + recurring-charge cron                     |
+| S5-04    | team rates (append-only) + ExecutorPayout (idempotent, draft→approved→paid) + time-log lock |
+| S5-05    | bonus-wallet ledger (walletCredit/Debit, FOR UPDATE, інваріант Σcredit−Σdebit≥0)            |
+| S5-06    | referral accrual → walletCredit (in-tx, idempotent, intra-agency)                           |
+| S5-07    | money-account: PaymentAllocation + moneyBalance + charge-states                             |
+| S5-08    | unified statement + bonus-spend на інвойс (bonus amountUsd=0 → не роздуває revenue)         |
+| S5-09    | loyalty tier-recalc cron + history + override                                               |
+| S5-10    | Expense CRUD + P&L (revenue−expenses, salary з ExecutorRate)                                |
+
+**Наскрізні відкладення → S6:** ~~нотифікації (outbox enqueue+handler)~~ ✅ BE-1/2 · ~~IdempotencyKey TTL-sweep cron~~ ✅ BE-3 · referral 5-min cache, `ExecutorRate.hourlyRate` (лишаються).
+
+**⏸️ ВІДКЛАДЕНО СВІДОМО (не для соло-фази):**
+
+- **SaaS-Enablement** (signup/підписка/super-admin/quota-значення/custom-домени/runtime-fetch брендингу) — окремий пізній спринт, коли вирішиш продавати. Фундамент (F1–F6) готовий; це додавання поверх, без міграції даних.
+- **Block 7b:** i18n-світ ~21 portal-файлу (UA→`t()`, en-локаль) + self-host шрифтів (GDPR). Seam готовий; робота механічна.
+- **RLS-активація** (workflo_app LOGIN + `DATABASE_APP_URL` + `RLS_ENFORCED=true` + soak) — перед першим зовнішнім тенантом, не зараз.
+- **Дисципліна по дорозі** (щоб «SaaS в кінці» лишався дешевим): кожна нова таблиця з `agencyId`; кожен запит scoped; UI на токенах `--wf-*`; `t()` на нових екранах.
 
 ---
 
-## SPRINT 3 — Portal Frontend (Тиждень 4-5)
-> Ціль: клієнт може зареєструватися, бачити задачі, спілкуватися
+## Структура: MVP (S0-S8) → Повноцінний продукт (S9-S14)
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S3-01 | packages/ui — Button, Input, Badge, Modal | [UI] | — | ⬜ | — | — |
-| S3-02 | packages/ui — Table, Spinner, Avatar | [UI] | — | ⬜ | — | — |
-| S3-03 | packages/ui — AuthLayout, DashboardLayout | [UI] | — | ⬜ | — | — |
-| S3-04 | packages/ui — ThemeProvider (light/dark) | [13-settings] | — | ⬜ | — | — |
-| S3-05 | Portal — Auth context (token in memory) | [01-auth] | — | ⬜ | — | — |
-| S3-06 | Portal — /login, /register | [01-auth] | — | ⬜ | — | — |
-| S3-07 | Portal — /forgot-password, /reset-password | [01-auth] | — | ⬜ | — | — |
-| S3-08 | Portal — /invite/:token | [01-auth] | — | ⬜ | — | — |
-| S3-09 | Portal — /dashboard | [02-orders] | — | ⬜ | — | — |
-| S3-10 | Portal — /tasks (список + фільтри) | [02-orders] | — | ⬜ | — | — |
-| S3-11 | Portal — /tasks/new | [02-orders] | — | ⬜ | — | — |
-| S3-12 | Portal — /tasks/:id (статус + етапи) | [02-orders] | — | ⬜ | — | — |
-| S3-13 | Portal — /tasks/:id чат (SSE) | [03-chat] | — | ⬜ | — | — |
-| S3-14 | Portal — /tasks/:id файли | [04-files] | — | ⬜ | — | — |
-| S3-15 | Portal — /tasks/:id activity log | [03-chat] | — | ⬜ | — | — |
-| S3-16 | Portal — /team (члени + invite) | [01-auth] | — | ⬜ | — | — |
-| S3-17 | Portal — /settings (профіль + пароль) | [13-settings] | — | ⬜ | — | — |
-| S3-18 | Portal — /settings нотифікації + мова + тема | [13-settings] | — | ⬜ | — | — |
-| S3-19 | i18n UA+EN в portal | [13-settings] | — | ⬜ | — | — |
-| S3-20 | Error handling — toast/popup для всіх помилок | [UI] | — | ⬜ | — | — |
-| S3-21 | Mobile responsive portal | [UI] | — | ⬜ | — | — |
-| S3-22 | Deploy Sprint 3 → staging | Infra | — | ⬜ | — | 🚀 |
+- **S0-S8 — MVP v0.1.0:** ядро кожного модуля (reconcile A + CRUD + must-have) + перший живий клієнт.
+- **S9-S14 — Enhancement:** обрані у вікторині фічі (B/C/D), що добудовують «повноцінний продукт». Заплановані, не беклог. Можна підтягувати раніше за потребою.
+- Foundation (tenancy + schema-delta + outbox) — **S1.6, до S2**. Кожен модуль несе свій `agencyId`-reconcile у власному ядровому спрінті.
 
 ---
 
-## SPRINT 4 — Workspace Frontend (Тиждень 5-6)
-> Ціль: власник і виконавець можуть повноцінно працювати
+## ✅ ЗАВЕРШЕНО
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S4-01 | Workspace — Auth context + /login | [01-auth] | — | ⬜ | — | — |
-| S4-02 | Workspace — /invite/:token (executor flow) | [01-auth] | — | ⬜ | — | — |
-| S4-03 | Executor — / kanban своїх задач | [02-orders] | — | ⬜ | — | — |
-| S4-04 | Executor — /tasks/:id статус + коментарі | [02-orders] | — | ⬜ | — | — |
-| S4-05 | Executor — /tasks/:id time log | [12-team] | — | ⬜ | — | — |
-| S4-06 | Executor — /profile заробіток | [12-team] | — | ⬜ | — | — |
-| S4-07 | Owner — / overview dashboard | [02-orders] | — | ⬜ | — | — |
-| S4-08 | Owner — /orders kanban + таблиця + пошук | [02-orders] | — | ⬜ | — | — |
-| S4-09 | Owner — /orders/:id повне управління | [02-orders] | — | ⬜ | — | — |
-| S4-10 | Owner — /clients список компаній | [02-orders] | — | ⬜ | — | — |
-| S4-11 | Owner — /clients/:id картка клієнта | [02-orders] | — | ⬜ | — | — |
-| S4-12 | IP whitelist middleware для workspace | Infra | — | ⬜ | — | — |
-| S4-13 | i18n UA+EN в workspace | [13-settings] | — | ⬜ | — | — |
-| S4-14 | Deploy Sprint 4 → staging | Infra | — | ⬜ | — | 🚀 |
+| Спрінт     | Підсумок                                                                                             | Стан     |
+| ---------- | ---------------------------------------------------------------------------------------------------- | -------- |
+| **S0**     | Foundation: monorepo, CI, Hetzner, Traefik, DNS, schema+seed, health, helmet, TIMESTAMPTZ. 30 задач. | ✅ 🚀    |
+| **S1**     | Auth+Core: register/login/logout/refresh/reset/me/guard, invites, profile, notify-matrix, i18n. 23.  | ✅ 🧪 🚀 |
+| **S1.5-A** | Post-S1 audit fixes: security (logout/login/refresh/CSRF/invite) + migration safety.                 | ✅ 🧪    |
+| **S1.5-B** | D1 `can()`-permissions + D2 `notifyRecipient()` + D5 enum-drift test.                                | ✅ 🧪    |
+| **S1.5-C** | Schema hardening: Payment.status, ExecutorRate fields, FK indexes, onDelete, decimals.               | ✅ 🧪    |
+
+> Повна історія завершених рядків — у git (`docs/TRACKER.md` до 30.05) + `modules/*` секції «Аудит-фіналізація».
 
 ---
 
-## SPRINT 5 — Billing + Services + Team (Тиждень 6-7)
+## 🔍 Аудит закриття S0/S1 (30.05.2026)
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S5-01 | API — /billing/summary, /charges | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-02 | API — POST /workspace/billing/payments | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-03 | Advance payment логіка (orderId + type) | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-04 | ExchangeRate — НБУ API cron (09:10 Kyiv) | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-05 | API — Services CRUD + assign to company | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-06 | pg_cron — recurring charges 1-го числа | [05-billing] | — | ⬜ | ⬜ | — |
-| S5-07 | API — Team invite + rates + earnings | [12-team] | — | ⬜ | ⬜ | — |
-| S5-08 | API — Company members + permissions | [01-auth] | — | ⬜ | ⬜ | — |
-| S5-09 | API — Referral bonus при payment | [09-referral] | — | ⬜ | ⬜ | — |
-| S5-10 | API — Loyalty tier update при payment | [10-loyalty] | — | ⬜ | ⬜ | — |
-| S5-11 | Portal — /billing | [05-billing] | — | ⬜ | — | — |
-| S5-12 | Portal — /referrals | [09-referral] | — | ⬜ | — | — |
-| S5-13 | Portal — /loyalty | [10-loyalty] | — | ⬜ | — | — |
-| S5-14 | Workspace — /billing dashboard | [05-billing] | — | ⬜ | — | — |
-| S5-15 | Workspace — /billing/payouts | [12-team] | — | ⬜ | — | — |
-| S5-16 | Workspace — /services | [05-billing] | — | ⬜ | — | — |
-| S5-17 | Workspace — /team | [12-team] | — | ⬜ | — | — |
-| S5-18 | Workspace — /settings (payment settings, referral) | [13-settings] | — | ⬜ | — | — |
-| S5-19 | Deploy Sprint 5 → staging | Infra | — | ⬜ | — | 🚀 |
+**Зелене (перевірено локально):** `type-check` 19/19 ✅ · `lint` 13/13 ✅ · тести: api **69** ✅, notifications **64** ✅, types **23** ✅, i18n **8** ✅ · 6 міграцій (вкл. S1.5-C) · 5 Dockerfiles · compose dev/staging/production · CI (ci.yml PR + staging + production).
+
+**S0 Foundation — закрито** (monorepo/CI/Hetzner/Traefik/DNS/schema/health — інфра+код зелені).
+**S1 Auth — код закрито** (усі ендпойнти + 69 api-тестів зелені, staging deploy 🚀).
+
+**Закрито (30.05):**
+
+| ID  | Проблема                                                                                          | Дія                                            | Статус |
+| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------ |
+| C1  | `pnpm test` червоний: bot/landing/portal/workspace/ui мають `vitest run` без тест-файлів → exit 1 | `--passWithNoTests` у 5 апах                   | ✅     |
+| C2  | Тести НЕ в CI (ci.yml/staging/production ганяють лише type-check+lint)                            | `turbo test` крок додано в усі 3 воркфлоу      | ✅     |
+| C3  | **S1.5-D**: у деплої немає `prisma migrate deploy` (міграції руками)                              | окремий `migrate`-сервіс + run-крок (stg+prod) | ✅     |
+
+> ✅ **S0+S1 повністю закриті (док+код):** `pnpm test` 15/15 green · тести в CI-гейті · міграції накочуються авто на деплої. Перевірка C3 на живому staging — поточний пуш. Далі S1.6.
 
 ---
 
-## SPRINT 6 — Documents + Notifications + Bot (Тиждень 7-8)
+## 🔑 SPRINT 1.6 — Tenancy + Foundation (ДО S2)
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S6-01 | packages/templates — InvoiceTemplate PDF | [06-documents] | — | ⬜ | — | — |
-| S6-02 | packages/templates — CompletionActTemplate | [06-documents] | — | ⬜ | — | — |
-| S6-03 | packages/templates — SpecificationTemplate | [06-documents] | — | ⬜ | — | — |
-| S6-04 | API — POST /workspace/orders/:id/documents | [06-documents] | — | ⬜ | ⬜ | — |
-| S6-05 | API — GET /workspace/documents/:id/download | [06-documents] | — | ⬜ | ⬜ | — |
-| S6-06 | API — POST /workspace/documents/:id/send | [06-documents] | — | ⬜ | ⬜ | — |
-| S6-07 | Portal — /tasks/:id вкладка Документи | [06-documents] | — | ⬜ | — | — |
-| S6-08 | Workspace — /orders/:id вкладка Документи | [06-documents] | — | ⬜ | — | — |
-| S6-09 | Telegram bot — /start + OTP flow | [15-bot] | — | ⬜ | ⬜ | — |
-| S6-10 | Bot — webhook mode (prod) | [15-bot] | — | ⬜ | ⬜ | — |
-| S6-11 | Bot — notification events handler | [15-bot] | — | ⬜ | ⬜ | — |
-| S6-12 | POST /profile/telegram/connect (OTP) | [13-settings] | — | ⬜ | ⬜ | — |
-| S6-13 | Notifications — in-app list GET/PATCH | [07-notifications] | — | ⬜ | ⬜ | — |
-| S6-14 | Email templates HTML дизайн (всі) | [08-email] | — | ⬜ | — | — |
-| S6-15 | Deploy Sprint 6 → staging | Infra | — | ⬜ | — | 🚀 |
+> Ціль: tenant-ready фундамент + надійна доставка + schema-delta + db-hardening. Розблоковує весь agencyId-reconcile.
+
+| ID     | Задача                                                                                                                                 | Модуль    | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| S16-01 | ✅ `Agency` + `AgencyMember` + `AgencyMemberRole` + міграція (FK/indexes Prisma-naming)                                                | [adr/004] | ✅     |
+| S16-02 | ✅ `agencyId` scoping (company req + orders/payments/docs/charges/comments/timelogs/services/rates/audit) + backfill + seed + register | [db]      | ✅     |
+| S16-03 | ✅ JWT claims `activeAgencyId` + `agencyMemberships` (login/refresh/register); `/auth/switch-agency` → Фаза 1 (multi-agency, ADR-004)  | [01-auth] | ✅     |
+| S16-04 | ✅ `can()` tenant-guard (default-deny крос-тенант) + 2 тести                                                                           | [adr/002] | ✅     |
+| S16-05 | ✅ `OutboxEvent` + міграція + drain-сервіс (claim SKIP LOCKED + backoff + DLQ) + 5 тестів — handlers/cron у S6                         | [07]      | ✅     |
+| S16-06 | ✅ Schema-delta batch-1: Order.{onHoldReason,cancelledReason} + OrderComment.{editedAt,deletedAt} + OrderChatRead (для S2 orders/chat) | [db]      | ✅     |
+| S16-07 | ✅ db-hardening — вже виконано в S1.5-C (FK-індекси, Order.company onDelete:SetNull, Decimal(10,4); OtpToken-index чистий)             | [db]      | ✅     |
+| S16-08 | ✅ telegramChatId dedup — прибрано unused Profile.telegram\* (NotificationSettings authoritative; verified no code reads)              | [15-bot]  | ✅     |
+| S1.5-D | ✅ `prisma migrate deploy` на деплої (окремий `migrate`-сервіс, stg+prod)                                                              | Infra     | ✅     |
 
 ---
 
-## SPRINT 7 — Landing + Blog (Тиждень 7-8, паралельно)
+## SPRINT 2 — Orders + Chat + Files API (ядро)
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S7-01 | Landing — Hero секція | [14-landing] | — | ⬜ | — | — |
-| S7-02 | Landing — Проблеми / Як працюємо / Кейси | [14-landing] | — | ⬜ | — | — |
-| S7-03 | Landing — Команда / Стек / FAQ / CTA | [14-landing] | — | ⬜ | — | — |
-| S7-04 | Landing — /blog + /blog/[slug] (ISR) | [11-content] | — | ⬜ | — | — |
-| S7-05 | Landing — /cases + /cases/[slug] (ISR) | [11-content] | — | ⬜ | — | — |
-| S7-06 | Landing — /team, /stack, /status | [14-landing] | — | ⬜ | — | — |
-| S7-07 | Landing — /terms, /privacy | [14-landing] | — | ⬜ | — | — |
-| S7-08 | Landing — UA + EN (next-intl) | [14-landing] | — | ⬜ | — | — |
-| S7-09 | Landing — SEO metadata + sitemap + hreflang | [14-landing] | — | ⬜ | — | — |
-| S7-10 | Landing — OG image autogeneration | [14-landing] | — | ⬜ | — | — |
-| S7-11 | Landing — Contact form → /api/contact | [14-landing] | — | ⬜ | ⬜ | — |
-| S7-12 | API — AI content generation endpoint | [11-content] | — | ⬜ | ⬜ | — |
-| S7-13 | Workspace — /content (AI draft + publish) | [11-content] | — | ⬜ | — | — |
-| S7-14 | Workspace — /messages + /inbox | [07-notifications] | — | ⬜ | — | — |
-| S7-15 | Lighthouse ≥ 90 для landing | [14-landing] | — | ⬜ | — | — |
-| S7-16 | Deploy Sprint 7 → staging | Infra | — | ⬜ | — | 🚀 |
+> Ціль: повний CRUD замовлень, коментарі SSE, файли. reconcile (agencyId/IDOR/leak-guard) — у кожній задачі.
+> **Pre-S2 hardening (31.05) ✅:** критичний аудит S0-S1 виправлено + verified; dep-CVE оновлено (fastify/jwt/next); **tenant-enforcement `apps/api/src/auth/tenant.ts`** (`assertSameTenant` + loader'и `requireOrderParticipant`/`requireTeamOrder`) у кожному agency-scoped хендлері; композитні order-індекси готові. Деталі — `archive/AUDIT_S0_S1.md` + ADR-004 amendment.
+> **Аудит S0-S2 (1.06) ✅:** 5-агентний критичний рев'ю (security/types/db/quality/arch) — фундамент зрілий, критичних витоків нема; виправлено 6 (activity-leak, Decimal-серіалізація, platform-agency findUnique, invite-tx, orphan-blob, seed-гігієна); відкладене структуровано. Деталі — `AUDIT_S0_S2.md` + `BACKLOG.md`.
+
+| ID    | Задача                                                                                                                                                                                                                                                                              | Модуль      | Статус |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S2-01 | ✅ GET/POST /orders + 9-станова машина (`ALLOWED_ORDER_TRANSITIONS`/`canTransitionOrder`) + OrderStage (create) — tenant-scoped, 9 тестів                                                                                                                                           | [02-orders] | ✅ 🧪  |
+| S2-02 | ✅ GET /orders/:id — detail + `assertSameTenant` + client-IDOR(404) + client/internal view + stages                                                                                                                                                                                 | [02-orders] | ✅ 🧪  |
+| S2-03 | ✅ `PATCH /orders/:id/assign` — triage: призначення/зняття executor (валідація agency-member) + variant-B list-фільтр `assigneeId=none`                                                                                                                                             | [02-orders] | ✅ 🧪  |
+| S2-04 | ✅ `PATCH /orders/:id/status` (state-machine) + `PATCH /orders/:id` (edit, role/status-gated) + `DELETE` (soft-delete) — internal↔client                                                                                                                                            | [02-orders] | ✅ 🧪  |
+| S2-05 | ✅ CRUD internal tasks (`/orders/:orderId/tasks`, workspace-only, tenant+IDOR-guarded, member-validated assignee); onHold/cancelled reason set on transition (S2-04)                                                                                                                | [02-orders] | ✅ 🧪  |
+| S2-06 | ✅ GET/POST /orders/:id/comments — cursor-пагінація + internal-leak guard (клієнт не бачить/не пише `isInternal`) + `requireOrderParticipant` IDOR-helper                                                                                                                           | [03-chat]   | ✅ 🧪  |
+| S2-07 | ✅ GET /orders/:id/comments/stream (SSE) — DB-тригер `pg_notify('chat_events')` + shared LISTEN (1 конект/інстанс, reconnect-backoff) + in-memory `chatBus` fan-out + heartbeat + leak-guard; міграція verified на throwaway (NOTIFY-payload + `migrate diff` empty)                | [03-chat]   | ✅ 🧪  |
+| S2-08 | ✅ `order_chat_reads` + POST /comments/read (upsert) + unread/lastReadAt у GET; participant IDOR predicate (shared `access.ts`)                                                                                                                                                     | [03-chat]   | ✅ 🧪  |
+| S2-09 | ✅ packages/storage — `read()`+path-traversal guard (`safeResolve`), `sha256Hex`/`buildOrderFileKey`/`safeExt`, `0640`; OrderFile reconcile (agencyId/deletedAt/sha256, міграція verified throwaway, diff empty); MIME-allowlist (SVG прибрано) у @workflo/types; +8 storage-тестів | [04-files]  | ✅ 🧪  |
+| S2-10 | ✅ POST `/orders/:id/files` (multipart, MIME 415, ліміт 100MB/413, 20-файлів/409, sha256, tenant-prefixed key) + GET list + DELETE (uploader/team, soft) — participant-guard                                                                                                        | [04-files]  | ✅ 🧪  |
+| S2-11 | ✅ GET `/files/:id` (meta, storedAs не тече) + GET `/files/:id/content` (access-check, `Content-Disposition: attachment` + `nosniff`, traversal-guarded read)                                                                                                                       | [04-files]  | ✅ 🧪  |
+| S2-12 | ✅ CRUD `/orders/:id/time-logs` (workspace-only, shared `requireTeamOrder`; create/list+total/edit/delete; author-only edit/delete; hours≤24/date-validation; Decimal→number, DATE→YYYY-MM-DD)                                                                                      | [12-team]   | ✅ 🧪  |
+| S2-13 | ✅ Activity log + outbox notify: статус-перехід у `$transaction` (order.update + ActivityLog + `enqueueOutbox('order.status_changed')`) — атомарно; GET `/orders/:id/activity` (participant-scoped feed)                                                                            | [07]        | ✅ 🧪  |
+| S2-14 | Deploy Sprint 2 → staging                                                                                                                                                                                                                                                           | Infra       | 🚀     |
 
 ---
 
-## SPRINT 8 — QA + Launch (Тиждень 9-10)
+## SAAS FOUNDATION (F1–F6) — структурний backfill у межах S2
 
-| ID | Задача | Модуль | Хто | Статус | Тест | Deploy |
-|---|---|---|---|---|---|---|
-| S8-01 | Integration tests — auth flow | [01-auth] | — | ⬜ | ⬜ | — |
-| S8-02 | Integration tests — order lifecycle | [02-orders] | — | ⬜ | ⬜ | — |
-| S8-03 | Integration tests — billing + payment | [05-billing] | — | ⬜ | ⬜ | — |
-| S8-04 | Integration tests — referral bonus | [09-referral] | — | ⬜ | ⬜ | — |
-| S8-05 | Security review — OWASP checklist | Infra | — | ⬜ | — | — |
-| S8-06 | Sentry — всі 5 apps налаштовані | Infra | — | ⬜ | — | — |
-| S8-07 | UptimeRobot — 4 monitors | Infra | — | ⬜ | — | — |
-| S8-08 | Netdata — встановлений на сервері | Infra | — | ⬜ | — | — |
-| S8-09 | Backup cron — налаштований + тест відновлення | Infra | — | ⬜ | — | — |
-| S8-10 | pg_cron — recurring charges перевірка | [05-billing] | — | ⬜ | ⬜ | — |
-| S8-11 | Перший реальний клієнт — ручне тестування | All | — | ⬜ | — | — |
-| S8-12 | Виправлення знайдених багів | All | — | ⬜ | — | — |
-| S8-13 | git tag v0.1.0 | Infra | — | ⬜ | — | — |
-| S8-14 | 🚀 Production deploy v0.1.0 | Infra | — | ⬜ | — | 🚀 |
+> Повний план: [`SAAS.md`](SAAS.md). Принцип: структурне (схема/запити) закладаємо ЗАРАЗ (ретрофіт у живу мультитенантну БД дорогий); продуктове увімкнення (signup/біллінг/branding) — Phase 1 у кінці. «Перевести на SaaS наприкінці» безпечно лише якщо F1–F6 готові.
+
+| ID    | Задача                                                                                                                                    | Модуль    | Статус         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- |
+| FDN-1 | SaaS-поля `Agency` (nullable міграція): subdomain/customDomain/plan/subscriptionStatus/trialEndsAt/billingCustomerId/suspendedAt/limits   | [db]      | ✅             |
+| FDN-2 | quota/feature **seam** `assertWithinQuota()`/`featureEnabled()` (no-op) у orders.create + **files.upload** (+ S5 invite)                  | [adr/007] | ✅ (invite→S5) |
+| FDN-3 | `provisionAgency()` — фабрика тенанта (Agency+owner+дефолтні налаштування); seed перевикористовує                                         | [db]      | ✅             |
+| FDN-4 | RLS: `tenantTransaction` (interactive-tx GUC) + політики (FORCE RLS + `workflo_app` роль) — **verified e2e, flag-gated** (`RLS_ENFORCED`) | [adr/007] | ✅ scaffold    |
+| FDN-5 | `BASE_DOMAIN`+host-resolver stub ✅; tenant rate-limit key ⬜(ADR→Phase1); Traefik wildcard `*.workflo.space` ⬜(infra)                   | Infra     | 🔶 partial     |
+| FDN-6 | (діє) кожна нова tenant-таблиця несе `agencyId` + RLS-політику з дня 1                                                                    | [all]     | ✅             |
+
+> **🏗️ Foundation closure (2.06.2026) — структурні дірки S0–S3 закрито** (комміти `b3d5ea6`/`2b0ac97`/`a68be2d`/`b1c7f98`+):
+>
+> - **S-D2** per-agency `DocumentCounter`/`PaymentSettings`/`ExchangeRate` (крос-тенант нумерація інвойсів) · **S-D3** `agencyId` на `InternalTask`/`ActivityLog` · **S-D4** `order_chat_reads` FK CASCADE.
+> - **R-1** executor-онбординг створює `AgencyMember` (був зламаний — locked-out) +тести · **R-3** Phase-1 IDOR у `requireTeamOrder` (→`order.agencyId`) · tenant-стемп audit/ActivityLog · outbox tenant-mismatch guard.
+> - **F4 RLS** — політики (column + parent-join) + `FORCE RLS` + `workflo_app` роль + **`tenantTransaction`** (interactive-tx GUC; per-op `$extends` відхилено — нуль ізоляції); **верифіковано e2e на throwaway-pg як `workflo_app`**; активація — `ENGINEERING_STANDARDS → RLS rollout`.
+> - **ADR-006** web/worker split (`worker.ts` + `RUN_WORKERS_INLINE` + opt-in compose `--profile workers`) · **R-4** SSE per-user cap.
+> - **Лишилось (Tier-3, дешеве, isolated):** tenant-aware rate-limit key (ADR дозволяє Phase 1), Traefik wildcard (infra-doc), CI `migrate diff` drift-gate.
+
+> **SaaS Enablement (Phase 1, у самому кінці — окремий пізній спрінт):** agency signup+onboarding, підписка агенції на workflo (Stripe/Paddle), per-domain branding у рантаймі, quota-значення (PLAN_LIMITS+UsageCounter), super-admin платформи, lifecycle тенанта (suspend/export/delete), AgencyFeatureFlag/ApiKey/WebhookEndpoint. Без міграції даних — поверх готової схеми.
+
+---
+
+## 🔁 Реордер (1.06.2026) — backend-first
+
+> Рішення власника: **фронтенд (S3 Portal + S4 Workspace) робимо одним суцільним дизайн-проходом ПОТІМ** (коли всі API готові + дизайн звірений). Зараз — лише **design-independent бекенд**: outbox-drain → S5 (Billing/Wallet/Finance) → S6 (Documents/Notifications/Bot), пропускаючи їх UI-задачі (S5-11/12, S6-03, S6-07 — design-gated, у фронтенд-прохід).
+
+| ID     | Задача                                                                                                                                                                       | Модуль | Статус |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| BE-OBX | ✅ Outbox-drain воркер (аудит T-D1): drain-loop у bootstrap + handler-registry + `order.status_changed`→notify (internal→client мапінг, пропуск не-клієнт-видимих); +4 тести | [07]   | ✅ 🧪  |
+
+> **GROWTH (26/27) + SUPPORT (29)** — design-independent бекенд, паралелізовні; рекомендований слот: після S6-backend (або раніше за потребою). Tier-3 foundation-хвости (rate-limit key, Traefik wildcard, CI drift-gate) НЕ блокують S5/S6.
+
+---
+
+## 🌱 GROWTH — Ліди + Інтеграції (нові модулі 26/27, спец 1.06)
+
+> Спеці: [`modules/26-leads.md`](modules/26-leads.md) + [`modules/27-integrations.md`](modules/27-integrations.md). API — design-independent (backend-фаза); екрани (канбан, settings/integrations) — у фронтенд-прохід. **Phase 1** = мінімум власника: форма клієнта + наші webhooks + Telegram-ліди.
+
+| ID      | Задача                                                                                                                                                                                                       | Модуль  | Статус       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------------ |
+| LEAD-1  | `Lead` модель + `LeadStatus` enum (фіксовані стадії MVP) + RLS міграція `20260630_leads` — ✅ (custom pipelines/`LeadStage`/`LeadActivity` table → пізніше)                                                  | [26]    | ✅ (MVP)     |
+| LEAD-2  | Leads API: CRUD + move-stage + convert→Order(+company link) ✅ (`routes/leads`, 14 тестів, advisory-lock convert). ⬜ pipeline-config · SSE-дошка · notify `leads.new_lead` · UTM/lost-аналітика → дозбудова | [26]    | 🔄 (ядро ✅) |
+| INT-1   | `ApiKey` (per-agency Bearer-auth-шлях + scopes) + **Inbound Lead API** `POST /v1/leads` (spam/rate/CORS/idempotency) → Lead(website_form)                                                                    | [27]    | ⬜           |
+| INT-2   | **Outbound webhooks**: `WebhookEndpoint`/`WebhookDelivery` + outbox handler `webhook.fanout`+`webhook.deliver` (HMAC `X-Workflo-Signature`); події order/payment/lead                                        | [27]    | ⬜           |
+| INT-3   | Telegram-адаптер як джерело лідів (бот уже є, 15) → Lead(telegram)                                                                                                                                           | [27/15] | ⬜           |
+| INT-P2  | Meta (IG/FB Lead Ads + Messenger), WhatsApp, TikTok, embeddable-widget, inbound email→lead                                                                                                                   | [27]    | ⬜ P2        |
+| GROW-UI | Канбан лідів + `/settings/integrations` (ключі/webhooks/канали) — у фронтенд-прохід                                                                                                                          | [26/27] | ⏸️ design    |
+
+> **SaaS-вписування:** усе per-agency (ApiKey/WebhookEndpoint/IntegrationConnection/ліди) → конфіг у white-label-воркспейсі (`SAAS_CONFIG.md`); ліміти інтеграцій — через quota-seam (SAAS.md F2).
+
+---
+
+## 🎫 SUPPORT — Тікет-система (новий модуль 29, спец 1.06)
+
+> Спец: [`modules/29-support.md`](modules/29-support.md). Закриває прогалину аудиту #2 (звернення поза замовленням). API — design-independent (backend-фаза); екрани (черга/тред) — у фронтенд-прохід, перевикористовують thread-патерн чату (03).
+
+| ID     | Задача                                                                                                                                      | Модуль  | Статус             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------ |
+| SUP-1  | `Ticket`+`TicketMessage` міграція + `TicketStatus`/`TicketPriority` enums + категорії per-agency                                            | [29]    | ✅ (SUP-MVP 05.07) |
+| SUP-2  | Portal API: відкрити/список/тред/відповісти (`/support/tickets`) + leak-guard (лише public) + notify `support.new_ticket`                   | [29]    | ✅ (SUP-MVP 05.07) |
+| SUP-3  | Workspace API: черга+фільтри/тред(incl. internal)/відповідь/PATCH(status·priority·assign·category)/convert→Order + SSE (`chatBus`-патерн)   | [29]    | ✅ (SUP-MVP 05.07) |
+| SUP-4  | Інтеграція в chat-hub (18): тікети поряд з order-чатами в єдиному inbox                                                                     | [29/18] | ⬜                 |
+| SUP-P2 | SLA-політики+breach-cron, auto-assign-правила, canned-replies, CSAT після close, email/telegram як source (через 27-inbound), KB-self-serve | [29]    | ⬜ P2              |
+| SUP-UI | Portal (мої звернення/нове/тред) + Workspace (черга/тікет з internal-нотатками) — у фронтенд-прохід                                         | [29]    | ⏸️ design          |
+
+> **SaaS-вписування:** категорії/SLA per-agency; ліміти тікетів — через quota-seam (SAAS.md F2).
+
+---
+
+## SPRINT 3 — Portal Frontend (ядро) — 🔄 У РОБОТІ (design-system-first)
+
+> Ціль: клієнт реєструється, бачить задачі, спілкується, дивиться рахунки.
+> **Підхід (рішення власника 2026-06-04): design-system-first** — спершу ядро `@workflo/ui` (компонент → Storybook-дока → reuse), потім екрани. Деталі — [`UI_COMPONENTS.md`](UI_COMPONENTS.md). Естетика «Engineer's Cut» портована з `design/` (токени `--wf-*` + класи `.wfp-*`, verbatim CSS). Фаза A=фундамент+flagship, B=решта ядра+shell, C=екрани Portal.
+
+| ID     | Задача                                                                                                         | Модуль      | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S3-01  | packages/ui примітиви — Button/Input/Badge/StatusDot/Card/EmptyState/Skeleton/Avatar/Modal (+Storybook+тести)  | [UI]        | ✅ 🧪  |
+| S3-02  | packages/ui shell — AppShell(термінал-chrome)/Sidebar/Topbar/AuthShell/Icon + ThemeProvider(theme+6 accent)    | [UI]        | ✅ 🧪  |
+| S3-03  | Portal wiring — api-client(Bearer+401-refresh)/queryClient/SSE/AuthContext/ProtectedRoute/router/i18n + /login | [01]        | ✅ 🧪  |
+| S3-03b | Portal auth — /register(2-step+strength) /forgot(sent+timer) /reset(token+strength); /invite ⬜                | [01]        | ✅ 🧪  |
+| S3-04  | Portal — /orders (список+фільтри+пошук+stats+empty/loading/error; React Query); E2E-з-даними ⏳                | [02-orders] | ✅     |
+| S3-05  | Portal — /orders/:id (header+статус+етапи, sidebar Фінанси/Деталі, approval-banner, skeleton/404)              | [02-orders] | ✅     |
+| S3-06  | Portal — /orders/:id чат (live-SSE+send+read) + файли (upload/download/delete) + activity                      | [03/04]     | ✅     |
+| S3-07  | Portal — /team (invite учасника; members-list → S5, нема API) + /invite/:token accept                          | [01-auth]   | ✅     |
+| S3-08  | Portal — /settings (профіль / вигляд: тема+мова / зміна пароля; notif-matrix → відкладено)                     | [13]        | ✅     |
+| S3-09  | i18n UA+EN + error-toasts (✅ каркас) + mobile responsive (⬜)                                                 | [UI]        | 🔄     |
+| S3-10  | Deploy Sprint 3 → staging                                                                                      | Infra       | 🚀     |
+
+> **Table** примітив — відкладено до екранів, що його потребують (S10). **Tabs** ✅ — примітив на дизайн-класах `.wfp-od-tab*` (C4 prereq, +story+тест). **Toast** = Sonner. **Аудит C1 (2026-06-04):** 2-агентний рев'ю (code+TS), виправлено SSE-401-loop, Modal scroll-lock/close, StrictMode-refresh, Icon literal-типи, api JSON-parse guard, i18n memo. **Аудит C2/C3 (2026-06-04):** ResetPassword→zodResolver (помилки під правильними полями + server-error окремо), orders `status=all` URL-guard, RegisterForm=`z.infer` (anti-drift) + Enter-guard на кроці-0, `internalStatusesFor` без касту, `counts` тип, a11y Space-клавіша, прибрано dead-code. **Аудит C4 (2026-06-04):** lifted SSE на рівень сторінки (не губимо апдейти поза чат-табом), query `enabled`-guard, SSE shape-guard (захист від кривого payload), download revoke-race fix, near-bottom autoscroll, upload error-state. Декомпозиція (`lib/orderDetail` + `ChatTab` + `FilesTab` + page) — здорова. **Аудит C5/комплексний (2026-06-04):** 3 агенти (code+TS+security). react-router CVE (open-redirect)→6.30.4 + `safeRedirect`-guard; RegisterPage шанує `from` (invite→register→accept); SettingsPage split-мутацій (без toast/reload-спаму на клік теми); `suppressGlobalToast`-meta (без подвійних тостів invite/password); password max-length+strength-meter+inline-error; accept reload-fail. **Security:** access-token лише в памʼяті (без localStorage/URL); без XSS (React-escape, 0 dangerouslySetInnerHTML); forced-download; CSRF-safe (Bearer). `InviteStatus` enum↔API ('accepted'/'used') — окремий backend-таск. Декомпозиція — здорова всі рази.
+
+> **Відповідність код↔дизайн↔доки (S3, 2026-06-04):** екрани кодовано 1:1 на `.wfp-*` дизайн-класах. Свідомі розбіжності (бекенд/скоуп, НЕ дефекти): login phone-OTP+2FA (S9); register extra-поля тип/ЄДРПОУ/slug/currency (нема в S2-register); orders pay-status badge + «до оплати $» (нема в list-DTO/aggregate); order approval-banner = informational (client-approve не в S2); Документи-таб = empty (S6); /team members-list (S5); /settings notif-matrix (відкладено) + theme/lang read-on-login (gap); mobile-responsive (окремі design-mobile екрани — відкладено). Dashboard у Portal-дизайні відсутній (/→/orders).
+
+---
+
+## SPRINT 4 — Workspace Frontend (ядро) — 🔄 У РОБОТІ (design-system-first)
+
+> Ціль: owner і executor повноцінно працюють.
+> **Підхід:** дзеркало S3 (`apps/portal`) — той самий wiring (`api`/`sse`/`queryClient`/`AuthContext`/i18n), `@workflo/ui` shell (`AppShell kind="workspace"`), екрани 1:1 на `.wfp-*` дизайн-класах. Єдина апка з **role-based** nav+routing (owner ↔ executor); клієнтів у Workspace не пускає `ProtectedRoute` (`isInternal`).
+
+| ID     | Задача                                                                                                                                 | Модуль      | Статус |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| S4-01  | Workspace — auth (/login /forgot /reset) + /invite (executor) + owner /team-invite + фундамент (role-shell, ProtectedRoute, RoleRoute) | [01-auth]   | ✅     |
+| S4-02  | Executor — kanban своїх задач (`/`) + /orders/:id (internal: Чат+internal-toggle / Файли / Час) + time-logs CRUD                       | [02/12]     | ✅     |
+| S4-03  | Executor — /profile (обліковий запис; заробіток-секція ⏸️ S5 — ставки/виплати)                                                         | [12-team]   | ✅ 🟡  |
+| S4-04  | Owner — overview dashboard (stats + attention items + all-orders board)                                                                | [02-orders] | ✅     |
+| S4-05  | Owner — /orders (board+таблиця+пошук) + /orders/:id (status-transition; assign ⏸️ потребує members-API S5)                             | [02]        | ✅     |
+| S4-06  | Owner — /clients (derived з orders за companyId) + /clients/:id (orders+назва з деталі) — rich-профілі ⏸️ S5/28                        | [02-orders] | ✅ 🟡  |
+| S4-07a | IP-whitelist (workspace) — Traefik `ipwhitelist` middleware `sourcerange=${TEAM_IPS}` на обох compose (stg+prod)                       | Infra       | ✅ 🟢  |
+| S4-07b | i18n `t()`-світ workspace-екранів (Block 7b, UA→ключі)                                                                                 | Infra       | ⬜     |
+| S4-08  | Deploy Sprint 4 → staging (CI вже білдить+пушить+деплоїть `workspace`; треба заповнити `TEAM_IPS`+secrets)                             | Infra       | 🚀     |
+
+> **Прогрес (2026-06-07):** S4-01…S4-06 закодовано в `apps/workspace` (дзеркало `apps/portal`). **Свідомі бек-гейти (НЕ дефекти):** заробіток виконавця (S4-03) + assign-виконавця (S4-05) + rich client-профілі/назви (S4-06) чекають S5-API (ExecutorRate/earnings · members-list · clients-модуль 28). Самостійна реєстрація запрошеного виконавця без акаунта — окремий auth-таск.
+>
+> **🔎 Аудит S4 + ремедіація (2026-06-08):** 3-агентний аудит (code · TypeScript · design-conformance/coverage/decomposition). **Регресій 0** (лише нові `apps/workspace`-файли + additive infra; спільні пакети не чіпані). **Декомпозиція здорова** (файли ≤282 рядків, делегують у sub-компоненти/хуки — легші за portal-аналоги; split не потрібен). **Дизайн-відповідність ~95%** (75/76 `.wfp-*` класів валідні; `.wfp-field-hint--error` існує в `components.css`). Виправлено 10 пунктів: SSE-guard `isChatComment` (+isInternal/+createdAt) · InviteAccept відхиляє non-executor (інакше CompanyMember→lockout) · a11y-клавіатура на рядках таблиць ×3 · `useTransitionStatus` generic→`Pick` · явний cast статусу · тайтенінг DTO-типів (clientStatus/type/billingType→enum, StageStatus) · compile-time exhaustiveness `STATUS_COLUMN` · OwnerDashboard total з пагінації · `RoleRoute` loading-guard · `api.ts ?? → \|\|`. **Інфра-фікс (критичний для прода):** SPA звертались до `/api` (відносний) без проксі, а API на окремому піддомені → `VITE_API_URL` тепер бейкається на білді (`ARG` у Dockerfile portal+workspace + `build-args` у CI stg/prod). Гейт після правок зелений (21/21 · 13/13 · 18/18). План тестування + серверний чек-лист — `docs/archive/S4_TEST_PLAN.md`.
+
+---
+
+## SPRINT 5 — Billing + Wallet + Finance + Team (ядро фінансів) — ✅ ЗАВЕРШЕНО (backend; деталі — «S5 РОЗГОРНУТО» вище)
+
+> Ціль: рахунки, платежі, гаманець (2 рахунки), P&L, команда, реферали, лояльність.
+> **План (канон): [`S5_PLAN.md`](archive/S5_PLAN.md)** — dependency-ordered waves A→D, контракти, ідемпотентність, інваріанти, test-list (з understand-workflow). **Порядок:** S5-01 → міграція `s5_00_financial_core` → S5-03a(ExchangeRate) → S5-02(payments) → ledgers(05/07/06) → tail(08/09/04/10). Гроші=`Decimal`; concurrency=`SELECT…FOR UPDATE` (не Serializable); ідемпотентність=`IdempotencyKey` таблиця + unique-констрейнти.
+
+| ID    | Задача                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Модуль        | Статус |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------ |
+| S5-01 | packages/payments — PaymentProvider interface + ManualProvider + RaceGuard (single-flight)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | [05-billing]  | ✅ 🧪  |
+| S5-02 | API — /billing/summary /charges + POST payments + advance + idempotency                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | [05-billing]  | ✅ 🧪  |
+| S5-03 | ExchangeRate НБУ cron + Services CRUD + recurring charges cron (CompanyService)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | [05-billing]  | ✅ 🧪  |
+| S5-04 | API — Team rates/earnings + ExecutorPayout + company members+permissions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | [12-team]     | ✅ 🧪  |
+| S5-05 | Wallet — WalletTransaction ledger + walletCredit/Debit (інваріант, FOR UPDATE)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | [25-wallet]   | ✅ 🧪  |
+| S5-06 | Wallet — referral accrual→credit + ReferralSettings (редаговані %)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | [25/09]       | ✅ 🧪  |
+| S5-07 | Wallet — money-account: PaymentAllocation + moneyBalance + стани                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [25-wallet]   | ✅ 🧪  |
+| S5-08 | Wallet — unified statement + spending (bonus/prepaid на invoice)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [25-wallet]   | ✅ 🧪  |
+| S5-09 | Loyalty — tier-recalc cron + discount-apply + LoyaltyTierHistory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [10-loyalty]  | ✅ 🧪  |
+| S5-10 | Finance — Expense model + CRUD + P&L (revenue−expenses, ЗП з ExecutorRate)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | [22-finance]  | ✅ 🧪  |
+| S5-11 | Portal — /billing /wallet /referrals /loyalty. **/billing ✅** (P-11; `a5a3475`) **+ /wallet ✅** (бонуси+гроші+ledger+виписка) **+ /loyalty ✅** (сходи тірів + поточний з summary) **+ /referrals ✅** (новий read-ендпоінт `GET /portal/referral`: код для шерингу + статус програми + приведені клієнти з заробітком; 3 route-тести). **S5-11 ЗАКРИТО** (усі 4 екрани portal-фінансів).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | [05/25/09/10] | ✅ 🧪  |
+| S5-12 | Workspace — /billing /payouts /services /team /finance /admin-wallet. **🔄 /billing ✅** (P-11 командна сторона; `ee684ba`) **+ /projects ✅** (`25f1fca`). **+ /finance ✅** (P&L за період + витрати CRUD), **+ /payouts ✅** (період → генерація виплат + approve/mark-paid + ставки команди), **+ /services ✅** (каталог послуг CRUD + active-toggle), **+ /admin-wallet ✅** (баланси клієнтів + пошук + ручне коригування бонусів). **+ /margin ✅** (P-9: клієнт+період → дохід/собівартість/маржа% + розбивка по проєктах). **+ /settings ✅** (owner-config: платіжні реквізити `PATCH /workspace/settings/payment` + реферальна програма `PATCH /admin/referral/settings` — enabled/тіри/employee% — закриває audit-M6 «нема workspace Settings» + розблоковує наскрізний тест «Як оплатити»). Усі owner-only (`RoleRoute allow owner` + nav `roles:'o'`, manager finance-blocked). Контракти звірено з бек-DTO. **S5-12 ЗАКРИТО — фінансово-командний фронт S5 повний + owner-config.** Лишаються суто операційні/design-v2 реворки (orders-v2/board фікс-колонки/project360/reports) — окремий трек, НЕ блокують тестування S5. | [05/12/22/25] | ✅ 🧪  |
+| S5-13 | Deploy Sprint 5 → staging                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Infra         | 🚀     |
+
+> **Прогрес (2026-06-08, backend-first):**
+> — **S5-01 ✅** `@workflo/payments` (PaymentProvider+ManualProvider+RaceGuard single-flight), 13 тестів.
+> — **`s5_00_financial_core` міграція ✅** (WAVE A foundation): 7 net-new моделей (WalletTransaction, PaymentAllocation, ReferralSettings, LoyaltyTierHistory, ExecutorPayout, Expense, IdempotencyKey) + дельти (Payment.amountUsd/rateUsed/sourceType/sourceId+`@@unique`, ServiceCharge.base/discount/total/currency+allocations, CompanyService.frequency/nextChargeAt, Company.moneyBalance/tierOverride, Service.isRecurring/defaultPriceUsd) + 8 enum'ів + ChargeStatus(+partial/+written_off) + **RLS** `tenant_isolation` на всіх 7 (F4-патерн). Згенеровано через `migrate diff` на throwaway PG16, **drift-free**, клієнт regenerated. Гейт 21/21·13/13·19/19.
+> — **S5-03a ✅** ExchangeRate НБУ cron: `apps/api/src/cron/{index,exchangeRate}.ts` — `syncExchangeRates` (per-agency upsert, fetch-fail→keep-last+warn, stale>3d warn) + daily 06:10 UTC scheduler (setTimeout→setInterval, no node-cron) wired у `startWorkers`. 10 тестів (mock fetch+prisma). Settings-endpoints (GET/PATCH/refresh) → S5-03b.
+> — **WAVE B ✅ — S5-02** idempotent billing payments + reads: `confirmManualPayment` (`SELECT…FOR UPDATE` на order, Decimal-математика, immutable `amountUsd`/`rateUsed`-снапшот, re-pay guard) обгорнутий у `withIdempotency`+`tenantTransaction`; `/billing/summary` /charges /overview /payments + paymentSettings. **S5-03b** services-каталог + CompanyService-підписки + recurring-charge cron (idempotent через `@@unique([companyServiceId, month])`).
+> — **WAVE C ✅ (ledgers) — S5-05** bonus-гаманець: `walletCredit`/`walletDebit` (company-row `FOR UPDATE`, інваріант `bonusBalance == Σcredit − Σdebit ≥ 0`, debit-guard 409) + portal/admin wallet-endpoints. **S5-07** money-account: `allocatePayment` (payment-row `FOR UPDATE` → `Σalloc ≤ amount` else 409, `@@unique([paymentId, chargeId])`, FIFO-by-dueDate), derived charge-state (awaiting/partial/paid/overdue/overpaid; stored → nearest `ChargeStatus`), single-writer `recomputeMoneyBalance = Σ(no-order confirmed payments).amountUsd − Σ(charge.totalAmount)` (order-track виключений). **S5-06** referral-accrual → `walletCredit` (in-tx з payment-confirm, idempotent `ON CONFLICT(sourceType,sourceId)`, історичний `percent` immutable) + `ReferralSettings` GET/PATCH. Порядок виконання: 05 → 07 → 06 (06 та 07 склались чисто, спільних файлів немає, `confirmManualPayment` лишився цілим окрім no-op referral-хука).
+> — **Гейт (S5-07):** type-check 21/21 · lint 13/13 · build 13/13 · test (api 294 unit + **37 integration проти живого PG**, з них 9 нових allocation-інваріантів: FOR-UPDATE concurrency, over-allocation 409, FIFO, order-exclusion, recompute) · types 29 · payments 13 · notifications 64.
+> — **Далі (WAVE D — convergence tail):** S5-08 (unified statement + bonus-spend на invoice; залежить від 05+07), S5-09 (loyalty tier-recalc cron + discount-apply), S5-04 (team rates/earnings + ExecutorPayout — незалежний, можна паралельно), S5-10 (Expense + P&L).
+
+---
+
+## SPRINT 5.5 — Audit-ремедіація (повний аудит 11.06.2026) — ✅ ЗАВЕРШЕНО (код; staging-верифікація після пушу)
+
+> Джерело: [`AUDIT_FULL_2026-06.md`](AUDIT_FULL_2026-06.md) (10 областей, 30 агентів, 0 спростованих знахідок).
+> **Принципи виконання (рішення власника 11.06):** тільки `dev` · фронтенд-тести НЕ пишемо (окремий пізніший прохід; фронт верифікуємо type-check/lint/build) · функціональність S6+ НЕ додаємо (не «переганяти» фактичний код) · бекапи: код+автоматизація зараз, офсайт-тест після появи сховища · після правок — аудит змін, актуалізація доків, коміт+пуш, нагляд за CI/staging.
+
+| ID    | Задача                                                                                                           | Модуль    | Статус |
+| ----- | ---------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| AR-01 | ci.yml: `push: branches [dev, main]` — db-integration гейт (RLS + money-інваріанти) нарешті діє                  | Infra     | ✅     |
+| AR-02 | `concurrency:` group на staging/production воркфлоу (serialize деплої, без cancel-in-progress)                   | Infra     | ✅     |
+| AR-03 | Pre-migrate бекап **blocking** (prod обовʼязково; + перевірка ненульового розміру дампа)                         | Infra     | ✅     |
+| AR-04 | healthchecks на всі 5 app-сервісів + `compose up -d --wait` замість grep `compose ps`                            | Infra     | ✅     |
+| AR-05 | `.previous_deploy` писати лише після успішного verify (rollback не цілиться у зламаний тег)                      | Infra     | ✅     |
+| AR-10 | allocatePayment: валютний guard (payment.currency vs charge.currency → 409) + тест                               | [05/25]   | ✅     |
+| AR-11 | recomputeMoneyBalance з confirmManualPayment (no-order confirmed) + після recurring-cron + тест                  | [25]      | ✅     |
+| AR-12 | recompute: `written_off` виключити з боргу + тест                                                                | [25]      | ✅     |
+| AR-13 | Атомарний статус-перехід ордера (guard у WHERE; прибрати TOCTOU) + тест                                          | [02]      | ✅     |
+| AR-20 | ExecutorPayout `@@unique([agencyId, executorId, period])` + upsert-ключ у payout.ts                              | [db/12]   | ✅     |
+| AR-21 | Referral.agencyId NOT NULL + backfill + column-RLS + same-agency write-guard                                     | [db/09]   | ✅     |
+| AR-22 | Company.slug → per-agency unique `@@unique([agencyId, slug])` (звірити споживачів)                               | [db]      | ✅     |
+| AR-23 | tenantTransaction fail-closed guard: `RLS_ENFORCED=true` + ctx відсутній → throw (allowlist=system); інакше warn | [db/007]  | ✅     |
+| AR-24 | notifications tenant-aware DI (tenant-scoped executor) + agencyId у notify-input                                 | [07]      | ✅     |
+| AR-30 | Fastify `forceCloseConnections` + SSE graceful end + shutdown watchdog 10s + ідемпотентний shutdown              | [api]     | ✅     |
+| AR-31 | refresh-токени: sha256-хеш у БД (сумісна міграція) + sweep протермінованих/revoked                               | [01-auth] | ✅     |
+| AR-32 | outboxWorker: all-channels-failed → retryable error → backoff/DLQ; шанувати `retryAfter` (rate_limited)          | [07]      | ✅     |
+| AR-40 | portal api.ts `??`→`\|\|` (дрейф-баг: порожній build-arg бейкає `API_URL=''`)                                    | [portal]  | ✅     |
+| AR-41 | ErrorBoundary в обох SPA (root-level, дружній fallback)                                                          | [ui]      | ✅     |
+| AR-42 | `@workflo/app-core`: екстракція байт-ідентичного ядра (api/sse/format/queryClient/password/PSM/i18n-provider)    | [arch]    | ✅     |
+| AR-50 | api/landing/bot → multi-stage Dockerfile (маніфести→deps→src; явне рішення де живе prisma CLI для migrate)       | Infra     | ✅     |
+| AR-51 | backup.sh: offsite-обвʼязка (restic/rclone → Storage Box, env-gated, без env = skip+WARN) + cron-автоматизація   | Infra     | ✅     |
+| AR-52 | infra/traefik: синхронізувати з live (cf DNS-challenge через env), dashboard basicauth, включити в deploy-sync   | Infra     | ✅     |
+| AR-53 | staging `COOKIE_DOMAIN` host-only (staging-сесії не течуть у прод на спільному apex)                             | Infra     | ✅     |
+| AR-54 | Секрети: зафіксувати одне джерело правди (trim github-secrets.sh до реально вживаних + док)                      | Infra     | ✅     |
+| AR-60 | Doc-sync: TRACKER ✅ · CRON_JOBS ✅ · INFRASTRUCTURE ✅ · ERD-нотатка ✅ (схема = канон)                         | Docs      | ✅     |
+
+> **Свідомо НЕ в S5.5:** фронтенд-тести (Playwright/компонентні — пізніший прохід) · i18n Block 7b (лишається відкладеним) · RLS-активація (перед зовнішнім тенантом; AR-23 готує механіку, не вмикає) · overdue/dunning, refunds, VAT, online-провайдери (S14-03/фронтенд-прохід) · рознесення серверів/PgBouncer/репліки (перед зовнішнім тенантом) · MoR/pricing-рішення (власник). Прогалини поза модулями (імперсонація, імпорт даних тенанта, email-доставність, email-verify на signup) → BACKLOG з тригерами.
+
+---
+
+## 🔁 РЕПЛАН після повного проходу модулів власником (11.06.2026)
+
+> **Джерела-канони:** [`MODULE_REVIEW_2026-06.md`](MODULE_REVIEW_2026-06.md) (~95 рішень по 29 модулях) · [`DESIGN_TZ_2026-06.md`](DESIGN_TZ_2026-06.md) (зведене ТЗ дизайнеру) · **[`PROJECTS_SPEC.md`](PROJECTS_SPEC.md) ✅ ЗАТВЕРДЖЕНО 12.06** (П1-П8, С1-С3 закрито → [`OPEN_QUESTIONS_2026-06.md`](OPEN_QUESTIONS_2026-06.md)).
+> **Принцип:** структурне (схема/фін-модель) лягає ДО S6-документів; усе «екранне» йде через ТЗ дизайнеру → фронтенд-прохід. Двомовність (06-Е «все на 2 мовах») підтверджує Block 7b — планувати в фронтенд-прохід.
+
+### 🆕 S5.6 — «Фінансова модель 2.0» (НОВИЙ спринт, ПЕРЕД S6) — спека затверджена, готово до старту
+
+> Підстава: 05-ПРОЕКТИ. Критична залежність: S6-документи будуються на проєктах/юр-особах/реквізитах/payment-terms — інакше переробка.
+> **Ключове (П6):** абонплат у системі ще немає → `CompanyService` замінюється `Project`-ом ЧИСТО (refactor, БЕЗ міграції даних і двофазного співіснування).
+
+| ID   | Задача                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Джерело          | Статус                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ---------------------------- |
+| P-0  | ~~Власник затверджує `PROJECTS_SPEC.md`~~ ✅ **ЗАТВЕРДЖЕНО 12.06** (П1-П8, С1-С3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 05-ПРОЕКТИ       | ✅                           |
+| P-1  | **3a ✅** `Project`+`ProjectExecutorRate`+enums+міграція RLS (`20260617_p1c_projects`), `Order.projectId/zeroBilled`, Project↔LegalEntity, CRUD `/workspace/projects` (гейт `billing`; per-billingModel `contractRequired` §5); тести 8 unit + 5 integration (RLS/unique/каскад). **3b-1 ✅** re-point `ServiceCharge` (additive: `projectId`+`periodStart/End`, `companyServiceId`→nullable, `Project.charges`, unique `(projectId,periodStart)`; міграція `20260617_p1d_servicecharge_project`, генератор незмінний). **3b-2 ✅** генератор recurring переписано на Project (fixed_monthly_advance/monthly_day_n; hourly/weekly/manual → P-2 cycle-engine); повний дроп `CompanyService` (модель+таблиця `20260617_p1e_drop_companyservice`+`companyServiceId`+роут assignments); catalog/portalSummary/cron оновлено; тести переписано (services/billing/recurring/allocation/bonusSpend). **P-1 ЗАВЕРШЕНО.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 05-ПРОЕКТИ       | ✅ 3a/3b-1/3b-2              |
+| P-1б | ✅ **`LegalEntity` (20-Д)** — модель+міграція RLS (`20260617_p1b_legal_entity`), дефолтна юр-особа в `provisionAgency()`, `isComplete`-гейт (Юр-2), CRUD `/workspace/legal-entities` (гейт `moduleEnabled('legal_entity')`), `Document.legalEntityId`. Тести: 8 unit + 6 integration (RLS+provisioning). Project FK — у P-1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 20-Д             | ✅ (Коміт 2)                 |
+| P-2  | Білінг-цикли (N-число / щотижня / вручну) → cycle-двигун per-проєкт; 3 моделі (абон-аванс/погодинка аванс·факт) + zero-billed задачі в собівартість. **+ ГІБРИД-overage (17.06): fixed-проєкт з `includedHoursCap` → години понад ліміт біляться по `clientHourlyRate` (агрегація TimeLog по циклу).** Конфіг+валідація гібрида ✅ закладено в P-1. **P-2a ✅:** `hourly_postpaid` (monthly) — Σ(год × `clientRateSnapshot`), skip якщо 0, zeroBilled виключені. **P-2b ✅:** `weekly_day_x` (період [anchor-7,anchor-1], advance +7) + **крон щоденний** (`msUntilNextDailyRun` — ловить будь-який cycleDay/тижневі вчасно). **P-2c ✅:** manual-close — `closeProjectCycle` + POST `/workspace/projects/:id/close-cycle` (manual-цикл; owner задає період → той самий charge-код через спільний `buildChargeRow`; 4 тести fixed/hourly/idempotent/cross-tenant). **P-2d ✅:** гібрид-overage — `ServiceCharge.kind` (subscription/hourly/overage) + unique `(projectId,periodStart,kind)` (міграція `20260618_p2d_charge_kind`); fixed-проєкт з `includedHoursCap`+`clientHourlyRate` → абон-аванс + окреме overage-нарахування (Σ годин минулого міс − cap)×rate; `sumProjectHours`; 2 тести. Тести разом: 4+2+4+2. **Лишилось:** `hourly_prepaid` (аванс при старті + звірка факту) — залежить від advance-gate 02-В (P-7), відкладено в P-7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 06-В             | ✅ (крім hourly_prepaid→P-7) |
+| P-3  | Юр-особи агенції (профілі реквізитів) + юр-реквізити клієнта + email для документів. **✅ (backend):** агенційний бік готовий (P-1б `LegalEntity`+CRUD). **Клієнтський бік (06-Б):** `Company` +13 юр-полів (`legalType/legalName/taxId/vatPayer/vatId/legalAddress/bankName/iban/signerName/signerTitle/documentEmail/documentEmailCc/legalIsComplete`, міграція `20260622_p3_client_requisites`) — дзеркало `LegalEntity`; `clientRequisitesIsComplete` (Юр-2 аналог, гейт генерації S6) + `services/clientRequisites.ts applyClientRequisites` (merge+recompute, 404 cross-tenant); роути `routes/company/`: Portal GET/PATCH `/portal/company/requisites` (клієнт-власник, owner-gated — юр-PII не делегується) + Workspace GET `/workspace/clients/:id/requisites` (internal). 4 unit + 5 integration. Аудит 2 рев'ю (code+security): APPROVE 0 critical/high; виправлено owner-gate читання + agencyId-фільтр. **Розмежування:** контракт-гейт (блок генерації) = P-7; UI-форма = фронтенд-прохід; agency-edit-on-behalf → 28-Б. Гейт: api 479·types 98·lint 14·build 14·drift-free                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 20-Д, 06-Б       | ✅ (backend; UI→фронт)       |
+| P-4  | Payment terms (строк оплати, налаштовується) → dueDate (основа dunning). **✅:** каскад `paymentTermsDays` project → company → agency (`PaymentSettings`) — нові additive-колонки `Company.paymentTermsDays`+`PaymentSettings.paymentTermsDays` (міграція `20260619_p4_payment_terms`, drift-free; agency-ярус конфіг owner-роутом `/workspace/settings/payment`; company-ярус закладено колонкою, route-config → з 28-Б). `resolveTermsDays`+`dueDateFromTerms` у `recurringCharges.ts`: `dueDate = issue-anchor + net terms` (advance→periodStart, postpaid/overage/manual→periodEnd); null на всіх ярусах → legacy per-model dueDate (без регресії); `0` днів шанується. Вшито в 4 сайти генерації + `closeProjectCycle`. Консьюмери (`deriveChargeState`/`fifoTargets`/charges-DTO/notif) — read-through. 8 integration. Гейт: 23·14·api 449·14·drift-free                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 05-Г             | ✅                           |
+| P-5  | ✅ **Собівартість + снапшоти:** `ExecutorRate.hourlyRate`+`zeroCostDefault`; `TimeLog` снапшоти (clientRate/costRate/costCurrency/costRateUsd, міграція `20260618_p5_rates_snapshots`); сервіс `resolveTimeLogRates` (каскад §2.3: zeroCost→override→zeroCostDefault→hourlyRate→null + FX costRateUsd) + снапшот при логуванні часу. Тести: 7 integration (5 ярусів каскаду + client-rate + FX). **Компенс-моделі (ставка/+години/+%)** і payout `hourlyEarned` — лишаються (S5-D6 backlog)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 12, 22-нюанси    | ✅ (Коміт P-5)               |
+| P-6  | Кошторис `EstimateLine` + per-client доступність послуг каталогу. **+ Бюджет проєкту годинами (17.06):** `Service.estimatedHours` (послуга «займає N год»); `EstimateLine` = позиція проєкту (послуга × години) → **zeroBilled-задача** в канбан; Σ позицій звіряється з `includedHoursCap` (приклад: обслуговування 5 год = оновлення 1h + підтримка 1h + інше 3h, додатково НЕ тарифікується). Залежить лише від Project+zeroBilled (готові), НЕ від P-5/P-2. **✅ (backend):** `Service.estimatedHours`; модель `EstimateLine` (projectId/serviceId?/name/hours/amount?/orderId@unique/position, міграція `20260623_p6_estimate_lines` +RLS); `services/estimate.ts`: `createEstimateLine` (авто-спавн zeroBilled-Order+link), `updateEstimateLine` (sync task), `deleteEstimateLine` (лишає task), `getEstimate` (Σ годин vs `includedHoursCap` → `withinCap`/`remainingHours`, **м'який** — overage білить P-2). Роути `routes/billing/estimates.ts`: workspace CRUD (internal+`moduleEnabled`) + portal read-only (own company). **Рішення власника:** zeroBilled-задача авто-при-збереженні; per-client availability — **без allowlist** (вільний вибір). 6 integration. Аудит 2 рев'ю (code+db): 0 critical; виправлено hours>0, portal moduleEnabled, FK CASCADE, індекси. UI=фронт; FM-T1 (per-cycle шаблони)=беклог після P-2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 02-Б             | ✅                           |
+| P-7  | Погодження оцінки (опційне, requiresApproval) + аванс-гейт (опційний) + договір-гейт блок документів (П3). **+ `hourly_prepaid` cycle-двигун (з P-2).** **✅ Усі 5 частин (вирішене власником):** (1) **контракт-гейт П3** ✅ — `generateRecurringCharges` виключає гейтнуті (`NOT {contractRequired,!contractDocumentId}`, nextCycleAt не просувається→catch-up; `GenerateResult.gated`); `closeProjectCycle` 409; `contractDocumentId` settable+валідація; 4 integration. (2) **internal-task ендпоінт** ✅ — `POST /workspace/orders`: команда створює завдання для клієнта (`internal_task`, `zeroBilled` обирає команда; клієнт бачить у порталі); 4 тести. (3) **`hourly_prepaid` cycle** ✅ (рішення: аванс=Σ`EstimateLine.hours`×`clientHourlyRate`×`advanceGatePct%` loyalty-disc, `kind=prepaid_advance`; звірка попереднього періоду → `prepaid_reconciliation` (+) або `prepaid_credit` (−, піднімає moneyBalance, FIFO skip). **Review знайшов CRITICAL:** multi-period catch-up в одному run читав advance з БД ДО вставки → подвійне нарахування; фікс — lookup у in-run буфері + 5 PG-тестів (catch-up=90, не 240). +`deriveChargeState` neg→paid. (4) **approval-стейт-машина 02-А** ✅ (міграція `20260625_p7_order_approval`: enum `OrderApprovalStatus`+5 кол. на orders): submit (команда)→pending; portal decide (owner/делегат `can_approve_estimates`, НЕ команда)→approve/reject-reason; гейт `→in_progress` 409 поки не approved; `updateOrder` лок білінг-полів поки pending/approved (approved сума=білингова). Review PASS 0 crit/high. 21 route-тест. (5) **02-В аванс-ПЛАТІЖ-гейт** ✅ (рішення власника: moneyBalance-дисципліна + лише hourly_prepaid, БЕЗ міграції): `→in_progress` 409, якщо проєкт `hourly_prepaid` і `Company.moneyBalance < 0` (аванс циклу не сплачено); сплата авансу → balance ≥ 0 → старт = «чекаємо аванс». Null-safe; 3 route-тести. Коміт `2fbc243`. **P-7 ПОВНІСТЮ ЗАКРИТО (5/5).** | 02-А, 02-В       | ✅                           |
+| P-8  | EUR як валюта + валюта бонусів у налаштуваннях (USDT = метод оплати, не валюта). **✅:** `billingCurrency` enum +EUR (+ expense/team currency); спільний `services/currency.ts toUsd` (USD/UAH/EUR через `eurToUah÷usdToUah`) — `pnl.ts`/`margin.ts` зрефакторено на нього; `snapshotUsd` EUR-гілка (`rateUsed`=EUR-per-USD, 422 без курсу). `ExchangeRate.eurToUah` (NBU-крон) + cost-rate EUR (`rateResolution`) вже були. `PaymentSettings.bonusCurrency` (міграція `20260620_p8_bonus_currency`; ledger у USD, декларативно; internal-only select). Тести: 6 unit (toUsd) + EUR-кейси payments/margin. Аудит: APPROVE, 0 critical/high. Гейт: api 461·types 82·lint 14·build 14·drift-free                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 05-Е, 09         | ✅                           |
+| P-9  | Маржа-движок v1 (accrual + «оплачено N%» П2; собівартість/маржа по проєктах/клієнтах) + реферал-бонус працівника від чистого доходу по клієнту (П4). **P-9a ✅ (маржа-core, БЕЗ міграції):** `services/margin.ts` — `computeProjectMargin`/`computeClientMargin`/`computeClientNetIncomeUsd` (§4.1: revenue=Σ `ServiceCharge.totalAmount` − cost=Σ `hours×costRateUsd`, усе в USD як sibling `pnl.ts`; per-executor розріз; «оплачено N%»=Σ `PaymentAllocation`; zero-billed години в собівартості; cross-tenant company→null→404). Owner-only роути GET `/workspace/projects/:id/margin` + `/workspace/companies/:id/margin` (§4.3 видимість лише власнику). 8 integration. **P-9b ✅ (реферал-працівника, міграція `20260618_p9_employee_referral`):** `Company.referredByEmployeeId` + `ExecutorPayout.referralBonusAmount` + `ReferralSettings.employeeReferralPercent` (additive, drift-free); `computeEmployeeReferralBonus` (Σ чистий-дохід приведених клієнтів × % per-agency, loss-clamp per-client) у `referral.ts`, вшито в `generatePayout` (recompute-into-draft, не чіпає approved/paid) + DTO/SELECT; settings GET/PATCH owner-only. 5 integration. Аудит 3 агенти (code/db/security): 0 critical/high; виправлено client-margin 404 + N+1 Promise.all. Гейт: type-check 23/23·lint 14/14·**test api 441 unit+integration real-PG**·build 14/14                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 22-Д, 12         | ✅ (a/b)                     |
+| P-10 | Разові знижки + ~~VAT-поля~~. **✅ Разові знижки (05-З):** `ServiceCharge.manualDiscountPct`+`manualDiscountAmount` (міграція `20260621_p10_manual_discount`) — ручна знижка ПОВЕРХ loyalty (% та/або сума); `services/chargeDiscount.ts computeManualDiscount` (стекінг pct+amount, clamp до post-loyalty net, Decimal) + `applyChargeDiscount` (recompute off стабільного net, refresh moneyBalance, 409 на нарахування з платежами/списане, 404 cross-tenant) + owner-роут POST `/workspace/billing/charges/:id/discount`; DTO. 7 unit + 6 integration. Аудит: APPROVE 0 critical/high. **⏸️ VAT-поля (05-Ж) ВІДКЛАДЕНО:** власник НЕ VAT-платник — класичний ПДВ не його модель; його податок = % від доходу per-юр-особа/канал (ФОП 5% / крипта-картка 0%) = витрата агенції → **Finance Phase 2 (S13-06)**, не P-10.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 05-З             | ✅ (знижки; VAT→S13-06)      |
+| P-11 | **Погодження вартості — 3 режими + counter-offer** (PROJECTS_SPEC §8, рішення власника 2026-06-19; розширює В11/02-А). `approvalMode` (`none`/`upfront`=02-А/`on_actuals`=новий Гейт-2) — один вибір, каскад Agency→Company→Project→Order; `invoiceApprover` (`client`/`internal`). **P-11a** (міграція `20260626_p11_approval_mode`): enums + каскад-поля + `services/approvalPolicy.ts resolveApprovalMode/resolveInvoiceApprover`, снапшот на Order (requiresApproval=upfront для back-compat). **P-11b** on_actuals charge-гейт: нарахування `approvalStatus=pending`=draft; спільний `LIVE_CHARGE_APPROVAL` ({null OR approved}) виключає draft з moneyBalance(SQL)/FIFO/margin-revenue/statement; prepaid_credit НЕ гейтиться; гарди — explicit-allocation + bonusSpend не оплачують draft. **P-11c** release: `POST /workspace/billing/charges/:id/approval` (internal, owner/executor, manager-blocked MOD-4) + `POST /portal/charges/:id/approval` (client-owner/делегат, scoped charge.companyId — без cross-company); канал=resolved invoiceApprover; **counter-offer** `approvedAmount`≤виставлено→знижує totalAmount (amount=quote → 3 числа); Project-config у create/update. **P-11d** upfront counter-offer у order-approval (`approvedAmount`≤оцінка). 3 adversarial-review (BLOCK/WARNING→0 critical/high після фіксів: catch-up подвійне-нарахування N/A, manager-block, IDOR/channel). Гейт: type-check·lint·build·**api 572 real-PG** (9 resolver+4 on_actuals+14 charge-approval+26 order-approval). **Відкладено:** Company-config-роут, грейс-dueDate (C07).                                                                                                                                                                                                                                                                                                                                                              | 02-А, 02-В, 05-З | ✅ (a/b/c/d)                 |
+
+> 🔒 **Харден-розблокування:** щойно **P-1 (`Project`) змержено в `dev`** — fin-coupled модулі (05/02/06/12/22/25/09/19/28) стають придатними до прицільного тест+поліру (Хвиля 2, [«Харден-гейт модулів»](#-харден-гейт-модулів-прицільний-тестполір-коли-модуль-готовий)). До P-1 — лише стійкі бек-тести (RLS/ролі/гроші), не фінальний харден.
+
+> 🧭 **Порядок комітів S5.6 (де-ризик, з doc-аудиту 15.06):**
+>
+> 1. **MOD-1 first** (ModuleRegistry — const-граф з ADR-008 у `@workflo/types`; нуль міграцій). `Project` додається БЕЗ гейту; **MOD-2 ∥ P-1** (гейт на роути паралельно). Розриває уявну циклічність MOD↔P-1.
+> 2. **P-1б (LegalEntity) — до/паралельно з P-1, змержити в `dev` ПЕРЕД S6** (Documents потребує `Project`+`LegalEntity`+payment-terms). Це **блокуюча залежність** документ-гейтів, не «колись».
+> 3. **P-1 (Project):** міграція **deprecate-not-drop** для `CompanyService`/`ServiceCharge` (занулити/архівувати orphan-FK у dev/staging, **бекап перед міграцією**), а не одразу DROP — П6 (даних нуль) стосується prod, не legacy-рядків dev.
+> 4. **P-5 (снапшоти ставок) ПЕРЕД P-2 (білінг-цикли):** §2.3 робить собівартість частиною циклу → інакше P-2 переписуватиметься.
+> 5. **contractRequired** дефолти per-`billingModel` — Prisma `@default` + enum-константи в міграції для S5.6; редагування в налаштуваннях агенції — пізніше (P-3). Семантика: активація дозволена (ворнінг), генерація рахунків/актів блокується (П3) — узгоджено з [`PROJECTS_SPEC.md`](PROJECTS_SPEC.md) §5.
+> 6. **Юр-гейти — два РІЗНІ** (не плутати): юр-особа **агенції** `isComplete=false` → блок генерації (Юр-2); реквізити **клієнта** неповні → вирішується в **P-3** (06-Б, окремо). На P-1б реалізуємо лише агенційний гейт.
+
+### S6 (РОЗШИРЕНИЙ) — Documents + Notifications + Bot
+
+Оригінальний скоуп S6-01…08 **плюс з проходу:** шаблони договорів зі змінними + привʼязка до проєкту (06-А) · автоакти/документи по білінг-циклу (06-В) · трекінг доставки + документи в Telegram (06-Г) · публічна сторінка рахунку (06-Д) · self-service документи клієнта + вивантаження підписаних договорів (06-Б) · **комплекти документів UA + EU** (06-Е, дизайн-гейт) · dunning з налаштуваннями (05-Б) · сторно/повернення/списання боргу (05-В) · автосписання з передоплати (05-Д) · low-balance нагадування + прогноз днів (25-Д) · експорт виписки (25-Г) · дайджест-звіт «що/коли/кому» (07-А) · «клієнт чекає відповіді» (07-Б) · mute замовлення (07-Г) · тест-сповіщення (07-Д) · керований SMTP транзакційки (08-А) · bounce/suppression (08-В) · inline-дії бота + **reply з Telegram у чат** (15-А) · bot-token per-tenant закладка (15-Б) · журнал фонових задач `CronRun` (21-А) · **подія `client.registered`** → notify власнику/адміну тенанта (Telegram/email) при новій реєстрації клієнта (09→07; метрика реєстрацій — у звітах 19-А).
+
+### S7 (РОЗШИРЕНИЙ) — Landing + Blog + ChatHub
+
+Оригінал **плюс:** структуровані кейси + AI-чернетка з замовлення (11-А) · прев'ю-лінк (11-В) · CTA→ліди (11-Г) · аналітика контенту (11-Д) · AI SEO-асистент (11-Е) · бронювання дзвінка на лендингу (14-В) · відгуки/логотипи (14-Г) · аналітика лендингу з цілями (14-Ж) · пошук: широкий індекс + Portal + збережені фільтри (16-А/Б/В) · inbox: Portal-inbox, snooze, відповідальний, «без відповіді» (18-А/Б/В/Г) · in-app оголошення (07-В).
+
+### Фронтенд-прохід (дизайн-гейт) — ОНОВЛЕНО
+
+S5-11/12 (білінг/гаманець/фінанси екрани) + всі `[екран]`-пункти з [`DESIGN_TZ_2026-06.md`](DESIGN_TZ_2026-06.md). **П1 дизайну — картка клієнта 360° (28-Б)**. Сюди ж: матриця сповіщень (13-Б), аватарки (13-Г), i18n Block 7b (підтверджено 06-Е).
+
+### 🧠 Аналітичні таски (перед відповідними спринтами)
+
+| ID   | Задача                                                                                                                                                                                | Коли                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| AN-1 | ~~Переосмислення системи ролей~~ ✅ **ЗАКРИТО 12.06** → [`adr/008-saas-module-packaging.md`](adr/008-saas-module-packaging.md) §Доступ (owner/manager/executor + view-as + SaaS-ролі) | —                          |
+| AN-2 | **Карта вебхуків системи** (27-В): інвентар подій → вихідні вебхуки; вхідні можливості; документація                                                                                  | разом з 27-А (API v1)      |
+| AN-3 | **Продуктові тури** (багаторівневі, по ролях) — концепт + ТЗ                                                                                                                          | після фіксації функціоналу |
+
+### 🧩 SaaS-модульність — foundation (ADR-008, закладаємо ЗАРАЗ; решта — SaaS Phase 1)
+
+> Рішення: [`adr/008-saas-module-packaging.md`](adr/008-saas-module-packaging.md) (entitlement-gated моноліт; фундамент AgencyFeatureFlag/BillingPlan/featureEnabled уже є з FDN-2). Закладаємо ДЕШЕВЕ зараз, бо ретрофіт дисципліни дорогий.
+
+| ID     | Задача                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Коли                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| MOD-1  | ✅ **ModuleRegistry** `packages/types/src/modules.ts`: 29 модулів, граф залежностей ADR-008, `resolveModules`/`validateModuleSelection` + 17 тестів (`module-registry.test.ts`, drift-гард проти ADR)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ✅ зроблено (Коміт 1)                  |
+| MOD-2  | 🔄 **Дисципліна гейту:** типізований `moduleEnabled(agencyId, moduleKey)` у `saas/limits.ts` (Phase-0 permissive, throw на невідомий ключ). Кожен НОВИЙ модуль (S5.6+) гейтить роути+навігацію через нього — **застосувати в P-1 (Project routes)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | seam ✅; застосування ∥ P-1            |
+| MOD-3  | ✅ **`BillingPlan.modules`** (через `features Json`) + валідатор «увімкнув модуль → увімкни залежності за графом». `packages/types/src/billing-plan.ts`: `parsePlanModules`/`resolveBillingPlanModules` (авто-резолв deps через MOD-1 `resolveModules`; unknown-ключі→invalid, missing deps→авто-додаються per ADR-008; always-on виключені зі stored)/`buildBillingPlanFeatures`. Foundation-only (без UI/seed-зміни; Phase 1 вшиє в `featureEnabled`). 12 тестів. Аудит: APPROVE 0 critical/high                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ✅ (foundation)                        |
+| MOD-4  | Ролі owner/manager/executor у `can()` (20-А) + view-as owner→клієнт (20-Б); платформна імперсонація (SA-1) — SaaS Phase 1. **✅ Ролі (20-А):** `AgencyMemberRole` +`manager` (міграція `20260624_mod4_manager_role`, additive enum); `AgencyRole`-тип + `agencyRole`/`isAgencyManager` хелпери; **canonical can()-shim**: `MANAGER_BLOCKED` set (finance/admin/settings/credentials/executor-mgmt/payment.confirm) — manager заблокований, owner/executor без змін; + finance/settings-READ роути (payments/overview/wallet-statement/payment-settings/charges/generateCharges/referral/loyalty/legal-entities) виключають manager (минали `can()` через голий `isInternalTeam`). 17 unit (manager-матриця). Аудит security-reviewer: can()-шлях герметичний; 9 leak-роутів закрито; ambiguous (estimates/team-roster/client-requisites) лишено як «manager діє на orders/clients». **⏸️ Відкладено:** view-as 20-Б (`[бек+банер]`, coupled з фронтом → фронт-прохід); імперсонація SA-1 = SaaS Phase 1; fine-grained per-route RBAC = #24. Гейт: type-check 23·lint 14·test api 510·build 14·drift-free | ✅ (ролі 20-А; view-as/імперс→пізніше) |
+| MOD-P1 | **SaaS Phase 1 (відкладено):** UI вибору плану · super-admin призначення планів · custom-ролі · MoR/білінг · значення лімітів                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | SaaS-фаза (SAAS.md E)                  |
+
+### 🔒 Харден-гейт модулів (прицільний тест+полір, коли модуль готовий)
+
+> Канон процесу: [`MODULE_HARDENING.md`](MODULE_HARDENING.md). **Це подієва ЧЕРГА, не розклад** — модуль
+> витягуєш у харден-проход у тиждень, коли зійшлися ВСІ 3 гейти (не за датою спринту).
+> **Тригер (усі 3):** `G1` контракт замерз (не fin-coupled **або** P-1 у `dev`; `migrate diff`=0) ·
+> `G2` усі екрани модуля = `РЕЮЗ` у [`DESIGN_SPEC_FULL.md`](DESIGN_SPEC_FULL.md) · `G3` власник прийняв (ручний тест-план).
+> Проход = бек integration (RLS+гроші+idempotency, `tdd-guide`) → фронт RTL+E2E на `РЕЮЗ`-екрани (`e2e-runner`) →
+> полір станів → рев'ю (`typescript-reviewer`+`code-reviewer`) → CI-лок (`ci.yml`+`db-gate.yml`) → мітка `🔒 hardened`.
+> **До хардену вже пишемо** (стійке до редизайну): тенант-RLS + ролі/IDOR + гроші-інваріанти на беку.
+
+| Хвиля                                 | Розблоковує               | Модуль (порядок)                                | G1  | G2  | G3  | Статус                                                                                                |
+| ------------------------------------- | ------------------------- | ----------------------------------------------- | --- | --- | --- | ----------------------------------------------------------------------------------------------------- |
+| **1 — зараз**                         | стабільні, не fin-coupled | 07 Notifications                                | ✅  | ⬜  | ⬜  | 🔄 backend route-тести ✅ (`notifications.test.ts` — IDOR/auth/pagination); чекає Gate-2 (фронт РЕЮЗ) |
+| 1                                     | —                         | 13 Settings                                     | ✅  | ⬜  | ⬜  | ⬜                                                                                                    |
+| 1                                     | —                         | 16 Search                                       | ✅  | ⬜  | ⬜  | ⬜                                                                                                    |
+| 1                                     | auth-дизайн → РЕЮЗ        | 01 Auth                                         | ✅  | ⬜  | ⬜  | ⬜ чекає Gate-2                                                                                       |
+| **2 — після P-1 (`Project`) у `dev`** | P-1/P-1б                  | 05 Billing                                      | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | P-1                       | 02 Orders                                       | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | P-1 + 20-Д + P-3/P-4      | 06 Documents (+20-Д)                            | ⬜  | ⬜  | ⬜  | 🔄 backend route-тести ✅ (`documentsRoute.test.ts` — IDOR/role/send-idempotency)                     |
+| 2                                     | P-5                       | 12 Team & Executors                             | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | P-9                       | 22 Finance & Expenses                           | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | P-4/P-8                   | 25 Wallet                                       | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | P-9                       | 09 Referral                                     | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2                                     | 22 + P-9                  | 19 Reports                                      | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| 2 ↔                                   | синхр. (таб «Проєкти»=05) | 28 Client Management (Картка 360°)              | ⬜  | ⬜  | ⬜  | ⛔ до P-1                                                                                             |
+| **3 — після свого дизайну**           | optional, поза фінмоделлю | 03·04·08·10·11·14·15·17·18·20·21·23·24·26·27·29 | —   | —   | —   | ⬜ після РЕЮЗ модуля                                                                                  |
+
+> Як вести: коли модуль захардено — заміни його рядок-статус на `🔒 hardened (дата)`. Галочки `G1/G2/G3`
+> ставляться по мірі досягнення; усі три ✅ = можна тягнути в проход (див. [`MODULE_HARDENING.md`](MODULE_HARDENING.md) §C).
+
+### Мапінг решти прийнятого по S9–S14 (доповнення наявних спринтів)
+
+**S9 auth+:** magic-link (01-А) · lockout (01-Б) · зміна email (01-Г) · mustChangePassword (01-Д) · WebAuthnCredential-закладка (01-Е) · vault: двосторонній ввід + глобальне сховище + типи + журнал для клієнта (17). **S10 orders/chat+:** typing (03-Б) · пошук у чаті (03-В) · pin (03-Г) · **медіа в чаті** (03-МЕДІА → + стрімінг 04-Б) · reply-to (03-REPLY) · PDF-вʼюер (04-В) · ClamAV (04-Д) · видимість задач компанії (02-Е′). **S11 reports/admin+:** звіти v1 + XLSX-правило + місячний звіт клієнту + MoM (19) · **план-факт годин** (норма capacity × тижні vs TimeLog; рівні **команда-агрегат**/людина-місяць/проєкт/замовлення — 12-ПЛАН-ФАКТ G-2/G-3, звʼязка 12-Б) · журнал змін налаштувань (20-В) · loyalty-налаштування + прогрес + перки (10) · referral give-get/воронка/згорання (09) · ліди: convert+замовлення, follow-up, UTM, lost-reasons (26) · API v1 + Swagger (27-А) · Slack/Discord (27-Б). **S12 docs/notif повний:** email-тікети (29-Г) · canned replies спільні (29-А) · KB (29-Б) · CSAT тікетів (29-В). **S13 calendar/leave+:** все 23-_ і 24-_ (вкл. Google Calendar/Meet/Zoom). **S14/SaaS:** лендінг-пресети+міні-CMS+GTM/Pixel (11-ПРЕСЕТИ) · status-page (21-В) · Zapier (27-Г) · Mini App (15-В) · кастомізація шаблонів документів тенантом (06-А-SaaS) · пошта тенанта 3 рівні (08-Г).
+
+---
+
+## SPRINT 6 — Documents + Notification-channels + Bot (ядро)
+
+| ID    | Задача                                                                                                                                                                                                                | Модуль         | Статус                                                                                              |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| S6-01 | packages/templates — **`renderDocumentHtml` + `htmlToPdf` (puppeteer-core + apt-Chromium у Dockerfile.api)** ✅                                                                                                       | [06-documents] | ✅ 🧪                                                                                               |
+| S6-02 | API — documents **generate + list + нумерація + `GET …/pdf`** (PDF/HTML-fallback) + **`POST …/send`** (status `sent` → invoice notify, BE-2) ✅                                                                       | [06-documents] | ✅ 🧪 `64ee363`·`00c6ba3`                                                                           |
+| S6-03 | Documents UI — **таб «Документи» (ws генерує рахунок/акт/спец, портал read-only)** + E2E smoke                                                                                                                        | [06-documents] | ✅ 🧪                                                                                               |
+| S6-04 | Notifications — center API + /inbox UI + дзвоник + **approval-події** + **created/assigned/comment/document-події** (BE-1/2; активує newComment·invoiceSent шаблони) — фід реально живий                              | [07]           | ✅ 🧪 `dd045c2`·`e8da1a7`                                                                           |
+| S6-05 | Bot — `/start <code>` OTP-лінк (grammY long-polling = update dedup) → `POST /telegram/link`; webhook mode → follow-up                                                                                                 | [15-bot]       | ✅ 🧪                                                                                               |
+| S6-06 | Telegram link API — `/profile/telegram/connect·status·unlink` (user) + `/telegram/link` (bot-secret) + **UI-картка «Telegram-сповіщення» в обох settings** (connect/unlink); notify telegram-канал працює після лінку | [15/13]        | ✅ 🧪🔒 (harden: `telegramProfile.test.ts` user+reassignment+config; `telegram.test.ts` bot-secret) |
+| S6-07 | Email templates — **orderStatusChanged · newComment · invoiceSent** (uk+en, бренд stone+lime, escape) + wired у dispatch; status_changed email тепер реально шлеться                                                  | [08-email]     | ✅ 🧪                                                                                               |
+| S6-08 | Deploy Sprint 6 → staging                                                                                                                                                                                             | Infra          | 🚀                                                                                                  |
+
+---
+
+## SPRINT 7 — Landing + Blog + Chat-hub (ядро)
+
+| ID    | Задача                                                                                                                                   | Модуль        | Статус                                                                     |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------- |
+| S7-01 | Landing — Hero/проблеми/кейси/команда/стек/FAQ/CTA                                                                                       | [14-landing]  | ✅                                                                         |
+| S7-02 | Landing — /blog /cases ISR + реальна BlogPost схема                                                                                      | [11-content]  | ✅                                                                         |
+| S7-03 | Landing — UA+EN + SEO(metadata/sitemap/hreflang/OG) + Lighthouse≥90                                                                      | [14]          | 🔄 SEO✅(canonical/OG/sitemap/twitter); UA/EN+hreflang+Lighthouse лишились |
+| S7-04 | Landing — contact form → /api/contact (Turnstile/honeypot)                                                                               | [14-landing]  | ✅ (honeypot+rate-limit; Turnstile→пізніше)                                |
+| S7-05 | ✅ **ЗБУДОВАНО 12.07.2026** (mini-CMS + BlogAi + workspace /content) — API — AI content generation (quota/sanitize) + Workspace /content | [11]          | ✅                                                                         |
+| S7-06 | Workspace — /messages + /inbox (chat-hub ядро)                                                                                           | [18-chat-hub] | ✅ (збудовано як /chats master-detail + /inbox 02.07)                      |
+| S7-07 | Deploy Sprint 7 → staging                                                                                                                | Infra         | 🚀                                                                         |
+
+---
+
+## SPRINT 8 — QA + Launch (MVP v0.1.0)
+
+| ID    | Задача                                                              | Модуль | Статус |
+| ----- | ------------------------------------------------------------------- | ------ | ------ |
+| S8-01 | Integration tests — auth/orders/billing/referral                    | All    | ⬜     |
+| S8-02 | Security review — OWASP checklist + tenant-isolation                | Infra  | ⬜     |
+| S8-03 | Sentry (5 apps) + UptimeRobot + Netdata + backup-cron               | Infra  | ⬜     |
+| S8-04 | pg_cron перевірка (recurring/НБУ/loyalty/heartbeat)                 | Infra  | ⬜     |
+| S8-05 | Перший реальний клієнт — ручне тестування + багфікс                 | All    | ⬜     |
+| S8-06 | Migration smoke-test (накат усіх міграцій на чистий PG + seed) у CI | Infra  | ⬜     |
+| S8-07 | On-call runbook (що робити коли SMTP/Telegram/DB лягло)             | Infra  | ⬜     |
+| S8-08 | git tag v0.1.0 + 🚀 Production deploy                               | Infra  | ⬜     |
+
+---
+
+# 🚀 ПОВНОЦІННИЙ ПРОДУКТ (S9-S14) — обрані фічі
+
+> Добудовуємо після живого MVP. Кожен спрінт — тематична група фіч з вікторини. Порядок гнучкий.
+
+## SPRINT 9 — Auth & Security (повний)
+
+| ID    | Задача                                                                                                                                                                                                                                                                                                                                                                                                           | Модуль           | Статус                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------- |
+| S9-01 | 2FA TOTP (totpSecretEnc/backupCodes) + 2-step login challenge                                                                                                                                                                                                                                                                                                                                                    | [01-auth]        | ✅ (2FA-POLICY 03.07)               |
+| S9-02 | Active sessions UI (refresh metadata) + reuse-detection + revoke                                                                                                                                                                                                                                                                                                                                                 | [01-auth]        | ⬜                                  |
+| S9-03 | Google OAuth (OAuthAccount) + email-verify flow                                                                                                                                                                                                                                                                                                                                                                  | [01-auth]        | ✅ (oauth_accounts+email-verify 07) |
+| S9-04 | Credentials vault — envelope crypto + reveal/revoke/delete + rate-limit                                                                                                                                                                                                                                                                                                                                          | [17-credentials] | ✅ (vault 17-А/Б/Д 02-03.07)        |
+| S9-05 | Credentials — 2FA-на-reveal + CredentialShare (scoped) + rotation-cron                                                                                                                                                                                                                                                                                                                                           | [17-credentials] | ✅ (17-SHARE+РОТАЦІЯ 03.07)         |
+| S9-06 | ✅ **ЗБУДОВАНО ПОВНІСТЮ 13.07.2026** — data-export (GET /profile/export → JSON власних даних: профіль/settings/членства/сповіщення/тікет-повідомлення/відсутності; без секретів; кнопка в порталі /settings) + **Profile.phone/timezone** (PATCH /profile валідує timezone через Intl; ContactDetailsSection у settings обох апок; timezone-picker з Intl.supportedValuesOf) — GDPR data-export + контактні поля | [13-settings]    | ✅                                  |
+| S9-07 | Темна тема в Portal (підключити ThemeProvider + перемикач) ⬅backlog                                                                                                                                                                                                                                                                                                                                              | [13-settings]    | ⬜                                  |
+
+## SPRINT 10 — Orders & Chat (повний)
+
+| ID     | Задача                                                                                                                                                                                                                        | Модуль      | Статус                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------- |
+| S10-01 | OrderTag/Assignment + OrderTemplate                                                                                                                                                                                           | [02-orders] | ✅ (S10-01 04.07)                 |
+| S10-02 | SlaPolicy + breach-cron + escalation                                                                                                                                                                                          | [02-orders] | ✅ (S10-02 04.07)                 |
+| S10-03 | ✅ **ЗБУДОВАНО 11.07.2026** (DFS cycle-guard 409 + гейт старту + orders.unblocked + gantt-бари TimelineView) — OrderDependency (cycle-guard) + gantt-view                                                                     | [02-orders] | ✅                                |
+| S10-04 | Chat — edit/delete (15-min) + CommentReaction + replyToId + read-receipts                                                                                                                                                     | [03-chat]   | ✅ (chat edit/reactions/reply 06) |
+| S10-05 | Chat-hub — mute/archive (ConversationState) + filters + @-mention picker                                                                                                                                                      | [18/03]     | ✅ (18-хвости 03.07)              |
+| S10-06 | ✅ **sharp-мініатюри ЗБУДОВАНО 12.07.2026** (OrderFile.thumbKey + webp best-effort на upload + GET /files/:id/thumb inline + прев'ю у FilesTab) ⬜ S3StorageAdapter (R2) — Files — sharp thumbnails + S3StorageAdapter ⬅хвіст | [04-files]  | 🔄                                |
+| S10-07 | Orders — soft-delete restore UI (admin, 30д вікно) + /restore ⬅backlog                                                                                                                                                        | [02-orders] | ✅ (S10-07 04.07)                 |
+
+## SPRINT 11 — Search + Reports + Admin (повний)
+
+| ID     | Задача                                                                                                                                                                                                                                     | Модуль       | Статус                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | --------------------------- |
+| S11-01 | Search — Postgres FTS (agency-scoped GIN) + SearchAdapter                                                                                                                                                                                  | [16-search]  | ✅ (FTS+Cmd+K 04.07)        |
+| S11-02 | Search — Cmd+K command palette (+ Meilisearch adapter stub)                                                                                                                                                                                | [16-search]  | ✅ (FTS+Cmd+K 04.07)        |
+| S11-03 | Reports — scheduled email (ReportSchedule+cron) + PDF/XLSX                                                                                                                                                                                 | [19-reports] | ✅ (scheduled report 04.07) |
+| S11-04 | Reports — custom ReportDefinition builder + revenue_monthly_mv                                                                                                                                                                             | [19-reports] | ⬜                          |
+| S11-05 | Admin — templates/SMTP/branding/nomenclature/departments editor (per-agency)                                                                                                                                                               | [20-admin]   | ⬜                          |
+| S11-06 | Admin — AgencyFeatureFlag + outbound webhooks + ApiKey + config export                                                                                                                                                                     | [20-admin]   | ⬜                          |
+| S11-07 | ✅ **retention-дашборд ЗБУДОВАНО 11.07.2026** (repeat rate + медіана time-to-2nd + NEW→REGULAR 90д + churn 60/120 + at-risk топ у /reports; Swagger — свідомо в лінії webhooks/ApiKey) — Retention-аналітика + Public API Swagger ⬅backlog | [19/20]      | 🔄                          |
+
+## SPRINT 12 — Documents & Notifications (повний)
+
+| ID     | Задача                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Модуль   | Статус |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| S12-01 | e-signature (click→accept; SignatureProvider for Diia/КЕП)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | [06-doc] | ⬜     |
+| S12-02 | DocumentTemplate + bulk-generate (outbox) + draft→preview→approve                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | [06]     | ⬜     |
+| S12-03 | ✅ **ЗБУДОВАНО 11.07.2026** (web-push VAPID, канал у матриці, sw.js обох апок; ключі → env) — Web Push (PushSubscription+VAPID+PushAdapter)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [07]     | ✅     |
+| S12-04 | SMS adapter (SmsAdapter TurboSMS/Twilio, per-agency)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | [07]     | ⬜     |
+| S12-05 | ✅ **ЗБУДОВАНО ПОВНІСТЮ 13.07.2026** — inbound→тікет (IMAP-полер graceful-off + ingestInboundEmail: resolve email→client, thread по In-Reply-To, source='email'; sourceMessageId UNIQUE ідемпотентність; інструкція власнику EMAIL_INBOUND_SETUP.md) + **bounce/DSN-детект** (multipart/report або mailer-daemon → EmailSuppression reason='bounce', тікет не створюється) + **unsubscribe** (HMAC-токен без стану, GET HTML + POST one-click RFC 8058, List-Unsubscribe заголовки у broadcast, футер-лінк; notify пропускає suppressed email) + **DKIM-surface** (Authentication-Results→⚠️ у нотифікації команди) + per-poll cap 200 — Email inbound→task | [08]     | ✅     |
+| S12-06 | ✅ **ЗБУДОВАНО 11.07.2026** (quietFrom/quietTo Kyiv на NotificationSettings + digestDaily + cron 08:00) — Quiet-hours / digest ⬅backlog                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | [07]     | ✅     |
+| S12-07 | ✅ **ЗБУДОВАНО 11.07.2026** (Broadcast + сегменти all/debtors/tier + outbox-воркер через notify-матрицю + UI на /announcements) — Bulk-розсилки ⬅backlog                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | [07]     | ✅     |
+
+## SPRINT 13 — Calendar + Leave + Finance Phase 2
+
+| ID     | Задача                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Модуль     | Статус             |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------ |
+| S13-01 | Calendar — CalendarEvent/Attendee + per-event tz + aggregated view                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | [24]       | ✅ (CAL-MVP 05.07) |
+| S13-02 | Calendar — reminder-cron + notifyRecipient guests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [24]       | ✅ (CAL-MVP 05.07) |
+| S13-03 | Calendar — booking-links (Calendly) + MeetingProvider (auto-video)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | [24]       | ⬜                 |
+| S13-04 | ✅ **ЗБУДОВАНО 11.07.2026** (routes/team/leave.ts + /leave UI; менеджер не погоджує власну) — Leave — LeaveRequest + approve/reject + self-vs-others can()                                                                                                                                                                                                                                                                                                                                                                                                                                                        | [23-leave] | ✅                 |
+| S13-05 | ✅ **ЗБУДОВАНО ПОВНІСТЮ 13.07.2026** — accrual (обчислюваний баланс від AgencyMember.hireDate + Agency.vacationDaysPerYear, guard на approve) + **calendar-integration** (read-side merge: GET /calendar/events повертає `leaves` — approved-відпустки команди у вікні, лише для team-ролей; workspace-сітка показує чіпи відсутності по днях) — Leave — LeaveBalance accrual (hireDate) + calendar-integration                                                                                                                                                                                                   | [23-leave] | ✅                 |
+| S13-06 | Finance Phase 2 — cost allocation (margin по клієнтах ✅ P-9) + receipts/budgets/approval/VAT. **+ ✅ Податок-на-дохід per-юр-особа/канал ЗБУДОВАНО (11.07.2026: `LegalEntity.incomeTaxPct` + `Payment.legalEntityId` каскад + лінія income_tax у P&L з refund-клавбеком; лишок рядка — receipts/budgets/VAT). Оригінал вимоги (з P-10, 18.06):** власник НЕ VAT-платник — податок = % від отриманого доходу залежно від юр-особи/каналу (ФОП 5% / крипта-картка 0%) = витрата агенції у P&L/маржі (НЕ класичний ПДВ на рахунку). Потребує: ставка на `LegalEntity` + привʼязка платежу до юр-особи + лінія в P&L | [22]       | ⬜                 |
+
+## SPRINT 14 — Ops + SaaS-readiness + контент-фічі
+
+| ID     | Задача                                                                                           | Модуль       | Статус |
+| ------ | ------------------------------------------------------------------------------------------------ | ------------ | ------ |
+| S14-01 | Monitoring — per-agency UsageCounter + dashboard (SaaS-ready)                                    | [21-monitor] | ⬜     |
+| S14-02 | Monitoring — public status-page + SLO/error-budget + InfraCost→P&L                               | [21]         | ⬜     |
+| S14-03 | Payments go-live — Monobank/Stripe provider + webhooks(outbox) + DunningPolicy + PaymentSchedule | [05]         | ⬜     |
+| S14-04 | Landing — CMS (LandingContent) + cookie-consent + live-chat                                      | [14-landing] | ⬜     |
+| S14-05 | Referral gamification (ReferralAchievement/leaderboard) + executor KPI dashboard                 | [09/12]      | ⬜     |
+| S14-06 | Content — реальні SEO-поля + (BACKLOG: scheduled publishing)                                     | [11-content] | ⬜     |
 
 ---
 
 ## ПРОГРЕС
 
-| Sprint | Всього | ✅ Done | 🧪 Tested | 🚀 Deployed |
-|---|---|---|---|---|
-| S0 Foundation | 30 | 22 | 0 | 0 |
-| S1 Auth | 22 | 0 | 0 | 0 |
-| S2 Orders API | 19 | 0 | 0 | 0 |
-| S3 Portal | 22 | 0 | 0 | 0 |
-| S4 Workspace | 14 | 0 | 0 | 0 |
-| S5 Billing | 19 | 0 | 0 | 0 |
-| S6 Docs+Bot | 15 | 0 | 0 | 0 |
-| S7 Landing | 16 | 0 | 0 | 0 |
-| S8 QA+Launch | 14 | 0 | 0 | 0 |
-| **TOTAL** | **171** | **22** | **0** | **0** |
+| Фаза                           | Спрінти      | Статус                                                              |
+| ------------------------------ | ------------ | ------------------------------------------------------------------- |
+| Foundation                     | S0, S1, S1.5 | ✅ done                                                             |
+| Tenancy + schema               | S1.6         | ✅ done                                                             |
+| Orders/Chat/Files backend      | S2           | ✅ done                                                             |
+| MVP ядро frontend              | S3-S4        | ✅ закодовано + аудит (лишилось: responsive; E2E — пізніший прохід) |
+| Billing/Wallet/Finance backend | S5           | ✅ done (запушено; ручний staging-тест — після S5.5)                |
+| Audit-ремедіація               | S5.5         | 🔄 in progress (повний аудит 11.06)                                 |
+| MVP доки+контент               | S6-S7        | ⬜                                                                  |
+| MVP launch v0.1.0              | S8           | ⬜                                                                  |
+| Повний продукт (фічі)          | S9-S14       | ⬜                                                                  |
+
+> **MVP-межа:** S8 (v0.1.0, перший клієнт). **Повноцінний продукт:** через S14.
+> Деталі скоупу кожного модуля — `SPEC.md` + `modules/NN-*.md`.
+
+> 🔄 **Реконсиляція 13.07.2026** (coverage-аудит §G): рядки S7-06, S9-01/03/04/05, S10-01/02/04/05/07, S11-01/02/03, S13-01/02, SUP-1/2/3 фліпнуто ⬜→✅ — збудовані у липневих зрізах, TRACKER не оновлювався (див. ROADMAP «Готово нещодавно» + міграції). Повний звіт прогалин — [`AUDIT_2026-07-13_coverage.md`](AUDIT_2026-07-13_coverage.md).

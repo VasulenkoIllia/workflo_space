@@ -1,0 +1,276 @@
+# REPORTS MODULE
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
+> App: Workspace (owner-only)
+> Статус: S4+ (post-MVP)
+> Залежить від: `packages/db`, `02-orders`, `05-billing`, `12-team-executors`
+> Оновлено: 27 травня 2026
+
+---
+
+> 🔄 **design-v2 (2026-06-20):** доставлено **reports-v1** + cash-flow forecast — revenue/margin by-client/project, debtors, utilization, new-clients: [`workspace-reports-v1.jsx`](../../design-v2/project/workspace-reports-v1.jsx) + data. 🟡 **частково** (звірено): P&L `finance/reports.ts` є ✅; решта звітів — нема aggregation API. Матриця — [`DESIGN_SYSTEM.md §5.13`](../DESIGN_SYSTEM.md).
+
+## Огляд
+
+Звіти для owner агенції. **3 канонічних звіти** у MVP-обсязі:
+
+1. **Time report** — куди йдуть години (per executor / per company / per order).
+2. **Revenue report** — оборот, прибуток, ARR.
+3. **Debtors report** — хто має borg, скільки, як давно.
+
+Кожен звіт = UI table + CSV export. PDF expor — у `BACKLOG.md`.
+
+---
+
+## 1. Time Report
+
+**Питання owner'а:** "Куди реально йдуть години моєї команди за період X?"
+
+### Endpoint
+
+`GET /reports/time?from=2026-04-01&to=2026-04-30&groupBy=executor|company|order&executorId=&companyId=`
+
+### Логіка
+
+```sql
+SELECT
+  COALESCE(executor_id, company_id, order_id) AS bucket,
+  SUM(duration_seconds) / 3600.0 AS total_hours,
+  COUNT(*) AS sessions,
+  -- billable hours: ті де order.billing_mode IN ('client_paid','internal_paid')
+  SUM(CASE WHEN ... THEN duration_seconds ELSE 0 END) / 3600.0 AS billable_hours
+FROM time_logs tl
+JOIN orders o ON o.id = tl.order_id
+WHERE tl.started_at BETWEEN $from AND $to
+  AND tl.ended_at IS NOT NULL  -- exclude active timers
+GROUP BY bucket
+ORDER BY total_hours DESC;
+```
+
+### UI table
+
+| Executor / Company / Order | Total hours | Billable | Non-billable | Sessions |
+| -------------------------- | ----------: | -------: | -----------: | -------: |
+| Olena Petrenko             |        42.5 |     38.0 |          4.5 |       18 |
+
+CSV export: ті ж колонки + extra `period_start` / `period_end` headers.
+
+---
+
+## 2. Revenue Report
+
+**Питання:** "Скільки реально заробляємо за період? Trend over time?"
+
+### Endpoint
+
+`GET /reports/revenue?from=&to=&granularity=day|week|month&currency=USD`
+
+### Логіка
+
+```sql
+SELECT
+  date_trunc('month', p.confirmed_at) AS period,
+  SUM(p.amount_usd) AS revenue_usd,           -- усе зайшло
+  SUM(CASE WHEN p.type='final' THEN p.amount_usd ELSE 0 END) AS final_revenue_usd,
+  COUNT(DISTINCT p.company_id) AS paying_clients,
+  COUNT(*) AS payments_count
+FROM payments p
+WHERE p.status = 'confirmed'
+  AND p.confirmed_at BETWEEN $from AND $to
+GROUP BY period
+ORDER BY period;
+```
+
+Окремо рахуємо:
+
+- Cost = сума ExecutorRate \* годин по orders за період.
+- Profit = revenue − cost.
+- Margin = profit / revenue.
+
+### UI
+
+- Line chart: revenue за period.
+- Side stats: total revenue / total profit / margin% / paying clients.
+- Table breakdown by month.
+
+---
+
+## 3. Debtors Report
+
+**Питання:** "Хто винен? Скільки? Скільки днів прострочено?"
+
+### Endpoint
+
+`GET /reports/debtors?asOf=2026-05-01`
+
+### Логіка
+
+```sql
+SELECT
+  c.id AS company_id,
+  c.name,
+  SUM(sc.total_amount) AS total_owed_usd,
+  MIN(sc.due_date) AS oldest_due,
+  -- days overdue: as_of - oldest_due
+  EXTRACT(day FROM $asOf::date - MIN(sc.due_date)::date)::INT AS days_overdue,
+  COUNT(*) AS unpaid_invoices
+FROM service_charges sc
+JOIN companies c ON c.id = sc.company_id
+WHERE sc.status IN ('pending', 'overdue')
+  AND sc.due_date < $asOf
+GROUP BY c.id, c.name
+ORDER BY days_overdue DESC;
+```
+
+### UI table
+
+| Company  | Total owed | Oldest due | Days overdue | Invoices |
+| -------- | ---------: | ---------- | -----------: | -------: |
+| Acme LLC |  $4,200.00 | 2026-03-15 |           47 |        3 |
+
+Action buttons per row:
+
+- "Send reminder" → `notify(event='billing.invoice_overdue', ...)`.
+- "Mark write-off" (admin only) — закриває debt as bad debt.
+- "View company" → drill-in.
+
+### Aggregate KPIs (top of page)
+
+- Total debt
+- # debtors
+- Avg days overdue
+- Worst (top 5 with longest overdue)
+
+---
+
+## Загальні принципи
+
+- **Owner-only** access (`can(user, 'admin.access')` або `memberships.role === 'owner'` на агенцію-головну компанію).
+- **CSV export** для всіх звітів: `GET /reports/<name>.csv?...` (same query params).
+- **Caching**: heavy queries cache 5 min per (params hash) у memory. Bust on payment confirmation, time log update.
+- **Currency normalization**: всі суми в USD; exchange rate на дату payment з `exchange_rates` (для history accuracy).
+
+---
+
+## Performance
+
+- Materialized view `revenue_monthly_mv` — refreshed nightly cron (С17).
+- Index `payments(company_id, confirmed_at)` для debtor queries.
+- Limit max time range: 12 months. Більше → manual chunk + повторний запит.
+
+---
+
+## UI Navigation
+
+`/workspace/reports` — головна з 3 картками:
+
+- "Time" → `/workspace/reports/time`
+- "Revenue" → `/workspace/reports/revenue`
+- "Debtors" → `/workspace/reports/debtors`
+
+Кожна сторінка: filter bar зверху, results table/chart посередині, export button праворуч.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+### A. Обов'язкові reconcile
+
+**`agencyId`-фільтр у КОЖНОМУ запиті** (зараз cross-tenant витік аgrеgатів!); cache-key включає `agencyId`; **CSV formula-injection escape** (`=`/`+`/`-`/`@` leading); write-off/refund як cache-bust тригери; `revenue_monthly_mv` оголосити в міграції; `can()`-only (не raw `role==='owner'`) + tenant-guard; timezone-boundaries для from/to (agency-local); revenue-definition = wallet moneyBalance (один канон).
+
+### B. Плановані звіти (email) ✅
+
+- `ReportSchedule { id, agencyId, reportType, frequency, recipients[], format, nextRunAt }`. Cron генерує → надсилає через outbox (email з attachment). Напр. боржники щопонеділка.
+
+### C. PDF/XLSX експорт ✅
+
+- Окрім CSV: PDF (React-PDF, presentable) + XLSX (`exceljs`, для бухгалтера). Великі — async через outbox + лінк.
+
+### D. Конструктор звітів ✅
+
+- `ReportDefinition { id, agencyId, name, metrics[], groupBy, filters, createdBy }` — owner будує власні звіти понад 3 готові. Виконавчий движок over дозволених метрик (whitelist, не raw SQL). Phase 2.
+
+```
+New: ReportSchedule, ReportDefinition; revenue_monthly_mv (migration)
+```
+
+## Беклог-промоут (30.05) → у план
+
+- **Retention-аналітика** (S11): дашборд утримання клієнтів — NEW→REGULAR conversion rate, P50 time-to-second-order, churn-сигнали. Будується на payments+loyalty-history (agency-scoped). Окрема картка поряд з time/revenue/debtors. Промоут із беклогу.
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+Статус модуля: ✅ ПІДТВЕРДЖЕНО — «все додаємо».
+
+| ID   | Рішення                                        | Вплив              | Нюанси власника                                                                                                                           |
+| ---- | ---------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 19-А | **Набір ключових звітів v1** (до конструктора) | [бек+екрани]       | Виручка по місяцях/клієнтах · маржа по клієнтах/проєктах (05-ПРОЕКТИ+12) · дебіторка з overdue · завантаженість · нові клієнти/реєстрації |
+| 19-Б | **Наскрізне правило: експорт XLSX/CSV**        | [бек] правило      | На кожному звіті й списку                                                                                                                 |
+| 19-Г | **Місячний звіт клієнту**                      | [бек+шаблон+екран] | Що зроблено, години по проєктах, оплати/борг — авто-PDF+email по білінг-циклу (06-В)                                                      |
+| 19-Д | **Порівняння періодів**                        | [бек дрібний]      | ±% MoM на дашборді                                                                                                                        |
+
+**Для ТЗ дизайнеру:** 5 екранів звітів v1 (А); шаблон місячного звіту клієнта — PDF + Portal-вигляд (Г); дельти на дашборді (Д).
+
+> **UPDATE 05.07.2026 — зріз S11 «звіти-надбудови» реалізовано:**
+>
+> - **SLA-compliance** — `GET /workspace/reports/sla?from&to` (owner): met/late/pending для
+>   першої відповіді та розвʼязання, % лише по «розсуджених» (pending не тягне вниз),
+>   розріз по виконавцях + список останніх порушень. Момент закриття (`doneAt`) береться з
+>   ActivityLog (`status_changed`→done; fallback updatedAt — у Order нема doneAt).
+>   Скасовані — поза знаменником розвʼязання. UI: блок на `/reports`.
+> - **Джерела лідів** — `GET /workspace/reports/lead-sources?from&to` (owner): групування
+>   utmSource → ручне source → «(без джерела)», воронка (won/lost/converted, % конверсії),
+>   гроші зі сконвертованих замовлень **per-currency** (курси не зшиваються): виставлено
+>   (totalAmount??fixedPrice) і оплачено (paidAt). + топ-кампанії (utm_campaign). Закриває 26-В.
+> - **Місячний email-дайджест власнику** — `Agency.monthlyReportEnabled` (owner-тумблер у
+>   /settings «Звіти на email», `GET/PATCH /workspace/agency/report-settings`) + cron
+>   `C-monthly_report` (доба): за ПОПЕРЕДНІЙ UTC-місяць власникам летить лист
+>   `reports.monthly` (CRITICAL) — замовлення/оплати/години/ліди/SLA. Одна відправка на
+>   місяць гейтиться `monthlyReportLastSentAt`; щойно увімкнули → перший лист на наступному
+>   прогоні. **Це НЕ 19-Г** (клієнтський місячний звіт із PDF по білінг-циклу — досі відкритий);
+>   це owner-дайджест на тих самих сервісах.
+
+> **UPDATE 06.07.2026 — 19-Г місячний звіт клієнту реалізовано** (з уточненням: «по
+> білінг-циклу» v1 = календарний UTC-місяць — персональні цикли компаній підуть разом
+> із 06-В, коли той зʼявиться).
+>
+> - **Документ:** новий `DocumentType.monthly_report` (company-scoped, `orderId = null`,
+>   номер `RPT-YYYY-######` через DocumentCounter, статус одразу `sent`). PDF-рендер —
+>   власний шаблон `renderClientMonthlyReportHtml` (@workflo/templates, той самий
+>   фірмовий стиль): нові замовлення · завершені (doneAt з ActivityLog) · години по
+>   проєктах · оплати за період · поточний борг (формула billing/overview, per-currency).
+> - **Доставка:** cron `C-client_monthly_report` (доба, гейт `clientMonthlyReportLastSentAt`
+>   раз на місяць) — для кожної АКТИВНОЇ компанії (замовлення/оплати/час у минулому
+>   місяці; порожнім не шлемо) лист із **PDF-вкладенням** на `Company.documentEmail`
+>   (+cc, 06-Г) або, fallback, власникам компанії. Без Chromium — HTML-вкладення
+>   (той самий graceful-патерн, що PDF-роут).
+> - **Перегляд:** generic `GET /documents/:docId/pdf` (команда агенції крім manager АБО
+>   клієнт-учасник компанії) — рендер детермінований (вікно = попередній місяць від
+>   generatedAt, місяць закритий). Документ видно в картці клієнта 360° → «Документи»
+>   (тип «Місячний звіт», відкривається без замовлення).
+> - **Тумблер:** другий чекбокс «Місячний звіт клієнтам (PDF на email)» у картці
+>   «Звіти на email» (/settings, owner) — `GET/PATCH /workspace/agency/report-settings`.
+
+> **UPDATE 06.07.2026 — 19-А/19-Б/19-Д добудовано. Прохід власника по модулю 19 закрито
+> повністю** (лишається конструктор звітів з основної спеки — SaaS-фаза).
+>
+> - **19-А «Виручка»** — `GET /workspace/reports/revenue?from&to` (owner): по місяцях
+>   (виручка = Payment.amountUsd, та сама USD-база, що P&L/overview; bonus-backed = 0),
+>   по клієнтах, нові клієнти по місяцях, **дебіторка з віком** (формула billing/overview
+>   per-currency + вік найстарішого неоплаченого замовлення, днів). Блок на `/reports`.
+>   Зауваження по решті списку 19-А: маржа по клієнтах/проєктах вже жила на `/margin`,
+>   завантаженість — у плані-факті годин (byExecutor utilization) — не дублюємо.
+> - **19-Б експорт** — ExportButtons (CSV/XLSX) тепер на КОЖНОМУ блоці `/reports`:
+>   години (був) + виручка (3 листи: місяці/клієнти/дебіторка) + SLA по виконавцях +
+>   джерела лідів. P&L мав CSV із S5.
+> - **19-Д ±% MoM** — `GET /workspace/reports/mom` (owner): поточний vs попередній
+>   UTC-місяць (виручка/замовлення/ліди/години), prev=0 → чесний null («—», не ∞).
+>   UI: стрічка «місяць до місяця» на owner-дашборді з ▲/▼-дельтами.

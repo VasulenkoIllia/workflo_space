@@ -1,8 +1,13 @@
 # FILES & STORAGE MODULE
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/types`, `packages/storage`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -17,7 +22,7 @@
 ```typescript
 // packages/storage/src/StorageAdapter.ts
 interface StorageAdapter {
-  upload(file: Buffer, path: string, mimeType: string): Promise<string>  // returns public URL
+  upload(file: Buffer, path: string, mimeType: string): Promise<string> // returns public URL
   download(path: string): Promise<Buffer>
   delete(path: string): Promise<void>
   exists(path: string): Promise<boolean>
@@ -25,13 +30,13 @@ interface StorageAdapter {
 
 // packages/storage/src/LocalStorageAdapter.ts (MVP)
 class LocalStorageAdapter implements StorageAdapter {
-  constructor(private basePath: string) {}  // /data/uploads
+  constructor(private basePath: string) {} // /data/uploads
 
   async upload(file: Buffer, path: string): Promise<string> {
     const fullPath = join(this.basePath, path)
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, file)
-    return `/files/${path}`  // relative URL → API serves it
+    return `/files/${path}` // relative URL → API serves it
   }
   // ...
 }
@@ -59,22 +64,9 @@ fastify.decorate('storage', storage)
 
 ## Файлова структура на диску
 
-```
-/data/uploads/
-├── orders/
-│   └── {orderId}/
-│       ├── comments/
-│       │   └── {commentId}/
-│       │       └── {uuid}-{filename}
-│       └── attachments/
-│           └── {uuid}-{filename}
-├── documents/
-│   └── {documentId}/
-│       └── {uuid}.pdf
-└── avatars/
-    └── {profileId}/
-        └── {uuid}-{filename}
-```
+> **Канонічний layout — див. «## S1 alignment update → Storage layout» + «## Аудит-фіналізація A» нижче.** Стисло: tenant-prefixed `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>`, аватари `agencies/<agencyId>/avatars/<profileId>.<ext>`. Права `0640` файли / `0750` теки.
+>
+> ⚠️ **Застарілий не-tenant layout видалено** (`/data/uploads/orders/{orderId}/comments/{commentId}/...`) — суперечив agency-ізоляції.
 
 ---
 
@@ -85,71 +77,35 @@ fastify.decorate('storage', storage)
 1. Клієнт відправляє `POST /files` з `multipart/form-data`
 2. Fastify парсить через `@fastify/multipart`
 3. Валідація: розмір ≤ ліміту, MIME-тип в allowlist
-4. Генеруємо унікальний шлях: `orders/{orderId}/comments/{uuid}-{originalName}`
+4. Генеруємо tenant-prefixed ключ: `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>` (`buildOrderFileKey`)
 5. Передаємо буфер до `storage.upload()`
 6. Зберігаємо метадані в таблицю `file_attachments`
 7. Повертаємо `{ id, url, fileName, fileSize, mimeType }`
 
 ### Прив'язка файлу
 
-Файл може бути прив'язаний до:
-- `orderId` — пряме вкладення до замовлення
-- `commentId` — вкладення в коментар
-- `documentId` — джерельний файл документа
-
-Поля `orderId`, `commentId`, `documentId` в `file_attachments` — всі nullable, але хоча б одне має бути встановлено.
+Файл прив'язаний до замовлення (`orderId` — **NOT NULL** у реальній `OrderFile`). Прив'язка до коментаря (`commentId`) та документа (`documentId`/`context`) — **відкладено** до відповідних фіч (comment-attachments / S5-документи), див. «## Аудит-фіналізація A».
 
 ### Ліміти
 
-| Контекст | Макс. розмір | Макс. кількість |
-|---|---|---|
-| Коментар | 50 МБ / файл | 10 файлів |
-| Замовлення (вкладення) | 100 МБ / файл | 20 файлів |
-| Аватар | 5 МБ | 1 файл |
-| Документ (PDF) | — | генерується сервером |
+| Контекст               | Макс. розмір  | Макс. кількість      |
+| ---------------------- | ------------- | -------------------- |
+| Коментар               | 50 МБ / файл  | 10 файлів            |
+| Замовлення (вкладення) | 100 МБ / файл | 20 файлів            |
+| Аватар                 | 5 МБ          | 1 файл               |
+| Документ (PDF)         | —             | генерується сервером |
 
 ### Дозволені MIME-типи
 
-```typescript
-const ALLOWED_MIME_TYPES = [
-  // Документи
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  // Зображення
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
-  // Архіви
-  'application/zip', 'application/x-rar-compressed',
-  // Текст
-  'text/plain', 'text/csv',
-]
-```
+> **Канонічний allowlist — «## S1 alignment update → MIME allowlist (SVG removed)» нижче** (джерело: `packages/types/src/files.ts`). Стисло: png/jpeg/webp/gif, pdf, txt/csv, zip, office (docx/xlsx/pptx + ms-excel/msword), video/mp4·webm. **`image/svg+xml` ВИКЛЮЧЕНО** (stored-XSS). Інше → 415.
 
 ### Видача файлів (serving)
 
-В MVP — Fastify статично видає файли з `/data/uploads`:
-
-```typescript
-// apps/api/src/routes/files.ts
-fastify.get('/files/*', async (req, reply) => {
-  const filePath = req.params['*']
-  // Перевіряємо права доступу: чи має юзер доступ до orderId цього файлу
-  const attachment = await db.fileAttachment.findFirst({
-    where: { storagePath: filePath }
-  })
-  if (!attachment) return reply.status(404).send()
-  if (!canAccessFile(req.user, attachment)) return reply.status(403).send()
-
-  const buffer = await storage.download(filePath)
-  reply.header('Content-Type', attachment.mimeType)
-  reply.header('Content-Disposition', `inline; filename="${attachment.fileName}"`)
-  return reply.send(buffer)
-})
-```
-
-> **Phase 2:** Hetzner генерує pre-signed URLs з TTL 1 годину. Fastify тільки видає URL, не проксіює бінарний трафік.
+> **Канонічно — id-based serve** (`GET /files/:id/content`): lookup `storedAs` з БД (НЕ шлях з URL), traversal-guard (`safeResolve`, див. «## S1 alignment → Path traversal guard»), `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`. Access-check `canAccessFile` (tenant + participant + internal-comment confidentiality).
+>
+> ⚠️ **Застарілий `GET /files/*` зі шляхом-з-URL + `findFirst({storagePath})` + `Content-Disposition: inline` видалено** — це саме той анти-патерн (path-from-URL + inline-XSS), який S1 прибрав.
+>
+> **Phase 2 (S3-адаптер, «## Аудит-фіналізація C»):** presigned URL з TTL; API авторизує + редіректить, не проксіює бінарь.
 
 ### Видалення файлів
 
@@ -160,42 +116,42 @@ fastify.get('/files/*', async (req, reply) => {
 
 ## API Endpoints
 
-| Метод | URL | Опис |
-|---|---|---|
-| `POST` | `/files` | Завантажити файл |
-| `GET` | `/files/:id` | Метадані файлу |
-| `GET` | `/files/*` | Завантажити бінарний контент |
-| `DELETE` | `/files/:id` | Soft delete файлу |
-| `GET` | `/orders/:id/files` | Всі файли замовлення |
+| Метод    | URL                  | Опис                                 |
+| -------- | -------------------- | ------------------------------------ |
+| `POST`   | `/orders/:id/files`  | Завантажити файл (multipart, 1 файл) |
+| `GET`    | `/orders/:id/files`  | Всі файли замовлення                 |
+| `GET`    | `/files/:id`         | Метадані файлу                       |
+| `GET`    | `/files/:id/content` | Завантажити бінарний контент         |
+| `DELETE` | `/files/:id`         | Soft delete файлу                    |
+
+> **Стан реалізації (S2-09/10/11, 31.05.2026):** ✅ усі 5 ендпоінтів вище.
+> Реальні шляхи: upload/list — **order-scoped** (`/orders/:id/files`, природно tenant+participant-guarded через `requireOrderParticipant`); serve — `/files/:id/content` (id-based lookup → `storedAs` з БД, НЕ шлях з URL), `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`, traversal-guarded read. MIME-allowlist (`@workflo/types`, **SVG прибрано**) → 415; ліміт 100MB/файл → 413; 20 файлів/замовлення → 409; sha256 + tenant-prefixed key `agencies/<agencyId>/orders/<orderId>/<fileId><ext>`; `0640`.
+> **OrderFile reconcile — S2-підмножина:** додано `agencyId`/`deletedAt`/`sha256`. Поля `commentId`/`documentId`/`context` **відкладено** до їхніх фіч (comment-attachments / S5-документи), бо потребують Document-моделі + comment-attachment-флоу.
 
 ---
 
 ## DTO
 
-### `POST /files` (multipart/form-data)
+### `POST /orders/:id/files` (multipart/form-data)
 
 ```
-fields:
-  orderId?: string       // прив'язка до замовлення (опційно при завантаженні)
-  commentId?: string     // прив'язка до коментаря
-  context: 'order_attachment' | 'comment' | 'avatar'
-file: <binary>
+file: <binary>           // 1 файл; orderId — зі шляху (order-scoped, participant-guarded)
 ```
 
-### File Response
+> `commentId`/`context` form-поля — відкладено (див. «## Аудит-фіналізація A»). Реальний upload — order-scoped, не bare `/files`.
+
+### File Response (`FILE_META_SELECT`)
 
 ```typescript
 {
   id: string
-  fileName: string          // оригінальна назва
-  fileSize: number          // bytes
+  filename: string // не `fileName`
   mimeType: string
-  url: string               // /files/{path} або pre-signed URL (Phase 2)
-  context: string
-  orderId: string | null
-  commentId: string | null
-  uploadedBy: string        // profileId
+  sizeBytes: number // не `fileSize`
+  sha256: string
+  uploadedBy: string // profileId
   createdAt: string
+  // без `url`/`storagePath`/`context`/`commentId` — контент через GET /files/:id/content
 }
 ```
 
@@ -203,31 +159,8 @@ file: <binary>
 
 ## DB Schema
 
-```prisma
-model FileAttachment {
-  id          String    @id @default(uuid())
-  fileName    String
-  fileSize    Int
-  mimeType    String
-  storagePath String    // відносний шлях на диску або Hetzner key
-  url         String    // публічний URL
-  context     String    // 'order_attachment' | 'comment' | 'avatar' | 'document'
-  orderId     String?
-  commentId   String?
-  documentId  String?
-  uploadedBy  String
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-
-  order    Order?    @relation(fields: [orderId], references: [id])
-  comment  Comment?  @relation(fields: [commentId], references: [id])
-  uploader Profile   @relation(fields: [uploadedBy], references: [id])
-
-  @@index([orderId])
-  @@index([commentId])
-  @@index([uploadedBy])
-}
-```
+> **Канонічна модель — `OrderFile` у `packages/db/prisma/schema.prisma`** (стара `FileAttachment` видалена з doc-sync).
+> Поля: `id, agencyId, orderId, filename, storedAs, mimeType, sizeBytes, sha256, deletedAt?, createdAt`. **`storedAs`** канонічне (не `url`/`storagePath`); `commentId`/`documentId`/`context`/`thumbStoredAs` — план foundation-міграції (див. «## Аудит-фіналізація A/B»).
 
 ---
 
@@ -245,7 +178,7 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /srv/workflo/uploads  # шлях на хості
+      device: /srv/workflo/uploads # шлях на хості
       o: bind
 ```
 
@@ -273,9 +206,132 @@ volumes:
 
 ## Зв'язки з іншими модулями
 
-| Модуль | Зв'язок |
-|---|---|
-| **Orders** | Вкладення до замовлення |
-| **Chat** | Вкладення до коментарів |
+| Модуль        | Зв'язок                              |
+| ------------- | ------------------------------------ |
+| **Orders**    | Вкладення до замовлення              |
+| **Chat**      | Вкладення до коментарів              |
 | **Documents** | PDF зберігається як `FileAttachment` |
-| **Auth** | Перевірка доступу при завантаженні |
+| **Auth**      | Перевірка доступу при завантаженні   |
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Path traversal guard
+
+Всі file serving endpoints (`GET /files/:id`, `GET /orders/:id/files/:fileId`, etc.) **обов'язково** валідують:
+
+```typescript
+import { resolve, sep } from 'node:path'
+
+function safeResolve(uploadsRoot: string, requested: string): string {
+  const resolved = resolve(uploadsRoot, requested)
+  if (!resolved.startsWith(uploadsRoot + sep) && resolved !== uploadsRoot) {
+    throw new ForbiddenError('path_traversal_blocked')
+  }
+  return resolved
+}
+```
+
+`requested` ніколи не приходить з URL прямо — це **завжди** `stored_as` колонка з `order_files` row (lookup by id). Захист на випадок SQL injection / data corruption.
+
+### MIME allowlist (SVG removed)
+
+Старий allowlist дозволяв `image/svg+xml`. **SVG видалено** через XSS risk (SVG може містити `<script>` теги, який рендериться браузером якщо відкритий як `Content-Type: image/svg+xml`).
+
+Поточний allowlist:
+
+- `image/png`, `image/jpeg`, `image/webp`, `image/gif`
+- `application/pdf`
+- `text/plain`, `text/csv`
+- `application/zip`
+- `application/vnd.openxmlformats-officedocument.*` (docx, xlsx, pptx)
+- `application/vnd.ms-excel`, `application/msword`
+- `video/mp4`, `video/webm` (max 100MB)
+
+Будь-який інший MIME → 415 Unsupported Media Type.
+
+### Content-Disposition
+
+Завжди `Content-Disposition: attachment; filename="<escaped>"` — навіть для inline-friendly types (PDF, images). Захист від ransom-via-malicious-html.
+
+Single exception: thumbnails preview через `?inline=1` + `attachment-thumbnail` access (still escaped).
+
+### Storage layout
+
+```
+/var/lib/workflo/uploads/
+  ├── orders/
+  │   └── <orderId>/
+  │       ├── <fileId>.<ext>   ← stored file
+  │       └── ...
+  ├── documents/
+  │   └── <documentId>.pdf
+  └── avatars/
+      └── <profileId>.<ext>
+```
+
+Permissions: `0640` files, `0750` directories. Owner `workflo`, group `workflo`. Web server has read-only access (`workflo-web` group).
+
+### Backup of uploads
+
+Окремий cron `C13:uploads_backup` (щодня о 04:00):
+
+- `rsync --delete /var/lib/workflo/uploads → /backup/uploads/`
+- Compress weekly to `/backup/uploads-weekly-<date>.tar.gz`.
+- Encrypt + upload to Hetzner Object Storage (GPG AES-256, див. `INFRASTRUCTURE.md` секція "Backups").
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Авторитетна секція. Стара `FileAttachment`-модель + дубль storage-layout вище → видалити в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- **`OrderFile` → реальна модель**: поля `commentId String?`, `documentId String?`, `context('order'|'comment'|'document'|'avatar')`, `deletedAt`, `sha256`, `storedAs` (не `url`/`storagePath`). Comment-attachments тепер представлені (`commentId`).
+- **Один storage-layout** (видалити stale `/data/uploads/...comments/`): tenant-prefixed `agencies/<agencyId>/orders/<orderId>/<fileId>.<ext>`, аватари `agencies/<agencyId>/avatars/<profileId>.<ext>`.
+- **Disk-cleanup при cascade**: hard-delete order/comment → видалити blob з диску/сховища (cron + on-delete hook). C04 виправити під реальні поля.
+- **`agencyId`** + access-check `canAccessFile` (tenant + participant + internal-comment confidentiality).
+- Path-traversal guard + SVG-removal + `Content-Disposition: attachment` (вже є).
+
+### B. Image preview / тумбнейли ✅ (S10-06ч, 2026-07-12 ЗБУДОВАНО)
+
+- На upload зображень → синхронна генерація webp-прев'ю (`sharp`, best-effort): один розмір ≤400px (рідко на чинах, не на PDF/SVG); `OrderFile.thumbKey String?` (окремий blob-ключ).
+- `GET /files/:id/thumb` (з access-check) — inline-рендер webp (безпечний на XSS: растровий, перекодований sharp'ом). Кеш 1 година.
+- Рідко зображення/PDF: 404. SVG виключено на upload (MIME-гвард).
+- UI: тумбнейли в чаті/галереї + FilesTab preview.
+
+### C. S3/R2 storage adapter ✅
+
+- `packages/storage` `StorageAdapter` (вже інтерфейс + `LocalStorageAdapter`) → додати `S3StorageAdapter` (Cloudflare R2 / Hetzner Object Storage, S3 API). Вибір через env `STORAGE_TYPE=local|s3`.
+- **Signed-URL serving**: замість стрімінгу через API — time-limited presigned URL (напр. 5хв) на download; API лише авторизує + редіректить. Tenant-prefixed keys.
+- Env: `STORAGE_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY/REGION`. Backups/CDN з коробки.
+
+### Schema-зміни (foundation-міграція)
+
+```
+OrderFile: + commentId, documentId, context, deletedAt, sha256, thumbStoredAs, agencyId
+           (storedAs канонічне; url/storagePath видалити)
+```
+
+> **→ BACKLOG (не обрано зараз):** virus-scan (ClamAV + `scanStatus` колонка — зарезервувати при бажанні), file versioning.
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+| ID   | Рішення                                                                                                  | Вплив               | Нюанси власника                                   |
+| ---- | -------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------- |
+| 04-Б | **Стрімінговий upload/download** (без повної буферизації в памʼяті) + перегляд лімітів розміру під відео | [бек]               | Прямий наслідок 03-МЕДІА; закриває P-D1 з беклогу |
+| 04-В | **Інлайн-перегляд PDF** (pdf.js у лайтбоксі; canvas-рендер — без inline-XSS ризику)                      | [бек дрібний+екран] |                                                   |
+| 04-Д | **Virus-scan (ClamAV)** — async скан після upload, колонка `scanStatus`, карантин до завершення скану    | [бек]               | Раніше був у беклозі — піднято власником          |
+
+**Піднято пріоритетом раніше (через 03-МЕДІА):** привʼязка файл→коментар (`commentId`/`context`), тумбнейли sharp + лайтбокс (були S10-06).
+
+**Відхилено:** Е (галерея файлів), И (share-link з TTL), **А (файли компанії поза замовленнями)** — двічі пояснено, функціональність власнику не відгукнулась; закрито 11.06 (повернутись можна).
+
+**Для ТЗ дизайнеру:** лайтбокс із PDF-переглядачем (В); стан файла «на перевірці антивірусом» у чаті/списку файлів (Д).

@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+# AR-54 (audit 2026-06-11): ONE source of truth for secrets.
+#
+#   - GitHub Secrets  → ТІЛЬКИ те, що споживають воркфлоу: SSH-доступ до сервера
+#     (звірено grep'ом по .github/workflows: HETZNER_HOST/SSH_USER/SSH_KEY;
+#     GITHUB_TOKEN видається автоматично).
+#   - Server .env     → КАНОН для всіх runtime-секретів (DATABASE_URL_*, JWT_*,
+#     SMTP_*, BOT_TOKEN, SENTRY_DSN, TEAM_IPS, OPENAI_API_KEY, ...). Живе у
+#     /var/www/srv/workflo/{staging,production}/.env і читається compose через
+#     --env-file. Ротація runtime-секрету = правка .env + recreate сервісу.
+#
+# Раніше цей скрипт заливав 17 секретів у GH, з яких 14 ніщо не читало — дві
+# несинхронізовані копії правди. Якщо колись захочеш рендерити server .env з GH
+# Secrets на деплої — це окреме рішення (додай scp-крок у workflow), не повертай
+# мовчазне дублювання.
 set -euo pipefail
 
 REPO="${1:-}"
@@ -26,24 +40,11 @@ set -a
 source "$SECRETS_FILE"
 set +a
 
+# CI-вживані секрети (див. шапку). Runtime-секрети живуть у server .env — НЕ тут.
 REQUIRED_SECRETS=(
   HETZNER_HOST
   HETZNER_SSH_USER
   HETZNER_SSH_KEY
-  DATABASE_URL_PROD
-  DATABASE_URL_STAGING
-  JWT_SECRET_PROD
-  JWT_SECRET_STAGING
-  JWT_REFRESH_SECRET_PROD
-  JWT_REFRESH_SECRET_STAGING
-  SMTP_USER
-  SMTP_PASS
-  BOT_TOKEN
-  TELEGRAM_DEPLOY_CHAT_ID
-  TELEGRAM_DEPLOY_BOT_TOKEN
-  OPENAI_API_KEY
-  SENTRY_DSN
-  TEAM_IPS
 )
 
 missing=0

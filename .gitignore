@@ -7,6 +7,8 @@ dist/
 build/
 .next/
 .turbo/
+storybook-static/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -27,6 +29,9 @@ logs/
 coverage/
 playwright-report/
 test-results/
+e2e/.logs/
+e2e/screenshots/
+e2e/test-results/
 
 # Prisma
 packages/db/prisma/migrations/*.sql.bak
@@ -37,3 +42,6 @@ infra/traefik/acme.json
 
 # Uploads (local dev)
 uploads/
+
+# Claude Code local settings (launch.json is shared)
+.claude/settings.local.json

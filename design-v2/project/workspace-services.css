@@ -1,0 +1,114 @@
+/* workspace-services.css — final brief screens + shared components.
+ *   /services-admin · /billing/services  (wfs-)
+ *   Notification center dropdown          (wfn-)
+ *   Toast system                          (wft-)
+ * All colour via --wf-* tokens.
+ */
+
+/* ───────── services-admin & billing/services ───────── */
+.wfs-svc-card {
+  display: grid; grid-template-columns: 44px 1fr auto; gap: 14px; align-items: center;
+  padding: 14px 16px; border: 1px solid var(--wf-border); border-radius: 11px;
+  background: var(--wf-bg); margin-bottom: 9px;
+}
+.wfs-svc-card:hover { border-color: var(--wf-border-strong); }
+.wfs-svc-glyph {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600;
+  color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 5%, transparent);
+}
+.wfs-svc-main { min-width: 0; }
+.wfs-svc-name { font-size: 14px; font-weight: 600; color: var(--wf-fg); display: flex; align-items: center; gap: 9px; }
+.wfs-svc-sub { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.wfs-svc-right { display: flex; align-items: center; gap: 16px; }
+.wfs-svc-leads { text-align: right; }
+.wfs-svc-leads-v { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 700; color: var(--wf-accent); }
+.wfs-svc-leads-k { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--wf-fg-muted); }
+.wfs-svc-reorder { display: flex; flex-direction: column; gap: 2px; color: var(--wf-fg-subtle); }
+.wfs-svc-reorder button { background: none; border: 0; color: inherit; cursor: pointer; line-height: 1; padding: 0; font-size: 11px; }
+.wfs-svc-reorder button:hover { color: var(--wf-fg); }
+
+/* status pill reused from CMS */
+.wfs-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid var(--wf-border);
+}
+.wfs-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.wfs-status[data-s="published"], .wfs-status[data-s="active"] { color: var(--wf-success, #1F8A5B); border-color: color-mix(in oklab, var(--wf-success, #1F8A5B) 35%, transparent); }
+.wfs-status[data-s="draft"] { color: var(--wf-fg-muted); }
+.wfs-status[data-s="paused"] { color: var(--wf-warning, #D97706); border-color: color-mix(in oklab, var(--wf-warning, #D97706) 35%, transparent); }
+
+/* ───────── Notification center (🔔 dropdown) ───────── */
+.wfn {
+  width: 380px; border: 1px solid var(--wf-border); border-radius: 14px;
+  background: var(--wf-bg); overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 24px 48px -16px rgba(0,0,0,.22);
+  font-family: 'Geist', system-ui, sans-serif;
+}
+.wfn-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--wf-border); }
+.wfn-title { font-size: 14px; font-weight: 600; color: var(--wf-fg); }
+.wfn-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #0A0A0A; background: var(--wf-accent); border-radius: 999px; padding: 1px 8px; }
+.wfn-readall { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); background: none; border: 0; cursor: pointer; }
+.wfn-readall:hover { color: var(--wf-fg); }
+.wfn-tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--wf-border); }
+.wfn-tab { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid transparent; color: var(--wf-fg-muted); background: none; cursor: pointer; }
+.wfn-tab[data-on="true"] { background: var(--wf-fg); color: var(--wf-bg); }
+.wfn-list { max-height: 420px; overflow: auto; }
+.wfn-row { display: flex; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--wf-border); position: relative; }
+.wfn-row:last-child { border-bottom: 0; }
+.wfn-row[data-unread="true"] { background: color-mix(in oklab, var(--wf-accent) 4%, transparent); }
+.wfn-row[data-unread="true"]::before { content: ""; position: absolute; left: 6px; top: 18px; width: 5px; height: 5px; border-radius: 50%; background: var(--wf-accent); }
+.wfn-row-main { min-width: 0; flex: 1; }
+.wfn-row-title { font-size: 13.5px; font-weight: 500; color: var(--wf-fg); line-height: 1.35; }
+.wfn-row-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 3px; }
+.wfn-row-ts { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-subtle); white-space: nowrap; }
+.wfn-foot { padding: 11px 16px; border-top: 1px solid var(--wf-border); text-align: center; }
+.wfn-foot a { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); text-decoration: none; }
+.wfn-foot a:hover { color: var(--wf-accent); }
+
+/* ───────── Toast system ───────── */
+.wft-stack { display: flex; flex-direction: column; gap: 10px; width: 380px; }
+.wft {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 13px 15px; border: 1px solid var(--wf-border); border-radius: 11px;
+  background: var(--wf-bg); position: relative; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 28px -12px rgba(0,0,0,.18);
+  font-family: 'Geist', system-ui, sans-serif;
+}
+.wft::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--wf-fg-muted); }
+.wft[data-v="success"]::before { background: var(--wf-success, #1F8A5B); }
+.wft[data-v="error"]::before   { background: var(--wf-destructive, #DC2626); }
+.wft[data-v="warning"]::before { background: var(--wf-warning, #D97706); }
+.wft[data-v="info"]::before    { background: var(--wf-accent); }
+.wft[data-v="loading"]::before { background: var(--wf-fg-muted); }
+.wft-ic {
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.wft[data-v="success"] .wft-ic { color: var(--wf-success, #1F8A5B); background: color-mix(in oklab, var(--wf-success, #1F8A5B) 12%, transparent); }
+.wft[data-v="error"] .wft-ic   { color: var(--wf-destructive, #DC2626); background: color-mix(in oklab, var(--wf-destructive, #DC2626) 12%, transparent); }
+.wft[data-v="warning"] .wft-ic { color: var(--wf-warning, #D97706); background: color-mix(in oklab, var(--wf-warning, #D97706) 12%, transparent); }
+.wft[data-v="info"] .wft-ic    { color: var(--wf-accent); background: color-mix(in oklab, var(--wf-accent) 14%, transparent); }
+.wft[data-v="loading"] .wft-ic { color: var(--wf-fg-muted); background: color-mix(in oklab, var(--wf-fg) 6%, transparent); }
+.wft-spin { animation: wft-spin 0.9s linear infinite; transform-origin: center; }
+@keyframes wft-spin { to { transform: rotate(360deg); } }
+.wft-main { min-width: 0; flex: 1; }
+.wft-title { font-size: 13.5px; font-weight: 600; color: var(--wf-fg); }
+.wft-sub { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); margin-top: 2px; line-height: 1.4; }
+.wft-action { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: var(--wf-fg); background: none; border: 0; cursor: pointer; padding: 4px 6px; align-self: center; white-space: nowrap; }
+.wft-action:hover { color: var(--wf-accent); }
+.wft-close { color: var(--wf-fg-subtle); background: none; border: 0; cursor: pointer; font-size: 15px; line-height: 1; padding: 2px; align-self: flex-start; }
+.wft-close:hover { color: var(--wf-fg); }
+.wft-stacked-note { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); text-align: center; padding: 4px; }
+
+/* demo backdrop so toasts/notif read as floating overlays */
+.wft-demo, .wfn-demo {
+  border: 1px dashed var(--wf-border); border-radius: 14px;
+  background:
+    repeating-linear-gradient(45deg, color-mix(in oklab, var(--wf-fg) 2%, transparent) 0 1px, transparent 1px 10px),
+    var(--wf-bg-subtle, color-mix(in oklab, var(--wf-fg) 1.5%, var(--wf-bg)));
+  padding: 28px; display: flex; gap: 24px;
+}
+.wft-demo-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-subtle); margin-bottom: 12px; }

@@ -1,0 +1,91 @@
+# Release preflight (AUDIT_2026-09-cicd N2) — READ-ONLY look at a server environment before a
+# release: which env vars are missing, DB migration/row counts, what runs, disk, backups.
+# Runs by itself on every release PR into main (production), or manually from Actions →
+# "Release preflight" for either environment. Never fails the PR on findings — read the log.
+#
+# The repository is PUBLIC, so are these logs: the script prints only variable NAMES, counts,
+# image tags and disk figures — never values, rows or secrets.
+name: Release preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Server environment to inspect
+        type: choice
+        options: [production, staging]
+        default: production
+  # A workflow_dispatch workflow can't be run before it exists on main — the PR trigger makes
+  # the very first release PR (and every later one) get a production preflight automatically.
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Preflight ${{ inputs.environment || 'production' }}
+    # Fork PRs get no secrets (and must never reach the server).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect server (read-only)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5 — pinned by SHA (SSH key access)
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -u
+            ENV_NAME='${{ inputs.environment || 'production' }}'
+            cd "/var/www/srv/workflo/${ENV_NAME}" || { echo "FATAL: runtime dir missing"; exit 1; }
+            SUFFIX=$([[ "$ENV_NAME" == production ]] && echo PROD || echo STAGING)
+            PROJECT="workflo-${ENV_NAME}"
+            has() { grep -q "^$1=..*" .env 2>/dev/null; }
+
+            echo "== Env vars (names only)"
+            required="DATABASE_URL_${SUFFIX} JWT_SECRET_${SUFFIX} POSTGRES_USER_${SUFFIX} POSTGRES_PASSWORD_${SUFFIX} POSTGRES_DB_${SUFFIX}"
+            recommended="CREDENTIALS_KEK_BASE64_${SUFFIX} SMTP_HOST SMTP_USER SMTP_PASS PORTAL_URL_${SUFFIX} WORKSPACE_URL_${SUFFIX} CORS_ALLOWED_ORIGINS_${SUFFIX} SENTRY_DSN BOT_TOKEN BOT_LINK_SECRET TELEGRAM_BOT_USERNAME UNSUBSCRIBE_SECRET TEAM_IPS ADMIN_EMAIL"
+            backups="TELEGRAM_DEPLOY_CHAT_ID RESTIC_REPOSITORY RESTIC_PASSWORD"
+            for v in $required; do has "$v" && echo "  ok        $v" || echo "  MISSING!  $v (fatal)"; done
+            for v in $recommended; do has "$v" && echo "  ok        $v" || echo "  missing   $v (feature degraded)"; done
+            for v in $backups; do has "$v" && echo "  ok        $v" || echo "  missing   $v (backups/alerts)"; done
+            for v in LANDING_TAG PORTAL_TAG WORKSPACE_TAG API_TAG BOT_TAG; do
+              echo "  $v=$(grep -m1 "^$v=" .env 2>/dev/null | cut -d= -f2- || true)"
+            done
+
+            echo "== Deploy bookkeeping"
+            echo "  .last_deploy=$(cat .last_deploy 2>/dev/null || echo none)  .previous_deploy=$(cat .previous_deploy 2>/dev/null || echo none)  .deploy_apps=$(cat .deploy_apps 2>/dev/null || echo none)"
+
+            echo "== Running containers (${PROJECT})"
+            docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" \
+              --format '  {{.Label "com.docker.compose.service"}}  {{.Image}}  {{.Status}}'
+
+            echo "== Database (counts only)"
+            pg="$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT}" --filter "label=com.docker.compose.service=postgres" | head -n1)"
+            if [[ -n "$pg" ]]; then
+              q() { docker exec "$pg" sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"$1\"" 2>&1 | head -n1; }
+              echo "  postgres image: $(docker inspect -f '{{.Config.Image}}' "$pg")"
+              echo "  server version: $(q 'SHOW server_version')"
+              echo "  migrations applied: $(q 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL')"
+              echo "  migrations failed/unfinished: $(q 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NULL')"
+              echo "  latest migration: $(q 'SELECT migration_name FROM _prisma_migrations ORDER BY started_at DESC LIMIT 1')"
+              for t in agencies profiles companies orders; do
+                echo "  rows in $t: $(q "SELECT count(*) FROM $t")"
+              done
+              echo "  db collation: $(q 'SELECT datcollate FROM pg_database WHERE datname = current_database()')"
+            else
+              echo "  no running postgres container in ${PROJECT}"
+            fi
+
+            echo "== Disk"
+            df -h / | tail -n1 | awk '{print "  root: used " $3 " of " $2 " (" $5 "), free " $4}'
+            docker system df --format '  {{.Type}}: {{.Size}} (reclaimable {{.Reclaimable}})' 2>/dev/null || true
+
+            echo "== Backups"
+            ls -1t backups/*.sql.gz 2>/dev/null | head -n3 | sed 's/^/  /' || true
+            [[ -z "$(ls backups/*.sql.gz 2>/dev/null)" ]] && echo "  no dumps in backups/"
+            crontab -l 2>/dev/null | grep -E 'backup|restore' | sed 's/^/  cron: /' || echo "  no backup cron for $(whoami)"
+            command -v restic >/dev/null && echo "  restic: installed" || echo "  restic: not installed"
+            exit 0

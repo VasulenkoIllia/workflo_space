@@ -14,7 +14,7 @@ const healthRoute: FastifyPluginAsync = (fastify) => {
   fastify.get('/health', async (request, reply) => {
     const checks = {
       uptime: Math.floor(process.uptime()),
-      version: process.env.npm_package_version ?? '0.1.0',
+      version: process.env.APP_VERSION ?? process.env.npm_package_version ?? '0.1.0',
       timestamp: new Date().toISOString(),
     }
 

@@ -1,0 +1,296 @@
+import { type Prisma, prisma, tenantTransaction, withTenant } from '@workflo/db'
+import {
+  ApiErrorCode,
+  AppError,
+  canRoleTransitionOrder,
+  canTransitionOrder,
+  INTERNAL_TO_CLIENT_STATUS,
+  isAcceptanceTransition,
+  OrderClientStatus,
+  OrderInternalStatus,
+  transitionOrderStatusSchema,
+} from '@workflo/types'
+import type { FastifyPluginAsync } from 'fastify'
+import { assertSameTenant } from '../../auth/tenant.js'
+import { isInternalTeam } from '../../auth/tokens.js'
+import { writeAuditAsync } from '../../services/audit.js'
+import {
+  assertStartGates,
+  defaultSettlementsOnDone,
+  notifyAcceptanceTransition,
+  notifyUnblockedDependents,
+} from '../../services/orderTransition.js'
+import { enqueueOutbox } from '../../services/outbox.js'
+import { coversOrder, getPermissions } from '../../auth/permissions.js'
+
+/**
+ * PATCH /orders/:id/status — internal status transition, validated against the
+ * canonical state machine (canTransitionOrder) and mirrored to clientStatus.
+ * Internal team may run any valid transition; a client may ONLY reopen their own
+ * company's order (done → revision) and only as the company owner.
+ *
+ * R1 (аудит r6): гейти старту, дефолт settlements і нотифікаційні фан-аути живуть
+ * у services/orderTransition.ts — роут лишає собі parse/auth/guarded-write.
+ */
+const transitionOrderStatusRoute: FastifyPluginAsync = (fastify) => {
+  fastify.patch<{ Params: { id: string } }>(
+    '/orders/:id/status',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const input = transitionOrderStatusSchema.parse(request.body)
+      const user = request.user
+
+      const order = await withTenant((tx) =>
+        tx.order.findUnique({
+          where: { id: request.params.id },
+          select: {
+            id: true,
+            agencyId: true,
+            companyId: true,
+            title: true,
+            internalStatus: true,
+            requiresApproval: true,
+            approvalStatus: true,
+            deletedAt: true,
+            // ПРИЙМАННЯ: для нотифікацій submit/accept/send-back
+            assigneeId: true,
+            submittedById: true,
+            // acceptedAt — payroll-якір: штампуємо ОДИН раз (перше приймання), щоб reopen→
+            // повторне приймання в іншому місяці не зсувало settlements у новий payout-період.
+            acceptedAt: true,
+            coAssignees: { select: { profileId: true } },
+            // 02-В advance gate (hourly_prepaid only): needs the project's model + the
+            // client's money-account balance. contractRequired — 06-ДОГОВІР-2 каскад.
+            project: { select: { billingModel: true, contractRequired: true, teamId: true } },
+            company: { select: { moneyBalance: true } },
+          },
+        })
+      )
+      if (!order || order.deletedAt) {
+        throw new AppError(ApiErrorCode.NOT_FOUND, 'Замовлення не знайдено', 404)
+      }
+      assertSameTenant(user, order.agencyId)
+
+      // Prisma's generated enum is structurally identical to @workflo/types' but
+      // nominally distinct — cast to the shared type for the state-machine check.
+      const from = order.internalStatus as OrderInternalStatus
+      const to = input.status
+      if (!canTransitionOrder(from, to)) {
+        throw new AppError(
+          ApiErrorCode.VALIDATION_ERROR,
+          `Недопустимий перехід статусу: ${from} → ${to}`,
+          409
+        )
+      }
+
+      const isInternal = isInternalTeam(user)
+      const isReopen = from === OrderInternalStatus.DONE && to === OrderInternalStatus.REVISION
+      const isCompanyOwner =
+        user.memberships.find((m) => m.companyId === order.companyId)?.role === 'owner'
+      if (!(isInternal || (isReopen && isCompanyOwner))) {
+        throw new AppError(ApiErrorCode.FORBIDDEN, 'Недостатньо прав для зміни статусу', 403)
+      }
+
+      // ПРИЙМАННЯ РОБОТИ (07.07): приймати (→done) і повертати на доопрацювання (review→revision)
+      // може лише owner або manager(тімлід). Виконавець тільки здає (in_progress→review).
+      // PERM-3: приймання — orders.accept (all — будь-яке; team — тімлід свого підрозділу)
+      const snap = isInternal ? await getPermissions(request) : null
+      const isAcceptor =
+        snap != null &&
+        (await coversOrder(
+          snap,
+          snap.levels['orders.accept'],
+          {
+            assigneeId: order.assigneeId,
+            coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profileId),
+            projectTeamId: order.project?.teamId ?? null,
+          },
+          user.sub
+        ))
+      const enteringDone = to === OrderInternalStatus.DONE
+      const sendingBack = from === OrderInternalStatus.REVIEW && to === OrderInternalStatus.REVISION
+      if (isAcceptanceTransition(from, to) && !isAcceptor) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Приймання роботи — власнику, менеджеру або тімліду підрозділу',
+          403
+        )
+      }
+      // ROLE-NAV → PERM-3: керівні переходи (триаж нового, пауза, скасування) — orders.status;
+      // без нього лише робочі (уточнити / взяти в роботу / здати). Приймання — вище (orders.accept).
+      const managesStatus = snap?.levels['orders.status'] === 'all'
+      // PERM-4: робочий перехід (взяти/уточнити/здати) — лише для замовлення в межах orders.work
+      if (isInternal && !managesStatus && !isAcceptanceTransition(from, to)) {
+        const covered =
+          snap != null &&
+          (await coversOrder(
+            snap,
+            snap.levels['orders.work'],
+            {
+              assigneeId: order.assigneeId,
+              coAssigneeIds: (order.coAssignees ?? []).map((c) => c.profileId),
+              projectTeamId: order.project?.teamId ?? null,
+            },
+            user.sub
+          ))
+        if (!covered) {
+          throw new AppError(ApiErrorCode.FORBIDDEN, 'Замовлення не призначене вам', 403)
+        }
+      }
+      if (
+        isInternal &&
+        !managesStatus &&
+        !isAcceptanceTransition(from, to) &&
+        !canRoleTransitionOrder('executor', from, to, { canAccept: false })
+      ) {
+        throw new AppError(
+          ApiErrorCode.FORBIDDEN,
+          'Цей перехід доступний власнику або менеджеру',
+          403
+        )
+      }
+
+      // Гейти старту (02-А погодження → S10-03 блокери → 02-В аванс → 06-договір) — ПІСЛЯ
+      // перевірок прав (ROLE-NAV): неавторизованому не віддаємо деталі гейтів.
+      if (to === OrderInternalStatus.IN_PROGRESS) {
+        await assertStartGates(order)
+      }
+
+      // Unchecked-варіант: дозволяє FK-скаляри submittedById/acceptedById (ПРИЙМАННЯ).
+      const data: Prisma.OrderUncheckedUpdateManyInput = {
+        internalStatus: to,
+        clientStatus: INTERNAL_TO_CLIENT_STATUS[to],
+      }
+      // 02-А: while the client's estimate decision is still pending, keep the order visibly
+      // «pending_approval» to the client even as the team shuffles internal pre-work states
+      // (estimating ↔ clarification both map to in_progress) — don't lose that the client owes
+      // a decision. Terminal maps (cancelled) pass through untouched.
+      if (
+        order.approvalStatus === 'pending' &&
+        data.clientStatus === OrderClientStatus.IN_PROGRESS
+      ) {
+        data.clientStatus = OrderClientStatus.PENDING_APPROVAL
+      }
+      if (to === OrderInternalStatus.ON_HOLD) data.onHoldReason = input.comment ?? null
+      if (to === OrderInternalStatus.CANCELLED) data.cancelledReason = input.comment ?? null
+      // ПРИЙМАННЯ: штампуємо хто/коли здав і хто/коли прийняв (audit + нотифікації).
+      const now = new Date()
+      if (to === OrderInternalStatus.REVIEW) {
+        data.submittedAt = now
+        data.submittedById = user.sub
+      }
+      // acceptedAt/acceptedById — set-once: якщо замовлення вже приймали (reopen→revision→
+      // знову done), НЕ перезаписуємо. Інакше payout-якір (order.acceptedAt) переповз би у
+      // новий місяць і ті самі payableHours нарахувалися б удруге (CRIT-1, аудит 08.07).
+      // TRADE-OFF (мета-аудит М-3, свідомо): якщо після reopen у НОВОМУ місяці додали роботу
+      // і підняли payableHours — дельта якориться на старий (можливо вже approved) період і
+      // авто-виплатою НЕ підхопиться → недоплату видно у звірці, owner коригує вручну.
+      // Обрано менше зло: тиха переплата двічі гірша за видиму недоплату. Точний фікс —
+      // period-aware settlements (окремий зріз, якщо reopen-через-місяць стане частим).
+      if (to === OrderInternalStatus.DONE && !order.acceptedAt) {
+        data.acceptedAt = now
+        data.acceptedById = user.sub
+      }
+
+      // Atomic: status update + activity-feed row + outbox notify all commit
+      // together, so a delivered notification always reflects a persisted change
+      // (and a rolled-back change never notifies).
+      const updated = await tenantTransaction(prisma, async (tx) => {
+        // AR-13: the state-machine check above ran on a snapshot — re-assert the
+        // from-state INSIDE the write (guarded WHERE), so a concurrent transition
+        // can't slip an invalid from→to through the gap (TOCTOU).
+        const guarded = await tx.order.updateMany({
+          where: { id: order.id, internalStatus: from, deletedAt: null },
+          data,
+        })
+        if (guarded.count === 0) {
+          throw new AppError(
+            ApiErrorCode.CONFLICT,
+            'Статус замовлення щойно змінився — оновіть сторінку і повторіть',
+            409
+          )
+        }
+        const u = await tx.order.findUniqueOrThrow({
+          where: { id: order.id },
+          select: {
+            id: true,
+            internalStatus: true,
+            clientStatus: true,
+            onHoldReason: true,
+            cancelledReason: true,
+            updatedAt: true,
+          },
+        })
+        await tx.activityLog.create({
+          data: {
+            agencyId: order.agencyId, // S-D3: stamp tenant on the activity row
+            orderId: order.id,
+            actorId: user.sub,
+            action: 'status_changed',
+            metadata: { from, to, comment: input.comment ?? null },
+          },
+        })
+        await enqueueOutbox(tx, {
+          type: 'order.status_changed',
+          payload: {
+            orderId: order.id,
+            from,
+            to,
+            actorId: user.sub,
+            comment: input.comment ?? null,
+          },
+          agencyId: order.agencyId,
+        })
+        if (to === OrderInternalStatus.DONE) {
+          await defaultSettlementsOnDone(tx, order)
+        }
+        return u
+      })
+
+      writeAuditAsync(request.log, {
+        actorId: user.sub,
+        agencyId: order.agencyId,
+        action: 'order.status_changed',
+        resourceType: 'order',
+        resourceId: order.id,
+        result: 'allowed',
+        metadata: { from, to, comment: input.comment ?? null },
+      })
+
+      // Адресні нотифікації приймання (submit/accept/send-back).
+      if (to === OrderInternalStatus.REVIEW) {
+        await notifyAcceptanceTransition(request.log, {
+          order,
+          actorId: user.sub,
+          kind: 'submitted',
+          comment: input.comment ?? null,
+        })
+      } else if (enteringDone && from === OrderInternalStatus.REVIEW) {
+        await notifyAcceptanceTransition(request.log, {
+          order,
+          actorId: user.sub,
+          kind: 'accepted',
+          comment: input.comment ?? null,
+        })
+      } else if (sendingBack) {
+        await notifyAcceptanceTransition(request.log, {
+          order,
+          actorId: user.sub,
+          kind: 'sent_back',
+          comment: input.comment ?? null,
+        })
+      }
+
+      // Блокер завершено → розблоковані залежні отримують in-app.
+      if (enteringDone) {
+        await notifyUnblockedDependents(request.log, order)
+      }
+
+      return reply.send({ success: true, data: { order: updated } })
+    }
+  )
+
+  return Promise.resolve()
+}
+
+export default transitionOrderStatusRoute

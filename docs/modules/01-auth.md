@@ -1,8 +1,13 @@
 # AUTH MODULE
+
+> 🗺️ **Реальний стан коду цього модуля — [`../DESIGN_COVERAGE.md`](../DESIGN_COVERAGE.md).** Позначки `✅`/`РЕЮЗ`/«готово» у цьому файлі = **дизайн/специфікація**, НЕ «в продакшені» (наскрізний аудит 2026-06-22).
+
+> ⚠️ **Канон БД — `packages/db/prisma/schema.prisma`; статус готовності — `TRACKER.md`.** `model {}`-блоки в цьому доку = дизайн-намір модуля: якщо різняться зі схемою, істина у схемі (а не тут).
+
 > App: Portal (portal.workflo.space) / Workspace (work.workflo.space) / API (api.workflo.space)
 > Статус: MVP
 > Залежить від: `packages/db`, `packages/notifications`, `packages/types`
-> Оновлено: 12 квітня 2026
+> Оновлено: 1 червня 2026 (doc-sync)
 
 ---
 
@@ -10,22 +15,25 @@
 
 Модуль відповідає за автентифікацію та авторизацію всіх акторів системи: owner, executor (сторона команди) та Company Owner / Company Member (сторона клієнтів). Реалізується схема з access token у пам'яті та refresh token у httpOnly cookie з ротацією. Invite-flow розрізняється для виконавців і членів компанії.
 
+> **Tenancy (ADR-004):** «команда» = `AgencyMember` (role `owner|executor`) під агенцією-тенантом; `isInternalTeam(user)` = має ≥1 agency-membership (**не** `Profile.role`). Профіль глобальний; членство в компаніях — `CompanyMember` (multi-company).
+
 **Ключові принципи безпеки:**
+
 - Access token живе тільки в React context (in-memory) — зникає при закритті вкладки
 - Refresh token у httpOnly cookie — недоступний через XSS
-- `SameSite=Strict` на cookie — CSRF захист без додаткових токенів
+- `SameSite=Lax` + `Path=/auth/refresh` на refresh-cookie (ADR-001) — CSRF-захист
 - Rate limiting на всі `/auth/*` endpoints: **10 запитів / 15 хвилин / IP**
 
 ---
 
 ## Актори та доступ
 
-| Актор | Де реєструється | Як потрапляє в систему |
-|---|---|---|
-| `owner` | Вручну (перший акаунт) | Пряма реєстрація або seed |
-| `executor` | Тільки через invite від owner | `work.workflo.space/invite/{token}` |
-| `client` (Company Owner) | Самореєстрація | `portal.workflo.space/register` + referral |
-| `client` (Company Member) | Тільки через invite від Company Owner | `portal.workflo.space/invite/{token}` |
+| Актор                     | Де реєструється                       | Як потрапляє в систему                     |
+| ------------------------- | ------------------------------------- | ------------------------------------------ |
+| `owner`                   | Вручну (перший акаунт)                | Пряма реєстрація або seed                  |
+| `executor`                | Тільки через invite від owner         | `work.workflo.space/invite/{token}`        |
+| `client` (Company Owner)  | Самореєстрація                        | `portal.workflo.space/register` + referral |
+| `client` (Company Member) | Тільки через invite від Company Owner | `portal.workflo.space/invite/{token}`      |
 
 > Workspace (`work.workflo.space`) захищений на рівні Traefik — IP whitelist для команди. Клієнт фізично не може відкрити сторінку навіть якщо знає URL.
 
@@ -39,11 +47,11 @@
 2. Система перевіряє унікальність email.
 3. Якщо переданий `referralCode` — знаходимо компанію-реферера, фіксуємо зв'язок у таблиці `referrals` зі статусом `pending`.
 4. Транзакційно створюються:
-   - `profiles` запис із роллю `client`
-   - `companies` запис (назва = ім'я клієнта за замовчуванням, slug = транслітерація)
+   - `profiles` запис (роль — на рівні членства, не глобальна)
+   - `companies` запис (`agencyId` = платформна агенція; назва = ім'я клієнта; slug = транслітерація)
    - `company_members` запис із роллю `owner` (Company Owner)
-   - `notification_settings` запис із дефолтними налаштуваннями
-5. Надсилається welcome email.
+   - `NotificationSettings` + дефолтні `NotificationPreference` рядки (`ensureNotificationSettings()`)
+5. Надсилається welcome email (+ `auth.email_verification` — CRITICAL-подія; `Profile.emailVerifiedAt`).
 6. Повертаються access token + встановлюється refresh cookie.
 
 **Referral code формат:** `workflo-XXXXXX`, де `XXXXXX` — перші 6 символів UUID компанії (генерується при створенні `companies`). Зберігається в полі `referralCode` таблиці `companies`.
@@ -54,7 +62,7 @@
 2. Перевіряємо `bcrypt.compare(password, passwordHash)`.
 3. Якщо `is_active = false` → помилка 403 "Акаунт деактивовано".
 4. Створюємо запис у `refresh_tokens` (UUID токен, `expiresAt = now + 30 днів`).
-5. Підписуємо JWT access token (`userId`, `role`, `companyId` якщо клієнт, `exp = now + 15 хвилин`).
+5. Підписуємо JWT access token — канонічні claims (`tokens.ts` `AccessClaims`) `{ sub, role, email, activeCompanyId?, memberships[], activeAgencyId?, agencyMemberships[] }`; `exp = now + 15 хвилин`. `role` (`owner|executor|client`) — **лише UI-підказка**, авторизація derive з `memberships`/`agencyMemberships` + `isInternalTeam()`, НЕ з `role`/`companyId`. (2FA: якщо увімкнено — спершу `require2fa`-крок, див. Аудит-фіналізація C.)
 6. Повертаємо `{ accessToken }` у body + `Set-Cookie: refreshToken=...`.
 
 ### Refresh Token Rotation (`POST /auth/refresh`)
@@ -99,9 +107,10 @@
 3. Створюємо `Invite` запис: `type = executor`, `expiresAt = now + 7 днів`.
 4. Надсилаємо email із посиланням: `work.workflo.space/invite/{token}`.
 5. Виконавець переходить за посиланням, встановлює пароль.
-6. Транзакційно: `profiles` (роль `executor`) + позначаємо invite `usedAt = now`.
+6. Транзакційно: `profiles` (якщо новий) + **`AgencyMember(role=executor)`** під агенцією (НЕ `Profile.role='executor'`) + позначаємо invite `usedAt = now`.
 
 **Edge cases:**
+
 - Токен протухнув (>7 днів) → сторінка показує "Запрошення недійсне" + CTA написати owner.
 - Токен вже використаний (`usedAt IS NOT NULL`) → "Акаунт вже створено, увійдіть".
 - Owner повторно запрошує той самий email → якщо є активний (невикористаний) invite → повертаємо 409 "Запрошення вже надіслано".
@@ -110,7 +119,7 @@
 
 Тільки для Company Owner або member із `can_invite_members = true`.
 
-1. Приймаємо `{ email, permissions: { can_create_tasks, can_view_billing, can_approve_estimates, can_invite_members } }`.
+1. Приймаємо `{ email, permissions }` — канонічні 5 ключів: `can_create_tasks, can_view_all_tasks, can_view_billing, can_approve_estimates, can_invite_members`.
 2. Якщо переданий email вже є профілем в системі і вже є member цієї компанії → 409.
 3. Створюємо `Invite`: `type = company_member`, `companyId = поточна компанія`, `permissions = JSON`, `expiresAt = now + 7 днів`.
 4. Надсилаємо email: `portal.workflo.space/invite/{token}`.
@@ -126,95 +135,29 @@ OTP — одноразовий код для прив'язки Telegram акау
 3. Надсилаємо code на email профілю.
 4. Клієнт відкриває Telegram bot і вводить `/start {код}`.
 5. Bot API (окремий сервіс) отримує команду → `POST /internal/telegram/verify { code, chatId }`.
-6. API знаходить `otp_tokens` запис → зберігає `profiles.telegramChatId = chatId`, `profiles.telegramConnected = true`.
+6. API знаходить `otp_tokens` запис → зберігає `NotificationSettings.telegramChatId = chatId` + `telegramLinkedAt` (НЕ на `Profile` — поля прибрано; `NotificationSettings` authoritative).
 7. Видаляємо використаний OTP.
 
 ---
 
 ## DB (relevant таблиці)
 
-```prisma
-model Profile {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  role          Role      @default(client)  // owner | executor | client
-  avatarUrl     String?
-  language      Language  @default(uk)
-  telegramChatId    String?   @unique
-  telegramConnected Boolean   @default(false)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+> **Канонічні моделі — `packages/db/prisma/schema.prisma`** (`Profile`, `RefreshToken`, `Invite`, `PasswordResetToken`, `OtpToken`, `Agency`, `AgencyMember`, `CompanyMember`). Стара inline-схема нижче видалена з doc-sync. Ключові відмінності:
+>
+> - **`Profile`** — БЕЗ глобального `role` (роль — у `AgencyMember`/`CompanyMember`); БЕЗ `telegramChatId`/`telegramConnected` (→ `NotificationSettings`); має `theme`; план Аудит-фіналізації: `tokenVersion`, `emailVerifiedAt`, `totpSecretEnc`/`backupCodes`, `mustChangePassword`.
+> - **`RefreshToken`** — + `ip`/`userAgent`/`lastUsedAt` (active-sessions + reuse-detect, Аудит-фіналізація D).
+> - **`OtpToken`** — `@@unique([profileId, purpose])`; purpose `telegram_link|two_fa|email_verify`.
+> - **Tenancy:** `Agency` (тенант-корінь) + `AgencyMember(role owner|executor)` + `agencyId`-scoping; `CompanyMember` (multi-company, partial-unique).
 
-  refreshTokens RefreshToken[]
-  invitesSent   Invite[]       @relation("InvitedBy")
-  // ...
-  @@map("profiles")
-}
+**Company Member permissions** — JSON у `company_members.permissions`. Канонічний набір — рівно **5 ключів** (`can_comment` та інші legacy — видалено):
 
-model RefreshToken {
-  id        String    @id @default(uuid())
-  profileId String
-  token     String    @unique
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
-  @@index([token])
-  @@map("refresh_tokens")
-}
-
-model Invite {
-  id          String     @id @default(uuid())
-  email       String
-  token       String     @unique @default(uuid())
-  type        InviteType              // executor | company_member
-  invitedById String
-  companyId   String?
-  permissions Json?
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdAt   DateTime   @default(now())
-  @@index([token])
-  @@map("invites")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(uuid())
-  email     String
-  token     String    @unique @default(uuid())
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  @@index([token])
-  @@map("password_reset_tokens")
-}
-
--- OTP таблиця (окрема від password reset)
-model OtpToken {
-  id        String   @id @default(uuid())
-  profileId String
-  code      String                        // 6 цифр
-  purpose   OtpPurpose                   // telegram_link | two_fa | email_verify
-  channel   OtpChannel                   // email | telegram | sms
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime @default(now())
-  @@index([profileId, purpose])
-  @@map("otp_tokens")
-}
-```
-
-**Company Member permissions** зберігаються як JSON поле в `company_members.permissions`:
 ```json
 {
   "can_create_tasks": true,
+  "can_view_all_tasks": true,
   "can_view_billing": false,
   "can_approve_estimates": false,
-  "can_invite_members": false,
-  "can_view_all_tasks": true,
-  "can_comment": true
+  "can_invite_members": false
 }
 ```
 
@@ -234,6 +177,7 @@ model OtpToken {
 ### `POST /auth/register`
 
 **Body:**
+
 ```json
 {
   "email": "john@company.com",
@@ -244,6 +188,7 @@ model OtpToken {
 ```
 
 **Response 201:**
+
 ```json
 {
   "data": {
@@ -252,16 +197,17 @@ model OtpToken {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "email": "john@company.com",
       "name": "John Doe",
-      "role": "client",
-      "companyId": "660e8400-e29b-41d4-a716-446655440001"
+      "activeCompanyId": "660e8400-e29b-41d4-a716-446655440001",
+      "memberships": [{ "companyId": "660e8400-e29b-41d4-a716-446655440001", "role": "owner" }]
     }
   }
 }
 ```
 
-**Set-Cookie:** `refreshToken=<uuid>; HttpOnly; Secure; SameSite=Strict; Path=/auth; Max-Age=2592000`
+**Set-Cookie:** `refreshToken=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/auth/refresh; Max-Age=2592000` (ADR-001)
 
 **Errors:**
+
 - `409` — email вже зареєстровано
 - `400` — невалідний referralCode (не знайдено компанію)
 
@@ -270,6 +216,7 @@ model OtpToken {
 ### `POST /auth/login`
 
 **Body:**
+
 ```json
 {
   "email": "john@company.com",
@@ -278,6 +225,7 @@ model OtpToken {
 ```
 
 **Response 200:**
+
 ```json
 {
   "data": {
@@ -286,21 +234,28 @@ model OtpToken {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "email": "john@company.com",
       "name": "John Doe",
-      "role": "client",
-      "companyId": "660e8400-e29b-41d4-a716-446655440001",
-      "companyRole": "owner",
-      "permissions": {
-        "can_create_tasks": true,
-        "can_view_billing": true,
-        "can_approve_estimates": true,
-        "can_invite_members": true
-      }
+      "activeCompanyId": "660e8400-e29b-41d4-a716-446655440001",
+      "memberships": [
+        {
+          "companyId": "660e8400-e29b-41d4-a716-446655440001",
+          "role": "owner",
+          "permissions": {
+            "can_create_tasks": true,
+            "can_view_all_tasks": true,
+            "can_view_billing": true,
+            "can_approve_estimates": true,
+            "can_invite_members": true
+          }
+        }
+      ],
+      "agencyMemberships": []
     }
   }
 }
 ```
 
 **Errors:**
+
 - `401` — невірний email або пароль (єдине повідомлення, не розкриваємо що саме)
 - `403` — акаунт деактивовано
 
@@ -311,6 +266,7 @@ model OtpToken {
 Cookie `refreshToken` передається автоматично браузером.
 
 **Response 200:**
+
 ```json
 {
   "data": {
@@ -320,6 +276,7 @@ Cookie `refreshToken` передається автоматично браузе
 ```
 
 **Errors:**
+
 - `401` — токен не знайдено, протухлий або відкликаний
 
 ---
@@ -335,11 +292,13 @@ Cookie `refreshToken` передається автоматично браузе
 ### `POST /auth/forgot-password`
 
 **Body:**
+
 ```json
 { "email": "john@company.com" }
 ```
 
 **Response 200** (завжди, незалежно від існування email):
+
 ```json
 { "data": { "message": "Якщо акаунт існує, лист надіслано" } }
 ```
@@ -349,6 +308,7 @@ Cookie `refreshToken` передається автоматично браузе
 ### `POST /auth/reset-password`
 
 **Body:**
+
 ```json
 {
   "token": "550e8400-e29b-41d4-a716-446655440000",
@@ -357,11 +317,13 @@ Cookie `refreshToken` передається автоматично браузе
 ```
 
 **Response 200:**
+
 ```json
 { "data": { "message": "Пароль успішно змінено" } }
 ```
 
 **Errors:**
+
 - `400` — токен не знайдено або протухлий
 - `400` — пароль не відповідає вимогам (мін. 8 символів)
 
@@ -370,25 +332,32 @@ Cookie `refreshToken` передається автоматично браузе
 ### `GET /auth/me`
 
 **Response 200:**
+
 ```json
 {
   "data": {
     "id": "550e8400-...",
     "email": "john@company.com",
     "name": "John Doe",
-    "role": "client",
     "avatarUrl": null,
     "language": "uk",
-    "telegramConnected": false,
-    "company": {
-      "id": "660e8400-...",
-      "name": "John's Company",
-      "slug": "johns-company",
-      "referralCode": "workflo-a1b2c3",
-      "loyaltyTier": "new"
-    },
-    "companyRole": "owner",
-    "permissions": { ... }
+    "theme": "system",
+    "activeCompanyId": "660e8400-...",
+    "memberships": [
+      {
+        "companyId": "660e8400-...",
+        "role": "owner",
+        "permissions": { "can_create_tasks": true, "can_view_all_tasks": true },
+        "company": {
+          "id": "660e8400-...",
+          "name": "John's Company",
+          "slug": "johns-company",
+          "referralCode": "workflo-a1b2c3",
+          "loyaltyTier": "new"
+        }
+      }
+    ],
+    "agencyMemberships": []
   }
 }
 ```
@@ -400,6 +369,7 @@ Cookie `refreshToken` передається автоматично браузе
 Тільки `owner`. Rate limit: 10 req/15min.
 
 **Body:**
+
 ```json
 {
   "email": "executor@gmail.com",
@@ -408,6 +378,7 @@ Cookie `refreshToken` передається автоматично браузе
 ```
 
 **Response 201:**
+
 ```json
 {
   "data": {
@@ -425,6 +396,7 @@ Cookie `refreshToken` передається автоматично браузе
 Company Owner або member із `can_invite_members`.
 
 **Body:**
+
 ```json
 {
   "email": "colleague@company.com",
@@ -438,6 +410,7 @@ Company Owner або member із `can_invite_members`.
 ```
 
 **Response 201:**
+
 ```json
 {
   "data": {
@@ -453,6 +426,7 @@ Company Owner або member із `can_invite_members`.
 ### `POST /profile/telegram/connect`
 
 **Response 200:**
+
 ```json
 {
   "data": {
@@ -469,27 +443,32 @@ Company Owner або member із `can_invite_members`.
 ### Portal (portal.workflo.space) — клієнтська сторона
 
 **Реєстрація:**
+
 1. `/register` — форма: email, ім'я, пароль, (опціонально) referral code
 2. Submit → `POST /auth/register` → при успіху redirect `/dashboard`
 3. При `?ref=workflo-XXXXXX` у URL — referral code підставляється автоматично
 
 **Логін:**
+
 1. `/login` → форма email + пароль
 2. "Забули пароль?" → `/forgot-password`
 3. При success → access token в React context → redirect `/dashboard`
 
 **Перезавантаження сторінки:**
+
 - `App.tsx` при mount → `POST /auth/refresh` (silent)
 - Якщо 401 → redirect `/login`
 - Якщо 200 → оновлюємо access token в context, рендеримо app
 
 **Invite flow (Company Member):**
+
 1. `/invite/{token}` — страница перевіряє token через `GET /auth/invite-info/{token}`
 2. Якщо нова людина → форма реєстрації (email підставлений з invite, readonly)
 3. Якщо вже є акаунт → кнопка "Прийняти запрошення" → `POST /auth/accept-invite { token }`
 4. Після прийняття → redirect `/dashboard`
 
 **Прив'язка Telegram:**
+
 1. `/settings/notifications` → кнопка "Прив'язати Telegram"
 2. `POST /profile/telegram/connect` → показуємо інструкцію з кодом
 3. Bot отримує `/start {код}` → verifies → UI polling або SSE оновлює статус
@@ -497,6 +476,7 @@ Company Owner або member із `can_invite_members`.
 ### Workspace (work.workflo.space) — сторона команди
 
 **Invite Executor flow:**
+
 1. `/team/invite` → форма email + ім'я → `POST /workspace/team/invite`
 2. Виконавець отримує email → переходить на `work.workflo.space/invite/{token}`
 3. Форма: показується ім'я (з invite) + поле нового пароля
@@ -506,16 +486,17 @@ Company Owner або member із `can_invite_members`.
 
 ## Notifications
 
-| Тригер | Канал | Кому |
-|---|---|---|
-| Реєстрація клієнта | Email | Клієнт (welcome email) |
-| Invite Executor | Email | Виконавець (посилання) |
-| Invite Company Member | Email | Колега (посилання) |
-| Forgot Password | Email | Клієнт/виконавець |
-| OTP Telegram | Email | Профіль (6-значний код) |
+| Тригер                      | Канал            | Кому                    |
+| --------------------------- | ---------------- | ----------------------- |
+| Реєстрація клієнта          | Email            | Клієнт (welcome email)  |
+| Invite Executor             | Email            | Виконавець (посилання)  |
+| Invite Company Member       | Email            | Колега (посилання)      |
+| Forgot Password             | Email            | Клієнт/виконавець       |
+| OTP Telegram                | Email            | Профіль (6-значний код) |
 | Telegram успішно прив'язано | Email + Telegram | Профіль (підтвердження) |
 
 **Email шаблони** (packages/notifications):
+
 - `sendWelcomeEmail(to, name)` — HTML шаблон з CTA увійти
 - `sendInviteEmail(to, inviteUrl)` — кнопка прийняти запрошення
 - `sendPasswordResetEmail(to, resetUrl)` — TTL 1 год
@@ -525,20 +506,20 @@ Company Owner або member із `can_invite_members`.
 
 ## Edge Cases
 
-| Ситуація | Поведінка |
-|---|---|
-| Реєстрація з вже існуючим email | 409 Conflict |
-| Логін із деактивованим акаунтом | 403 з повідомленням |
-| Refresh token використано двічі (reuse) | Анулювати всі tokens профілю → force logout |
-| Refresh token протухнув | 401 → клієнт редиректить на `/login` |
-| Reset password token протухнув (>1 год) | 400 "Посилання застаріло" |
-| Invite token протухнув (>7 днів) | Сторінка: "Запрошення недійсне, зверніться до відправника" |
-| Invite token вже використано | Сторінка: "Акаунт вже створено, увійдіть" |
-| Повторне запрошення того самого email (активний invite) | 409 "Запрошення вже надіслано" |
-| OTP код протухнув (>15 хв) | 400 "Код застарів, запросіть новий" |
-| OTP код введено невірно 3+ разів | Видаляємо OTP, просимо запросити новий |
-| Referral code не знайдено | 400, реєстрація не блокується (код просто ігнорується за бажанням — уточнити) |
-| Rate limit перевищено | 429 з `Retry-After` header |
+| Ситуація                                                | Поведінка                                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Реєстрація з вже існуючим email                         | 409 Conflict                                                                  |
+| Логін із деактивованим акаунтом                         | 403 з повідомленням                                                           |
+| Refresh token використано двічі (reuse)                 | Анулювати всі tokens профілю → force logout                                   |
+| Refresh token протухнув                                 | 401 → клієнт редиректить на `/login`                                          |
+| Reset password token протухнув (>1 год)                 | 400 "Посилання застаріло"                                                     |
+| Invite token протухнув (>7 днів)                        | Сторінка: "Запрошення недійсне, зверніться до відправника"                    |
+| Invite token вже використано                            | Сторінка: "Акаунт вже створено, увійдіть"                                     |
+| Повторне запрошення того самого email (активний invite) | 409 "Запрошення вже надіслано"                                                |
+| OTP код протухнув (>15 хв)                              | 400 "Код застарів, запросіть новий"                                           |
+| OTP код введено невірно 3+ разів                        | Видаляємо OTP, просимо запросити новий                                        |
+| Referral code не знайдено                               | 400, реєстрація не блокується (код просто ігнорується за бажанням — уточнити) |
+| Rate limit перевищено                                   | 429 з `Retry-After` header                                                    |
 
 ---
 
@@ -581,11 +562,184 @@ fastify.register(rateLimit, {
 
 ---
 
-## Phase 2
+## Phase 2 → промоутовано в Аудит-фіналізацію
 
-- **2FA (TOTP):** `purpose = two_fa` в `otp_tokens`, Google Authenticator або аналог
-- **SSO / Google OAuth:** `POST /auth/google` → OAuth flow → прив'язка до профілю
-- **Telegram OAuth:** вхід через Telegram Login Widget замість email+пароль
-- **SMS OTP:** `channel = sms` в `otp_tokens`, Twilio або ukrainian provider
-- **Session management UI:** сторінка в налаштуваннях "Активні сесії" — список refresh tokens з можливістю відкликати
-- **IP-based suspicious login detection:** якщо логін з нового IP → email сповіщення
+> Усі пункти цього старого списку **обрані й специфіковані** в «## Аудит-фіналізація» нижче (вже не «колись»):
+>
+> - **2FA (TOTP)** → §C (owner/admin, 2-step login, backup-codes).
+> - **Google OAuth** → §E (`OAuthAccount`).
+> - **Active sessions UI** + **suspicious-login** → §D (`refresh_tokens.{ip,userAgent,lastUsedAt}` + reuse-detect).
+> - **SMS OTP** → модуль 07 (SmsAdapter), Telegram-login → модуль 15.
+>   Статус реалізації — `SPEC.md` 01-auth (2FA+OAuth+sessions — спрінт S-auth-2).
+
+---
+
+## S1 alignment update (17 квітня 2026 → 27 травня 2026)
+
+### Multi-company per profile
+
+Архітектурне рішення (S1-00 migration): один `profile` може мати **N companies** через `CompanyMember` rows з `role='owner'`. Унікальність забезпечена частковим унікальним індексом `company_members_one_owner_per_company` на `(company_id) WHERE role='owner'`.
+
+`Company.ownerId` поле **видалено** в міграції `20260527_s1_00_multi_company`. Власника визначаємо через `CompanyMember`.
+
+#### Нові endpoints
+
+| Method   | Path                                | Auth    | Опис                                                                                                   |
+| -------- | ----------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/companies`                        | client+ | Список компаній поточного profile (де я owner АБО member). Активна підсвічена.                         |
+| `POST`   | `/auth/switch-company`              | client+ | Body `{ companyId }`. Перевіряє membership → видає новий access token з активною `companyId` у claims. |
+| `POST`   | `/companies`                        | client+ | Створити нову компанію. Auto-creates `CompanyMember(role='owner')` для актора.                         |
+| `POST`   | `/companies/:id/transfer-ownership` | owner   | Body `{ newOwnerProfileId }`. Запускає transfer flow з accept-step (див. LIFECYCLE.md).                |
+| `POST`   | `/companies/:id/accept-ownership`   | invited | Підтверджує отримання ownership.                                                                       |
+| `POST`   | `/companies/:id/members`            | owner   | Запросити member (створює Invite, email/telegram через `notify()`).                                    |
+| `DELETE` | `/companies/:id/members/:profileId` | owner   | Видалити member (не себе).                                                                             |
+| `POST`   | `/companies/:id/archive`            | owner   | Архівувати компанію (див. LIFECYCLE.md).                                                               |
+| `POST`   | `/companies/:id/restore`            | owner   | Розархівувати.                                                                                         |
+
+#### Access token claims (multi-company)
+
+```json
+{
+  "sub": "profile-uuid",
+  "email": "user@example.com",
+  "role": "client",
+  "activeCompanyId": "company-uuid",
+  "memberships": [
+    { "companyId": "co-1", "role": "owner" },
+    { "companyId": "co-2", "role": "owner" },
+    { "companyId": "co-3", "role": "member" }
+  ],
+  "iat": 1234567890,
+  "exp": 1234568790
+}
+```
+
+`activeCompanyId` — поточна "робоча" компанія (з якою працює user у поточній session). Перемикається через `/auth/switch-company`. UI у Portal: company switcher у header.
+
+### Refresh cookie strategy
+
+Див. **ADR-001** (`docs/adr/001-refresh-cookie-strategy.md`).
+
+Короко: `SameSite=Lax; Path=/auth/refresh; HttpOnly=true; Secure=production-only; Domain=.workflo.space у prod`. CSRF guard через Origin-check.
+
+### Welcome notification на register
+
+Після успішного `POST /auth/register`:
+
+1. Create `Profile` + `Company` + `CompanyMember(role='owner')` у 1 transaction.
+2. Create `NotificationSettings` + 21 default `NotificationPreference` rows (`ensureNotificationSettings()` helper).
+3. Issue access + refresh tokens.
+4. Async dispatch (не блокує response):
+   ```typescript
+   await notify(deps, {
+     profileId,
+     event: 'auth.welcome',
+     vars: { portalUrl: env.APP_PORTAL_URL },
+   })
+   ```
+
+### Password reset rate limit
+
+Окремо від email-критичності (`CRITICAL_EVENTS`) — захист від abuse:
+
+- `POST /auth/forgot-password`: 3 req / 15 min per email.
+- `POST /auth/reset-password`: 5 attempts / 1h per token.
+- Перевищення → 429 + audit_log entry.
+
+### Auth-related audit_logs events
+
+Див. **модуль 21 → секцію "Audit log → Authentication"**. Все логуємо: success/failed login, refresh used, password change, account deactivation.
+
+---
+
+## Аудит-фіналізація (30 травня 2026) — reconcile + нові фічі
+
+> Результат module-audit + вибору власника. Ця секція **авторитетна** — при розбіжностях зі старими (квітневими) частинами вище пріоритет тут. Pre-S1 секції підлягають видаленню в doc-sync.
+
+### A. Обов'язкові reconcile
+
+- **Canonical permissions** — єдиний набір флагів (snake_case, з `tokens.ts`): `can_create_tasks`, `can_view_all_tasks`, `can_view_billing`, `can_approve_estimates`, `can_invite_members`. Старі camelCase/інші набори в 01/13 — видалити. `can()` знає лише ці.
+- **Tenancy (ADR-004)** — claims `activeAgencyId` + `agencyMemberships[]`; новий `POST /auth/switch-agency`; `can()` tenant-guard.
+- **Last-owner protection** — `DELETE /companies/:id/members/:profileId` і `transfer-ownership` забороняють видалити/демоутити єдиного owner → `409 CONFLICT` (не raw-500 від partial-unique).
+- **Audit** — login_success / login_failed(reason) / refresh_used / **refresh_reuse_detected** (security!) / password_changed / account_deactivated → `audit_logs`.
+- **`Profile.tokenVersion Int @default(0)`** — інкремент при reset/2FA-зміні/compromise → інвалідовує **живі access-токени** (не лише refresh). `jwtVerify` звіряє `tokenVersion`.
+- Оновити stale `Profile`-модель у доці під реальну схему (`theme`, `telegramConnected`, `telegramOtp*`).
+
+### B. Email-верифікація ✅
+
+- `Profile.emailVerifiedAt DateTime?` (null = не верифіковано). Реєстрація НЕ блокує вхід, але непідтверджений email обмежує чутливі дії (виставлення рахунків, credentials) до підтвердження.
+- Register → `auth.email_verification` (CRITICAL_EVENT, завжди email) з посиланням `…/verify-email?token=`. Токен у `otp_tokens(purpose=email_verify)`, TTL 24h.
+- `POST /auth/verify-email { token }` → set `emailVerifiedAt`. `POST /auth/resend-verification` (rate 3/15хв).
+
+### C. 2FA (TOTP) ✅ — owner/admin
+
+- `Profile.totpSecretEnc Bytes?` (envelope-encrypted, як credentials), `totpEnabledAt DateTime?`, `Profile.backupCodesHash String[]` (bcrypt-хеші 10 одноразових кодів).
+- Setup: `POST /auth/2fa/setup` → повертає `otpauthUrl` + QR (secret НЕ показуємо повторно). `POST /auth/2fa/enable { code }` → перевірка TOTP → enable + видати backup-коди (показати 1 раз). `POST /auth/2fa/disable { code | password }`.
+- **Login flow зміна:** якщо `totpEnabledAt` → після пароля НЕ видаємо токени, повертаємо `{ require2fa: true, challengeId }`; `POST /auth/2fa/verify { challengeId, code }` (TOTP або backup) → видаємо access+refresh. Rate-limit 5/15хв на verify.
+- Reset паролю / зміна 2FA → `tokenVersion++`.
+
+#### C-2. Політика «вимагати 2FA у команди» (2FA-POLICY, рішення власника 05.07.2026) ✅
+
+> Вікторина 05.07: **owner-тумблер для команди** (клієнтів порталу не стосується) ·
+> **грейс 7 днів → блок входу** (форс-екран setup) · **TOTP-first step-up у vault**
+> (пароль лишається фолбеком для акаунтів без 2FA).
+
+- `Agency.requireTwoFactorAt DateTime?` — момент увімкнення політики (null = off). Дедлайн = +7 днів. Повторне увімкнення перезапускає грейс (не «доганяє» заднім числом).
+- Роути: `GET/PATCH /workspace/agency/security` (owner-only; GET віддає покриття — хто з команди вже має 2FA). Audit `agency.2fa_policy_enabled/disabled`.
+- Двигун: `services/twoFactorPolicy.ts` → `{ required, deadline, blocking }`; рахується на **кожній видачі сесії** (login / refresh / switch-agency) і в `/auth/me`. Стосується лише internal-членів (`agencyMemberships`); увімкнене 2FA знімає вимогу.
+- **Жорсткий гейт:** `blocking` → клейм `tfaDue` в access-токені → `authenticate` пропускає ЛИШЕ `/auth/*` (setup/enable/me/logout), решта — `403 TFA_SETUP_REQUIRED` (окремий код, щоб фронт вів на форс-екран, а не тост). Після enable — refresh знімає клейм (≤15 хв TTL, фронт рефрешить одразу).
+- UI (workspace): картка «Безпека агенції · 2FA» у `/settings` (owner, тумблер + покриття команди); банер грейсу з дедлайном у AppLayout (веде в `/profile`, де 2FA-секція доступна всім ролям); після дедлайну — форс-екран «Потрібна 2FA» замість апки.
+- **TOTP-first step-up (vault reveal):** `services/vaultStepUp.ts` — у кого 2FA увімкнено, step-up приймає ЛИШЕ `{ code }` (TOTP або backup, через `verifyChallenge` з replay-guard; пароль → 400 «введіть код»); без 2FA — `{ password }` як раніше. Обидві модалки (workspace+portal) перемикаються по `GET /auth/2fa/status`.
+
+### D. Active sessions (управління) ✅
+
+- `RefreshToken` додає `ip String?`, `userAgent String?`, `lastUsedAt DateTime?` (оновлюється на кожному `/auth/refresh`).
+- `GET /auth/sessions` → список активних refresh-токенів (поточний помічений), `DELETE /auth/sessions/:id` (revoke один), `DELETE /auth/sessions` (revoke всі крім поточного).
+- Reuse-detection: якщо приходить уже-revoked токен → revoke-all для profile + audit `refresh_reuse_detected` + notify `auth.login_from_new_device`-стиль попередження.
+
+### E. Social login (Google OAuth) ✅
+
+- `OAuthAccount { id, profileId, provider('google'|'github'), providerAccountId, email, createdAt, @@unique([provider, providerAccountId]) }`.
+- `GET /auth/oauth/google` → redirect на Google; `GET /auth/oauth/google/callback` → обмін code→profile: якщо `OAuthAccount` існує → login; інакше якщо email збігається з наявним `Profile` → лінкуємо (після підтвердження); інакше → новий Profile (email авто-верифікований) + Company + Agency-tenant #1.
+- `POST /auth/oauth/google/link` / `DELETE /auth/oauth/:provider` для linked-акаунтів (потребує ≥1 способу входу — не можна відлінкувати останній).
+- Env: `GOOGLE_OAUTH_CLIENT_ID/SECRET/CALLBACK_URL`. CSRF: `state` param.
+
+### Schema-зміни (зведення, у foundation-міграцію)
+
+```
+Profile: + emailVerifiedAt, tokenVersion, totpSecretEnc, totpEnabledAt, backupCodesHash[]
+RefreshToken: + ip, userAgent, lastUsedAt
+OAuthAccount: нова таблиця
+(+ agencyId scoping — з tenancy)
+```
+
+### Нові endpoints (зведення)
+
+`/auth/switch-agency`, `/auth/verify-email`, `/auth/resend-verification`, `/auth/2fa/{setup,enable,disable,verify}`, `/auth/sessions` (GET/DELETE), `/auth/sessions/:id` (DELETE), `/auth/oauth/google` (+callback/link), `/auth/oauth/:provider` (DELETE).
+
+---
+
+## Прохід власника (11.06.2026) — прийняті розширення
+
+> Рішення власника з повного проходу модулів (канон: `MODULE_REVIEW_2026-06.md`).
+> Ця секція авторитетна нарівні з «Аудит-фіналізація»; реалізація — за TRACKER-репланом.
+
+| ID   | Рішення                                                                                                                                     | Вплив                       | Нюанси власника                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------- |
+| 01-А | **Magic-link вхід** — посилання на email замість пароля (на базі наявної OTP-інфри)                                                         | [бек+екран]                 | варіант на /login (Portal; Workspace — вирішити при ТЗ)         |
+| 01-Б | **Account lockout** — прогресивна затримка після N невдалих логінів на акаунт (доповнює per-IP ліміт) + email-попередження власнику акаунта | [бек]                       | без нових екранів                                               |
+| 01-Г | **Flow зміни email** — підтвердження на стару + нову адресу                                                                                 | [бек+екран]                 | у /settings (Portal + Workspace)                                |
+| 01-Д | **mustChangePassword** — ручне створення акаунта з тимчасовим паролем → примусова зміна на першому вході                                    | [бек+екран]                 | поле вже в плані схеми (Аудит-фіналізація A); 1 проста сторінка |
+| 01-Е | **Passkeys (WebAuthn)** — вхід без пароля; ЗАРАЗ закласти таблицю `WebAuthnCredential` у схему, UI — пізніше                                | [бек зараз + екран пізніше] | сильний козир для SaaS-фази                                     |
+
+**Відхилено:** В (HaveIBeenPwned-перевірка паролів), Ж (microsoft у OAuth-enum), З (geo/назви пристроїв у sessions).
+
+**Для ТЗ дизайнеру:** /login з варіантом «Увійти за посиланням» (А); екран «лист надіслано» (А); секція зміни email у /settings + 2 email-шаблони (Г); сторінка примусової зміни пароля (Д). Passkeys-UI — окремим пізнішим ТЗ (Е).
+
+> **UPDATE 05.07.2026 — auth-пачка (01-А/Б/Г/Д) реалізована.** Passkeys (01-Е) — єдиний відкритий пункт.
+>
+> - **01-А magic-link ✅** — `POST /auth/magic-link {email}` (rate 3/15хв, завжди 200 — існування адреси не палимо; OTP-інфра: purpose=`magic_link`, TTL 15 хв, одноразовий, upsert гасить попередній лінк) → лист «Вхід у Workflo одним кліком» → `POST /auth/magic-login {token}`. **2FA не обходиться**: увімкнена → challenge як після пароля. Lockout (01-Б) magic-link не блокує — доставка листа сама доводить контроль скриньки. UI: кнопка «Увійти без пароля» на /login порталу + сторінка `/magic-login` (2FA-гілка → `/login?oauth2fa=`). Workspace-варіант вирішили не робити (лінк веде на портал).
+> - **01-Б lockout ✅** — `Profile.failedLoginAttempts + lockedUntil`; 5-й фейл → лок 15 хв, далі прогресивно 30/60 хв (cap). Під локом — той самий generic 401 і пароль НЕ перевіряється (лок не оракул). Успішний вхід скидає лічильники. Email-попередження власнику акаунта НЕ шлемо (рішення при реалізації: audit-лог фіксує reason=locked, а лист на кожен лок — спам-вектор).
+> - **01-Г зміна email ✅ (відхилення від специфікації)** — спека каже «підтвердження на стару + нову»; реалізовано еквівалент: контроль акаунта доводиться **паролем (re-auth)** + підтвердженням лінка на **новій** адресі (purpose=`email_change`, TTL 24 год), а на **стару** одразу летить **попередження** («якщо це не ви — змініть пароль»). `Profile.pendingEmail` тримає нову адресу до підтвердження; `POST /auth/change-email` (authenticated, 3/15хв) → `POST /auth/confirm-email-change` (публічний, race-check зайнятості 409). Після підтвердження email вважається верифікованим. UI: `EmailChangeSection` (app-core) у Portal `/settings` + Workspace `/profile`; сторінка `/confirm-email-change` у порталі.
+> - **01-Д mustChangePassword ✅** — `Profile.mustChangePassword`; сесія і `/auth/me` віддають прапорець → банер «у вас тимчасовий пароль» в обох AppLayout (портал → /settings, workspace → /profile); `PATCH /profile/password` знімає прапорець. Форс-екрана нема — банер (акаунт функціональний, примус м'який). Разом із цим зʼявилась спільна `PasswordSection` в app-core і вперше — UI зміни пароля у workspace (`/profile`).
+> - Нові email-шаблони: `auth.magic_link`, `auth.email_change_requested` (на стару), `auth.email_change_confirm` (на нову, шлеться мейлером напряму — notify-канал доставляє лише на profile.email). Всі три — CRITICAL (email завжди).

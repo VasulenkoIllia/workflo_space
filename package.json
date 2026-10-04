@@ -13,7 +13,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@types/node": "^20.17.0",
+    "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^8.30.0",
     "@typescript-eslint/parser": "^8.30.0",
     "eslint": "^8.57.1",
@@ -24,20 +24,35 @@
     "typescript": "^5.8.3"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=24.0.0",
     "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "overrides": {
+      "zod": "^3.24.3"
+    }
+  },
   "lint-staged": {
-    "**/*.{ts,tsx,js,jsx}": [
+    "apps/**/src/**/*.{ts,tsx,js,jsx}": [
       "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "apps/**/tests/**/*.{ts,tsx,js,jsx}": [
+      "prettier --write"
+    ],
+    "packages/**/src/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "packages/**/tests/**/*.{ts,tsx,js,jsx}": [
       "prettier --write"
     ],
     "**/*.{json,md,yaml,yml}": [
       "prettier --write"
     ],
     "packages/db/prisma/schema.prisma": [
-      "prisma format"
+      "pnpm --filter @workflo/db exec prisma format"
     ]
   }
 }

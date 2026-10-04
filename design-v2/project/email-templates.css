@@ -1,0 +1,296 @@
+/* email-templates.css — transactional emails for workflo.space (G1).
+ * Rendered inside a lightweight email-client preview chrome so the owner can
+ * review exactly what the client receives. All colour via --wf-* tokens, so
+ * light/dark + accent-swap carry through. Prefix: wfm- (workflo mail).
+ */
+
+.wfm-client {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in oklab, var(--wf-fg) 4%, var(--wf-bg));
+  font-family: 'Geist', system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+/* ── client header (from / subject / meta) ── */
+.wfm-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--wf-border);
+  background: var(--wf-bg);
+}
+.wfm-bar-avatar {
+  width: 38px; height: 38px; border-radius: 8px;
+  background: var(--wf-fg);
+  color: var(--wf-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 15px;
+  flex-shrink: 0;
+}
+.wfm-bar-main { min-width: 0; flex: 1; }
+.wfm-bar-from {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--wf-fg);
+}
+.wfm-bar-email { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 400; color: var(--wf-fg-muted); }
+.wfm-bar-subject { font-size: 13px; color: var(--wf-fg-secondary); margin-top: 2px; }
+.wfm-bar-to { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); white-space: nowrap; }
+.wfm-bar-actions { display: flex; gap: 6px; }
+.wfm-bar-ico {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid var(--wf-border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--wf-fg-muted); background: var(--wf-bg);
+}
+
+/* ── scroll area holding the actual email ── */
+.wfm-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 26px;
+  display: flex; justify-content: center;
+}
+
+/* ── the email itself — a centered card ── */
+.wfm-email {
+  width: 100%; max-width: 600px;
+  background: var(--wf-bg);
+  border: 1px solid var(--wf-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px -12px rgba(0,0,0,.12);
+  align-self: flex-start;
+}
+
+/* header strip with wordmark */
+.wfm-head {
+  padding: 22px 32px;
+  border-bottom: 1px solid var(--wf-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.wfm-wordmark {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600; font-size: 16px; letter-spacing: -0.01em;
+  color: var(--wf-fg);
+}
+.wfm-wordmark .dot { color: var(--wf-accent); }
+.wfm-head-tag {
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  color: var(--wf-fg-muted);
+  padding: 3px 9px; border: 1px solid var(--wf-border); border-radius: 999px;
+}
+
+/* hero band — kind-coloured */
+.wfm-hero {
+  padding: 30px 32px 26px;
+  border-bottom: 1px solid var(--wf-border);
+  background:
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--wf-accent) 6%, transparent) 0 1.5px, transparent 1.5px 8px),
+    color-mix(in oklab, var(--wf-accent) 5%, var(--wf-bg));
+}
+.wfm-hero[data-kind="ok"] {
+  background:
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--wf-success) 8%, transparent) 0 1.5px, transparent 1.5px 8px),
+    color-mix(in oklab, var(--wf-success) 6%, var(--wf-bg));
+}
+.wfm-hero[data-kind="warn"] {
+  background:
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--wf-warning) 9%, transparent) 0 1.5px, transparent 1.5px 8px),
+    color-mix(in oklab, var(--wf-warning) 7%, var(--wf-bg));
+}
+.wfm-hero[data-kind="alert"] {
+  background:
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--wf-destructive, #DC2626) 9%, transparent) 0 1.5px, transparent 1.5px 8px),
+    color-mix(in oklab, var(--wf-destructive, #DC2626) 7%, var(--wf-bg));
+}
+.wfm-hero[data-kind="info"] {
+  background:
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--wf-fg) 5%, transparent) 0 1.5px, transparent 1.5px 8px),
+    color-mix(in oklab, var(--wf-fg) 3%, var(--wf-bg));
+}
+.wfm-hero-eyebrow {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: var(--wf-fg-muted); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 7px;
+}
+.wfm-hero-eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--wf-accent); }
+.wfm-hero[data-kind="ok"] .wfm-hero-eyebrow .dot { background: var(--wf-success); }
+.wfm-hero[data-kind="alert"] .wfm-hero-eyebrow .dot { background: var(--wf-destructive, #DC2626); }
+.wfm-hero[data-kind="info"] .wfm-hero-eyebrow .dot { background: var(--wf-fg-muted); }
+.wfm-hero-h1 {
+  font-size: 25px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;
+  color: var(--wf-fg); text-wrap: pretty; margin: 0;
+}
+.wfm-hero-sub { font-size: 14px; color: var(--wf-fg-secondary); margin-top: 8px; line-height: 1.5; }
+
+/* body */
+.wfm-body { padding: 26px 32px 8px; }
+.wfm-p { font-size: 14.5px; line-height: 1.62; color: var(--wf-fg-secondary); margin: 0 0 16px; text-wrap: pretty; }
+.wfm-p strong { color: var(--wf-fg); font-weight: 600; }
+
+/* detail panel (order / invoice summary) */
+.wfm-panel {
+  border: 1px solid var(--wf-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 4px 0 20px;
+}
+.wfm-panel-h {
+  padding: 11px 16px;
+  background: color-mix(in oklab, var(--wf-fg) 3%, transparent);
+  border-bottom: 1px solid var(--wf-border);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.wfm-row {
+  display: flex; justify-content: space-between; gap: 16px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--wf-border);
+}
+.wfm-row:last-child { border-bottom: 0; }
+.wfm-row-k { color: var(--wf-fg-muted); }
+.wfm-row-v { color: var(--wf-fg); font-weight: 500; text-align: right; }
+.wfm-row--total {
+  background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent);
+  font-size: 15px;
+}
+.wfm-row--total .wfm-row-v { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 18px; }
+.wfm-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* CTA button */
+.wfm-cta-wrap { margin: 4px 0 22px; }
+.wfm-cta {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 13px 26px;
+  background: var(--wf-fg); color: var(--wf-bg);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 600;
+  text-decoration: none;
+}
+.wfm-cta[data-kind="accent"] { background: var(--wf-accent); color: #0A0A0A; }
+.wfm-cta-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 9px; }
+.wfm-cta-sub a { color: var(--wf-fg-secondary); }
+
+/* magic-link / token block */
+.wfm-token {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  padding: 12px 16px;
+  border: 1px dashed var(--wf-border); border-radius: 8px;
+  color: var(--wf-fg); letter-spacing: .06em; text-align: center;
+  background: color-mix(in oklab, var(--wf-fg) 2%, transparent);
+  margin: 0 0 20px;
+}
+
+/* divider note */
+.wfm-note {
+  font-size: 12.5px; line-height: 1.55; color: var(--wf-fg-muted);
+  padding: 14px 16px; border-radius: 8px;
+  background: color-mix(in oklab, var(--wf-fg) 2.5%, transparent);
+  margin: 0 0 8px;
+}
+
+/* footer */
+.wfm-foot {
+  padding: 22px 32px 26px;
+  border-top: 1px solid var(--wf-border);
+  margin-top: 8px;
+}
+.wfm-foot-mark { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--wf-fg-secondary); margin-bottom: 8px; }
+.wfm-foot-mark .dot { color: var(--wf-accent); }
+.wfm-foot-links { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.wfm-foot-links a { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); text-decoration: none; }
+.wfm-foot-links a:hover { color: var(--wf-fg); }
+.wfm-foot-fine { font-size: 11px; line-height: 1.5; color: var(--wf-fg-subtle); }
+.wfm-foot-fine a { color: var(--wf-fg-muted); }
+
+/* label above each email artboard inside the grid */
+.wfm-caption {
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  color: var(--wf-fg-muted); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── OTP / verification code block ── */
+.wfm-code {
+  display: flex; gap: 10px; justify-content: center;
+  margin: 4px 0 18px;
+}
+.wfm-code-digit {
+  width: 52px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 600;
+  color: var(--wf-fg);
+  background: color-mix(in oklab, var(--wf-fg) 3%, transparent);
+  border: 1px solid var(--wf-border); border-radius: 10px;
+}
+.wfm-code-digit[data-hot="true"] {
+  border-color: var(--wf-accent);
+  background: color-mix(in oklab, var(--wf-accent) 9%, transparent);
+}
+.wfm-code-expiry {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted);
+  margin: -8px 0 18px;
+}
+
+/* ── security detail rows (device / location / time) ── */
+.wfm-sec {
+  border: 1px solid var(--wf-border); border-radius: 10px;
+  overflow: hidden; margin: 4px 0 18px;
+}
+.wfm-sec-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wf-border);
+  font-size: 13.5px;
+}
+.wfm-sec-row:last-child { border-bottom: 0; }
+.wfm-sec-ico {
+  width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--wf-fg) 5%, transparent);
+  color: var(--wf-fg-muted);
+}
+.wfm-sec-k { color: var(--wf-fg-muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.wfm-sec-v { color: var(--wf-fg); font-weight: 500; margin-top: 1px; }
+
+/* ── digest stat grid ── */
+.wfm-digest {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--wf-border);
+  border: 1px solid var(--wf-border); border-radius: 10px; overflow: hidden;
+  margin: 4px 0 18px;
+}
+.wfm-digest-cell { background: var(--wf-bg); padding: 16px; text-align: center; }
+.wfm-digest-v { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--wf-fg); }
+.wfm-digest-v[data-accent="true"] { color: var(--wf-accent); }
+.wfm-digest-k { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--wf-fg-muted); margin-top: 4px; }
+
+/* ── compact list (digest items / mentions) ── */
+.wfm-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; }
+.wfm-list-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border: 1px solid var(--wf-border); border-radius: 9px;
+}
+.wfm-list-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--wf-accent); flex-shrink: 0; }
+.wfm-list-main { min-width: 0; flex: 1; }
+.wfm-list-t { font-size: 13.5px; font-weight: 500; color: var(--wf-fg); }
+.wfm-list-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--wf-fg-muted); margin-top: 2px; }
+.wfm-list-v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--wf-fg); font-weight: 600; }
+
+/* ── quoted message (mention) ── */
+.wfm-quote {
+  border-left: 3px solid var(--wf-accent);
+  background: color-mix(in oklab, var(--wf-accent) 6%, transparent);
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+  margin: 4px 0 18px;
+}
+.wfm-quote-who { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--wf-fg-muted); margin-bottom: 6px; }
+.wfm-quote-txt { font-size: 14px; color: var(--wf-fg); line-height: 1.55; }
+.wfm-quote-txt .mention { color: var(--wf-accent); font-weight: 600; }
+

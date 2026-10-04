@@ -1,8 +1,259 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { LoginPage } from '@/routes/auth/LoginPage'
+import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
+import { InviteAcceptPage } from '@/routes/auth/InviteAcceptPage'
+import { PermRoute, ProtectedRoute, RoleRoute } from '@/components/ProtectedRoute'
+import { AppLayout } from '@/layouts/AppLayout'
+import { TeamPage } from '@/routes/team/TeamPage'
+import { DashboardPage } from '@/routes/dashboard/DashboardPage'
+import { OwnerDashboard } from '@/routes/dashboard/OwnerDashboard'
+import { OrdersPage } from '@/routes/orders/OrdersPage'
+import { OrderDetailPage } from '@/routes/orders/OrderDetailPage'
+import { ClientsPage } from '@/routes/clients/ClientsPage'
+import { ClientDetailPage } from '@/routes/clients/ClientDetailPage'
+import { InboxPage } from '@/routes/inbox/InboxPage'
+import { ProfilePage } from '@/routes/profile/ProfilePage'
+import { BillingPage } from '@/routes/billing/BillingPage'
+import { ProjectsPage } from '@/routes/projects/ProjectsPage'
+import { ProjectDetailPage } from '@/routes/projects/ProjectDetailPage'
+import { FinancePage } from '@/routes/finance/FinancePage'
+import { MarginPage } from '@/routes/margin/MarginPage'
+import { ReportsPage } from '@/routes/reports/ReportsPage'
+import { ContentPage } from '@/routes/content/ContentPage'
+import { NotificationsHubPage } from '@/routes/notifications/NotificationsHubPage'
+import { LeavePage } from '@/routes/leave/LeavePage'
+import { ExecutorCardPage } from '@/routes/team/ExecutorCardPage'
+import { TaskBoardPage } from '@/routes/board/TaskBoardPage'
+import { ChatsPage } from '@/routes/chats/ChatsPage'
+import { SupportPage } from '@/routes/support/SupportPage'
+import { CalendarPage } from '@/routes/calendar/CalendarPage'
+import { LeadBoardPage } from '@/routes/leads/LeadBoardPage'
+import { LeadDetailPage } from '@/routes/leads/LeadDetailPage'
+import { VaultPage } from '@/routes/vault/VaultPage'
+import { PayoutsPage } from '@/routes/payouts/PayoutsPage'
+import { ServicesPage } from '@/routes/services/ServicesPage'
+import { AdminWalletPage } from '@/routes/adminWallet/AdminWalletPage'
+import { SettingsPage } from '@/routes/settings/SettingsPage'
+import { useAuth } from '@/contexts/AuthContext'
+
+/** Home is role-aware: owner/manager → operational overview, executor → personal task board. */
+function Home() {
+  const { isOwner, isManager } = useAuth()
+  return isOwner || isManager ? <OwnerDashboard /> : <DashboardPage />
+}
+
 export default function App() {
   return (
-    <main style={{ fontFamily: 'system-ui', padding: 24 }}>
-      <h1>Workflo Workspace</h1>
-      <p>Workspace skeleton is ready.</p>
-    </main>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/invite/:token" element={<InviteAcceptPage />} />
+
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/" element={<Home />} />
+        <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/inbox" element={<InboxPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route
+          path="/settings"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <SettingsPage />
+            </RoleRoute>
+          }
+        />
+
+        {/* Owner-only */}
+        <Route
+          path="/orders"
+          element={
+            <PermRoute any={['orders.view']}>
+              <OrdersPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/board"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <TaskBoardPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/chats"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <ChatsPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/leads"
+          element={
+            <PermRoute any={['leads.manage']}>
+              <LeadBoardPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/leads/:id"
+          element={
+            <PermRoute any={['leads.manage']}>
+              <LeadDetailPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/clients"
+          element={
+            <PermRoute any={['clients.view']}>
+              <ClientsPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/vault"
+          element={
+            // 17-SHARE: executor sees their shared subset; manager stays out (canon)
+            <RoleRoute allow={['owner', 'executor']}>
+              <VaultPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/clients/:id"
+          element={
+            <PermRoute any={['clients.view']}>
+              <ClientDetailPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <TeamPage />
+            </RoleRoute>
+          }
+        />
+        {/* S13-04: відсутності — self-service для всієї команди */}
+        <Route
+          path="/leave"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <LeavePage />
+            </RoleRoute>
+          }
+        />
+        {/* Finance — owner-only (manager is finance-blocked, MOD-4). */}
+        <Route
+          path="/billing"
+          element={
+            <PermRoute any={['billing.view']}>
+              <BillingPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <PermRoute any={['projects.view']}>
+              <ProjectsPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/projects/:id"
+          element={
+            <PermRoute any={['projects.view']}>
+              <ProjectDetailPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <PermRoute any={['finance.view']}>
+              <FinancePage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/margin"
+          element={
+            <PermRoute any={['finance.view']}>
+              <MarginPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <PermRoute any={['reports.ops', 'finance.view', 'reports.audit']}>
+              <ReportsPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/content"
+          element={
+            <PermRoute any={['content.manage']}>
+              <ContentPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/announcements"
+          element={<Navigate to="/notifications?tab=announce" replace />}
+        />
+        {/* DSN-7: хаб сповіщень — адмін-таби за правами, «Мої канали»/«Тест» — усім */}
+        <Route path="/notifications" element={<NotificationsHubPage />} />
+        <Route
+          path="/team/:profileId"
+          element={
+            <RoleRoute allow={['owner', 'manager', 'executor']}>
+              <ExecutorCardPage />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/payouts"
+          element={
+            <PermRoute any={['payouts.manage', 'payouts.view_team']}>
+              <PayoutsPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/services"
+          element={
+            <PermRoute any={['settings.catalogs']}>
+              <ServicesPage />
+            </PermRoute>
+          }
+        />
+        <Route
+          path="/admin-wallet"
+          element={
+            <PermRoute any={['billing.view']}>
+              <AdminWalletPage />
+            </PermRoute>
+          }
+        />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
