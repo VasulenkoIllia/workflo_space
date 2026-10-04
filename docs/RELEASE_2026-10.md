@@ -75,3 +75,19 @@ docker compose --project-name workflo-production --env-file .env -f docker-compo
 - Ручний: `bash scripts/rollback.sh` (попередній) або `bash scripts/rollback.sh sha-<commit>`.
 - Схема БД назад не відкочується (Prisma без down-міграцій) — аварійний вихід:
   `scripts/restore.sh` з `backups/pre-migrate-*.sql.gz`, який деплой робить перед кожною міграцією.
+
+## Preflight проду 04.10 (PR #2) — фактичний стан
+
+- **Прод-БД порожня** — жодної таблиці (квітневий деплой міграцій не застосував). → Міграції підуть
+  «з нуля», як у CI DB-gate; REINDEX не потрібен; **власника створювати обовʼязково** (крок 6).
+- Репетиція локально: том, ініціалізований `postgres:16-alpine`, → наш `postgres:16-bookworm` + pg_cron
+  → дамп порожньої БД 1655 B (гейт ≥ 1024 B пропускає) → `prisma migrate deploy` релізним
+  api-образом на Node 24: **99/99 міграцій**, платформна агенція створена.
+- Працюють квітневі образи `sha-5efd81c` (landing, portal, workspace, api, bot), `.last_deploy` = він же
+  → є куди відкотитись. У `.env` теги `sha-initial` — `deploy-remote.sh` бере тег живого контейнера.
+- `.env`: ✅ DATABASE_URL/JWT/POSTGRES/SMTP/TEAM_IPS · бракує `CREDENTIALS_KEK_BASE64_PROD` (крок 3),
+  `SENTRY_DSN`, `BOT_TOKEN`/`BOT_LINK_SECRET`/`TELEGRAM_BOT_USERNAME`, `UNSUBSCRIBE_SECRET`, `ADMIN_EMAIL`
+  (не фатальні; URL-и й CORS мають прод-дефолти в compose).
+- Бекапи workflo на проді **не налаштовані** (cron лише іншого проєкту, restic не встановлено) — до появи
+  реальних даних: `SERVER_UPDATE_2026-07.md` крок 7.
+- Диск: вільно 203 ГБ.

@@ -55,15 +55,14 @@ set_env_value() {
   fi
 }
 
-# Tag an app runs right now: .env first (persisted by `record`), else the live container.
+# Tag an app runs right now: the live container is the truth (prod .env still said
+# `sha-initial` while the April images ran — preflight 04.10); .env is the fallback.
 current_tag() {
-  local app="$1" tag image
-  tag="$(env_value "$(tag_var "$app")")"
-  if [[ -z "$tag" ]]; then
-    image="$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
-      --filter "label=com.docker.compose.service=${app}" --format '{{.Image}}' | head -n1)"
-    [[ "$image" == *:* ]] && tag="${image##*:}"
-  fi
+  local app="$1" tag="" image
+  image="$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+    --filter "label=com.docker.compose.service=${app}" --format '{{.Image}}' | head -n1)"
+  [[ "$image" == *:* ]] && tag="${image##*:}"
+  [[ -z "$tag" ]] && tag="$(env_value "$(tag_var "$app")")"
   echo "${tag:-none}"
 }
 
