@@ -196,6 +196,9 @@ jobs:
   verify:
     name: Verify
     needs: deploy
+    # Explicit: with the default success() a SKIPPED ancestor (approval off on staging) skips
+    # this job too — the 04.10 staging run deployed fine but never verified/recorded.
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
