@@ -16,6 +16,7 @@ const CONFIG = {
       ['/loyalty', /Лояльність/],
       ['/referrals', /Реферал/],
       ['/team', /Учасники/],
+      ['/company', /Моя компанія/],
       ['/settings', /Налаштування/],
     ],
   },
@@ -89,7 +90,9 @@ async function gotoInApp(page: Page, path: string) {
     window.history.pushState({}, '', p)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, path)
-  await expect(page).toHaveURL(new RegExp(`${path.replace('/', '\\/')}(\\?|$)`), { timeout: 10_000 })
+  await expect(page).toHaveURL(new RegExp(`${path.replace('/', '\\/')}(\\?|$)`), {
+    timeout: 10_000,
+  })
 }
 
 test.describe('smoke', () => {
@@ -108,10 +111,7 @@ test.describe('smoke', () => {
         await gotoInApp(page, path)
         // The page-specific heading must render (proves the route mounted + data resolved
         // enough to paint the shell, not the 404 / error EmptyState).
-        await expect(
-          page.getByText(heading as RegExp).first(),
-          `heading for ${path}`
-        ).toBeVisible()
+        await expect(page.getByText(heading as RegExp).first(), `heading for ${path}`).toBeVisible()
         await page.screenshot({
           path: `screenshots/${info.project.name}${path === '/' ? '/_home' : path}.png`,
           fullPage: true,
@@ -120,14 +120,15 @@ test.describe('smoke', () => {
     }
 
     // Portal-only: client saves their company legal requisites (another form submit).
+    // DEDUP-IA: реквізити переїхали з /settings у «Моя компанія» (лише власник компанії).
     if (info.project.name === 'portal') {
-      await test.step('portal /settings → save company requisites', async () => {
-        await gotoInApp(page, '/settings')
+      await test.step('portal /company → save company requisites', async () => {
+        await gotoInApp(page, '/company')
         await page.getByLabel('Юридична назва').fill('ТОВ Смоук Клієнт')
         await page.getByRole('button', { name: 'Зберегти реквізити' }).first().click()
         await expect(page.getByText('Реквізити збережено')).toBeVisible()
         await page.screenshot({
-          path: 'screenshots/portal/_settings-requisites.png',
+          path: 'screenshots/portal/_company-requisites.png',
           fullPage: true,
         })
       })
@@ -185,24 +186,36 @@ test.describe('smoke', () => {
         await gotoInApp(page, '/orders')
         await page.getByRole('button', { name: 'Таймлайн' }).click()
         await expect(page.getByRole('heading', { name: 'Замовлення' })).toBeVisible()
-        await page.screenshot({ path: 'screenshots/workspace/_orders-timeline.png', fullPage: true })
+        await page.screenshot({
+          path: 'screenshots/workspace/_orders-timeline.png',
+          fullPage: true,
+        })
       })
 
       await test.step('workspace order detail: tabs + generate a document (D1/D3)', async () => {
         // Open an order via the timeline rows (they carry the seed client name).
-        await page.getByRole('button', { name: /ТОВ Тестова Компанія/ }).first().click()
+        await page
+          .getByRole('button', { name: /ТОВ Тестова Компанія/ })
+          .first()
+          .click()
         await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{8,}/)
         await expect(page.getByRole('tab', { name: 'Час' })).toBeVisible()
         // «Задачі» tab was removed (design has no per-order task kanban).
         await expect(page.getByRole('tab', { name: 'Задачі' })).toHaveCount(0)
         // Documents tab → generate an invoice → it lands with a per-agency number (INV-YYYY-NNNNNN).
         await page.getByRole('tab', { name: 'Документи' }).click()
-        await page.getByRole('button', { name: /Рахунок/ }).first().click()
+        await page
+          .getByRole('button', { name: /Рахунок/ })
+          .first()
+          .click()
         await expect(page.getByText(/INV-\d{4}-\d{6}/).first()).toBeVisible({ timeout: 10000 })
         // Click the number → renders the document (PDF, or HTML fallback when no Chromium) in a tab.
         const [docView] = await Promise.all([
           page.waitForEvent('popup'),
-          page.getByRole('button', { name: /INV-\d{4}-\d{6}/ }).first().click(),
+          page
+            .getByRole('button', { name: /INV-\d{4}-\d{6}/ })
+            .first()
+            .click(),
         ])
         await docView.waitForLoadState('domcontentloaded')
         await docView.close()
@@ -216,7 +229,10 @@ test.describe('smoke', () => {
         await gotoInApp(page, '/margin')
         await page.getByRole('tab', { name: 'За виконавцями' }).click()
         await expect(page.getByText('Маржа').first()).toBeVisible()
-        await page.screenshot({ path: 'screenshots/workspace/_margin-executors.png', fullPage: true })
+        await page.screenshot({
+          path: 'screenshots/workspace/_margin-executors.png',
+          fullPage: true,
+        })
       })
 
       await test.step('workspace create order (modal)', async () => {
@@ -237,7 +253,11 @@ test.describe('smoke', () => {
       await test.step('workspace /clients → open a client 360', async () => {
         await gotoInApp(page, '/clients')
         // Client rows are role=button → navigate to /clients/:id.
-        await page.locator('[role="button"]').filter({ hasText: /ТОВ|Компан/ }).first().click()
+        await page
+          .locator('[role="button"]')
+          .filter({ hasText: /ТОВ|Компан/ })
+          .first()
+          .click()
         await expect(page).toHaveURL(/\/clients\/[0-9a-f-]{8,}/)
         await expect(page.getByText(/усього замовлень/i).first()).toBeVisible()
         await page.screenshot({ path: 'screenshots/workspace/_client-detail.png', fullPage: true })
