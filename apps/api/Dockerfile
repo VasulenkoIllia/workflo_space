@@ -7,7 +7,7 @@
 # from THIS image and the prisma CLI is a devDep of @workflo/db. A true prod-prune
 # needs a dedicated migrate stage/image first (BACKLOG: AR-50b; trigger — image
 # size/pull time starts to hurt).
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 WORKDIR /app
 
 # openssl/ca-certs for prisma+TLS; chromium + fonts for the documents PDF engine (06, S6-D2).

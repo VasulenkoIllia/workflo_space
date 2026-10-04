@@ -134,8 +134,8 @@ services:
       - traefik.http.routers.workflo-workspace.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-cf}
       - traefik.http.routers.workflo-workspace.priority=10000
       - traefik.http.services.workflo-workspace.loadbalancer.server.port=8080
-      - traefik.http.middlewares.workflo-workspace-ipwhitelist.ipwhitelist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
-      - traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipwhitelist
+      - traefik.http.middlewares.workflo-workspace-ipallowlist.ipallowlist.sourcerange=${TEAM_IPS:-127.0.0.1/32}
+      - traefik.http.routers.workflo-workspace.middlewares=workflo-workspace-ipallowlist
     healthcheck:
       test: ['CMD', 'wget', '-qO', '/dev/null', 'http://127.0.0.1:8080/health']
       interval: 30s
@@ -329,7 +329,7 @@ services:
       - app_network
 
   maintenance:
-    image: nginx:1.27-alpine
+    image: nginx:1.28-alpine
     restart: unless-stopped
     mem_limit: 128m
     cpus: '0.25'

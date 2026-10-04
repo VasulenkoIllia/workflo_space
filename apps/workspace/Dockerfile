@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Cross-origin API base, baked into the bundle at build (vite reads import.meta.env).
@@ -32,7 +32,7 @@ ENV VITE_API_URL=$VITE_API_URL
 COPY . .
 RUN pnpm --filter @workflo/workspace... build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.28-alpine
 COPY apps/workspace/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder --chown=101:101 /app/apps/workspace/dist /usr/share/nginx/html
 

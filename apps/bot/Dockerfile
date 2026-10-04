@@ -1,5 +1,5 @@
 # AR-50 (audit 2026-06-11): manifests-first layering — see apps/api/Dockerfile.
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
