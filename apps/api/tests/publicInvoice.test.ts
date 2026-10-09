@@ -68,6 +68,8 @@ const CLIENT = {
 }
 
 const orderRow = () => ({ id: ORDER, agencyId: AGENCY, companyId: 'company-1', deletedAt: null })
+const DAY = 24 * 60 * 60 * 1000
+const inDays = (n: number) => new Date(Date.now() + n * DAY)
 
 /** Рядок PUBLIC_DOC_SELECT для no-auth читання (buildRenderData-сумісний). */
 const publicDocRow = (over: Partial<Record<string, unknown>> = {}) => ({
@@ -78,9 +80,11 @@ const publicDocRow = (over: Partial<Record<string, unknown>> = {}) => ({
   generatedAt: new Date('2026-07-01T00:00:00Z'),
   companyId: 'company-1',
   agencyId: AGENCY,
+  publicTokenExpiresAt: inDays(10),
   agency: { name: 'Workflo' },
   order: {
     id: ORDER,
+    deletedAt: null,
     title: 'CRM rebuild',
     description: null,
     totalAmount: 9800,
@@ -141,14 +145,23 @@ describe('POST /orders/:orderId/documents/:docId/public-link (06-Д)', () => {
     const { data } = res.json()
     expect(data.publicToken).toHaveLength(32) // 24 байти base64url
     expect(data.url).toContain(`/public/documents/${data.publicToken}`)
-    expect(db.document.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { publicToken: data.publicToken } })
-    )
+    const written = db.document.update.mock.calls[0][0].data
+    expect(written.publicToken).toBe(data.publicToken)
+    // строк дії — 30 днів від видачі, і він же у відповіді
+    const ttl = written.publicTokenExpiresAt.getTime() - Date.now()
+    expect(ttl).toBeGreaterThan(29 * DAY)
+    expect(ttl).toBeLessThanOrEqual(30 * DAY)
+    expect(data.expiresAt).toBe(written.publicTokenExpiresAt.toISOString())
     await app.close()
   })
 
   it('ідемпотентно: наявний токен повертається без перезапису', async () => {
-    db.document.findFirst.mockResolvedValue({ id: 'doc-1', type: 'invoice', publicToken: TOKEN })
+    db.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      type: 'invoice',
+      publicToken: TOKEN,
+      publicTokenExpiresAt: inDays(5),
+    })
     const { app, token } = await authed(OWNER)
     const res = await app.inject({
       method: 'POST',
@@ -158,6 +171,26 @@ describe('POST /orders/:orderId/documents/:docId/public-link (06-Д)', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.publicToken).toBe(TOKEN)
     expect(db.document.update).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('прострочений лінк перевидається новим токеном (старий більше не віддається)', async () => {
+    db.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      type: 'invoice',
+      publicToken: TOKEN,
+      publicTokenExpiresAt: inDays(-1),
+    })
+    db.document.update.mockResolvedValue({})
+    const { app, token } = await authed(OWNER)
+    const res = await app.inject({
+      method: 'POST',
+      url: `/orders/${ORDER}/documents/doc-1/public-link`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.publicToken).not.toBe(TOKEN)
+    expect(db.document.update).toHaveBeenCalledTimes(1)
     await app.close()
   })
 
@@ -204,6 +237,30 @@ describe('GET /public/documents/:token — без логіна', () => {
     await app.close()
   })
 
+  it('прострочений лінк → 404 (і сторінка, і PDF)', async () => {
+    db.document.findUnique.mockResolvedValue(publicDocRow({ publicTokenExpiresAt: inDays(-1) }))
+    const app = buildApp()
+    await app.ready()
+    const page = await app.inject({ method: 'GET', url: `/public/documents/${TOKEN}` })
+    const pdf = await app.inject({ method: 'GET', url: `/public/documents/${TOKEN}/pdf` })
+    expect(page.statusCode).toBe(404)
+    expect(pdf.statusCode).toBe(404)
+    await app.close()
+  })
+
+  it('рахунок видаленого замовлення → 404', async () => {
+    const row = publicDocRow()
+    db.document.findUnique.mockResolvedValue({
+      ...row,
+      order: { ...(row.order as object), deletedAt: new Date() },
+    })
+    const app = buildApp()
+    await app.ready()
+    const res = await app.inject({ method: 'GET', url: `/public/documents/${TOKEN}` })
+    expect(res.statusCode).toBe(404)
+    await app.close()
+  })
+
   it('PDF-ендпоінт: без Chromium віддає HTML-фолбек', async () => {
     db.document.findUnique.mockResolvedValue(publicDocRow())
     const app = buildApp()
@@ -226,7 +283,7 @@ describe('DELETE /orders/:orderId/documents/:docId/public-link — відкли�
     })
     expect(ok.statusCode).toBe(200)
     expect(db.document.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { publicToken: null } })
+      expect.objectContaining({ data: { publicToken: null, publicTokenExpiresAt: null } })
     )
     const again = await app.inject({
       method: 'DELETE',

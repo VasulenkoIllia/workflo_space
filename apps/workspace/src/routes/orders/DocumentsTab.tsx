@@ -48,13 +48,15 @@ export function DocumentsTab({ orderId }: { orderId: string }) {
       onSuccess: (r) => toast.success(`Надіслано клієнту: ${r.document.number}`),
     })
 
-  // 06-Д: лінк без логіна — копіюємо в буфер (ідемпотентно, токен видається раз)
+  // 06-Д: лінк без логіна — копіюємо в буфер. Чинний лінк повертається той самий;
+  // після 30 днів — новий (старий уже віддає 404).
   const onPublicLink = (d: OrderDocument) =>
     publicLink.mutate(d.id, {
       onSuccess: (r) => {
+        const until = `діє до ${formatDate(r.expiresAt)}`
         void navigator.clipboard.writeText(r.url).then(
-          () => toast.success('Публічне посилання скопійовано'),
-          () => toast.info(r.url) // буфер недоступний — показуємо лінк
+          () => toast.success(`Публічне посилання скопійовано · ${until}`),
+          () => toast.info(`${r.url} · ${until}`) // буфер недоступний — показуємо лінк
         )
       },
     })

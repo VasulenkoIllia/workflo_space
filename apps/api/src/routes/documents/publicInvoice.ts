@@ -17,7 +17,8 @@ import { requirePermission } from '../../auth/permissions.js'
  * 06-Д: публічна сторінка рахунку — hosted-лінк без логіна (дизайн PublicInvoicePage,
  * workspace-documents-eu.jsx). Команда видає лінк на рахунок (invoice/advance_invoice),
  * клієнт відкриває сторінку/PDF без акаунта. Безпека — непередбачуваний токен
- * (192 біти, base64url, globally unique) + відкликання (DELETE → token=null).
+ * (192 біти, base64url, globally unique) + строк дії 30 днів + відкликання
+ * (DELETE → token=null). Рахунок видаленого замовлення по лінку не відкривається.
  * Кнопки онлайн-оплати нема свідомо — провайдери 05-А ще не підключені; сторінка
  * показує банківські реквізити з самого документа.
  */
@@ -26,6 +27,9 @@ import { requirePermission } from '../../auth/permissions.js'
 const newPublicToken = (): string => randomBytes(24).toString('base64url')
 
 const PUBLIC_LINK_TYPES = new Set(['invoice', 'advance_invoice'])
+
+/** Строк дії публічного лінка (PERMISSIONS §3: раніше — безстроковий). */
+export const PUBLIC_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 /** Селект документа для публічного рендера — той самий DocRow, що й авторизований PDF. */
 const PUBLIC_DOC_SELECT = {
@@ -36,10 +40,12 @@ const PUBLIC_DOC_SELECT = {
   generatedAt: true,
   companyId: true,
   agencyId: true,
+  publicTokenExpiresAt: true,
   agency: { select: { name: true } },
   order: {
     select: {
       id: true,
+      deletedAt: true,
       title: true,
       description: true,
       totalAmount: true,
@@ -112,10 +118,10 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
     async (request, reply) => {
       const { agencyId, orderId } = await requireTeamOrder(request, request.params.orderId)
       await requirePermission(request, 'billing.manage') // PERM-2: публічне посилання на рахунок
-      const token = await tenantTransaction(prisma, async (tx) => {
+      const link = await tenantTransaction(prisma, async (tx) => {
         const doc = await tx.document.findFirst({
           where: { id: request.params.docId, orderId },
-          select: { id: true, type: true, publicToken: true },
+          select: { id: true, type: true, publicToken: true, publicTokenExpiresAt: true },
         })
         if (!doc) throw new AppError(ApiErrorCode.NOT_FOUND, 'Документ не знайдено', 404)
         if (!PUBLIC_LINK_TYPES.has(doc.type)) {
@@ -125,10 +131,17 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
             400
           )
         }
-        if (doc.publicToken) return doc.publicToken
+        // Чинний лінк віддаємо як є; прострочений (або легасі без строку) — перевидаємо.
+        if (doc.publicToken && doc.publicTokenExpiresAt && doc.publicTokenExpiresAt > new Date()) {
+          return { token: doc.publicToken, expiresAt: doc.publicTokenExpiresAt }
+        }
         const fresh = newPublicToken()
-        await tx.document.update({ where: { id: doc.id }, data: { publicToken: fresh } })
-        return fresh
+        const expiresAt = new Date(Date.now() + PUBLIC_LINK_TTL_MS)
+        await tx.document.update({
+          where: { id: doc.id },
+          data: { publicToken: fresh, publicTokenExpiresAt: expiresAt },
+        })
+        return { token: fresh, expiresAt }
       })
       writeAuditAsync(request.log, {
         actorId: request.user.sub,
@@ -141,7 +154,11 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
       const base = process.env.API_PUBLIC_URL ?? 'https://dev-api.workflo.space'
       return reply.send({
         success: true,
-        data: { publicToken: token, url: `${base}/public/documents/${token}` },
+        data: {
+          publicToken: link.token,
+          url: `${base}/public/documents/${link.token}`,
+          expiresAt: link.expiresAt.toISOString(),
+        },
       })
     }
   )
@@ -156,7 +173,7 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
       const cleared = await withTenant((tx) =>
         tx.document.updateMany({
           where: { id: request.params.docId, orderId, publicToken: { not: null } },
-          data: { publicToken: null },
+          data: { publicToken: null, publicTokenExpiresAt: null },
         })
       )
       if (cleared.count === 0) {
@@ -177,11 +194,16 @@ const publicInvoiceRoute: FastifyPluginAsync = (fastify) => {
   // ── Публічні читання (без auth): токен = вся авторизація ─────────────────────
   // Читання поза user-контекстом → системний RLS-контекст; row знаходиться ЛИШЕ
   // по globally-unique токену, тенант «зашитий» у сам рядок — крос-тенант витоку нема.
+  // Прострочений лінк і рахунок видаленого замовлення — як невідомий токен (404).
   async function loadPublicDoc(token: string) {
     if (token.length < 16) return null // явно не наш токен — без запиту в БД
-    return runWithSystemContext(() =>
+    const doc = await runWithSystemContext(() =>
       prisma.document.findUnique({ where: { publicToken: token }, select: PUBLIC_DOC_SELECT })
     )
+    if (!doc) return null
+    if (!doc.publicTokenExpiresAt || doc.publicTokenExpiresAt <= new Date()) return null
+    if (doc.order?.deletedAt) return null
+    return doc
   }
 
   fastify.get<{ Params: { token: string } }>(

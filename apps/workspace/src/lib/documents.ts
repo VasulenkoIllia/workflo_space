@@ -115,7 +115,7 @@ export function useSendDocument(orderId: string) {
 export function usePublicLink(orderId: string) {
   return useMutation({
     mutationFn: (docId: string) =>
-      api.post<{ publicToken: string; url: string }>(
+      api.post<{ publicToken: string; url: string; expiresAt: string }>(
         `/orders/${orderId}/documents/${docId}/public-link`
       ),
   })
