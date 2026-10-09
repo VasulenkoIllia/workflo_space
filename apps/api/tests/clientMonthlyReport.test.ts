@@ -13,6 +13,8 @@ const paymentFindMany = vi.fn()
 const companyFindUnique = vi.fn()
 const companyMemberFindMany = vi.fn()
 const documentCreate = vi.fn()
+const documentFindFirst = vi.fn()
+const documentUpdate = vi.fn()
 const queryRaw = vi.fn()
 
 vi.mock('@workflo/db', () => ({
@@ -25,7 +27,7 @@ vi.mock('@workflo/db', () => ({
     payment: { findMany: paymentFindMany },
     company: { findUnique: companyFindUnique },
     companyMember: { findMany: companyMemberFindMany },
-    document: { create: documentCreate },
+    document: { create: documentCreate, findFirst: documentFindFirst, update: documentUpdate },
     emailTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
     $queryRaw: queryRaw,
   },
@@ -78,7 +80,10 @@ beforeEach(() => {
     id: 'doc-1',
     number: 'RPT-2026-000001',
     generatedAt: NOW,
+    status: 'generated',
   })
+  documentFindFirst.mockResolvedValue(null)
+  documentUpdate.mockResolvedValue({})
   sendMail.mockResolvedValue({})
 })
 
@@ -168,11 +173,15 @@ describe('runClientMonthlyReportOnce (19-Г)', () => {
     const sent = await runClientMonthlyReportOnce(logger, NOW)
     expect(sent).toBe(1)
 
-    // Документ: monthly_report без замовлення, статус sent
+    // Документ: monthly_report без замовлення; `sent` — лише ПІСЛЯ відправки листа
     const docArg = documentCreate.mock.calls[0][0].data
     expect(docArg.type).toBe('monthly_report')
     expect(docArg.order).toBeUndefined()
-    expect(docArg.status).toBe('sent')
+    expect(docArg.status).toBe('generated')
+    expect(documentUpdate).toHaveBeenCalledWith({
+      where: { id: 'doc-1' },
+      data: { status: 'sent', sentAt: NOW },
+    })
 
     // Лист: на documentEmail з cc і PDF-вкладенням
     const mail = sendMail.mock.calls[0][0]
@@ -208,5 +217,114 @@ describe('runClientMonthlyReportOnce (19-Г)', () => {
     const mail = sendMail.mock.calls[0][0]
     expect(mail.to).toBe('owner@client.com')
     expect(mail.cc).toBe('second@client.com')
+  })
+  describe('idempotency (05.10: SMTP failure must not duplicate reports)', () => {
+    const oneCompanyMonth = () => {
+      agencyFindMany.mockResolvedValue([{ id: 'ag-1', name: 'Workflo' }])
+      orderFindMany
+        .mockResolvedValueOnce([{ companyId: 'co-1' }])
+        .mockResolvedValue([{ title: 'A', totalAmount: 100, fixedPrice: null, currency: 'USD' }])
+      companyFindUnique.mockResolvedValue({
+        id: 'co-1',
+        name: 'A',
+        documentEmail: 'buh@client.com',
+        documentEmailCc: null,
+      })
+    }
+
+    it('SMTP failure: document stays unsent, month NOT stamped, error logged — no throw', async () => {
+      oneCompanyMonth()
+      sendMail.mockRejectedValueOnce(new Error('SMTP 421'))
+
+      const sent = await runClientMonthlyReportOnce(logger, NOW)
+
+      expect(sent).toBe(0)
+      expect(documentCreate).toHaveBeenCalledTimes(1)
+      expect(documentUpdate).not.toHaveBeenCalled()
+      expect(agencyUpdate).not.toHaveBeenCalled()
+      expect(logger.error).toHaveBeenCalled()
+    })
+
+    it('next run retries the SAME unsent document (no new number)', async () => {
+      oneCompanyMonth()
+      documentFindFirst.mockResolvedValue({
+        id: 'doc-old',
+        number: 'RPT-2026-000007',
+        generatedAt: NOW,
+        status: 'generated',
+      })
+
+      const sent = await runClientMonthlyReportOnce(logger, NOW)
+
+      expect(sent).toBe(1)
+      expect(documentCreate).not.toHaveBeenCalled()
+      expect(sendMail.mock.calls[0][0].attachments[0].filename).toBe('RPT-2026-000007.pdf')
+      expect(documentUpdate).toHaveBeenCalledWith({
+        where: { id: 'doc-old' },
+        data: { status: 'sent', sentAt: NOW },
+      })
+      expect(agencyUpdate).toHaveBeenCalled()
+    })
+
+    it('a report already sent for the period is skipped (no second email)', async () => {
+      oneCompanyMonth()
+      documentFindFirst.mockResolvedValue({
+        id: 'doc-old',
+        number: 'RPT-2026-000007',
+        generatedAt: NOW,
+        status: 'sent',
+      })
+
+      const sent = await runClientMonthlyReportOnce(logger, NOW)
+
+      expect(sent).toBe(0)
+      expect(sendMail).not.toHaveBeenCalled()
+      expect(documentCreate).not.toHaveBeenCalled()
+      expect(agencyUpdate).toHaveBeenCalled() // nothing failed → month done
+    })
+
+    it('one company failing does not stop the others', async () => {
+      agencyFindMany.mockResolvedValue([{ id: 'ag-1', name: 'Workflo' }])
+      orderFindMany
+        .mockResolvedValueOnce([{ companyId: 'co-1' }, { companyId: 'co-2' }])
+        .mockResolvedValue([{ title: 'A', totalAmount: 100, fixedPrice: null, currency: 'USD' }])
+      companyFindUnique
+        .mockResolvedValueOnce({
+          id: 'co-1',
+          name: 'A',
+          documentEmail: 'a@x.com',
+          documentEmailCc: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'co-2',
+          name: 'B',
+          documentEmail: 'b@x.com',
+          documentEmailCc: null,
+        })
+      sendMail.mockRejectedValueOnce(new Error('SMTP 550')).mockResolvedValueOnce({})
+
+      const sent = await runClientMonthlyReportOnce(logger, NOW)
+
+      expect(sent).toBe(1)
+      expect(sendMail).toHaveBeenCalledTimes(2)
+      expect(agencyUpdate).not.toHaveBeenCalled() // co-1 retried next run
+    })
+
+    it('no recipient → no document is created', async () => {
+      oneCompanyMonth()
+      companyFindUnique.mockResolvedValue({
+        id: 'co-1',
+        name: 'A',
+        documentEmail: null,
+        documentEmailCc: null,
+      })
+      companyMemberFindMany.mockResolvedValue([])
+
+      const sent = await runClientMonthlyReportOnce(logger, NOW)
+
+      expect(sent).toBe(0)
+      expect(documentCreate).not.toHaveBeenCalled()
+      expect(sendMail).not.toHaveBeenCalled()
+    })
   })
 })
