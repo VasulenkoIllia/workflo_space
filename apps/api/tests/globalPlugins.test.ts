@@ -54,6 +54,30 @@ describe('global plugins reach route responses (fp encapsulation guard)', () => 
     await app.close()
   })
 
+  // Regression (ROADMAP:1085, verified 05.10): the limiter's errorResponseBuilder returned a
+  // plain object — @fastify/rate-limit throws it, the error handler saw no AppError and
+  // answered 500 "Щось пішло не так" (+ a Sentry event) to a user who only mistyped a password.
+  it('answers 429 RATE_LIMITED (not 500) once a route limit is exceeded', async () => {
+    const app = buildApp()
+    const hit = () =>
+      app.inject({ method: 'POST', url: '/auth/login', payload: {}, remoteAddress: '10.9.9.9' })
+
+    // login: max 10 / 15 min. An empty body fails validation (400) before any DB access.
+    for (let i = 0; i < 10; i += 1) {
+      expect((await hit()).statusCode).toBe(400)
+    }
+    const res = await hit()
+
+    expect(res.statusCode).toBe(429)
+    expect(res.json()).toMatchObject({
+      success: false,
+      error: { code: 'RATE_LIMITED', message: expect.stringContaining('Забагато запитів') },
+    })
+    expect(res.headers['retry-after']).toBeDefined()
+
+    await app.close()
+  })
+
   it('rejects a disallowed cross-origin request (CORS allowlist still enforced)', async () => {
     const app = buildApp()
     const res = await app.inject({

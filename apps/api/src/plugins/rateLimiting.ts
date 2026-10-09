@@ -1,5 +1,5 @@
 import rateLimit from '@fastify/rate-limit'
-import { ApiErrorCode } from '@workflo/types'
+import { AppError, ApiErrorCode } from '@workflo/types'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import fp from 'fastify-plugin'
 
@@ -19,14 +19,16 @@ const rateLimitingPlugin: FastifyPluginAsync = async (fastify) => {
     max: 300,
     timeWindow: '1 minute',
     keyGenerator: getRateLimitKey,
-    errorResponseBuilder: () => ({
-      success: false,
-      error: {
-        code: ApiErrorCode.RATE_LIMITED,
-        message: 'Забагато запитів. Зачекайте хвилину та спробуйте знову.',
-        details: null,
-      },
-    }),
+    // @fastify/rate-limit THROWS whatever this returns. A plain object reached the error
+    // handler as an unknown error → 500 + Sentry noise; an AppError carries its 429 and goes
+    // out in the standard envelope (Retry-After header is set by the plugin).
+    errorResponseBuilder: (_request, context) =>
+      new AppError(
+        ApiErrorCode.RATE_LIMITED,
+        'Забагато запитів. Зачекайте трохи та спробуйте знову.',
+        429,
+        { retryAfterSeconds: Math.ceil(context.ttl / 1000) }
+      ),
   })
 }
 
